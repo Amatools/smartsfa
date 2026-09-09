@@ -32,6 +32,7 @@ class ClientePreCadastro implements TenantScopedEntity {
     );
   }
 
+  @override
   final String id;
   @override
   final String tenantId;

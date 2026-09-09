@@ -4,6 +4,5 @@ import 'in_memory_tenant_scoped_repository.dart';
 
 class InMemoryPedidoRepository extends InMemoryTenantScopedRepository<Pedido>
     implements PedidoRepository {
-  InMemoryPedidoRepository({Iterable<Pedido> seedItems = const []})
-      : super(seedItems: seedItems);
+  InMemoryPedidoRepository({super.seedItems = const []});
 }

@@ -38,6 +38,7 @@ class Cliente implements TenantScopedEntity {
     );
   }
 
+  @override
   final String id;
   @override
   final String tenantId;

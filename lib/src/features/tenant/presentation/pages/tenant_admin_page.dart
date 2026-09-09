@@ -8,7 +8,9 @@ import '../../../../shared/presentation/widgets/app_info_card.dart';
 import '../../../../shared/presentation/widgets/app_pagination_bar.dart';
 import '../../../../shared/presentation/widgets/pagination_slice.dart';
 import '../../../auth/services/tenant_membership_service.dart';
+import '../../domain/tenant_membership_filter.dart';
 import '../../domain/tenant_admin_permissions.dart';
+import '../controllers/tenant_admin_action_controller.dart';
 import 'tenant_invitations_page.dart';
 import 'tenant_membership_audit_page.dart';
 
@@ -40,6 +42,9 @@ class _TenantAdminPageState extends State<TenantAdminPage> {
 
   TenantMembershipService get _membershipService =>
       widget.membershipService ?? TenantMembershipService(FirebaseFirestore.instance);
+
+    TenantAdminActionController get _actions =>
+      TenantAdminActionController(_membershipService);
 
   String? get _actorUid =>
       widget.currentUserUid ?? FirebaseAuth.instance.currentUser?.uid;
@@ -109,11 +114,10 @@ class _TenantAdminPageState extends State<TenantAdminPage> {
     });
 
     try {
-      await _membershipService.updateGovernancePolicy(
+      final updatedPolicy = await _actions.savePolicy(
         tenantId: widget.identity.tenantId,
         allowManagerDisableRepresentative: allowManagerDisableRepresentative,
         allowRepresentativeDisableSeller: allowRepresentativeDisableSeller,
-        allowPersonalWorkspace: true,
         updatedByUid: actorUid,
       );
 
@@ -122,11 +126,7 @@ class _TenantAdminPageState extends State<TenantAdminPage> {
       }
 
       setState(() {
-        _policy = {
-          'allowManagerDisableRepresentative':
-              allowManagerDisableRepresentative,
-          'allowRepresentativeDisableSeller': allowRepresentativeDisableSeller,
-        };
+        _policy = updatedPolicy;
       });
       _showMessage('Politica de governanca atualizada.');
     } catch (error) {
@@ -154,7 +154,7 @@ class _TenantAdminPageState extends State<TenantAdminPage> {
     });
 
     try {
-      await _membershipService.revokeMembershipByActor(
+      await _actions.revokeMembership(
         membershipId: membership.membershipId,
         actorUid: actorUid,
       );
@@ -184,7 +184,7 @@ class _TenantAdminPageState extends State<TenantAdminPage> {
     });
 
     try {
-      await _membershipService.reactivateMembershipByActor(
+      await _actions.reactivateMembership(
         membershipId: membership.membershipId,
         actorUid: actorUid,
       );
@@ -214,7 +214,7 @@ class _TenantAdminPageState extends State<TenantAdminPage> {
     });
 
     try {
-      await _membershipService.changeRoleByActor(
+      await _actions.changeRole(
         membershipId: membership.membershipId,
         newRole: newRole,
         actorUid: actorUid,
@@ -252,32 +252,12 @@ class _TenantAdminPageState extends State<TenantAdminPage> {
   }
 
   List<TenantMembership> _applyFilters(List<TenantMembership> memberships) {
-    final query = _searchController.text.trim().toLowerCase();
-
-    return memberships.where((membership) {
-      final role = membership.role.trim().toLowerCase();
-      final status = membership.isActive
-          ? 'ativo'
-          : membership.state == TenantMembershipState.revoked
-              ? 'revogado'
-              : 'inativo';
-      final matchesRole =
-          _selectedRoleFilter == 'todos' || role == _selectedRoleFilter;
-      final matchesStatus =
-          _selectedStatusFilter == 'todos' || status == _selectedStatusFilter;
-
-      if (!matchesRole || !matchesStatus) {
-        return false;
-      }
-
-      if (query.isEmpty) {
-        return true;
-      }
-
-      return membership.uid.toLowerCase().contains(query) ||
-          membership.membershipId.toLowerCase().contains(query) ||
-          role.contains(query);
-    }).toList();
+    return TenantMembershipFilter.apply(
+      memberships: memberships,
+      query: _searchController.text,
+      selectedRole: _selectedRoleFilter,
+      selectedStatus: _selectedStatusFilter,
+    );
   }
 
   @override
