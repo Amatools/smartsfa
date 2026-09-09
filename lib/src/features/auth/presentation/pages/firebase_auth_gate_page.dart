@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/models/app_identity.dart';
@@ -134,7 +135,16 @@ class _TenantAccessResolver extends StatefulWidget {
 }
 
 class _TenantAccessResolverState extends State<_TenantAccessResolver> {
+  static const List<String> _devRoles = [
+    'platform_admin',
+    'owner',
+    'gerente',
+    'representante',
+    'vendedor',
+  ];
+
   late String _selectedMembershipId;
+  String? _devRoleOverride;
 
   @override
   void initState() {
@@ -150,8 +160,9 @@ class _TenantAccessResolverState extends State<_TenantAccessResolver> {
   @override
   void didUpdateWidget(covariant _TenantAccessResolver oldWidget) {
     super.didUpdateWidget(oldWidget);
-    final stillExists = widget.decision.options
-        .any((item) => item.membershipId == _selectedMembershipId);
+    final stillExists = widget.decision.options.any(
+      (item) => item.membershipId == _selectedMembershipId,
+    );
     if (!stillExists && widget.decision.options.isNotEmpty) {
       _selectedMembershipId = widget.decision.options
           .firstWhere(
@@ -183,7 +194,8 @@ class _TenantAccessResolverState extends State<_TenantAccessResolver> {
         if (tenantDoc == null || !tenantDoc.exists) {
           return const AccessDeniedScaffold(
             title: 'Tenant indisponivel',
-            message: 'A conta possui membership, mas o tenant nao foi encontrado.',
+            message:
+                'A conta possui membership, mas o tenant nao foi encontrado.',
           );
         }
 
@@ -203,52 +215,105 @@ class _TenantAccessResolverState extends State<_TenantAccessResolver> {
           defaultTenant: selectedSeed.defaultTenant,
         );
 
+        final effectiveRole = _devRoleOverride ?? access.role;
+        final hasRoleOverride = _devRoleOverride != null;
+
         return AppShellPage(
           identity: AppIdentity(
             tenantId: access.tenantId,
             tenantName: access.tenantName,
             userLabel: widget.user.email ?? widget.user.uid,
-            role: access.role,
+            role: effectiveRole,
             isMock: false,
             membershipId: access.membershipId,
             isPersonalWorkspace: false,
           ),
           onAccessUpdated: widget.onAccessUpdated,
           onSignOut: () => FirebaseAuth.instance.signOut(),
-          onSwitchProfile: widget.decision.options.length > 1
-              ? () {
-                  _showTenantPicker(context);
-                }
-              : null,
+          onSwitchProfile: () {
+            _showAccessPicker(
+              context,
+              realRole: access.role,
+              hasRoleOverride: hasRoleOverride,
+            );
+          },
         );
       },
     );
   }
 
-  void _showTenantPicker(BuildContext context) {
+  void _showAccessPicker(
+    BuildContext context, {
+    required String realRole,
+    required bool hasRoleOverride,
+  }) {
     showModalBottomSheet<void>(
       context: context,
       builder: (context) {
+        final canSwitchMembership = widget.decision.options.length > 1;
+
         return SafeArea(
           child: ListView(
             shrinkWrap: true,
-            children: widget.decision.options
-                .map(
+            children: [
+              const ListTile(
+                title: Text('Trocar acesso'),
+                subtitle: Text('Selecione tenant/perfil para esta sessao.'),
+              ),
+              if (canSwitchMembership)
+                ...widget.decision.options.map(
                   (item) => ListTile(
                     title: Text(item.tenantName),
-                    subtitle: Text(item.role),
+                    subtitle: Text('Role real: ${item.role}'),
                     trailing: item.membershipId == _selectedMembershipId
                         ? const Icon(Icons.check)
                         : null,
                     onTap: () {
                       setState(() {
                         _selectedMembershipId = item.membershipId;
+                        _devRoleOverride = null;
                       });
                       Navigator.of(context).pop();
                     },
                   ),
-                )
-                .toList(),
+                ),
+              if (kDebugMode) ...[
+                const Divider(height: 1),
+                ListTile(
+                  title: const Text('Perfil de interface (dev)'),
+                  subtitle: Text(
+                    hasRoleOverride
+                        ? 'Override ativo: $_devRoleOverride (real: $realRole)'
+                        : 'Role real atual: $realRole',
+                  ),
+                ),
+                ..._devRoles.map(
+                  (role) => ListTile(
+                    title: Text(role),
+                    trailing: _devRoleOverride == role
+                        ? const Icon(Icons.check)
+                        : null,
+                    onTap: () {
+                      setState(() {
+                        _devRoleOverride = role;
+                      });
+                      Navigator.of(context).pop();
+                    },
+                  ),
+                ),
+                ListTile(
+                  title: const Text('Usar role real do Firebase'),
+                  subtitle: const Text('Remove override de interface.'),
+                  trailing: !hasRoleOverride ? const Icon(Icons.check) : null,
+                  onTap: () {
+                    setState(() {
+                      _devRoleOverride = null;
+                    });
+                    Navigator.of(context).pop();
+                  },
+                ),
+              ],
+            ],
           ),
         );
       },

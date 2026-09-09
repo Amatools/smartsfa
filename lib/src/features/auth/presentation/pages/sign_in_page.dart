@@ -9,8 +9,27 @@ class SignInPage extends StatefulWidget {
 }
 
 class _SignInPageState extends State<SignInPage> {
+  static const String _defaultDevEmail = 'aureo@amatools.com.br';
+  static const String _defaultDevPassword = '123456';
+
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
   bool _loading = false;
   String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _emailController.text = _defaultDevEmail;
+    _passwordController.text = _defaultDevPassword;
+  }
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
 
   Future<void> _signInWithGoogle() async {
     setState(() {
@@ -25,22 +44,79 @@ class _SignInPageState extends State<SignInPage> {
       String message;
       switch (e.code) {
         case 'operation-not-allowed':
-          message =
-              'Login Google desabilitado no Firebase. Habilite em Authentication > Sign-in method.';
+          message = 'Login Google desabilitado no Firebase. Habilite em Authentication > Sign-in method.';
           break;
         case 'unauthorized-domain':
-          message =
-              'Dominio nao autorizado. Adicione o dominio atual em Authentication > Settings > Authorized domains.';
+          message = 'Dominio nao autorizado. Adicione o dominio atual em Authentication > Settings > Authorized domains.';
           break;
         case 'popup-blocked':
-          message =
-              'Popup bloqueado pelo navegador. Libere popups para continuar o login.';
+          message = 'Popup bloqueado pelo navegador. Libere popups para continuar o login.';
           break;
         case 'popup-closed-by-user':
           message = 'Login cancelado antes da confirmacao.';
           break;
         default:
           message = e.message ?? 'Falha ao autenticar com Google.';
+      }
+
+      setState(() {
+        _error = message;
+      });
+    } catch (_) {
+      setState(() {
+        _error = 'Erro inesperado durante o login.';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _signInWithEmailPassword() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+
+    if (email.isEmpty || password.isEmpty) {
+      setState(() {
+        _error = 'Informe e-mail e senha para entrar.';
+      });
+      return;
+    }
+
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    try {
+      await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+    } on FirebaseAuthException catch (e) {
+      String message;
+      switch (e.code) {
+        case 'operation-not-allowed':
+          message = 'Login por e-mail/senha desabilitado no Firebase. Habilite em Authentication > Sign-in method.';
+          break;
+        case 'invalid-email':
+          message = 'E-mail invalido.';
+          break;
+        case 'user-disabled':
+          message = 'Usuario desabilitado.';
+          break;
+        case 'user-not-found':
+          message = 'Usuario nao encontrado.';
+          break;
+        case 'wrong-password':
+        case 'invalid-credential':
+          message = 'Credenciais invalidas.';
+          break;
+        default:
+          message = e.message ?? 'Falha ao autenticar com e-mail/senha.';
       }
 
       setState(() {
@@ -96,6 +172,33 @@ class _SignInPageState extends State<SignInPage> {
                     label: Text(
                       _loading ? 'Entrando...' : 'Entrar com Google (empresa)',
                     ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Divider(),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: _emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      labelText: 'E-mail',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _passwordController,
+                    obscureText: true,
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      labelText: 'Senha',
+                    ),
+                    onSubmitted: (_) => _signInWithEmailPassword(),
+                  ),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: _loading ? null : _signInWithEmailPassword,
+                    icon: const Icon(Icons.alternate_email),
+                    label: const Text('Entrar com e-mail/senha (dev)'),
                   ),
                 ],
               ),

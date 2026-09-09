@@ -4,16 +4,15 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/models/app_identity.dart';
 import '../../../../core/models/tenant_invitation.dart';
+import '../../../../shared/domain/date_time_label.dart';
 import '../../../../shared/presentation/widgets/app_info_card.dart';
 import '../../../../shared/presentation/widgets/app_pagination_bar.dart';
 import '../../../../shared/presentation/widgets/pagination_slice.dart';
 import '../../../auth/services/tenant_invitation_service.dart';
+import '../controllers/tenant_invitation_action_controller.dart';
 
 class TenantInvitationsPage extends StatefulWidget {
-  const TenantInvitationsPage({
-    super.key,
-    required this.identity,
-  });
+  const TenantInvitationsPage({super.key, required this.identity});
 
   final AppIdentity identity;
 
@@ -33,6 +32,9 @@ class _TenantInvitationsPageState extends State<TenantInvitationsPage> {
 
   TenantInvitationService get _invitationService =>
       TenantInvitationService(FirebaseFirestore.instance);
+
+  TenantInvitationActionController get _actions =>
+      TenantInvitationActionController(_invitationService);
 
   bool get _isOwner => widget.identity.role.trim().toLowerCase() == 'owner';
 
@@ -55,32 +57,29 @@ class _TenantInvitationsPageState extends State<TenantInvitationsPage> {
     }
 
     final invitedEmail = _emailController.text.trim().toLowerCase();
-    if (invitedEmail.isEmpty || !invitedEmail.contains('@')) {
-      _showMessage('Informe um e-mail valido para o convite.');
-      return;
-    }
 
     setState(() {
       _creating = true;
     });
 
     try {
-      final expiresAt = DateTime.now().add(Duration(days: _expirationDays));
-      final invitation = await _invitationService.createInvitation(
+      final invitation = await _actions.createInvitation(
         tenantId: widget.identity.tenantId,
         role: _selectedRole,
         createdByUid: user.uid,
         invitedEmail: invitedEmail,
         defaultTenant: _defaultTenant,
-        expiresAt: expiresAt,
+        expirationDays: _expirationDays,
       );
 
       _emailController.clear();
       _showMessage('Convite criado: ${invitation.token}');
     } catch (error) {
-      _showMessage(error is StateError
-          ? error.message.toString()
-          : 'Nao foi possivel criar convite agora.');
+      _showMessage(
+        error is StateError
+            ? error.message.toString()
+            : 'Nao foi possivel criar convite agora.',
+      );
     } finally {
       if (mounted) {
         setState(() {
@@ -107,15 +106,17 @@ class _TenantInvitationsPageState extends State<TenantInvitationsPage> {
     });
 
     try {
-      await _invitationService.revokeInvitation(
+      await _actions.revokeInvitation(
         token: invitation.token,
         revokedByUid: user.uid,
       );
       _showMessage('Convite revogado com sucesso.');
     } catch (error) {
-      _showMessage(error is StateError
-          ? error.message.toString()
-          : 'Nao foi possivel revogar convite agora.');
+      _showMessage(
+        error is StateError
+            ? error.message.toString()
+            : 'Nao foi possivel revogar convite agora.',
+      );
     } finally {
       if (mounted) {
         setState(() {
@@ -126,17 +127,14 @@ class _TenantInvitationsPageState extends State<TenantInvitationsPage> {
   }
 
   void _showMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Convites do tenant'),
-      ),
+      appBar: AppBar(title: const Text('Convites do tenant')),
       body: SafeArea(
         child: SingleChildScrollView(
           child: Padding(
@@ -152,8 +150,7 @@ class _TenantInvitationsPageState extends State<TenantInvitationsPage> {
                 if (!_isOwner)
                   const AppInfoCard(
                     title: 'Acesso restrito',
-                    subtitle:
-                        'Somente owner pode enviar e gerenciar convites deste tenant.',
+                    subtitle: 'Somente owner pode enviar e gerenciar convites deste tenant.',
                   )
                 else
                   _CreateInvitationCard(
@@ -181,8 +178,9 @@ class _TenantInvitationsPageState extends State<TenantInvitationsPage> {
                   ),
                 const SizedBox(height: 12),
                 StreamBuilder<List<TenantInvitation>>(
-                  stream: _invitationService
-                      .watchInvitationsForTenant(widget.identity.tenantId),
+                  stream: _invitationService.watchInvitationsForTenant(
+                    widget.identity.tenantId,
+                  ),
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) {
                       return const AppInfoCard(
@@ -250,7 +248,8 @@ class _TenantInvitationsPageState extends State<TenantInvitationsPage> {
                           (invitation) => _ManagedInvitationCard(
                             invitation: invitation,
                             revoking: _revokingToken == invitation.token,
-                            onRevoke: _isOwner &&
+                            onRevoke:
+                                _isOwner &&
                                     invitation.status ==
                                         TenantInvitationStatus.pending
                                 ? () => _revokeInvitation(invitation)
@@ -415,11 +414,11 @@ class _ManagedInvitationCard extends StatelessWidget {
             Text('Perfil: ${invitation.role}'),
             if (invitation.expiresAt != null) ...[
               const SizedBox(height: 6),
-              Text('Expira em: ${_formatDate(invitation.expiresAt!)}'),
+              Text('Expira em: ${formatDateTimeLabel(invitation.expiresAt!)}'),
             ],
             if (invitation.createdAt != null) ...[
               const SizedBox(height: 6),
-              Text('Criado em: ${_formatDate(invitation.createdAt!)}'),
+              Text('Criado em: ${formatDateTimeLabel(invitation.createdAt!)}'),
             ],
             const SizedBox(height: 10),
             OutlinedButton.icon(
@@ -432,13 +431,4 @@ class _ManagedInvitationCard extends StatelessWidget {
       ),
     );
   }
-}
-
-String _formatDate(DateTime value) {
-  final year = value.year.toString().padLeft(4, '0');
-  final month = value.month.toString().padLeft(2, '0');
-  final day = value.day.toString().padLeft(2, '0');
-  final hour = value.hour.toString().padLeft(2, '0');
-  final minute = value.minute.toString().padLeft(2, '0');
-  return '$day/$month/$year $hour:$minute';
 }

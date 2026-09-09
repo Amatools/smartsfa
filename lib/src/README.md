@@ -1,17 +1,20 @@
-Estrutura inicial do app
+Estrutura atual do app
 
-- app/: composicao principal do aplicativo
-- core/: modelos, contratos e utilitarios compartilhados
+- core/: modelos, contratos, repositorios e implementacoes de dados
 - navigation/: shell e navegacao principal
+- shared/: utilitarios e widgets compartilhados
 - features/: modulos funcionais por contexto de negocio
 
-Modulos previstos em features:
+Modulos atuais em features:
 
 - auth
-- dashboard
 - clientes
 - produtos
 - pedidos
 - notificacoes
-- tenant_admin
-- platform_admin
+- tenant
+
+Observacao de status:
+
+- auth + tenant + notificacoes (convites): com dados reais em Firebase/Firestore
+- clientes + produtos + pedidos: ainda em repositorios in-memory (mock)

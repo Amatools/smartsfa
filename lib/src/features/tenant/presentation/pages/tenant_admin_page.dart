@@ -41,9 +41,10 @@ class _TenantAdminPageState extends State<TenantAdminPage> {
   bool _savingPolicy = false;
 
   TenantMembershipService get _membershipService =>
-      widget.membershipService ?? TenantMembershipService(FirebaseFirestore.instance);
+      widget.membershipService ??
+      TenantMembershipService(FirebaseFirestore.instance);
 
-    TenantAdminActionController get _actions =>
+  TenantAdminActionController get _actions =>
       TenantAdminActionController(_membershipService);
 
   String? get _actorUid =>
@@ -65,10 +66,10 @@ class _TenantAdminPageState extends State<TenantAdminPage> {
       _policy?['allowRepresentativeDisableSeller'] ?? true;
 
   TenantAdminPermissions get _permissions => TenantAdminPermissions(
-        actorRole: _actorRole,
-        allowManagerDisableRepresentative: _allowManagerDisableRepresentative,
-        allowRepresentativeDisableSeller: _allowRepresentativeDisableSeller,
-      );
+    actorRole: _actorRole,
+    allowManagerDisableRepresentative: _allowManagerDisableRepresentative,
+    allowRepresentativeDisableSeller: _allowRepresentativeDisableSeller,
+  );
 
   @override
   void dispose() {
@@ -130,9 +131,11 @@ class _TenantAdminPageState extends State<TenantAdminPage> {
       });
       _showMessage('Politica de governanca atualizada.');
     } catch (error) {
-      _showMessage(error is StateError
-          ? error.message.toString()
-          : 'Nao foi possivel atualizar a politica agora.');
+      _showMessage(
+        error is StateError
+            ? error.message.toString()
+            : 'Nao foi possivel atualizar a politica agora.',
+      );
     } finally {
       if (mounted) {
         setState(() {
@@ -160,9 +163,11 @@ class _TenantAdminPageState extends State<TenantAdminPage> {
       );
       _showMessage('Membership revogado com sucesso.');
     } catch (error) {
-      _showMessage(error is StateError
-          ? error.message.toString()
-          : 'Nao foi possivel revogar o membership.');
+      _showMessage(
+        error is StateError
+            ? error.message.toString()
+            : 'Nao foi possivel revogar o membership.',
+      );
     } finally {
       if (mounted) {
         setState(() {
@@ -190,9 +195,11 @@ class _TenantAdminPageState extends State<TenantAdminPage> {
       );
       _showMessage('Membership reativado com sucesso.');
     } catch (error) {
-      _showMessage(error is StateError
-          ? error.message.toString()
-          : 'Nao foi possivel reativar o membership.');
+      _showMessage(
+        error is StateError
+            ? error.message.toString()
+            : 'Nao foi possivel reativar o membership.',
+      );
     } finally {
       if (mounted) {
         setState(() {
@@ -221,9 +228,11 @@ class _TenantAdminPageState extends State<TenantAdminPage> {
       );
       _showMessage('Papel atualizado para $newRole.');
     } catch (error) {
-      _showMessage(error is StateError
-          ? error.message.toString()
-          : 'Nao foi possivel alterar o papel.');
+      _showMessage(
+        error is StateError
+            ? error.message.toString()
+            : 'Nao foi possivel alterar o papel.',
+      );
     } finally {
       if (mounted) {
         setState(() {
@@ -234,9 +243,8 @@ class _TenantAdminPageState extends State<TenantAdminPage> {
   }
 
   void _showMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 
   List<String> _availableRoleTargets(TenantMembership membership) {
@@ -245,10 +253,7 @@ class _TenantAdminPageState extends State<TenantAdminPage> {
       return const [];
     }
 
-    return _permissions.availableRoleTargets(
-      membership,
-      actorUid: actorUid,
-    );
+    return _permissions.availableRoleTargets(membership, actorUid: actorUid);
   }
 
   List<TenantMembership> _applyFilters(List<TenantMembership> memberships) {
@@ -281,8 +286,7 @@ class _TenantAdminPageState extends State<TenantAdminPage> {
             if (!_canOpenTenantArea)
               const AppInfoCard(
                 title: 'Acesso restrito',
-                subtitle:
-                    'Somente owner, gerente, representante e platform admin acessam esta area.',
+                subtitle: 'Somente owner, gerente, representante e platform admin acessam esta area.',
               )
             else
               Card(
@@ -407,13 +411,13 @@ class _TenantAdminPageState extends State<TenantAdminPage> {
             if (widget.identity.isMock)
               const AppInfoCard(
                 title: 'Modo mock',
-                subtitle:
-                    'A administracao real de memberships usa Firestore e Firebase Auth.',
+                subtitle: 'A administracao real de memberships usa Firestore e Firebase Auth.',
               )
             else
               StreamBuilder<List<TenantMembership>>(
-                stream: _membershipService
-                    .watchMembershipsForTenant(widget.identity.tenantId),
+                stream: _membershipService.watchMembershipsForTenant(
+                  widget.identity.tenantId,
+                ),
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
                     return const AppInfoCard(
@@ -426,7 +430,8 @@ class _TenantAdminPageState extends State<TenantAdminPage> {
                   if (memberships.isEmpty) {
                     return const AppInfoCard(
                       title: 'Sem memberships',
-                      subtitle: 'Nenhum usuario vinculado ao tenant no momento.',
+                      subtitle:
+                          'Nenhum usuario vinculado ao tenant no momento.',
                     );
                   }
 
@@ -434,8 +439,7 @@ class _TenantAdminPageState extends State<TenantAdminPage> {
                   if (filteredMemberships.isEmpty) {
                     return const AppInfoCard(
                       title: 'Sem resultados para o filtro atual',
-                      subtitle:
-                          'Ajuste busca, papel ou status para visualizar os memberships.',
+                      subtitle: 'Ajuste busca, papel ou status para visualizar os memberships.',
                     );
                   }
 
@@ -491,9 +495,11 @@ class _TenantAdminPageState extends State<TenantAdminPage> {
                         (membership) => _MembershipCard(
                           membership: membership,
                           processing:
-                              _processingMembershipId == membership.membershipId,
+                              _processingMembershipId ==
+                              membership.membershipId,
                           availableRoles: _availableRoleTargets(membership),
-                          onRevoke: membership.isActive &&
+                          onRevoke:
+                              membership.isActive &&
                                   (_actorUid != null &&
                                       _permissions.canRevoke(
                                         membership,
@@ -501,7 +507,8 @@ class _TenantAdminPageState extends State<TenantAdminPage> {
                                       ))
                               ? () => _revoke(membership)
                               : null,
-                          onReactivate: membership.isActive ||
+                          onReactivate:
+                              membership.isActive ||
                                   _actorUid == null ||
                                   !_permissions.canReactivate(
                                     membership,
@@ -576,12 +583,18 @@ class _MembershipFilters extends StatelessWidget {
                     items: const [
                       DropdownMenuItem(value: 'todos', child: Text('Todos')),
                       DropdownMenuItem(value: 'owner', child: Text('owner')),
-                      DropdownMenuItem(value: 'gerente', child: Text('gerente')),
+                      DropdownMenuItem(
+                        value: 'gerente',
+                        child: Text('gerente'),
+                      ),
                       DropdownMenuItem(
                         value: 'representante',
                         child: Text('representante'),
                       ),
-                      DropdownMenuItem(value: 'vendedor', child: Text('vendedor')),
+                      DropdownMenuItem(
+                        value: 'vendedor',
+                        child: Text('vendedor'),
+                      ),
                     ],
                     onChanged: (value) {
                       if (value != null) {
@@ -602,8 +615,14 @@ class _MembershipFilters extends StatelessWidget {
                     items: const [
                       DropdownMenuItem(value: 'todos', child: Text('Todos')),
                       DropdownMenuItem(value: 'ativo', child: Text('Ativo')),
-                      DropdownMenuItem(value: 'revogado', child: Text('Revogado')),
-                      DropdownMenuItem(value: 'inativo', child: Text('Inativo')),
+                      DropdownMenuItem(
+                        value: 'revogado',
+                        child: Text('Revogado'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'inativo',
+                        child: Text('Inativo'),
+                      ),
                     ],
                     onChanged: (value) {
                       if (value != null) {
@@ -725,4 +744,3 @@ class _MembershipCard extends StatelessWidget {
     );
   }
 }
-

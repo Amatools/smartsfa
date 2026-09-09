@@ -6,6 +6,7 @@ import '../../../../shared/presentation/widgets/app_info_card.dart';
 import '../../../../shared/presentation/widgets/app_pagination_bar.dart';
 import '../../../../shared/presentation/widgets/pagination_slice.dart';
 import '../../../auth/services/tenant_membership_service.dart';
+import '../../domain/tenant_membership_audit_filter.dart';
 
 class TenantMembershipAuditPage extends StatefulWidget {
   const TenantMembershipAuditPage({
@@ -33,28 +34,6 @@ class _TenantMembershipAuditPageState extends State<TenantMembershipAuditPage> {
   void dispose() {
     _searchController.dispose();
     super.dispose();
-  }
-
-  List<Map<String, dynamic>> _applyFilters(List<Map<String, dynamic>> entries) {
-    final query = _searchController.text.trim().toLowerCase();
-
-    return entries.where((entry) {
-      final action = (entry['action'] ?? '').toString().toLowerCase();
-      final actorUid = (entry['actorUid'] ?? '').toString().toLowerCase();
-      final membershipId = (entry['membershipId'] ?? '').toString().toLowerCase();
-      final matchesAction = _selectedAction == 'todos' || action == _selectedAction;
-      if (!matchesAction) {
-        return false;
-      }
-
-      if (query.isEmpty) {
-        return true;
-      }
-
-      return action.contains(query) ||
-          actorUid.contains(query) ||
-          membershipId.contains(query);
-    }).toList();
   }
 
   @override
@@ -154,7 +133,11 @@ class _TenantMembershipAuditPageState extends State<TenantMembershipAuditPage> {
                       );
                     }
 
-                    final filteredEntries = _applyFilters(entries);
+                    final filteredEntries = TenantMembershipAuditFilter.apply(
+                      entries: entries,
+                      query: _searchController.text,
+                      selectedAction: _selectedAction,
+                    );
                     if (filteredEntries.isEmpty) {
                       return const AppInfoCard(
                         title: 'Sem resultados',

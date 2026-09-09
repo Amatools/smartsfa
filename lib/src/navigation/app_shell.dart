@@ -1,7 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
+import '../core/data/firestore/firestore_cliente_repository.dart';
+import '../core/data/firestore/firestore_mock_seed_service.dart';
+import '../core/data/firestore/firestore_pedido_repository.dart';
+import '../core/data/firestore/firestore_produto_repository.dart';
 import '../core/data/in_memory/demo_workspace.dart';
 import '../core/models/app_identity.dart';
+import '../core/repositories/cliente_repository.dart';
+import '../core/repositories/pedido_repository.dart';
+import '../core/repositories/produto_repository.dart';
 import '../features/auth/presentation/pages/account_settings_page.dart';
 import '../features/clientes/presentation/pages/clientes_page.dart';
 import '../features/notificacoes/presentation/pages/notificacoes_page.dart';
@@ -29,12 +38,68 @@ class AppShellPage extends StatefulWidget {
 
 class _AppShellPageState extends State<AppShellPage> {
   int _selectedIndex = 0;
-  late final DemoWorkspace _workspace;
+  DemoWorkspace? _workspace;
+  late final ClienteRepository _clienteRepository;
+  late final ProdutoRepository _produtoRepository;
+  late final PedidoRepository _pedidoRepository;
 
   @override
   void initState() {
     super.initState();
-    _workspace = DemoWorkspace.seeded(widget.identity);
+    if (widget.identity.isMock) {
+      _workspace = DemoWorkspace.seeded(widget.identity);
+      _clienteRepository = _workspace!.clientes;
+      _produtoRepository = _workspace!.produtos;
+      _pedidoRepository = _workspace!.pedidos;
+      return;
+    }
+
+    final firestore = FirebaseFirestore.instance;
+    _clienteRepository = FirestoreClienteRepository(firestore);
+    _produtoRepository = FirestoreProdutoRepository(firestore);
+    _pedidoRepository = FirestorePedidoRepository(firestore);
+    _seedFirestoreMocksIfNeeded();
+  }
+
+  Future<void> _seedFirestoreMocksIfNeeded() async {
+    final role = widget.identity.role.trim().toLowerCase();
+    if (role != 'owner' && role != 'platform_admin') {
+      return;
+    }
+
+    final actorUid = FirebaseAuth.instance.currentUser?.uid;
+    if (actorUid == null || actorUid.isEmpty) {
+      return;
+    }
+
+    try {
+      final seedService = FirestoreMockSeedService(FirebaseFirestore.instance);
+      final result = await seedService.seedIfEmpty(
+        identity: widget.identity,
+        actorUid: actorUid,
+      );
+
+      if (!mounted || !result.anySeeded) {
+        return;
+      }
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) {
+          return;
+        }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Mock no banco carregado: ${result.seededClientes} clientes, '
+              '${result.seededProdutos} produtos, ${result.seededPedidos} pedidos.',
+            ),
+          ),
+        );
+      });
+    } catch (_) {
+      // Seeding is best-effort for dev bootstrap only.
+    }
   }
 
   List<_ShellItem> _buildItems(String role) {
@@ -48,26 +113,20 @@ class _AppShellPageState extends State<AppShellPage> {
       _ShellItem(
         label: 'Clientes',
         icon: Icons.people_outline,
-        builder: (context, identity) => ClientesPage(
-          identity: identity,
-          repository: _workspace.clientes,
-        ),
+        builder: (context, identity) =>
+            ClientesPage(identity: identity, repository: _clienteRepository),
       ),
       _ShellItem(
         label: 'Produtos',
         icon: Icons.inventory_2_outlined,
-        builder: (context, identity) => ProdutosPage(
-          identity: identity,
-          repository: _workspace.produtos,
-        ),
+        builder: (context, identity) =>
+            ProdutosPage(identity: identity, repository: _produtoRepository),
       ),
       _ShellItem(
         label: 'Pedidos',
         icon: Icons.receipt_long_outlined,
-        builder: (context, identity) => PedidosPage(
-          identity: identity,
-          repository: _workspace.pedidos,
-        ),
+        builder: (context, identity) =>
+            PedidosPage(identity: identity, repository: _pedidoRepository),
       ),
       _ShellItem(
         label: 'Avisos',
@@ -95,9 +154,7 @@ class _AppShellPageState extends State<AppShellPage> {
         _ShellItem(
           label: 'Tenant',
           icon: Icons.business_outlined,
-          builder: (context, identity) => TenantAdminPage(
-            identity: identity,
-          ),
+          builder: (context, identity) => TenantAdminPage(identity: identity),
         ),
       );
     }
@@ -109,7 +166,8 @@ class _AppShellPageState extends State<AppShellPage> {
           icon: Icons.admin_panel_settings_outlined,
           builder: (context, identity) => _ModulePage(
             title: 'Plataforma',
-            subtitle: 'Visao global do SaaS para onboarding, governanca e suporte.',
+            subtitle:
+                'Visao global do SaaS para onboarding, governanca e suporte.',
             bullets: const [
               'Gestao de tenants',
               'Ambientes e recursos',
@@ -126,7 +184,20 @@ class _AppShellPageState extends State<AppShellPage> {
   @override
   Widget build(BuildContext context) {
     final items = _buildItems(widget.identity.role);
-    final selected = items[_selectedIndex.clamp(0, items.length - 1)];
+    final safeIndex = _selectedIndex.clamp(0, items.length - 1);
+    final selected = items[safeIndex];
+
+    if (safeIndex != _selectedIndex) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          _selectedIndex = safeIndex;
+        });
+      });
+    }
+
     final isWide = MediaQuery.sizeOf(context).width >= 900;
 
     return Scaffold(
@@ -151,7 +222,7 @@ class _AppShellPageState extends State<AppShellPage> {
             ? Row(
                 children: [
                   NavigationRail(
-                    selectedIndex: _selectedIndex,
+                    selectedIndex: safeIndex,
                     onDestinationSelected: (index) {
                       setState(() {
                         _selectedIndex = index;
@@ -168,23 +239,19 @@ class _AppShellPageState extends State<AppShellPage> {
                         .toList(),
                   ),
                   const VerticalDivider(width: 1),
-                  Expanded(
-                    child: selected.builder(context, widget.identity),
-                  ),
+                  Expanded(child: selected.builder(context, widget.identity)),
                 ],
               )
             : Column(
                 children: [
-                  Expanded(
-                    child: selected.builder(context, widget.identity),
-                  ),
+                  Expanded(child: selected.builder(context, widget.identity)),
                 ],
               ),
       ),
       bottomNavigationBar: isWide
           ? null
           : NavigationBar(
-              selectedIndex: _selectedIndex,
+              selectedIndex: safeIndex,
               onDestinationSelected: (index) {
                 setState(() {
                   _selectedIndex = index;
@@ -259,14 +326,13 @@ class _DashboardPage extends StatelessWidget {
                               Expanded(
                                 child: Text(
                                   entry.$1,
-                                  style: Theme.of(context).textTheme.titleMedium,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .titleMedium,
                                 ),
                               ),
                               Flexible(
-                                child: Text(
-                                  entry.$2,
-                                  textAlign: TextAlign.end,
-                                ),
+                                child: Text(entry.$2, textAlign: TextAlign.end),
                               ),
                             ],
                           ),
@@ -339,19 +405,21 @@ class _StageCard extends StatelessWidget {
           children: [
             Text(title, style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 12),
-            ...lines.map((line) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Padding(
-                        padding: EdgeInsets.only(top: 6, right: 8),
-                        child: Icon(Icons.circle, size: 8),
-                      ),
-                      Expanded(child: Text(line)),
-                    ],
-                  ),
-                )),
+            ...lines.map(
+              (line) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Padding(
+                      padding: EdgeInsets.only(top: 6, right: 8),
+                      child: Icon(Icons.circle, size: 8),
+                    ),
+                    Expanded(child: Text(line)),
+                  ],
+                ),
+              ),
+            ),
           ],
         ),
       ),

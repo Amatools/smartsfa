@@ -1,10 +1,10 @@
-# SmartSFA - Estrutura Inicial do Projeto
+# SmartSFA - Estrutura Atual do Projeto
 
 ## Objetivo
 
 Estabelecer uma base evolutiva para o app Flutter com separacao clara entre composicao, navegacao, modelos compartilhados e modulos de negocio.
 
-## Estrutura atual proposta
+## Estrutura atual
 
 ```text
 lib/
@@ -24,15 +24,14 @@ lib/
         produto.dart
     navigation/
       app_shell.dart
+    shared/
     features/
       auth/
-      dashboard/
       clientes/
       produtos/
       pedidos/
       notificacoes/
-      tenant_admin/
-      platform_admin/
+      tenant/
 ```
 
 ## Responsabilidades
@@ -43,12 +42,13 @@ lib/
 - src/core/data: implementacoes de armazenamento por ambiente
 - src/core/models: tipos compartilhados e entidades de dominio pequenas
 - src/navigation: shell, menus e roteamento principal
+- src/shared: utilitarios e widgets compartilhados
 - src/features: modulos funcionais por contexto de negocio
 
 ## Proxima evolucao
 
-1. Mover auth e splash para src/features/auth
-2. Mover dashboard para src/features/dashboard
-3. Consolidar modelos tenant-aware e contratos de repositorio em src/core
-4. Adicionar camada data para storage local e integrações
-5. Criar camada domain para regras comerciais e casos de uso
+1. Conectar Clientes/Produtos/Pedidos a provider real tenant-aware (Firestore inicial)
+2. Introduzir selecao clara de data source (mock vs real) por ambiente
+3. Evoluir armazenamento local para offline-first com Isar
+4. Manter regras de acesso apenas em services/domain e evitar regra de negocio na UI
+5. Expandir cobertura de testes de repositorios e fluxos de entrada multi-tenant

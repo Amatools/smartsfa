@@ -3,8 +3,13 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/models/app_identity.dart';
 import '../../../../core/models/tenant_invitation.dart';
+import '../../../../shared/domain/date_time_label.dart';
+import '../../../../shared/presentation/widgets/app_info_card.dart';
 import '../../../auth/services/tenant_invitation_service.dart';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
+
+import '../controllers/notification_invitation_action_controller.dart';
 
 class NotificacoesPage extends StatefulWidget {
   const NotificacoesPage({
@@ -26,6 +31,9 @@ class _NotificacoesPageState extends State<NotificacoesPage> {
   TenantInvitationService get _invitationService =>
       TenantInvitationService(FirebaseFirestore.instance);
 
+  NotificationInvitationActionController get _actions =>
+      NotificationInvitationActionController(_invitationService);
+
   Future<void> _acceptInvite(TenantInvitation invitation) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
@@ -38,18 +46,15 @@ class _NotificacoesPageState extends State<NotificacoesPage> {
     });
 
     try {
-      await _invitationService.acceptInvitation(
-        user: user,
-        token: invitation.token,
-      );
-      _showMessage(
-        'Convite aceito. Atualizando acessos da conta...',
-      );
+      await _actions.acceptInvitation(user: user, token: invitation.token);
+      _showMessage('Convite aceito. Atualizando acessos da conta...');
       widget.onAccessUpdated?.call();
     } catch (error) {
-      _showMessage(error is StateError
-          ? error.message.toString()
-          : 'Nao foi possivel aceitar o convite agora.');
+      _showMessage(
+        error is StateError
+            ? error.message.toString()
+            : 'Nao foi possivel aceitar o convite agora.',
+      );
     } finally {
       if (mounted) {
         setState(() {
@@ -71,15 +76,17 @@ class _NotificacoesPageState extends State<NotificacoesPage> {
     });
 
     try {
-      await _invitationService.declineInvitation(
+      await _actions.declineInvitation(
         token: invitation.token,
         declinedByUid: user.uid,
       );
       _showMessage('Convite recusado.');
     } catch (error) {
-      _showMessage(error is StateError
-          ? error.message.toString()
-          : 'Nao foi possivel recusar o convite agora.');
+      _showMessage(
+        error is StateError
+            ? error.message.toString()
+            : 'Nao foi possivel recusar o convite agora.',
+      );
     } finally {
       if (mounted) {
         setState(() {
@@ -90,9 +97,8 @@ class _NotificacoesPageState extends State<NotificacoesPage> {
   }
 
   void _showMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -121,22 +127,23 @@ class _NotificacoesPageState extends State<NotificacoesPage> {
             ),
             const SizedBox(height: 16),
             if (widget.identity.isMock)
-              const _InfoCard(
+              const AppInfoCard(
                 title: 'Modo mock',
-                subtitle:
-                    'No modo mock, notificacoes reais de convite nao sao carregadas.',
+                subtitle: 'No modo mock, notificacoes reais de convite nao sao carregadas.',
               )
             else if (email.isEmpty)
-              const _InfoCard(
+              const AppInfoCard(
                 title: 'Sem e-mail autenticado',
                 subtitle: 'Nao foi possivel identificar convites para a sessao atual.',
               )
             else
               StreamBuilder<List<TenantInvitation>>(
-                stream: _invitationService.watchPendingInvitationsForEmail(email),
+                stream: _invitationService.watchPendingInvitationsForEmail(
+                  email,
+                ),
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const _InfoCard(
+                    return const AppInfoCard(
                       title: 'Carregando notificacoes',
                       subtitle: 'Buscando convites pendentes...',
                     );
@@ -144,10 +151,9 @@ class _NotificacoesPageState extends State<NotificacoesPage> {
 
                   final invitations = snapshot.data ?? const [];
                   if (invitations.isEmpty) {
-                    return const _InfoCard(
+                    return const AppInfoCard(
                       title: 'Sem convites pendentes',
-                      subtitle:
-                          'Quando um owner enviar convite para seu e-mail, ele aparece aqui.',
+                      subtitle: 'Quando um owner enviar convite para seu e-mail, ele aparece aqui.',
                     );
                   }
 
@@ -205,7 +211,7 @@ class _InvitationCard extends StatelessWidget {
             Text('Status: ${invitation.status.label}'),
             if (invitation.expiresAt != null) ...[
               const SizedBox(height: 6),
-              Text('Expira em: ${_formatDate(invitation.expiresAt!)}'),
+              Text('Expira em: ${formatDateTimeLabel(invitation.expiresAt!)}'),
             ],
             const SizedBox(height: 12),
             FilledButton.icon(
@@ -224,37 +230,4 @@ class _InvitationCard extends StatelessWidget {
       ),
     );
   }
-}
-
-class _InfoCard extends StatelessWidget {
-  const _InfoCard({required this.title, required this.subtitle});
-
-  final String title;
-  final String subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 8),
-            Text(subtitle),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-String _formatDate(DateTime value) {
-  final year = value.year.toString().padLeft(4, '0');
-  final month = value.month.toString().padLeft(2, '0');
-  final day = value.day.toString().padLeft(2, '0');
-  final hour = value.hour.toString().padLeft(2, '0');
-  final minute = value.minute.toString().padLeft(2, '0');
-  return '$day/$month/$year $hour:$minute';
 }

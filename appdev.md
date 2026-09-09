@@ -17,7 +17,7 @@ Regra de uso: cada item entregue deve ser marcado com [x] e manter evidencias cu
 - [x] Resolver de entrada por tenant/membership iniciado no codigo
 - [x] Fluxo de convite por token iniciado no codigo (aceite + criacao de membership)
 - [x] Convites pendentes exibidos em notificacoes com aceite no app
-- [x] Owner/Admin pode criar e revogar convites na tela de notificacoes
+- [x] Owner pode criar e revogar convites na tela Tenant > Convites
 - [x] Revalidacao de acesso apos aceite de convite no app shell
 - [x] Modulo Tenant com gestao de memberships (listar, revogar, reativar)
 - [x] Filtro e busca de memberships por uid, papel e status no modulo Tenant
@@ -28,17 +28,34 @@ Regra de uso: cada item entregue deve ser marcado com [x] e manter evidencias cu
 - [x] Convites movidos para modulo Tenant (tela dedicada) com envio/gestao owner-only
 - [x] Notificacoes focada apenas em convite recebido (aceitar ou recusar)
 - [x] Tela de auditoria de memberships com filtros basicos
-- [x] Modo pessoal definido como preferencia da conta do usuario (nao governado por owner do tenant)
+- [x] Modo pessoal definido como capacidade permanente da conta (nao governado por owner do tenant)
 - [x] Politica do tenant restrita a governanca organizacional (ex.: gerente->representante, representante->vendedor)
 
 ## Diretrizes de fluxo (multi-tenant + pessoal)
 
-- [x] Modo pessoal deve continuar acessivel ao usuario fora de qualquer tenant, quando habilitado na propria conta
+- [x] Modo pessoal deve continuar acessivel ao usuario fora de qualquer tenant
 - [x] Owner pode desligar membership de vendedor no tenant sem bloquear o acesso pessoal da conta
 - [x] Tela Tenant nao controla habilitacao de modo pessoal; controle individual fica na aba Conta
 - [x] Usuario com multiplos memberships escolhe o contexto de entrada (tenant A, tenant B ou pessoal)
 - [ ] Definir oficialmente se criacao de tenant sera self-service (qualquer conta elegivel) ou assistida (somente platform admin)
 - [ ] Definir se representante sem membership de tenant pode existir como "workspace pessoal com equipe" (recomendado: nao)
+
+## Status atual de persistencia (importante)
+
+- [x] Auth e acesso multi-tenant em dados reais (Firebase Auth + Firestore)
+- [x] Convites, memberships, politicas e auditoria em colecoes reais
+- [ ] Clientes em base real por tenant (atual: in-memory/mock)
+- [ ] Produtos em base real por tenant (atual: in-memory/mock)
+- [ ] Pedidos em base real por tenant (atual: in-memory/mock)
+- [ ] Isar offline-first conectado aos modulos comerciais (atual: contratos + mock)
+
+## Proxima etapa recomendada (execucao)
+
+- [ ] Migrar Clientes de in-memory para provider real tenant-aware (Firestore inicial)
+- [ ] Manter fallback de mock apenas para modo dev explicito
+- [ ] Replicar estrategia em Produtos
+- [ ] Replicar estrategia em Pedidos
+- [ ] Fechar ciclo com testes de repositorio e smoke de UI
 
 ## 0) Validacao de ambiente (hoje)
 
@@ -79,6 +96,7 @@ Use esta secao como checklist operacional do dia a dia.
 - [x] Criar modo mock/dev auth para liberar desenvolvimento das telas e fluxos
 - [x] Simular perfis: platform_admin, owner, gerente, representante, vendedor
 - [x] Permitir troca de perfil em ambiente dev para validar fluxos e permissoes visuais
+- [x] Criar login local temporario (email/senha) sem dependencia de Google Console
 
 ## Decisoes em aberto
 
@@ -218,6 +236,11 @@ Use esta secao como checklist operacional do dia a dia.
 - 2026-09-09: Firebase atual mantido como ambiente dev/prototipo e login real movido para etapa posterior.
 - 2026-09-09: Documento de transicao criado em docs/architecture_transition.md.
 - 2026-09-09: Modo mock/dev auth implementado como padrao temporario no app para liberar desenvolvimento sem OAuth real.
+- 2026-09-09: Login local de desenvolvimento implementado (AUTH_MODE=local) para continuidade sem Google Console.
+- 2026-09-09: Bootstrap de auth atualizado com tres modos: local, profile_mock e firebase.
+- 2026-09-09: AUTH_MODE=local atualizado para tentar Firebase Auth anonimo + provisionamento minimo no Firestore com fallback automatico para mock.
+- 2026-09-09: AppShell passou a popular mock inicial direto no Firestore (clientes/produtos/pedidos) quando tenant estiver vazio.
+- 2026-09-09: Configuracao de persistencia local do Firestore ativada no bootstrap para base offline-first.
 - 2026-09-09: Estrutura base em lib/src criada com shell responsivo e navegacao por perfil.
 - 2026-09-09: Documentados SaaS model v2 e estrutura inicial do projeto.
 - 2026-09-09: Firestore Rules refatoradas e publicadas para modelo multi-tenant com tenants e tenant_memberships.
@@ -245,4 +268,8 @@ Use esta secao como checklist operacional do dia a dia.
 - 2026-09-09: Regra reforcada no service: somente owner ativo do tenant pode criar ou revogar convite.
 - 2026-09-09: Notificacoes agora exibe apenas convites pendentes para o usuario, com opcoes de aceitar ou recusar.
 - 2026-09-09: Entregue tela Tenant > Auditoria de memberships com busca por ator, acao e membershipId.
+- 2026-09-09: Refactor SRP: extraidos controllers de acoes de convite (Tenant e Notificacoes).
+- 2026-09-09: Refactor SRP: filtro de auditoria extraido para helper de dominio.
+- 2026-09-09: Formato de data/hora consolidado em util compartilhado.
+- 2026-09-09: Status atual confirmado: Clientes/Produtos/Pedidos ainda usam repositorios in-memory.
 
