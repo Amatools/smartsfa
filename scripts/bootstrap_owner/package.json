@@ -1,0 +1,13 @@
+{
+  "name": "smartsfa-bootstrap-owner",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Bootstrap do primeiro owner no Firebase Auth + Firestore",
+  "main": "create_owner.js",
+  "scripts": {
+    "owner:create": "node create_owner.js"
+  },
+  "dependencies": {
+    "firebase-admin": "^13.4.0"
+  }
+}

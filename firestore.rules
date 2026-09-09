@@ -1,0 +1,319 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function uid() {
+      return request.auth.uid;
+    }
+
+    function hasUserDoc() {
+      return exists(/databases/$(database)/documents/usuarios/$(uid()));
+    }
+
+    function me() {
+      return get(/databases/$(database)/documents/usuarios/$(uid()));
+    }
+
+    function isGlobalActiveUser() {
+      return signedIn() && hasUserDoc() && me().data.ativoGlobal == true;
+    }
+
+    function myPlatformRole() {
+      return hasUserDoc() ? me().data.platformRole : 'none';
+    }
+
+    function isPlatformAdmin() {
+      return isGlobalActiveUser() && myPlatformRole() == 'platform_admin';
+    }
+
+    function membershipId(tenantId) {
+      return tenantId + '_' + uid();
+    }
+
+    function hasActiveMembership(tenantId) {
+      return exists(/databases/$(database)/documents/tenant_memberships/$(membershipId(tenantId)))
+        && get(/databases/$(database)/documents/tenant_memberships/$(membershipId(tenantId))).data.ativo == true;
+    }
+
+    function myMembership(tenantId) {
+      return get(/databases/$(database)/documents/tenant_memberships/$(membershipId(tenantId)));
+    }
+
+    function myTenantRole(tenantId) {
+      return hasActiveMembership(tenantId) ? myMembership(tenantId).data.role : '';
+    }
+
+    function isTenantOwner(tenantId) {
+      return hasActiveMembership(tenantId) && myTenantRole(tenantId) == 'owner';
+    }
+
+    function isTenantGerente(tenantId) {
+      return hasActiveMembership(tenantId) && myTenantRole(tenantId) == 'gerente';
+    }
+
+    function isTenantRepresentante(tenantId) {
+      return hasActiveMembership(tenantId) && myTenantRole(tenantId) == 'representante';
+    }
+
+    function isTenantVendedor(tenantId) {
+      return hasActiveMembership(tenantId) && myTenantRole(tenantId) == 'vendedor';
+    }
+
+    function hasTenantField(data) {
+      return data.tenantId is string && data.tenantId != '';
+    }
+
+    function hasScopeFields(data) {
+      return hasTenantField(data)
+        && data.ownerId is string
+        && data.gerenteId is string
+        && data.representanteId is string
+        && data.vendedorId is string;
+    }
+
+    function canReadScopedData(data) {
+      return isPlatformAdmin()
+        || (hasActiveMembership(data.tenantId) && (
+          isTenantOwner(data.tenantId)
+          || (isTenantGerente(data.tenantId) && data.gerenteId == uid())
+          || (isTenantRepresentante(data.tenantId) && data.representanteId == uid())
+          || (isTenantVendedor(data.tenantId) && data.vendedorId == uid())
+        ));
+    }
+
+    function canWriteScopedData(data) {
+      return isPlatformAdmin()
+        || (hasActiveMembership(data.tenantId) && (
+          (isTenantOwner(data.tenantId) && data.ownerId == uid())
+          || (isTenantGerente(data.tenantId)
+            && data.gerenteId == uid()
+            && data.ownerId == myMembership(data.tenantId).data.ownerId)
+          || (isTenantRepresentante(data.tenantId)
+            && data.representanteId == uid()
+            && data.gerenteId == myMembership(data.tenantId).data.gerenteId
+            && data.ownerId == myMembership(data.tenantId).data.ownerId)
+          || (isTenantVendedor(data.tenantId)
+            && data.vendedorId == uid()
+            && data.representanteId == myMembership(data.tenantId).data.representanteId
+            && data.gerenteId == myMembership(data.tenantId).data.gerenteId
+            && data.ownerId == myMembership(data.tenantId).data.ownerId)
+        ));
+    }
+
+    function immutableScopeOnUpdate() {
+      return resource.data.tenantId == request.resource.data.tenantId
+        && resource.data.ownerId == request.resource.data.ownerId
+        && resource.data.gerenteId == request.resource.data.gerenteId
+        && resource.data.representanteId == request.resource.data.representanteId
+        && resource.data.vendedorId == request.resource.data.vendedorId;
+    }
+
+    function validTenantDoc(tenantId, data) {
+      return data.tenantId == tenantId
+        && data.slug is string
+        && data.nomeFantasia is string
+        && data.ativo is bool
+        && data.operationMode in ['manual', 'sankhya', 'custom']
+        && data.erpProvider in ['none', 'sankhya', 'custom'];
+    }
+
+    function validPlatformUserDoc(targetUid, data) {
+      return data.uid == targetUid
+        && data.email is string
+        && data.displayName is string
+        && data.platformRole in ['platform_admin', 'none']
+        && data.ativoGlobal is bool;
+    }
+
+    function validTenantRole(role) {
+      return role in ['owner', 'gerente', 'representante', 'vendedor'];
+    }
+
+    function validMembershipHierarchy(data) {
+      return (data.role == 'owner'
+          && data.ownerId == data.uid
+          && data.gerenteId == ''
+          && data.representanteId == ''
+          && data.vendedorId == '')
+        || (data.role == 'gerente'
+          && data.ownerId is string
+          && data.ownerId != ''
+          && data.gerenteId == data.uid
+          && data.representanteId == ''
+          && data.vendedorId == '')
+        || (data.role == 'representante'
+          && data.ownerId is string
+          && data.ownerId != ''
+          && data.gerenteId is string
+          && data.gerenteId != ''
+          && data.representanteId == data.uid
+          && data.vendedorId == '')
+        || (data.role == 'vendedor'
+          && data.ownerId is string
+          && data.ownerId != ''
+          && data.gerenteId is string
+          && data.gerenteId != ''
+          && data.representanteId is string
+          && data.representanteId != ''
+          && data.vendedorId == data.uid);
+    }
+
+    function validMembershipDoc(membershipKey, data) {
+      return data.membershipId == membershipKey
+        && membershipKey == data.tenantId + '_' + data.uid
+        && data.tenantId is string
+        && data.uid is string
+        && validTenantRole(data.role)
+        && data.ativo is bool
+        && data.defaultTenant is bool
+        && data.ownerId is string
+        && data.gerenteId is string
+        && data.representanteId is string
+        && data.vendedorId is string
+        && validMembershipHierarchy(data);
+    }
+
+    match /tenants/{tenantId} {
+      allow read: if isPlatformAdmin() || hasActiveMembership(tenantId);
+
+      allow create, update: if signedIn()
+        && isPlatformAdmin()
+        && validTenantDoc(tenantId, request.resource.data);
+
+      allow delete: if signedIn() && isPlatformAdmin();
+    }
+
+    match /usuarios/{targetUid} {
+      allow read: if signedIn() && (isPlatformAdmin() || uid() == targetUid);
+
+      allow create: if signedIn()
+        && isPlatformAdmin()
+        && validPlatformUserDoc(targetUid, request.resource.data);
+
+      allow update: if signedIn()
+        && isPlatformAdmin()
+        && validPlatformUserDoc(targetUid, request.resource.data);
+
+      allow delete: if signedIn() && isPlatformAdmin();
+    }
+
+    match /tenant_memberships/{membershipKey} {
+      allow read: if signedIn() && (
+        isPlatformAdmin()
+        || uid() == resource.data.uid
+        || (isTenantOwner(resource.data.tenantId) && resource.data.ownerId == uid())
+        || (isTenantGerente(resource.data.tenantId)
+          && resource.data.gerenteId == uid()
+          && (resource.data.role == 'representante' || resource.data.role == 'vendedor'))
+        || (isTenantRepresentante(resource.data.tenantId)
+          && resource.data.representanteId == uid()
+          && resource.data.role == 'vendedor')
+      );
+
+      allow create: if signedIn()
+        && validMembershipDoc(membershipKey, request.resource.data)
+        && (
+          isPlatformAdmin()
+          || (
+            isTenantOwner(request.resource.data.tenantId)
+            && request.resource.data.ownerId == uid()
+            && request.resource.data.role in ['gerente', 'representante', 'vendedor']
+          )
+        );
+
+      allow update: if signedIn()
+        && validMembershipDoc(membershipKey, request.resource.data)
+        && resource.data.tenantId == request.resource.data.tenantId
+        && resource.data.uid == request.resource.data.uid
+        && (
+          isPlatformAdmin()
+          || (
+            isTenantOwner(request.resource.data.tenantId)
+            && request.resource.data.ownerId == uid()
+            && request.resource.data.role in ['gerente', 'representante', 'vendedor']
+          )
+        );
+
+      allow delete: if signedIn() && (
+        isPlatformAdmin()
+        || (
+          isTenantOwner(resource.data.tenantId)
+          && resource.data.ownerId == uid()
+          && resource.data.role in ['gerente', 'representante', 'vendedor']
+        )
+      );
+    }
+
+    match /solicitacoes_acesso/{requestId} {
+      allow create: if signedIn()
+        && request.resource.data.uid == uid()
+        && request.resource.data.status == 'pendente';
+
+      allow read: if signedIn() && (uid() == resource.data.uid || isPlatformAdmin());
+
+      allow update: if signedIn() && (
+          isPlatformAdmin()
+          || (
+            uid() == resource.data.uid
+            && request.resource.data.uid == uid()
+            && request.resource.data.status == 'pendente'
+          )
+        );
+
+      allow delete: if signedIn() && (isPlatformAdmin() || uid() == resource.data.uid);
+    }
+
+    match /clientes/{clienteId} {
+      allow read: if hasScopeFields(resource.data)
+        && canReadScopedData(resource.data);
+
+      allow create: if hasScopeFields(request.resource.data)
+        && canWriteScopedData(request.resource.data);
+
+      allow update: if hasScopeFields(request.resource.data)
+        && immutableScopeOnUpdate()
+        && canWriteScopedData(request.resource.data);
+
+      allow delete: if hasScopeFields(resource.data)
+        && canWriteScopedData(resource.data);
+    }
+
+    match /produtos/{produtoId} {
+      allow read: if isPlatformAdmin()
+        || (hasTenantField(resource.data) && hasActiveMembership(resource.data.tenantId));
+
+      allow create: if hasTenantField(request.resource.data)
+        && (isPlatformAdmin() || isTenantOwner(request.resource.data.tenantId));
+
+      allow update: if hasTenantField(request.resource.data)
+        && resource.data.tenantId == request.resource.data.tenantId
+        && (isPlatformAdmin() || isTenantOwner(request.resource.data.tenantId));
+
+      allow delete: if hasTenantField(resource.data)
+        && (isPlatformAdmin() || isTenantOwner(resource.data.tenantId));
+    }
+
+    match /pedidos/{pedidoId} {
+      allow read: if hasScopeFields(resource.data)
+        && canReadScopedData(resource.data);
+
+      allow create: if hasScopeFields(request.resource.data)
+        && canWriteScopedData(request.resource.data);
+
+      allow update: if hasScopeFields(request.resource.data)
+        && immutableScopeOnUpdate()
+        && canWriteScopedData(request.resource.data);
+
+      allow delete: if hasScopeFields(resource.data)
+        && (isPlatformAdmin() || isTenantOwner(resource.data.tenantId));
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

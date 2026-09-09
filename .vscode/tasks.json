@@ -1,0 +1,82 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "flutter analyze",
+			"type": "process",
+			"command": "flutter",
+			"args": [
+				"analyze"
+			],
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"isBackground": false,
+			"problemMatcher": [
+				"$tsc"
+			],
+			"group": "build"
+		},
+		{
+			"label": "flutter build apk debug",
+			"type": "process",
+			"command": "flutter",
+			"args": [
+				"build",
+				"apk",
+				"--debug"
+			],
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "flutter run chrome",
+			"type": "process",
+			"command": "flutter",
+			"args": [
+				"run",
+				"-d",
+				"chrome"
+			],
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"isBackground": true,
+			"group": "build"
+		},
+		{
+			"label": "flutterfire configure",
+			"type": "process",
+			"command": "C:/Users/Aureo.Filho/AppData/Local/Pub/Cache/bin/flutterfire.bat",
+			"args": [
+				"configure",
+				"--project=smartsfa-f20a0",
+				"--platforms=android,ios,web"
+			],
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "firebase deploy firestore rules",
+			"type": "process",
+			"command": "C:/Users/Aureo.Filho/AppData/Roaming/npm/firebase.cmd",
+			"args": [
+				"deploy",
+				"--project=smartsfa-f20a0",
+				"--only",
+				"firestore:rules"
+			],
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"isBackground": false,
+			"group": "build"
+		}
+	]
+}
