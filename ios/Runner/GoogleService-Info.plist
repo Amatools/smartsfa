@@ -2,18 +2,22 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>CLIENT_ID</key>
+	<string>209774810668-cjifscpihdipd1i0ta9ja42mlki5omf4.apps.googleusercontent.com</string>
+	<key>REVERSED_CLIENT_ID</key>
+	<string>com.googleusercontent.apps.209774810668-cjifscpihdipd1i0ta9ja42mlki5omf4</string>
 	<key>API_KEY</key>
-	<string>AIzaSyDDxQXrwfOrJXT9JneFE3apaokH3SYx1jE</string>
+	<string>AIzaSyCBSuz3gwzxTSC-OYUsI07ei_a-78ZBwXU</string>
 	<key>GCM_SENDER_ID</key>
-	<string>349024474460</string>
+	<string>209774810668</string>
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>BUNDLE_ID</key>
 	<string>com.example.smartsfa</string>
 	<key>PROJECT_ID</key>
-	<string>smartsfa-f20a0</string>
+	<string>smart-sfa</string>
 	<key>STORAGE_BUCKET</key>
-	<string>smartsfa-f20a0.firebasestorage.app</string>
+	<string>smart-sfa.firebasestorage.app</string>
 	<key>IS_ADS_ENABLED</key>
 	<false></false>
 	<key>IS_ANALYTICS_ENABLED</key>
@@ -25,6 +29,6 @@
 	<key>IS_SIGNIN_ENABLED</key>
 	<true></true>
 	<key>GOOGLE_APP_ID</key>
-	<string>1:349024474460:ios:471f1b6d61c63ba9d6dd99</string>
+	<string>1:209774810668:ios:33b9601d3abb13d6d8e389</string>
 </dict>
 </plist>

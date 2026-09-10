@@ -23,15 +23,7 @@ SmartSFA e um app Flutter para operacao comercial B2B em modelo SaaS multi-tenan
 2. `flutter analyze`
 3. `flutter run -d chrome`
 
-Por padrao o projeto inicia com login local de desenvolvimento para acelerar validacao de fluxos sem depender de Google Cloud:
-
-- flag: `AUTH_MODE=local` (default no build atual)
-
-Modos disponiveis:
-
-- `AUTH_MODE=local`: login local por e-mail/senha de desenvolvimento (tenta Firebase anonimo + Firestore; se nao conseguir, entra em fallback mock automaticamente)
-- `AUTH_MODE=profile_mock`: acesso por selecao de tenant/perfil (modo antigo)
-- `AUTH_MODE=firebase`: login real via Firebase Auth (Google)
+O login e exclusivamente via Firebase Auth (Google ou e-mail/senha cadastrados no projeto). Nao ha mais modos mock/local de desenvolvimento: a conta precisa existir no Firebase para liberar o app. Apos o primeiro login bem-sucedido, a sessao fica persistida localmente e o app continua funcionando offline (Firestore com persistencia habilitada) ate que seja necessario reautenticar.
 
 ## Guias do projeto
 

@@ -1,9 +1,11 @@
 import '../../models/app_identity.dart';
 import '../../models/cliente.dart';
+import '../../models/cliente_pre_cadastro.dart';
 import '../../models/cliente_reference.dart';
 import '../../models/pedido.dart';
 import '../../models/domain_types.dart';
 import '../../models/produto.dart';
+import 'in_memory_cliente_pre_cadastro_repository.dart';
 import 'in_memory_cliente_repository.dart';
 import 'in_memory_pedido_repository.dart';
 import 'in_memory_produto_repository.dart';
@@ -11,6 +13,7 @@ import 'in_memory_produto_repository.dart';
 class DemoWorkspace {
   DemoWorkspace({
     required this.clientes,
+    required this.preCadastros,
     required this.produtos,
     required this.pedidos,
   });
@@ -47,6 +50,23 @@ class DemoWorkspace {
             representanteId: 'rep-002',
             vendedorId: 'vnd-002',
             createdAt: now,
+          ),
+        ],
+      ),
+      preCadastros: InMemoryClientePreCadastroRepository(
+        seedItems: [
+          ClientePreCadastro(
+            id: 'pre-001',
+            tenantId: tenantId,
+            nome: 'Mecânica do Vale',
+            documento: '55.123.456/0001-77',
+            status: PreRegistrationStatus.pending,
+            requestedByUid: 'user-001',
+            email: 'contato@mecanica.com.br',
+            celular: '(11) 99999-1234',
+            origemCadastro: CustomerOrigin.manual,
+            createdAt: now,
+            updatedAt: now,
           ),
         ],
       ),
@@ -118,6 +138,7 @@ class DemoWorkspace {
   }
 
   final InMemoryClienteRepository clientes;
+  final InMemoryClientePreCadastroRepository preCadastros;
   final InMemoryProdutoRepository produtos;
   final InMemoryPedidoRepository pedidos;
 }

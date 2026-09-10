@@ -3,12 +3,12 @@
 ## Decisao adotada
 
 - Login no app: Google (Firebase Authentication).
+- Login oficial ja habilitado e em uso no projeto smart-sfa.
 - Autorizacao de uso: interna por tenant via documentos em Firestore.
 - Vinculo com Sankhya: opcional e controlado internamente (nao automatico no cliente).
 - Direcao oficial: plataforma SaaS multi-tenant.
 - Operacao sem ERP: suportada por cadastro/importacao manual.
-- Firebase atual: usar apenas como ambiente dev/prototipo.
-- Login real definitivo: adiado ate dominio, branding e ownership do produto estarem definidos.
+- Operacao offline-first: apos primeiro login valido, a sessao e o cache local permitem continuar operando sem internet.
 
 Esse modelo permite:
 
@@ -22,7 +22,7 @@ Esse modelo permite:
 1. Usuario entra com Google.
 2. App consulta memberships do usuario para descobrir a quais tenants ele pertence.
 3. Se nao houver membership ativo, app mostra tela de solicitacao e grava solicitacoes_acesso/{uid} com status pendente.
-4. Platform Admin ou Owner do tenant aprova internamente e cria/atualiza os vinculos do usuario.
+4. Owner do tenant (ou operador de plataforma com permissao explicita) aprova internamente e cria/atualiza os vinculos do usuario.
 5. App libera fluxo somente quando houver membership ativo no tenant selecionado.
 
 ## Como o app reconhece o tenant na primeira entrada
@@ -45,7 +45,13 @@ A melhor pratica nao e descobrir o tenant apenas pelo email. O tenant deve ser d
 5. Se nao existir nenhum membership ativo, o app mostra uma tela de vinculo com tres caminhos:
 	- entrar por convite;
 	- solicitar acesso a um tenant;
-	- criar workspace pessoal, se habilitado.
+	- criar workspace solo (self-service) para entrar como owner do proprio tenant.
+
+Regra de uso recomendada:
+
+- Solo: criar workspace solo e operar como owner.
+- Team/Enterprise: entrar por convite do owner do tenant.
+- Solicitacao de acesso: manter para fluxo assistido quando nao houver convite imediato.
 
 ### Sobre tenant A e tenant B
 
@@ -64,31 +70,27 @@ Esse tenant pessoal deve ter:
 - regras simplificadas de produto e cliente;
 - possibilidade de migrar depois para um tenant corporativo, se necessario.
 
-## Fluxo temporario para desenvolvimento
+Regra de produto recomendada:
 
-Enquanto o login real definitivo nao estiver fechado, o app pode operar em modo dev com autenticacao mockada.
-
-Esse modo deve permitir:
-
-- entrar sem Google real;
-- escolher tenant simulado;
-- escolher papel simulado;
-- validar UX e regras visuais de permissao;
-- continuar desenvolvimento offline-first sem travar por OAuth.
-
-Melhor pratica:
-
-- isolar mock auth atras de interface;
-- nao misturar regras fake com dados reais de producao;
-- manter uma chave clara para desligar mock auth em builds finais.
+- vendedor solo nao deve existir como "vendedor sem superior".
+- vendedor solo entra como owner do proprio tenant solo.
+- quando convidar equipe, o mesmo tenant evolui para modelo team sem migracao de conta.
 
 ## Niveis recomendados de papel
 
-### Nivel da plataforma
+### Nivel da plataforma (SaaS)
 
-- platform_admin: administra a plataforma inteira, onboarding de tenants, suporte e governanca global.
+- platform_observer (recomendado): leitura global, saude da plataforma, suporte de diagnostico, sem alteracao estrutural.
+- platform_operator (opcional): operacao assistida sob processo interno (onboarding, manutencao, correcao pontual).
+- platform_admin (break-glass): acesso maximo para incidentes criticos, uso restrito e auditado.
 
-Esse papel nao participa da arvore comercial do tenant.
+Break-glass significa conta/papel de emergencia para situacoes como:
+
+- indisponibilidade operacional que impede o owner de agir;
+- incidente de seguranca com necessidade de contencao imediata;
+- corrupcao/inconsistencia de vinculos que bloqueia faturamento ou operacao critica.
+
+Nao deve ser o caminho padrao de suporte diario.
 
 ### Nivel do tenant (empresa cliente)
 
@@ -99,7 +101,7 @@ Esse papel nao participa da arvore comercial do tenant.
 
 Hierarquia final:
 
-- Platform Admin
+- Plataforma (observer/operator/admin)
 - Tenant
 - Owner
 - Gerente
@@ -110,7 +112,30 @@ Melhor pratica:
 
 - Tenant nao e um usuario, e uma entidade organizacional.
 - Owner e o topo da hierarquia comercial/administrativa da empresa cliente.
-- Platform Admin fica acima, mas separado, para nao misturar suporte SaaS com operacao comercial.
+- Papel de plataforma nao substitui ownership do tenant, exceto em procedimento de suporte formal.
+
+## Modelos de conta e monetizacao (direcao)
+
+### Plano Solo
+
+- usuario individual sem equipe;
+- tenant solo com owner unico;
+- sem integracao ERP obrigatoria;
+- sincronizacao essencial e foco em baixo custo.
+
+### Plano Team (sem ERP)
+
+- escritorio de representacao/equipe comercial;
+- owner paga a assinatura e convidados nao pagam individualmente;
+- convites obrigatorios para entrada de gerente/representante/vendedor;
+- dependencia maior de sincronizacao para visao de equipe.
+
+### Plano Enterprise (com ERP)
+
+- empresa cliente com integracao Sankhya (ou outro ERP);
+- owner paga a assinatura corporativa;
+- convidados entram por convite no tenant;
+- Firestore segue como camada de colaboracao, acesso, offline e estado operacional.
 
 ## Estrutura recomendada (Firestore)
 

@@ -13,6 +13,24 @@ class Cliente implements TenantScopedEntity {
     this.gerenteId,
     this.representanteId,
     this.vendedorId,
+    this.tipoPessoa = 'pj',
+    this.nomeFantasia = '',
+    this.email = '',
+    this.emailFinanceiro = '',
+    this.canal = 'vendedor',
+    this.celular = '',
+    this.telefone = '',
+    this.cep = '',
+    this.logradouro = '',
+    this.numero = '',
+    this.complemento = '',
+    this.bairro = '',
+    this.cidade = '',
+    this.estado = '',
+    this.pais = 'Brasil',
+    this.inscricaoEstadual = '',
+    this.inscricaoMunicipal = '',
+    this.observacoes = '',
     this.createdAt,
     this.updatedAt,
   });
@@ -33,6 +51,24 @@ class Cliente implements TenantScopedEntity {
       gerenteId: map['gerenteId'] as String?,
       representanteId: map['representanteId'] as String?,
       vendedorId: map['vendedorId'] as String?,
+      tipoPessoa: map['tipoPessoa'] as String? ?? 'pj',
+      nomeFantasia: map['nomeFantasia'] as String? ?? '',
+      email: map['email'] as String? ?? '',
+      emailFinanceiro: map['emailFinanceiro'] as String? ?? '',
+      canal: map['canal'] as String? ?? 'vendedor',
+      celular: map['celular'] as String? ?? '',
+      telefone: map['telefone'] as String? ?? '',
+      cep: map['cep'] as String? ?? '',
+      logradouro: map['logradouro'] as String? ?? '',
+      numero: map['numero'] as String? ?? '',
+      complemento: map['complemento'] as String? ?? '',
+      bairro: map['bairro'] as String? ?? '',
+      cidade: map['cidade'] as String? ?? '',
+      estado: map['estado'] as String? ?? '',
+      pais: map['pais'] as String? ?? 'Brasil',
+      inscricaoEstadual: map['inscricaoEstadual'] as String? ?? '',
+      inscricaoMunicipal: map['inscricaoMunicipal'] as String? ?? '',
+      observacoes: map['observacoes'] as String? ?? '',
       createdAt: _readDateTime(map['createdAt']),
       updatedAt: _readDateTime(map['updatedAt']),
     );
@@ -50,6 +86,24 @@ class Cliente implements TenantScopedEntity {
   final String? gerenteId;
   final String? representanteId;
   final String? vendedorId;
+  final String tipoPessoa;
+  final String nomeFantasia;
+  final String email;
+  final String emailFinanceiro;
+  final String canal;
+  final String celular;
+  final String telefone;
+  final String cep;
+  final String logradouro;
+  final String numero;
+  final String complemento;
+  final String bairro;
+  final String cidade;
+  final String estado;
+  final String pais;
+  final String inscricaoEstadual;
+  final String inscricaoMunicipal;
+  final String observacoes;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -64,6 +118,24 @@ class Cliente implements TenantScopedEntity {
     String? gerenteId,
     String? representanteId,
     String? vendedorId,
+    String? tipoPessoa,
+    String? nomeFantasia,
+    String? email,
+    String? emailFinanceiro,
+    String? canal,
+    String? celular,
+    String? telefone,
+    String? cep,
+    String? logradouro,
+    String? numero,
+    String? complemento,
+    String? bairro,
+    String? cidade,
+    String? estado,
+    String? pais,
+    String? inscricaoEstadual,
+    String? inscricaoMunicipal,
+    String? observacoes,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -78,6 +150,24 @@ class Cliente implements TenantScopedEntity {
       gerenteId: gerenteId ?? this.gerenteId,
       representanteId: representanteId ?? this.representanteId,
       vendedorId: vendedorId ?? this.vendedorId,
+      tipoPessoa: tipoPessoa ?? this.tipoPessoa,
+      nomeFantasia: nomeFantasia ?? this.nomeFantasia,
+      email: email ?? this.email,
+      emailFinanceiro: emailFinanceiro ?? this.emailFinanceiro,
+      canal: canal ?? this.canal,
+      celular: celular ?? this.celular,
+      telefone: telefone ?? this.telefone,
+      cep: cep ?? this.cep,
+      logradouro: logradouro ?? this.logradouro,
+      numero: numero ?? this.numero,
+      complemento: complemento ?? this.complemento,
+      bairro: bairro ?? this.bairro,
+      cidade: cidade ?? this.cidade,
+      estado: estado ?? this.estado,
+      pais: pais ?? this.pais,
+      inscricaoEstadual: inscricaoEstadual ?? this.inscricaoEstadual,
+      inscricaoMunicipal: inscricaoMunicipal ?? this.inscricaoMunicipal,
+      observacoes: observacoes ?? this.observacoes,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -95,6 +185,24 @@ class Cliente implements TenantScopedEntity {
       'gerenteId': gerenteId,
       'representanteId': representanteId,
       'vendedorId': vendedorId,
+      'tipoPessoa': tipoPessoa,
+      'nomeFantasia': nomeFantasia,
+      'email': email,
+      'emailFinanceiro': emailFinanceiro,
+      'canal': canal,
+      'celular': celular,
+      'telefone': telefone,
+      'cep': cep,
+      'logradouro': logradouro,
+      'numero': numero,
+      'complemento': complemento,
+      'bairro': bairro,
+      'cidade': cidade,
+      'estado': estado,
+      'pais': pais,
+      'inscricaoEstadual': inscricaoEstadual,
+      'inscricaoMunicipal': inscricaoMunicipal,
+      'observacoes': observacoes,
       'createdAt': createdAt?.toIso8601String(),
       'updatedAt': updatedAt?.toIso8601String(),
     };

@@ -3,21 +3,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
 import 'firebase_options.dart';
-import 'src/core/models/app_identity.dart';
 import 'src/features/auth/presentation/pages/firebase_auth_gate_page.dart';
-import 'src/features/auth/presentation/pages/local_dev_auth_gate_page.dart';
-import 'src/navigation/app_shell.dart';
-
-const String kAuthMode = String.fromEnvironment(
-  'AUTH_MODE',
-  defaultValue: 'select',
-);
-
-bool get _useFirebaseAuth => kAuthMode == 'firebase';
-bool get _useProfileMockAuth => kAuthMode == 'profile_mock';
-bool get _useLocalAuth => kAuthMode == 'local';
-
-enum AppAuthMode { firebase, local, profileMock }
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -61,7 +47,6 @@ class SplashFlowPage extends StatefulWidget {
 
 class _SplashFlowPageState extends State<SplashFlowPage> {
   bool _ready = false;
-  AppAuthMode? _selectedMode;
 
   @override
   void initState() {
@@ -79,29 +64,7 @@ class _SplashFlowPageState extends State<SplashFlowPage> {
   @override
   Widget build(BuildContext context) {
     if (_ready) {
-      if (_selectedMode != null) {
-        return _buildAuthGate(_selectedMode!);
-      }
-
-      if (_useFirebaseAuth) {
-        return _buildAuthGate(AppAuthMode.firebase);
-      }
-
-      if (_useProfileMockAuth) {
-        return _buildAuthGate(AppAuthMode.profileMock);
-      }
-
-      if (_useLocalAuth) {
-        return _buildAuthGate(AppAuthMode.local);
-      }
-
-      return _AuthModeSelectorPage(
-        onSelect: (mode) {
-          setState(() {
-            _selectedMode = mode;
-          });
-        },
-      );
+      return const FirebaseAuthGatePage();
     }
 
     final textTheme = Theme.of(context).textTheme;
@@ -136,13 +99,7 @@ class _SplashFlowPageState extends State<SplashFlowPage> {
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      _useFirebaseAuth
-                          ? 'Inicializando autenticacao segura'
-                          : _useProfileMockAuth
-                          ? 'Modo desenvolvimento por selecao de perfil'
-                          : _useLocalAuth
-                          ? 'Modo desenvolvimento com login local'
-                          : 'Preparando seletor de modo de autenticacao',
+                      'Inicializando autenticacao segura',
                       style: textTheme.bodySmall,
                       textAlign: TextAlign.center,
                     ),
@@ -154,281 +111,6 @@ class _SplashFlowPageState extends State<SplashFlowPage> {
                 child: CircularProgressIndicator(),
               ),
             ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAuthGate(AppAuthMode mode) {
-    switch (mode) {
-      case AppAuthMode.firebase:
-        return const FirebaseAuthGatePage();
-      case AppAuthMode.local:
-        return const LocalDevAuthGatePage();
-      case AppAuthMode.profileMock:
-        return const DevAuthGatePage();
-    }
-  }
-}
-
-class _AuthModeSelectorPage extends StatelessWidget {
-  const _AuthModeSelectorPage({required this.onSelect});
-
-  final ValueChanged<AppAuthMode> onSelect;
-
-  @override
-  Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-
-    return Scaffold(
-      body: SafeArea(
-        child: SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Smart SFA', style: textTheme.headlineMedium),
-                const SizedBox(height: 8),
-                Text(
-                  'Escolha como deseja entrar no app neste ambiente.',
-                  style: textTheme.bodyLarge,
-                ),
-                const SizedBox(height: 24),
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        FilledButton.icon(
-                          onPressed: () => onSelect(AppAuthMode.firebase),
-                          icon: const Icon(Icons.verified_user),
-                          label: const Text('Entrar com Firebase'),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Use Google ou e-mail/senha na tela de login do Firebase.',
-                          style: textTheme.bodySmall,
-                        ),
-                        const SizedBox(height: 16),
-                        OutlinedButton.icon(
-                          onPressed: () => onSelect(AppAuthMode.local),
-                          icon: const Icon(Icons.dns_outlined),
-                          label: const Text('Entrar com Login Local (dev)'),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Tenta Auth anonimo + Firestore e cai para mock se precisar.',
-                          style: textTheme.bodySmall,
-                        ),
-                        const SizedBox(height: 16),
-                        OutlinedButton.icon(
-                          onPressed: () => onSelect(AppAuthMode.profileMock),
-                          icon: const Icon(Icons.tune),
-                          label: const Text('Entrar com Perfil Mock'),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Seleciona tenant/papel sem usar Firebase.',
-                          style: textTheme.bodySmall,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class DevAuthGatePage extends StatefulWidget {
-  const DevAuthGatePage({super.key});
-
-  @override
-  State<DevAuthGatePage> createState() => _DevAuthGatePageState();
-}
-
-class _DevAuthGatePageState extends State<DevAuthGatePage> {
-  DevAccessSession? _session;
-
-  void _signIn(DevAccessSession session) {
-    setState(() {
-      _session = session;
-    });
-  }
-
-  void _signOut() {
-    setState(() {
-      _session = null;
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (_session == null) {
-      return DevSignInPage(onSignIn: _signIn);
-    }
-
-    return AppShellPage(
-      identity: AppIdentity(
-        tenantId: _session!.tenant.id,
-        userLabel: _session!.userEmail,
-        role: _session!.role.label,
-        tenantName: _session!.tenant.name,
-        isMock: true,
-      ),
-      onSignOut: _signOut,
-      onSwitchProfile: _signOut,
-    );
-  }
-}
-
-class DevSignInPage extends StatefulWidget {
-  const DevSignInPage({super.key, required this.onSignIn});
-
-  final ValueChanged<DevAccessSession> onSignIn;
-
-  @override
-  State<DevSignInPage> createState() => _DevSignInPageState();
-}
-
-class _DevSignInPageState extends State<DevSignInPage> {
-  final List<DevTenant> _tenants = const [
-    DevTenant(id: 'amatools', name: 'Amatools'),
-    DevTenant(id: 'demo', name: 'Tenant Demo'),
-  ];
-
-  DevTenant? _selectedTenant;
-  DevRole _selectedRole = DevRole.owner;
-
-  @override
-  void initState() {
-    super.initState();
-    _selectedTenant = _tenants.first;
-  }
-
-  void _enter() {
-    final tenant = _selectedTenant;
-    if (tenant == null) {
-      return;
-    }
-
-    widget.onSignIn(
-      DevAccessSession(
-        tenant: tenant,
-        role: _selectedRole,
-        userEmail: '${_selectedRole.name}@${tenant.id}.local',
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-
-    return Scaffold(
-      body: SafeArea(
-        child: SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Smart SFA', style: textTheme.headlineMedium),
-                const SizedBox(height: 8),
-                Text(
-                  'Modo de desenvolvimento para validar a plataforma sem login real.',
-                  style: textTheme.bodyLarge,
-                ),
-                const SizedBox(height: 24),
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Selecionar tenant', style: textTheme.titleMedium),
-                        const SizedBox(height: 12),
-                        DropdownButtonFormField<DevTenant>(
-                          initialValue: _selectedTenant,
-                          decoration: const InputDecoration(
-                            border: OutlineInputBorder(),
-                            labelText: 'Tenant',
-                          ),
-                          items: _tenants
-                              .map(
-                                (tenant) => DropdownMenuItem<DevTenant>(
-                                  value: tenant,
-                                  child: Text(tenant.name),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (value) {
-                            setState(() {
-                              _selectedTenant = value;
-                            });
-                          },
-                        ),
-                        const SizedBox(height: 20),
-                        Text('Selecionar perfil', style: textTheme.titleMedium),
-                        const SizedBox(height: 12),
-                        DropdownButtonFormField<DevRole>(
-                          initialValue: _selectedRole,
-                          decoration: const InputDecoration(
-                            border: OutlineInputBorder(),
-                            labelText: 'Perfil',
-                          ),
-                          items: DevRole.values
-                              .map(
-                                (role) => DropdownMenuItem<DevRole>(
-                                  value: role,
-                                  child: Text(role.label),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (value) {
-                            if (value == null) {
-                              return;
-                            }
-                            setState(() {
-                              _selectedRole = value;
-                            });
-                          },
-                        ),
-                        const SizedBox(height: 20),
-                        FilledButton.icon(
-                          onPressed: _enter,
-                          icon: const Icon(Icons.play_arrow),
-                          label: const Text('Entrar no modo dev'),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Observacoes', style: textTheme.titleMedium),
-                        const SizedBox(height: 12),
-                        const Text(
-                          'Este modo ignora Google Sign-In e Firestore para liberar o desenvolvimento das telas, navegacao, fluxo comercial e permissoes visuais.',
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
           ),
         ),
       ),

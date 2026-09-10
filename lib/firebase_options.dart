@@ -47,29 +47,29 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyCXfrkquYAtgrxNxi0MTz-7M_pN4fbaoB4',
-    appId: '1:349024474460:web:fa8cfa8a7c6e757cd6dd99',
-    messagingSenderId: '349024474460',
-    projectId: 'smartsfa-f20a0',
-    authDomain: 'smartsfa-f20a0.firebaseapp.com',
-    storageBucket: 'smartsfa-f20a0.firebasestorage.app',
-    measurementId: 'G-574C0NQRPG',
+    apiKey: 'AIzaSyDFXV_T5_WfN2xrl-qi814i_AwReyGjXKs',
+    appId: '1:209774810668:web:791f214b9561d723d8e389',
+    messagingSenderId: '209774810668',
+    projectId: 'smart-sfa',
+    authDomain: 'smart-sfa.firebaseapp.com',
+    storageBucket: 'smart-sfa.firebasestorage.app',
+    measurementId: 'G-C1FE0R0DBK',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyAxg5dROfjXkQqp4Bn8342Gi3XPbmzjHg8',
-    appId: '1:349024474460:android:56c2664e9d6eed48d6dd99',
-    messagingSenderId: '349024474460',
-    projectId: 'smartsfa-f20a0',
-    storageBucket: 'smartsfa-f20a0.firebasestorage.app',
+    apiKey: 'AIzaSyAJNxHMIgAi0uRuTN_epmGc7ZKxBvASP0A',
+    appId: '1:209774810668:android:c65d463954b4fb50d8e389',
+    messagingSenderId: '209774810668',
+    projectId: 'smart-sfa',
+    storageBucket: 'smart-sfa.firebasestorage.app',
   );
-
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyDDxQXrwfOrJXT9JneFE3apaokH3SYx1jE',
-    appId: '1:349024474460:ios:471f1b6d61c63ba9d6dd99',
-    messagingSenderId: '349024474460',
-    projectId: 'smartsfa-f20a0',
-    storageBucket: 'smartsfa-f20a0.firebasestorage.app',
+    apiKey: 'AIzaSyCBSuz3gwzxTSC-OYUsI07ei_a-78ZBwXU',
+    appId: '1:209774810668:ios:33b9601d3abb13d6d8e389',
+    messagingSenderId: '209774810668',
+    projectId: 'smart-sfa',
+    storageBucket: 'smart-sfa.firebasestorage.app',
+    iosClientId: '209774810668-cjifscpihdipd1i0ta9ja42mlki5omf4.apps.googleusercontent.com',
     iosBundleId: 'com.example.smartsfa',
   );
 }

@@ -11,24 +11,20 @@ class TenantEntryResolver {
 
   Future<TenantEntryDecision?> resolve(User user) async {
     final userDoc = await _firestore.collection('usuarios').doc(user.uid).get();
-    if (!userDoc.exists) {
-      return TenantEntryDecision.personalWorkspace(uid: user.uid);
-    }
-
-    final userData = userDoc.data() ?? <String, dynamic>{};
-    const personalWorkspaceEnabled = true;
-    if (userData['ativoGlobal'] != true) {
-      return TenantEntryDecision.requestAccess(
-        uid: user.uid,
-        personalWorkspaceEnabled: personalWorkspaceEnabled,
-      );
-    }
 
     final membershipsSnapshot = await _firestore
         .collection('tenant_memberships')
         .where('uid', isEqualTo: user.uid)
         .where('ativo', isEqualTo: true)
         .get();
+
+    final userData = userDoc.data() ?? <String, dynamic>{};
+    if (userDoc.exists && userData['ativoGlobal'] != true) {
+      return TenantEntryDecision.requestAccess(
+        uid: user.uid,
+        personalWorkspaceEnabled: true,
+      );
+    }
 
     final seeds = <TenantEntryOption>[];
     for (final doc in membershipsSnapshot.docs) {
@@ -39,7 +35,10 @@ class TenantEntryResolver {
     }
 
     if (seeds.isEmpty) {
-      return TenantEntryDecision.personalWorkspace(uid: user.uid);
+      return TenantEntryDecision.requestAccess(
+        uid: user.uid,
+        personalWorkspaceEnabled: true,
+      );
     }
 
     if (seeds.length == 1) {

@@ -50,3 +50,4 @@ app.*.map.json
 # Local Firebase/Google downloaded files (may contain sensitive keys)
 /google/
 *service-account*.json
+*firebase-adminsdk*.json

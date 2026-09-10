@@ -34,6 +34,23 @@ service cloud.firestore {
       return tenantId + '_' + uid();
     }
 
+    function isPersonalWorkspaceTenant(tenantId) {
+      return tenantId == 'personal_' + uid();
+    }
+
+    function isSoloTenant(tenantId) {
+      return tenantId == 'solo_' + uid();
+    }
+
+    function isSelfServiceTeamOrEnterpriseTenant(tenantId) {
+      return tenantId.matches('^self_' + uid() + '_[a-z0-9-]+$');
+    }
+
+    function isSelfServiceOwnerTenantId(tenantId) {
+      return isSoloTenant(tenantId)
+        || isSelfServiceTeamOrEnterpriseTenant(tenantId);
+    }
+
     function hasActiveMembership(tenantId) {
       return exists(/databases/$(database)/documents/tenant_memberships/$(membershipId(tenantId)))
         && get(/databases/$(database)/documents/tenant_memberships/$(membershipId(tenantId))).data.ativo == true;
@@ -75,8 +92,19 @@ service cloud.firestore {
         && data.vendedorId is string;
     }
 
+    // A personal/no-tenant account (tenantId == 'personal_<uid>') has no
+    // hierarchy at all — the sole user is effectively the owner of their own
+    // data, with normal full CRUD permission on it. This bypass must apply
+    // uniformly everywhere scoped data is read/written/deleted; only once a
+    // real tenant is involved does the owner/gerente/representante/vendedor
+    // layered model in the functions below take over.
+    function canAccessOwnPersonalData(data) {
+      return isPersonalWorkspaceTenant(data.tenantId);
+    }
+
     function canReadScopedData(data) {
       return isPlatformAdmin()
+        || canAccessOwnPersonalData(data)
         || (hasActiveMembership(data.tenantId) && (
           isTenantOwner(data.tenantId)
           || (isTenantGerente(data.tenantId) && data.gerenteId == uid())
@@ -87,6 +115,7 @@ service cloud.firestore {
 
     function canWriteScopedData(data) {
       return isPlatformAdmin()
+        || canAccessOwnPersonalData(data)
         || (hasActiveMembership(data.tenantId) && (
           (isTenantOwner(data.tenantId) && data.ownerId == uid())
           || (isTenantGerente(data.tenantId)
@@ -102,6 +131,17 @@ service cloud.firestore {
             && data.gerenteId == myMembership(data.tenantId).data.gerenteId
             && data.ownerId == myMembership(data.tenantId).data.ownerId)
         ));
+    }
+
+    // Lifecycle actions (excluir cliente oficial) are destructive and, once a
+    // real tenant hierarchy is involved, must be restricted to the tenant
+    // owner — never a gerente/representante/vendedor, even if they can write
+    // regular field updates on their own scope. A personal/no-tenant account
+    // has no hierarchy, so it keeps normal full permission on its own data.
+    function canDeleteCliente(data) {
+      return isPlatformAdmin()
+        || canAccessOwnPersonalData(data)
+        || (isTenantOwner(data.tenantId) && data.ownerId == uid());
     }
 
     function immutableScopeOnUpdate() {
@@ -127,6 +167,13 @@ service cloud.firestore {
         && data.displayName is string
         && data.platformRole in ['platform_admin', 'none']
         && data.ativoGlobal is bool;
+    }
+
+    function validSelfServiceUserDoc(targetUid, data) {
+      return validPlatformUserDoc(targetUid, data)
+        && targetUid == uid()
+        && data.platformRole == 'none'
+        && data.ativoGlobal == true;
     }
 
     function validTenantRole(role) {
@@ -177,12 +224,41 @@ service cloud.firestore {
         && validMembershipHierarchy(data);
     }
 
+    function validSelfServiceOwnerTenantDoc(tenantId, data) {
+      return isSelfServiceOwnerTenantId(tenantId)
+        && validTenantDoc(tenantId, data)
+        && data.plan in ['solo', 'team', 'enterprise']
+        && data.ownerUid == uid()
+        && data.ativo == true
+        && data.operationMode == 'manual'
+        && data.erpProvider == 'none'
+        && (
+          (data.plan == 'solo' && isSoloTenant(tenantId))
+          || (data.plan in ['team', 'enterprise']
+            && isSelfServiceTeamOrEnterpriseTenant(tenantId))
+        );
+    }
+
+    function validSelfServiceOwnerMembership(membershipKey, data) {
+      return validMembershipDoc(membershipKey, data)
+        && isSelfServiceOwnerTenantId(data.tenantId)
+        && data.uid == uid()
+        && data.role == 'owner'
+        && data.defaultTenant == true
+        && data.ownerId == uid()
+        && data.gerenteId == ''
+        && data.representanteId == ''
+        && data.vendedorId == '';
+    }
+
     match /tenants/{tenantId} {
       allow read: if isPlatformAdmin() || hasActiveMembership(tenantId);
 
       allow create, update: if signedIn()
-        && isPlatformAdmin()
-        && validTenantDoc(tenantId, request.resource.data);
+        && (
+          (isPlatformAdmin() && validTenantDoc(tenantId, request.resource.data))
+          || validSelfServiceOwnerTenantDoc(tenantId, request.resource.data)
+        );
 
       allow delete: if signedIn() && isPlatformAdmin();
     }
@@ -191,12 +267,16 @@ service cloud.firestore {
       allow read: if signedIn() && (isPlatformAdmin() || uid() == targetUid);
 
       allow create: if signedIn()
-        && isPlatformAdmin()
-        && validPlatformUserDoc(targetUid, request.resource.data);
+        && (
+          (isPlatformAdmin() && validPlatformUserDoc(targetUid, request.resource.data))
+          || validSelfServiceUserDoc(targetUid, request.resource.data)
+        );
 
       allow update: if signedIn()
-        && isPlatformAdmin()
-        && validPlatformUserDoc(targetUid, request.resource.data);
+        && (
+          (isPlatformAdmin() && validPlatformUserDoc(targetUid, request.resource.data))
+          || validSelfServiceUserDoc(targetUid, request.resource.data)
+        );
 
       allow delete: if signedIn() && isPlatformAdmin();
     }
@@ -218,6 +298,7 @@ service cloud.firestore {
         && validMembershipDoc(membershipKey, request.resource.data)
         && (
           isPlatformAdmin()
+          || validSelfServiceOwnerMembership(membershipKey, request.resource.data)
           || (
             isTenantOwner(request.resource.data.tenantId)
             && request.resource.data.ownerId == uid()
@@ -231,6 +312,7 @@ service cloud.firestore {
         && resource.data.uid == request.resource.data.uid
         && (
           isPlatformAdmin()
+          || validSelfServiceOwnerMembership(membershipKey, request.resource.data)
           || (
             isTenantOwner(request.resource.data.tenantId)
             && request.resource.data.ownerId == uid()
@@ -279,22 +361,105 @@ service cloud.firestore {
         && canWriteScopedData(request.resource.data);
 
       allow delete: if hasScopeFields(resource.data)
-        && canWriteScopedData(resource.data);
+        && canDeleteCliente(resource.data);
+    }
+
+    function validPreCadastroDoc(data) {
+      return data.tenantId is string
+        && data.tenantId != ''
+        && data.nome is string
+        && data.documento is string
+        && data.status is string
+        && data.requestedByUid is string;
+    }
+
+    match /cliente_pre_cadastros/{preCadastroId} {
+      allow read: if signedIn()
+        && (
+          isPersonalWorkspaceTenant(resource.data.tenantId)
+          || (
+            hasActiveMembership(resource.data.tenantId)
+            && (
+              isPlatformAdmin()
+              || isTenantOwner(resource.data.tenantId)
+              || isTenantGerente(resource.data.tenantId)
+              || isTenantRepresentante(resource.data.tenantId)
+              || isTenantVendedor(resource.data.tenantId)
+            )
+          )
+        );
+
+      allow create: if signedIn()
+        && validPreCadastroDoc(request.resource.data)
+        && (
+          isPersonalWorkspaceTenant(request.resource.data.tenantId)
+          || (
+            hasActiveMembership(request.resource.data.tenantId)
+            && (
+              isPlatformAdmin()
+              || isTenantOwner(request.resource.data.tenantId)
+              || isTenantGerente(request.resource.data.tenantId)
+              || isTenantRepresentante(request.resource.data.tenantId)
+              || isTenantVendedor(request.resource.data.tenantId)
+            )
+          )
+        );
+
+      allow update: if signedIn()
+        && validPreCadastroDoc(request.resource.data)
+        && resource.data.tenantId == request.resource.data.tenantId
+        && (
+          isPersonalWorkspaceTenant(request.resource.data.tenantId)
+          || (
+            hasActiveMembership(request.resource.data.tenantId)
+            && (
+              isPlatformAdmin()
+              || isTenantOwner(request.resource.data.tenantId)
+              || isTenantGerente(request.resource.data.tenantId)
+              || isTenantRepresentante(request.resource.data.tenantId)
+              || isTenantVendedor(request.resource.data.tenantId)
+            )
+          )
+        );
+
+      allow delete: if signedIn()
+        && (
+          isPersonalWorkspaceTenant(resource.data.tenantId)
+          || (
+            hasActiveMembership(resource.data.tenantId)
+            && (
+              isPlatformAdmin()
+              || isTenantOwner(resource.data.tenantId)
+              || isTenantGerente(resource.data.tenantId)
+              || isTenantRepresentante(resource.data.tenantId)
+              || isTenantVendedor(resource.data.tenantId)
+            )
+          )
+        );
     }
 
     match /produtos/{produtoId} {
       allow read: if isPlatformAdmin()
-        || (hasTenantField(resource.data) && hasActiveMembership(resource.data.tenantId));
+        || (hasTenantField(resource.data) && (
+          canAccessOwnPersonalData(resource.data)
+          || hasActiveMembership(resource.data.tenantId)
+        ));
 
       allow create: if hasTenantField(request.resource.data)
-        && (isPlatformAdmin() || isTenantOwner(request.resource.data.tenantId));
+        && (isPlatformAdmin()
+          || canAccessOwnPersonalData(request.resource.data)
+          || isTenantOwner(request.resource.data.tenantId));
 
       allow update: if hasTenantField(request.resource.data)
         && resource.data.tenantId == request.resource.data.tenantId
-        && (isPlatformAdmin() || isTenantOwner(request.resource.data.tenantId));
+        && (isPlatformAdmin()
+          || canAccessOwnPersonalData(request.resource.data)
+          || isTenantOwner(request.resource.data.tenantId));
 
       allow delete: if hasTenantField(resource.data)
-        && (isPlatformAdmin() || isTenantOwner(resource.data.tenantId));
+        && (isPlatformAdmin()
+          || canAccessOwnPersonalData(resource.data)
+          || isTenantOwner(resource.data.tenantId));
     }
 
     match /pedidos/{pedidoId} {
@@ -309,7 +474,9 @@ service cloud.firestore {
         && canWriteScopedData(request.resource.data);
 
       allow delete: if hasScopeFields(resource.data)
-        && (isPlatformAdmin() || isTenantOwner(resource.data.tenantId));
+        && (isPlatformAdmin()
+          || canAccessOwnPersonalData(resource.data)
+          || isTenantOwner(resource.data.tenantId));
     }
 
     match /{document=**} {

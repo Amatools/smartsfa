@@ -2,7 +2,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../../../../core/diagnostics/error_dialog.dart';
 import '../../../../core/models/app_identity.dart';
+import '../../../diagnostics/presentation/pages/diagnostics_page.dart';
 import '../../services/tenant_membership_service.dart';
 
 class AccountSettingsPage extends StatefulWidget {
@@ -54,10 +56,18 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
 
       _showMessage('Saida do tenant concluida. Revalidando acesso...');
       widget.onAccessUpdated?.call();
-    } catch (error) {
-      _showMessage(error is StateError
-          ? error.message.toString()
-          : 'Nao foi possivel sair deste tenant agora.');
+    } catch (error, stackTrace) {
+      if (error is StateError) {
+        _showMessage(error.message.toString());
+      } else if (mounted) {
+        await showAppErrorDialog(
+          context,
+          title: 'Não foi possível sair deste tenant',
+          error: error,
+          stackTrace: stackTrace,
+          tag: 'account.leave_tenant',
+        );
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -143,6 +153,37 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                       const Text(
                         'Este perfil nao possui autoatendimento para sair do tenant.',
                       ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Diagnóstico',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Consulte e copie os detalhes técnicos dos últimos erros e falhas de sincronização registrados nesta sessão.',
+                    ),
+                    const SizedBox(height: 10),
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const DiagnosticsPage(),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.bug_report_outlined),
+                      label: const Text('Ver diagnóstico'),
+                    ),
                   ],
                 ),
               ),

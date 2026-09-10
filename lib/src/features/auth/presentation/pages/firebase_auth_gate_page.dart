@@ -54,22 +54,6 @@ class _UserAccessResolverState extends State<_UserAccessResolver> {
     });
   }
 
-  Widget _buildPersonalWorkspace() {
-    return AppShellPage(
-      identity: AppIdentity(
-        tenantId: 'personal_${widget.user.uid}',
-        tenantName: 'Workspace pessoal',
-        userLabel: widget.user.email ?? widget.user.uid,
-        role: 'vendedor',
-        isMock: false,
-        membershipId: null,
-        isPersonalWorkspace: true,
-      ),
-      onAccessUpdated: _refreshAccess,
-      onSignOut: () => FirebaseAuth.instance.signOut(),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<TenantEntryDecision?>(
@@ -91,10 +75,6 @@ class _UserAccessResolverState extends State<_UserAccessResolver> {
 
         switch (decision.path) {
           case TenantEntryPath.requestAccess:
-            if (decision.personalWorkspaceEnabled) {
-              return _buildPersonalWorkspace();
-            }
-
             return PendingAccessPage(
               user: widget.user,
               onAccessUpdated: _refreshAccess,
@@ -112,7 +92,10 @@ class _UserAccessResolverState extends State<_UserAccessResolver> {
               onAccessUpdated: _refreshAccess,
             );
           case TenantEntryPath.personalWorkspace:
-            return _buildPersonalWorkspace();
+            return PendingAccessPage(
+              user: widget.user,
+              onAccessUpdated: _refreshAccess,
+            );
         }
       },
     );

@@ -11,8 +11,10 @@ Regra de uso: cada item entregue deve ser marcado com [x] e manter evidencias cu
 - [x] Operacao sem ERP: suportada por carga manual de usuarios, clientes, produtos e tabelas
 - [x] Hierarquia da empresa cliente: Tenant > Owner > Gerente > Representante > Vendedor
 - [x] Papel acima do Owner: Platform Admin interno do produto, fora da hierarquia comercial do tenant
-- [x] Firebase atual classificado como ambiente dev/prototipo
-- [x] Login real pode ser adiado sem bloquear desenvolvimento do produto
+- [x] Login oficial Firebase habilitado no projeto smart-sfa
+- [x] Mock auth removido da tela de login (apenas login oficial)
+- [ ] Separar papeis de plataforma: observer (read-only), operator (operacao assistida) e admin (break-glass)
+- [ ] Reduzir poder operacional de platform_admin no dia a dia (privilegio maximo apenas em incidente)
 - [x] Documento central de implementacao criado para guiar uma nova IA ou novo dev
 - [x] Resolver de entrada por tenant/membership iniciado no codigo
 - [x] Fluxo de convite por token iniciado no codigo (aceite + criacao de membership)
@@ -37,6 +39,10 @@ Regra de uso: cada item entregue deve ser marcado com [x] e manter evidencias cu
 - [x] Owner pode desligar membership de vendedor no tenant sem bloquear o acesso pessoal da conta
 - [x] Tela Tenant nao controla habilitacao de modo pessoal; controle individual fica na aba Conta
 - [x] Usuario com multiplos memberships escolhe o contexto de entrada (tenant A, tenant B ou pessoal)
+- [x] Vendedor solo modelado como owner do proprio tenant solo (nao como vendedor sem superior)
+- [ ] Definir onboarding guiado com escolha de perfil de entrada: Solo, Team ou Enterprise
+- [ ] Fluxo Team/Enterprise: membros entram por convite do owner (nao por auto cadastro no tenant)
+- [ ] Definir matriz de permissao funcional por role (ex.: gerente com foco em acompanhamento, sem pedido)
 - [ ] Definir oficialmente se criacao de tenant sera self-service (qualquer conta elegivel) ou assistida (somente platform admin)
 - [ ] Definir se representante sem membership de tenant pode existir como "workspace pessoal com equipe" (recomendado: nao)
 
@@ -47,7 +53,7 @@ Regra de uso: cada item entregue deve ser marcado com [x] e manter evidencias cu
 - [ ] Clientes em base real por tenant (atual: in-memory/mock)
 - [ ] Produtos em base real por tenant (atual: in-memory/mock)
 - [ ] Pedidos em base real por tenant (atual: in-memory/mock)
-- [ ] Isar offline-first conectado aos modulos comerciais (atual: contratos + mock)
+- [x] Isar offline-first conectado aos modulos comerciais (atual: contratos + mock) - persistencia local de sessao e login local ativado para uso sem internet
 
 ## Proxima etapa recomendada (execucao)
 
@@ -92,11 +98,7 @@ Use esta secao como checklist operacional do dia a dia.
 
 ## Estrategia temporaria de autenticacao
 
-- [x] Adiar login real de producao ate identidade do produto ficar definida
-- [x] Criar modo mock/dev auth para liberar desenvolvimento das telas e fluxos
-- [x] Simular perfis: platform_admin, owner, gerente, representante, vendedor
-- [x] Permitir troca de perfil em ambiente dev para validar fluxos e permissoes visuais
-- [x] Criar login local temporario (email/senha) sem dependencia de Google Console
+- [x] Encerrada. Login agora e apenas oficial (Firebase Auth) no app.
 
 ## Decisoes em aberto
 
@@ -104,6 +106,8 @@ Use esta secao como checklist operacional do dia a dia.
 - [ ] Definir formula final de preco base (temporaria, por tabela, por cliente ou por campanha)
 - [ ] Definir se o onboarding do tenant sera manual assistido ou self-service
 - [ ] Definir quando habilitar billing/assinatura por tenant
+- [ ] Definir grade de planos e limites: Solo, Team sem ERP, Enterprise com ERP
+- [ ] Definir quais recursos de sincronizacao entram por plano (especialmente Team e Enterprise)
 - [ ] Definir politica final de origem unica de produtos por tenant (ERP, Excel ou Manual)
 - [ ] Definir fluxo canonico de pre-cadastro de clientes e merge com ERP
 - [ ] Definir regra de aprovacao padrao para pre-cadastro em tenants sem ERP
@@ -217,8 +221,70 @@ Use esta secao como checklist operacional do dia a dia.
 - [ ] Sprint 4: Integracao Sankhya + fila + sync inteligente
 - [ ] Sprint 5: Notificacoes + hardening + testes finais
 
+## Matriz rapida de testes de acesso
+
+Objetivo: validar onboarding, entrada por convite/membership e permissao por papel com contas reais no Firebase.
+
+### Contas de teste atuais
+
+- owner@smartsfa.com.br (role owner no tenant smartsfa_demo)
+- gerente@smartsfa.com.br (role gerente no tenant smartsfa_demo)
+- resepresentante@smartsfa.com.br (role representante no tenant smartsfa_demo)
+- vendedor@smartsfa.com.br (role vendedor no tenant smartsfa_demo)
+- vendas@smartsfa.com.br (conta para fluxo solo/self-service)
+
+### Sequencia recomendada
+
+1. Login com owner@smartsfa.com.br
+- Esperado: entra direto sem onboarding.
+- Esperado: aba Tenant visivel.
+- Esperado: consegue criar convite para vendedor/representante/gerente.
+
+2. Login com gerente@smartsfa.com.br
+- Esperado: entra direto sem onboarding.
+- Esperado: aba Tenant visivel.
+- Esperado: nao consegue promover/revogar owner.
+
+3. Login com resepresentante@smartsfa.com.br
+- Esperado: entra direto sem onboarding.
+- Esperado: aba Tenant visivel.
+- Esperado: escopo de leitura/escrita abaixo do owner e gerente.
+
+4. Login com vendedor@smartsfa.com.br
+- Esperado: entra direto sem onboarding.
+- Esperado: sem aba Tenant.
+- Esperado: operacao comercial dentro do escopo de vendedor.
+
+5. Login com vendas@smartsfa.com.br (sem membership inicial)
+- Esperado: cai na tela de primeiro acesso (onboarding).
+- Acao: selecionar Plano Solo, informar nome do workspace e confirmar.
+- Esperado: cria tenant solo e membership owner automaticamente.
+- Esperado: entra no app como owner.
+
+6. Validar reentrada do vendas@smartsfa.com.br
+- Esperado: entra direto, sem onboarding, no workspace solo recem-criado.
+
+7. Fluxo por convite para conta sem membership
+- Acao: owner gera convite para uma conta nova.
+- Acao: conta nova entra com token de convite no onboarding.
+- Esperado: membership criado com role do convite e entrada liberada.
+
+### Criterios de aprovacao
+
+- Conta com membership ativo nao passa por onboarding.
+- Conta sem membership passa por onboarding e escolhe jornada (solo/team/enterprise/convite).
+- Jornada solo cria owner de si mesmo, sem depender de suporte.
+- Convite sempre prevalece para entrada em tenant de equipe/empresa.
+- Mudancas de role refletem no menu/abas e no escopo de dados.
+
 ## Log de Execucao
 
+- 2026-09-10: Projeto Firebase migrado para smart-sfa (novas configuracoes Android/iOS/Web via FlutterFire).
+- 2026-09-10: Firestore rules e indexes publicados no projeto smart-sfa.
+- 2026-09-10: Contas de teste provisionadas com tenant de validacao e papeis owner/gerente/representante/vendedor.
+- 2026-09-10: Conta contato@smartsfa.com.br promovida para platform_admin para suporte da plataforma.
+- 2026-09-10: Tela de login simplificada para modo oficial (Firebase only), removendo entrada mock/local.
+- 2026-09-10: Fluxo alvo registrado: usuario solo entra como owner do proprio tenant; Team/Enterprise entra por convite.
 - 2026-09-09: Ambiente validado, run no Chrome funcionando, build debug Android ok.
 - 2026-09-09: Tasks do workspace ajustadas para evitar conflitos de terminal.
 - 2026-09-09: Regra de preco x10 movida para decisao pendente no backlog.

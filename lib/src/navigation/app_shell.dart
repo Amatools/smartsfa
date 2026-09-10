@@ -1,13 +1,23 @@
-import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'dart:async';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+
+import '../core/data/firestore/firestore_cliente_pre_cadastro_repository.dart';
 import '../core/data/firestore/firestore_cliente_repository.dart';
 import '../core/data/firestore/firestore_mock_seed_service.dart';
 import '../core/data/firestore/firestore_pedido_repository.dart';
 import '../core/data/firestore/firestore_produto_repository.dart';
 import '../core/data/in_memory/demo_workspace.dart';
+import '../core/diagnostics/app_diagnostics.dart';
 import '../core/models/app_identity.dart';
+import '../core/models/cliente.dart';
+import '../core/models/cliente_pre_cadastro.dart';
+import '../core/repositories/cliente_pre_cadastro_repository.dart';
+import '../core/services/offline_sync_queue.dart';
 import '../core/repositories/cliente_repository.dart';
 import '../core/repositories/pedido_repository.dart';
 import '../core/repositories/produto_repository.dart';
@@ -37,31 +47,183 @@ class AppShellPage extends StatefulWidget {
 }
 
 class _AppShellPageState extends State<AppShellPage> {
+  static const bool _enableFirestoreMockSeed = bool.fromEnvironment(
+    'SEED_FIRESTORE_MOCKS',
+    defaultValue: false,
+  );
+
   int _selectedIndex = 0;
   DemoWorkspace? _workspace;
   late final ClienteRepository _clienteRepository;
+  late final ClientePreCadastroRepository _preCadastroRepository;
   late final ProdutoRepository _produtoRepository;
   late final PedidoRepository _pedidoRepository;
+  final Connectivity _connectivity = Connectivity();
+  bool _syncInProgress = false;
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
 
   @override
   void initState() {
     super.initState();
-    if (widget.identity.isMock) {
+    _connectivitySubscription = _connectivity.onConnectivityChanged.listen((results) {
+      if (results.contains(ConnectivityResult.none)) {
+        return;
+      }
+
+      _syncOfflineQueueIfOnline();
+    });
+    _initializeRepositories();
+  }
+
+  @override
+  void dispose() {
+    _connectivitySubscription?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _initializeRepositories() async {
+    final shouldUseLocalFallback = widget.identity.isMock ||
+        await _isOffline();
+
+    if (shouldUseLocalFallback) {
       _workspace = DemoWorkspace.seeded(widget.identity);
       _clienteRepository = _workspace!.clientes;
+      _preCadastroRepository = _workspace!.preCadastros;
       _produtoRepository = _workspace!.produtos;
       _pedidoRepository = _workspace!.pedidos;
+      if (mounted) {
+        setState(() {});
+      }
       return;
     }
 
     final firestore = FirebaseFirestore.instance;
     _clienteRepository = FirestoreClienteRepository(firestore);
+    _preCadastroRepository = FirestoreClientePreCadastroRepository(firestore);
     _produtoRepository = FirestoreProdutoRepository(firestore);
     _pedidoRepository = FirestorePedidoRepository(firestore);
     _seedFirestoreMocksIfNeeded();
+    _syncOfflineQueueIfOnline();
+  }
+
+  Future<bool> _isOffline() async {
+    try {
+      final connectivity = await Connectivity().checkConnectivity();
+      return connectivity.contains(ConnectivityResult.none);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> _syncOfflineQueueIfOnline() async {
+    if (_syncInProgress) {
+      return;
+    }
+
+    final connectivity = await Connectivity().checkConnectivity();
+    final hasConnection = connectivity.contains(ConnectivityResult.none) == false;
+    if (!hasConnection) {
+      return;
+    }
+
+    _syncInProgress = true;
+    try {
+      final pending = await OfflineSyncQueue.readAll();
+      final pendingDeletesPreview = await OfflineSyncQueue.readPendingDeletes();
+      if (pending.isEmpty && pendingDeletesPreview.isEmpty) {
+        return;
+      }
+
+      for (final item in pending) {
+        if (item.synced) {
+          continue;
+        }
+
+        if (item.type == 'cliente_pre_cadastro') {
+          try {
+            final payload = item.payloadMap;
+            final entity = ClientePreCadastro.fromMap(payload);
+            if (entity.tenantId == widget.identity.tenantId ||
+                widget.identity.isPersonalWorkspace) {
+              await _preCadastroRepository.save(entity);
+              await OfflineSyncQueue.markSynced(item.id);
+            }
+          } catch (error, stackTrace) {
+            AppDiagnostics.log(
+              tag: 'app_shell.sync.pre_cadastro',
+              message: 'Falha ao sincronizar pré-cadastro em segundo plano.',
+              error: error,
+              stackTrace: stackTrace,
+            );
+            // keep pending until the next sync pass.
+          }
+        } else if (item.type == 'cliente') {
+          try {
+            final payload = item.payloadMap;
+            final entity = Cliente.fromMap(payload);
+            if (entity.tenantId == widget.identity.tenantId ||
+                widget.identity.isPersonalWorkspace) {
+              await _clienteRepository.save(entity);
+              await OfflineSyncQueue.markSynced(item.id);
+            }
+          } catch (error, stackTrace) {
+            AppDiagnostics.log(
+              tag: 'app_shell.sync.cliente',
+              message: 'Falha ao sincronizar cliente em segundo plano.',
+              error: error,
+              stackTrace: stackTrace,
+            );
+            // keep pending until the next sync pass.
+          }
+        }
+      }
+
+      // Also retry any pending local deletes (tombstones): a delete that
+      // failed remotely earlier (offline, transient error, permission
+      // mismatch) must keep being retried in the background too, not only
+      // when the user manually presses "Sincronizar agora" on the Clientes
+      // screen — otherwise it stays excluded locally forever while still
+      // existing on the server.
+      for (final tombstone in pendingDeletesPreview) {
+        final type = tombstone['type']?.toString();
+        final id = tombstone['id']?.toString() ?? '';
+        final tenantId = tombstone['tenantId']?.toString() ?? '';
+        if (id.isEmpty) {
+          continue;
+        }
+        if (tenantId != widget.identity.tenantId &&
+            !widget.identity.isPersonalWorkspace) {
+          continue;
+        }
+
+        try {
+          if (type == 'cliente_pre_cadastro') {
+            await _preCadastroRepository.delete(tenantId: tenantId, id: id);
+            await OfflineSyncQueue.clearTombstone(id);
+          } else if (type == 'cliente') {
+            await _clienteRepository.delete(tenantId: tenantId, id: id);
+            await OfflineSyncQueue.clearTombstone(id);
+          }
+        } catch (error, stackTrace) {
+          AppDiagnostics.log(
+            tag: 'app_shell.sync.delete_retry',
+            message: 'Falha ao confirmar exclusão remota de $type/$id em segundo plano.',
+            error: error,
+            stackTrace: stackTrace,
+          );
+          // keep the tombstone until the next sync pass.
+        }
+      }
+    } finally {
+      _syncInProgress = false;
+    }
   }
 
   Future<void> _seedFirestoreMocksIfNeeded() async {
+    if (!kDebugMode || !_enableFirestoreMockSeed) {
+      return;
+    }
+
     final role = widget.identity.role.trim().toLowerCase();
     if (role != 'owner' && role != 'platform_admin') {
       return;
@@ -97,7 +259,13 @@ class _AppShellPageState extends State<AppShellPage> {
           ),
         );
       });
-    } catch (_) {
+    } catch (error, stackTrace) {
+      AppDiagnostics.log(
+        tag: 'app_shell.seed_mocks',
+        message: 'Falha ao carregar dados de exemplo (mock) no Firestore.',
+        error: error,
+        stackTrace: stackTrace,
+      );
       // Seeding is best-effort for dev bootstrap only.
     }
   }
@@ -113,8 +281,11 @@ class _AppShellPageState extends State<AppShellPage> {
       _ShellItem(
         label: 'Clientes',
         icon: Icons.people_outline,
-        builder: (context, identity) =>
-            ClientesPage(identity: identity, repository: _clienteRepository),
+        builder: (context, identity) => ClientesPage(
+          identity: identity,
+          repository: _clienteRepository,
+          preCadastroRepository: _preCadastroRepository,
+        ),
       ),
       _ShellItem(
         label: 'Produtos',
@@ -293,7 +464,10 @@ class _DashboardPage extends StatelessWidget {
       ('Tenant', identity.tenantName),
       ('Usuario', identity.userLabel),
       ('Perfil', identity.role),
-      ('Modo', identity.isMock ? 'Mock auth' : 'Firebase auth'),
+      (
+        'Conexao',
+        identity.isMock ? 'Local mock / fallback' : 'Firebase autenticado',
+      ),
     ];
 
     return SingleChildScrollView(

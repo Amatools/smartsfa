@@ -9,20 +9,10 @@ class SignInPage extends StatefulWidget {
 }
 
 class _SignInPageState extends State<SignInPage> {
-  static const String _defaultDevEmail = 'aureo@amatools.com.br';
-  static const String _defaultDevPassword = '123456';
-
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   bool _loading = false;
   String? _error;
-
-  @override
-  void initState() {
-    super.initState();
-    _emailController.text = _defaultDevEmail;
-    _passwordController.text = _defaultDevPassword;
-  }
 
   @override
   void dispose() {
@@ -170,7 +160,7 @@ class _SignInPageState extends State<SignInPage> {
                     onPressed: _loading ? null : _signInWithGoogle,
                     icon: const Icon(Icons.login),
                     label: Text(
-                      _loading ? 'Entrando...' : 'Entrar com Google (empresa)',
+                      _loading ? 'Entrando...' : 'Entrar com Google da empresa',
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -198,7 +188,7 @@ class _SignInPageState extends State<SignInPage> {
                   OutlinedButton.icon(
                     onPressed: _loading ? null : _signInWithEmailPassword,
                     icon: const Icon(Icons.alternate_email),
-                    label: const Text('Entrar com e-mail/senha (dev)'),
+                    label: const Text('Entrar com e-mail/senha do Firebase'),
                   ),
                 ],
               ),
