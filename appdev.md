@@ -19,7 +19,7 @@ Regra de uso: cada item entregue deve ser marcado com [x] e manter evidencias cu
 - [x] Resolver de entrada por tenant/membership iniciado no codigo
 - [x] Fluxo de convite por token iniciado no codigo (aceite + criacao de membership)
 - [x] Convites pendentes exibidos em notificacoes com aceite no app
-- [x] Owner pode criar e revogar convites na tela Tenant > Convites
+- [x] Governanca de convites por tipo de workspace iniciada (seller_solo sem convite; rep/brand_owner com regras por role)
 - [x] Revalidacao de acesso apos aceite de convite no app shell
 - [x] Modulo Tenant com gestao de memberships (listar, revogar, reativar)
 - [x] Filtro e busca de memberships por uid, papel e status no modulo Tenant
@@ -27,7 +27,7 @@ Regra de uso: cada item entregue deve ser marcado com [x] e manter evidencias cu
 - [x] Testes de widget da tela Tenant para revogar/reativar e restricao de owner
 - [x] Alteracao de papel (role) de membership com governanca por perfil
 - [x] Trilha de auditoria para revogacao, reativacao e alteracao de papel
-- [x] Convites movidos para modulo Tenant (tela dedicada) com envio/gestao owner-only
+- [x] Convites movidos para modulo Tenant (tela dedicada) com envio/gestao por role e tipo de workspace
 - [x] Notificacoes focada apenas em convite recebido (aceitar ou recusar)
 - [x] Tela de auditoria de memberships com filtros basicos
 - [x] Modo pessoal definido como capacidade permanente da conta (nao governado por owner do tenant)
@@ -39,8 +39,8 @@ Regra de uso: cada item entregue deve ser marcado com [x] e manter evidencias cu
 - [x] Owner pode desligar membership de vendedor no tenant sem bloquear o acesso pessoal da conta
 - [x] Tela Tenant nao controla habilitacao de modo pessoal; controle individual fica na aba Conta
 - [x] Usuario com multiplos memberships escolhe o contexto de entrada (tenant A, tenant B ou pessoal)
-- [x] Vendedor solo modelado como owner do proprio tenant solo (nao como vendedor sem superior)
-- [ ] Definir onboarding guiado com escolha de perfil de entrada: Solo, Team ou Enterprise
+- [x] Vendedor solo modelado em workspace proprio (seller_solo_workspace) com contexto privado
+- [x] Onboarding guiado com escolha de contexto: vendedor solo, representacao, brand owner
 - [ ] Fluxo Team/Enterprise: membros entram por convite do owner (nao por auto cadastro no tenant)
 - [ ] Definir matriz de permissao funcional por role (ex.: gerente com foco em acompanhamento, sem pedido)
 - [ ] Definir oficialmente se criacao de tenant sera self-service (qualquer conta elegivel) ou assistida (somente platform admin)
@@ -62,6 +62,24 @@ Regra de uso: cada item entregue deve ser marcado com [x] e manter evidencias cu
 - [ ] Replicar estrategia em Produtos
 - [ ] Replicar estrategia em Pedidos
 - [ ] Fechar ciclo com testes de repositorio e smoke de UI
+- [x] Criar login web responsivo e dedicado para o portal administrativo
+- [ ] Iniciar portal web administrativo separado para configuracao de tenant, regras e tabelas de preco
+- [ ] Definir e implementar motor de precificacao compartilhado com o portal web
+- [ ] Separar claramente no backlog o que e app operacional e o que e configuracao web
+
+## 0.1) Precificacao e cadastro de produto (decisao recente)
+
+- [x] Definir que o produto e o cadastro mestre completo, com lista resumida e detalhe em abas
+- [x] Definir que preco bruto, impostos e atributos fiscais pertencem ao produto, nao a uma tela isolada de preco
+- [x] Definir que o portal deve suportar modo tabela e modo politica ao mesmo tempo
+- [x] Definir que o caso Amatools prioriza politica comercial sobre o preco bruto com travas de desconto
+- [x] Definir que outros clientes podem operar por tabela vinculada a cliente/regiao/grupo
+- [x] Iniciar tela de importacao de tabelas de preco por Excel com escolha de vinculo
+- [ ] Detalhar a modelagem de tabelas de preco derivadas por cliente, grupo, regiao e campanha
+- [ ] Detalhar a modelagem de politicas comerciais por desconto, acrescimo e promocao
+- [ ] Detalhar as travas de manga por faixa de desconto (88, 88.5, 89)
+- [ ] Definir a interface final do construtor de regras de politicas comerciais
+- [ ] Definir o fluxo de vinculacao de tabela ou politica a cada cliente
 
 ## 0) Validacao de ambiente (hoje)
 

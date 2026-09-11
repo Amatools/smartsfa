@@ -1,9 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 
 import 'firebase_options.dart';
 import 'src/features/auth/presentation/pages/firebase_auth_gate_page.dart';
+import 'src/features/catalog_preview/presentation/pages/catalog_preview_page.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -27,13 +29,19 @@ class SmartSfaApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final previewMode = kIsWeb && Uri.base.queryParameters['preview'] == 'catalogs';
+
     return MaterialApp(
       title: 'SmartSFA',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF0B5D4B)),
         useMaterial3: true,
       ),
-      home: const SplashFlowPage(),
+      home: previewMode
+          ? const CatalogPreviewPage()
+          : kIsWeb
+              ? const FirebaseAuthGatePage()
+              : const SplashFlowPage(),
     );
   }
 }
