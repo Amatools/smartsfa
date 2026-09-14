@@ -28,7 +28,7 @@ class _PendingAccessPageState extends State<PendingAccessPage> {
   final TextEditingController _inviteTokenController = TextEditingController();
   final TextEditingController _workspaceNameController = TextEditingController();
   final TextEditingController _cnpjController = TextEditingController();
-  _OnboardingChoice _choice = _OnboardingChoice.solo;
+  _OnboardingChoice _choice = _OnboardingChoice.sellerSolo;
 
   @override
   void dispose() {
@@ -57,6 +57,18 @@ class _PendingAccessPageState extends State<PendingAccessPage> {
     }
 
     return 'Meu Workspace';
+  }
+
+  Stream<AccountContractLock> get _accountContractLockStream {
+    return FirebaseFirestore.instance
+        .collection('usuarios')
+        .doc(widget.user.uid)
+        .snapshots()
+        .map(
+          (doc) => AccountContractLock.fromValue(
+            (doc.data()?['accountContractLock'] ?? '').toString().trim(),
+          ),
+        );
   }
 
   Future<void> _loadCurrentRequest() async {
@@ -143,23 +155,31 @@ class _PendingAccessPageState extends State<PendingAccessPage> {
     });
 
     try {
+      final shouldClearPendingRequest = _currentRequest != null;
       await SoloWorkspaceService(FirebaseFirestore.instance)
           .createOwnerWorkspace(
             user: widget.user,
             plan: OnboardingPlan.solo,
+            workspaceType: WorkspaceType.sellerSoloWorkspace,
             workspaceName: _workspaceNameController.text,
+            clearPendingRequest: shouldClearPendingRequest,
           );
 
       setState(() {
         _message =
-            'Workspace solo criado com sucesso. Entrando como owner...';
+        'Workspace vendedor solo criado com sucesso. Entrando no contexto privado...';
       });
 
       widget.onAccessUpdated?.call();
-    } catch (_) {
+    } on FirebaseException catch (error) {
       setState(() {
-        _message =
-            'Nao foi possivel criar workspace solo agora. Tente novamente.';
+        _message = 'Erro Firebase (${error.code}): ${error.message ?? 'falha ao criar workspace solo.'}';
+      });
+    } catch (error) {
+      setState(() {
+        _message = error is StateError
+            ? error.message.toString()
+            : 'Nao foi possivel criar workspace solo agora. Tente novamente.';
       });
     } finally {
       if (mounted) {
@@ -172,6 +192,7 @@ class _PendingAccessPageState extends State<PendingAccessPage> {
 
   Future<void> _createTeamOrEnterpriseWorkspace(
     OnboardingPlan plan,
+    WorkspaceType workspaceType,
   ) async {
     setState(() {
       _sending = true;
@@ -179,15 +200,18 @@ class _PendingAccessPageState extends State<PendingAccessPage> {
     });
 
     try {
+      final shouldClearPendingRequest = _currentRequest != null;
       await SoloWorkspaceService(FirebaseFirestore.instance).createOwnerWorkspace(
         user: widget.user,
         plan: plan,
+        workspaceType: workspaceType,
         workspaceName: _workspaceNameController.text,
         cnpj: _cnpjController.text,
+        clearPendingRequest: shouldClearPendingRequest,
       );
 
       setState(() {
-        _message = 'Workspace criado com sucesso. Entrando como owner...';
+        _message = 'Workspace criado com sucesso. Entrando no tenant...';
       });
 
       widget.onAccessUpdated?.call();
@@ -195,9 +219,15 @@ class _PendingAccessPageState extends State<PendingAccessPage> {
       setState(() {
         _message = error.message.toString();
       });
-    } catch (_) {
+    } on FirebaseException catch (error) {
       setState(() {
-        _message = 'Nao foi possivel criar workspace agora. Tente novamente.';
+        _message = 'Erro Firebase (${error.code}): ${error.message ?? 'falha ao criar workspace.'}';
+      });
+    } catch (error) {
+      setState(() {
+        _message = error is StateError
+            ? error.message.toString()
+            : 'Nao foi possivel criar workspace agora. Tente novamente.';
       });
     } finally {
       if (mounted) {
@@ -215,33 +245,93 @@ class _PendingAccessPageState extends State<PendingAccessPage> {
     });
   }
 
-  Widget _buildChoiceChip({
+  Widget _buildChoiceCard({
     required _OnboardingChoice value,
-    required String label,
+    required String title,
+    required String subtitle,
   }) {
-    return ChoiceChip(
-      label: Text(label),
-      selected: _choice == value,
-      onSelected: (_) => _selectChoice(value),
+    final selected = _choice == value;
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return InkWell(
+      onTap: () => _selectChoice(value),
+      borderRadius: BorderRadius.circular(16),
+      child: Ink(
+        width: 240,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: selected ? colorScheme.primary : colorScheme.outlineVariant,
+            width: selected ? 2 : 1,
+          ),
+          color: selected
+              ? colorScheme.primaryContainer.withAlpha(90)
+              : colorScheme.surface,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: Theme.of(context).textTheme.titleSmall),
+            const SizedBox(height: 8),
+            Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
+          ],
+        ),
+      ),
     );
   }
 
   Widget _buildChoiceSection() {
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: [
-        _buildChoiceChip(value: _OnboardingChoice.solo, label: 'Plano Solo'),
-        _buildChoiceChip(value: _OnboardingChoice.team, label: 'Plano Team'),
-        _buildChoiceChip(
-          value: _OnboardingChoice.enterprise,
-          label: 'Plano Enterprise',
-        ),
-        _buildChoiceChip(
-          value: _OnboardingChoice.invite,
-          label: 'Entrar com convite',
-        ),
-      ],
+    return StreamBuilder<AccountContractLock>(
+      stream: _accountContractLockStream,
+      builder: (context, snapshot) {
+        final accountContractLock =
+            snapshot.data ?? AccountContractLock.flexible;
+        final canCreateFlexibleWorkspaces =
+            accountContractLock != AccountContractLock.enterpriseOnly;
+
+        if (!canCreateFlexibleWorkspaces &&
+            (_choice == _OnboardingChoice.sellerSolo ||
+                _choice == _OnboardingChoice.repWorkspace)) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) {
+              return;
+            }
+            setState(() {
+              _choice = _OnboardingChoice.brandOwner;
+            });
+          });
+        }
+
+        return Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            if (canCreateFlexibleWorkspaces)
+              _buildChoiceCard(
+                value: _OnboardingChoice.sellerSolo,
+                title: 'Individual',
+                subtitle: 'Base privada sem equipe e sem interligacao com outros usuarios.',
+              ),
+            if (canCreateFlexibleWorkspaces)
+              _buildChoiceCard(
+                value: _OnboardingChoice.repWorkspace,
+                title: 'Representacoes',
+                subtitle: 'Representante opera base propria e pode convidar vendedores.',
+              ),
+            _buildChoiceCard(
+              value: _OnboardingChoice.brandOwner,
+              title: 'Empresa',
+              subtitle: 'Tenant oficial da marca com CNPJ e cadeia completa de acesso.',
+            ),
+            _buildChoiceCard(
+              value: _OnboardingChoice.invite,
+              title: 'Entrar com convite',
+              subtitle: 'Use o token recebido para entrar em um tenant existente.',
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -268,12 +358,18 @@ class _PendingAccessPageState extends State<PendingAccessPage> {
   }
 
   Widget _buildWorkspacePanel() {
-    final isSolo = _choice == _OnboardingChoice.solo;
-    final plan = _choice == _OnboardingChoice.enterprise
-        ? OnboardingPlan.enterprise
-        : _choice == _OnboardingChoice.team
-        ? OnboardingPlan.team
-        : OnboardingPlan.solo;
+    final isSellerSolo = _choice == _OnboardingChoice.sellerSolo;
+    final isBrandOwner = _choice == _OnboardingChoice.brandOwner;
+    final plan = isBrandOwner
+      ? OnboardingPlan.enterprise
+      : isSellerSolo
+      ? OnboardingPlan.solo
+      : OnboardingPlan.team;
+    final workspaceType = isBrandOwner
+      ? WorkspaceType.brandOwnerWorkspace
+      : isSellerSolo
+      ? WorkspaceType.sellerSoloWorkspace
+      : WorkspaceType.repWorkspace;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -282,25 +378,31 @@ class _PendingAccessPageState extends State<PendingAccessPage> {
           controller: _workspaceNameController,
           decoration: InputDecoration(
             border: const OutlineInputBorder(),
-            labelText: isSolo ? 'Nome do seu workspace' : 'Nome da empresa',
+            labelText: isBrandOwner
+                ? 'Nome da empresa contratante'
+                : 'Nome interno do workspace',
           ),
         ),
-        if (!isSolo) ...[
+        if (!isSellerSolo) ...[
           const SizedBox(height: 12),
           TextField(
             controller: _cnpjController,
             keyboardType: TextInputType.number,
-            decoration: const InputDecoration(
-              border: OutlineInputBorder(),
-              labelText: 'CNPJ (opcional neste momento)',
+            decoration: InputDecoration(
+              border: const OutlineInputBorder(),
+              labelText: isBrandOwner
+                  ? 'CNPJ da empresa contratante'
+                  : 'CNPJ da representada (informativo)',
             ),
           ),
         ],
         const SizedBox(height: 10),
         Text(
-          isSolo
-              ? 'Voce entrara como owner do seu workspace solo.'
-              : 'Voce entrara como owner do tenant criado para sua empresa.',
+          isBrandOwner
+              ? 'Conta oficial da empresa contratante com cadeia completa de acesso.'
+              : isSellerSolo
+              ? 'Workspace individual com base privada e sem equipe vinculada.'
+              : 'Workspace de representacoes com base propria e equipe comercial vinculada.',
           style: Theme.of(context).textTheme.bodySmall,
         ),
         const SizedBox(height: 12),
@@ -308,19 +410,21 @@ class _PendingAccessPageState extends State<PendingAccessPage> {
           onPressed: _sending
               ? null
               : () {
-                  if (isSolo) {
+                  if (isSellerSolo) {
                     _createSoloWorkspace();
                     return;
                   }
-                  _createTeamOrEnterpriseWorkspace(plan);
+                  _createTeamOrEnterpriseWorkspace(plan, workspaceType);
                 },
           icon: const Icon(Icons.business_center_outlined),
           label: Text(
             _sending
                 ? 'Criando workspace...'
-                : isSolo
-                ? 'Criar workspace solo (owner)'
-                : 'Criar empresa e continuar',
+                : isSellerSolo
+                ? 'Criar workspace Individual'
+                : isBrandOwner
+                ? 'Criar workspace Empresa'
+                : 'Criar workspace Representacoes',
           ),
         ),
       ],
@@ -345,8 +449,24 @@ class _PendingAccessPageState extends State<PendingAccessPage> {
                 Text('Usuario: ${widget.user.email ?? widget.user.uid}'),
                 const SizedBox(height: 8),
                 Text(
-                  'Escolha como deseja entrar: conta solo, criar empresa, ou convite.',
+                  'Escolha como deseja entrar: workspace Individual, Representacoes, Empresa ou convite.',
                   style: Theme.of(context).textTheme.bodySmall,
+                ),
+                StreamBuilder<AccountContractLock>(
+                  stream: _accountContractLockStream,
+                  builder: (context, snapshot) {
+                    final accountContractLock =
+                        snapshot.data ?? AccountContractLock.flexible;
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(
+                        accountContractLock == AccountContractLock.enterpriseOnly
+                          ? 'Tipo de conta: Conta BrandOp. Este login so pode operar no contexto oficial da empresa contratante.'
+                          : 'Tipo de conta: Conta MultiOp. Este login pode reunir workspace Individual, Representacoes e acessos convidados.',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    );
+                  },
                 ),
                 if (_currentRequest != null) ...[
                   const SizedBox(height: 12),
@@ -391,8 +511,8 @@ class _PendingAccessPageState extends State<PendingAccessPage> {
 }
 
 enum _OnboardingChoice {
-  solo,
-  team,
-  enterprise,
+  sellerSolo,
+  repWorkspace,
+  brandOwner,
   invite,
 }

@@ -12,6 +12,7 @@ import '../../services/tenant_entry_resolver.dart';
 import 'loading_page.dart';
 import 'pending_access_page.dart';
 import 'sign_in_page.dart';
+import 'web_sign_in_page.dart';
 
 class FirebaseAuthGatePage extends StatelessWidget {
   const FirebaseAuthGatePage({super.key});
@@ -27,7 +28,7 @@ class FirebaseAuthGatePage extends StatelessWidget {
 
         final user = authSnapshot.data;
         if (user == null) {
-          return const SignInPage();
+          return kIsWeb ? const WebSignInPage() : const SignInPage();
         }
 
         return _UserAccessResolver(user: user);

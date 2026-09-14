@@ -96,6 +96,8 @@ class TenantEntryResolver {
       tenantId: tenantId,
       tenantName: (tenantData['nomeFantasia'] ?? tenantId).toString(),
       role: role,
+      workspaceType: (tenantData['workspaceType'] ?? 'brand_owner_workspace')
+          .toString(),
       defaultTenant: data['defaultTenant'] == true,
     );
   }

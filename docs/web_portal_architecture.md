@@ -186,6 +186,32 @@ A listagem deve ser resumida, mas ao abrir o item o sistema deve mostrar o regis
 
 No cadastro do produto, os campos de valor bruto e fiscal nao devem ser tratados como uma tela separada de precificacao. Eles pertencem ao produto e servem como base para o calculo de preco e para a integracao ERP.
 
+## Regra de sincronizacao de produtos (ERP)
+
+Para produtos, o sistema adota uma chave de governanca por tenant:
+
+- `productSyncFromErpEnabled = true`: ERP e a fonte da verdade de produtos.
+- `productSyncFromErpEnabled = false`: operacao manual/Excel permitida.
+
+Comportamento esperado:
+
+- switch visivel apenas para owner de workspace `brand_owner_workspace`;
+- em `brand_owner_workspace` com sincronizacao ativa:
+	- esconder botoes de importacao/cadastro manual no frontend;
+	- bloquear create/update/delete manual no backend;
+	- exibir card informativo de catalogo gerenciado por ERP;
+- em `rep_workspace` e `seller_solo_workspace`:
+	- switch nao aparece;
+	- fluxo segue por importacao Excel e cadastro manual;
+	- backend rejeita qualquer ativacao desse switch fora de enterprise.
+
+Cada produto integrado deve manter identificadores tecnicos de sincronizacao, no minimo:
+
+- `erpProductId`;
+- `erpSyncId` (versao/lote da sincronizacao).
+
+Quando a integracao ERP for desligada, a recomendacao e nao excluir produto integrado para preservar historico. Preferir inativacao e transicao controlada para manutencao manual.
+
 ## ERP e integracao
 
 Para ERP, o portal web deve permitir configuracao assistida pelo tenant quando isso for permitido pelo produto.

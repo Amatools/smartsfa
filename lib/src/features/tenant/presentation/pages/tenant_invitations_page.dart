@@ -36,7 +36,40 @@ class _TenantInvitationsPageState extends State<TenantInvitationsPage> {
   TenantInvitationActionController get _actions =>
       TenantInvitationActionController(_invitationService);
 
-  bool get _isOwner => widget.identity.role.trim().toLowerCase() == 'owner';
+  String get _normalizedRole => widget.identity.role.trim().toLowerCase();
+
+  List<String> _allowedRolesForContext(String workspaceType) {
+    if (workspaceType == 'seller_solo_workspace') {
+      return const [];
+    }
+
+    if (workspaceType == 'rep_workspace') {
+      if (_normalizedRole == 'owner') {
+        return const ['representante', 'vendedor'];
+      }
+      if (_normalizedRole == 'representante') {
+        return const ['vendedor'];
+      }
+      return const [];
+    }
+
+    if (_normalizedRole == 'owner') {
+      return const ['gerente'];
+    }
+    if (_normalizedRole == 'gerente') {
+      return const ['representante'];
+    }
+    if (_normalizedRole == 'representante') {
+      return const ['vendedor'];
+    }
+    return const [];
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedRole = 'vendedor';
+  }
 
   @override
   void dispose() {
@@ -45,8 +78,21 @@ class _TenantInvitationsPageState extends State<TenantInvitationsPage> {
   }
 
   Future<void> _createInvitation() async {
-    if (!_isOwner) {
-      _showMessage('Somente owner pode enviar convites.');
+    final tenantDoc = await FirebaseFirestore.instance
+        .collection('tenants')
+        .doc(widget.identity.tenantId)
+        .get();
+    final workspaceType = (tenantDoc.data()?['workspaceType'] ?? 'brand_owner_workspace')
+        .toString();
+    final allowedRolesForContext = _allowedRolesForContext(workspaceType);
+
+    if (allowedRolesForContext.isEmpty) {
+      _showMessage('Seu perfil nao pode enviar convites neste tenant.');
+      return;
+    }
+
+    if (!allowedRolesForContext.contains(_selectedRole)) {
+      _showMessage('Perfil de convite invalido para este tipo de workspace.');
       return;
     }
 
@@ -90,8 +136,16 @@ class _TenantInvitationsPageState extends State<TenantInvitationsPage> {
   }
 
   Future<void> _revokeInvitation(TenantInvitation invitation) async {
-    if (!_isOwner) {
-      _showMessage('Somente owner pode gerenciar convites.');
+    final tenantDoc = await FirebaseFirestore.instance
+        .collection('tenants')
+        .doc(widget.identity.tenantId)
+        .get();
+    final workspaceType = (tenantDoc.data()?['workspaceType'] ?? 'brand_owner_workspace')
+        .toString();
+    final allowedRolesForContext = _allowedRolesForContext(workspaceType);
+
+    if (allowedRolesForContext.isEmpty) {
+      _showMessage('Seu perfil nao pode gerenciar convites neste tenant.');
       return;
     }
 
@@ -133,138 +187,169 @@ class _TenantInvitationsPageState extends State<TenantInvitationsPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Convites do tenant')),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Envio e gerenciamento de convites do tenant ${widget.identity.tenantName}.',
-                  style: Theme.of(context).textTheme.bodyLarge,
-                ),
-                const SizedBox(height: 16),
-                if (!_isOwner)
-                  const AppInfoCard(
-                    title: 'Acesso restrito',
-                    subtitle: 'Somente owner pode enviar e gerenciar convites deste tenant.',
-                  )
-                else
-                  _CreateInvitationCard(
-                    emailController: _emailController,
-                    selectedRole: _selectedRole,
-                    defaultTenant: _defaultTenant,
-                    expirationDays: _expirationDays,
-                    creating: _creating,
-                    onRoleChanged: (value) {
-                      setState(() {
-                        _selectedRole = value;
-                      });
-                    },
-                    onExpirationChanged: (value) {
-                      setState(() {
-                        _expirationDays = value;
-                      });
-                    },
-                    onDefaultTenantChanged: (value) {
-                      setState(() {
-                        _defaultTenant = value;
-                      });
-                    },
-                    onCreate: _createInvitation,
-                  ),
-                const SizedBox(height: 12),
-                StreamBuilder<List<TenantInvitation>>(
-                  stream: _invitationService.watchInvitationsForTenant(
-                    widget.identity.tenantId,
-                  ),
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const AppInfoCard(
-                        title: 'Carregando convites',
-                        subtitle: 'Buscando historico de convites do tenant...',
-                      );
-                    }
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('tenants')
+          .doc(widget.identity.tenantId)
+          .snapshots(),
+      builder: (context, tenantSnapshot) {
+        final workspaceType =
+            (tenantSnapshot.data?.data()?['workspaceType'] ?? 'brand_owner_workspace')
+                .toString();
+        final allowedRoles = _allowedRolesForContext(workspaceType);
+        final canManageInvites = allowedRoles.isNotEmpty;
 
-                    final invitations = snapshot.data ?? const [];
-                    if (invitations.isEmpty) {
-                      return const AppInfoCard(
-                        title: 'Sem convites emitidos',
-                        subtitle: 'Crie um convite para iniciar o onboarding.',
-                      );
-                    }
+        if (canManageInvites && !allowedRoles.contains(_selectedRole)) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) {
+              return;
+            }
+            setState(() {
+              _selectedRole = allowedRoles.first;
+            });
+          });
+        }
 
-                    final page = buildPaginationSlice(
-                      source: invitations,
-                      requestedPage: _currentPage,
-                      pageSize: _pageSize,
-                    );
-
-                    if (page.currentPage != _currentPage) {
-                      WidgetsBinding.instance.addPostFrameCallback((_) {
-                        if (mounted) {
+        return Scaffold(
+          appBar: AppBar(title: const Text('Convites do tenant')),
+          body: SafeArea(
+            child: SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Envio e gerenciamento de convites do tenant ${widget.identity.tenantName}.',
+                      style: Theme.of(context).textTheme.bodyLarge,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Tipo de workspace: $workspaceType',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 16),
+                    if (!canManageInvites)
+                      const AppInfoCard(
+                        title: 'Acesso restrito',
+                        subtitle:
+                            'Seu perfil nao tem permissao para enviar convites neste tenant.',
+                      )
+                    else
+                      _CreateInvitationCard(
+                        emailController: _emailController,
+                        selectedRole: _selectedRole,
+                        allowedRoles: allowedRoles,
+                        defaultTenant: _defaultTenant,
+                        expirationDays: _expirationDays,
+                        creating: _creating,
+                        onRoleChanged: (value) {
                           setState(() {
-                            _currentPage = page.currentPage;
+                            _selectedRole = value;
+                          });
+                        },
+                        onExpirationChanged: (value) {
+                          setState(() {
+                            _expirationDays = value;
+                          });
+                        },
+                        onDefaultTenantChanged: (value) {
+                          setState(() {
+                            _defaultTenant = value;
+                          });
+                        },
+                        onCreate: _createInvitation,
+                      ),
+                    const SizedBox(height: 12),
+                    StreamBuilder<List<TenantInvitation>>(
+                      stream: _invitationService.watchInvitationsForTenant(
+                        widget.identity.tenantId,
+                      ),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return const AppInfoCard(
+                            title: 'Carregando convites',
+                            subtitle: 'Buscando historico de convites do tenant...',
+                          );
+                        }
+
+                        final invitations = snapshot.data ?? const [];
+                        if (invitations.isEmpty) {
+                          return const AppInfoCard(
+                            title: 'Sem convites emitidos',
+                            subtitle: 'Crie um convite para iniciar o onboarding.',
+                          );
+                        }
+
+                        final page = buildPaginationSlice(
+                          source: invitations,
+                          requestedPage: _currentPage,
+                          pageSize: _pageSize,
+                        );
+
+                        if (page.currentPage != _currentPage) {
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            if (mounted) {
+                              setState(() {
+                                _currentPage = page.currentPage;
+                              });
+                            }
                           });
                         }
-                      });
-                    }
 
-                    return Column(
-                      children: [
-                        AppPaginationBar(
-                          currentPage: page.currentPage,
-                          totalPages: page.totalPages,
-                          pageSize: _pageSize,
-                          startDisplay: page.startDisplay,
-                          endDisplay: page.endDisplay,
-                          totalItems: page.totalItems,
-                          onPageSizeChanged: (value) {
-                            setState(() {
-                              _pageSize = value;
-                              _currentPage = 0;
-                            });
-                          },
-                          onPrevious: !page.hasPrevious
-                              ? null
-                              : () {
-                                  setState(() {
-                                    _currentPage = page.currentPage - 1;
-                                  });
-                                },
-                          onNext: !page.hasNext
-                              ? null
-                              : () {
-                                  setState(() {
-                                    _currentPage = page.currentPage + 1;
-                                  });
-                                },
-                        ),
-                        const SizedBox(height: 10),
-                        ...page.items.map(
-                          (invitation) => _ManagedInvitationCard(
-                            invitation: invitation,
-                            revoking: _revokingToken == invitation.token,
-                            onRevoke:
-                                _isOwner &&
-                                    invitation.status ==
-                                        TenantInvitationStatus.pending
-                                ? () => _revokeInvitation(invitation)
-                                : null,
-                          ),
-                        ),
-                      ],
-                    );
-                  },
+                        return Column(
+                          children: [
+                            AppPaginationBar(
+                              currentPage: page.currentPage,
+                              totalPages: page.totalPages,
+                              pageSize: _pageSize,
+                              startDisplay: page.startDisplay,
+                              endDisplay: page.endDisplay,
+                              totalItems: page.totalItems,
+                              onPageSizeChanged: (value) {
+                                setState(() {
+                                  _pageSize = value;
+                                  _currentPage = 0;
+                                });
+                              },
+                              onPrevious: !page.hasPrevious
+                                  ? null
+                                  : () {
+                                      setState(() {
+                                        _currentPage = page.currentPage - 1;
+                                      });
+                                    },
+                              onNext: !page.hasNext
+                                  ? null
+                                  : () {
+                                      setState(() {
+                                        _currentPage = page.currentPage + 1;
+                                      });
+                                    },
+                            ),
+                            const SizedBox(height: 10),
+                            ...page.items.map(
+                              (invitation) => _ManagedInvitationCard(
+                                invitation: invitation,
+                                revoking: _revokingToken == invitation.token,
+                                onRevoke: canManageInvites &&
+                                        invitation.status ==
+                                            TenantInvitationStatus.pending
+                                    ? () => _revokeInvitation(invitation)
+                                    : null,
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
@@ -273,6 +358,7 @@ class _CreateInvitationCard extends StatelessWidget {
   const _CreateInvitationCard({
     required this.emailController,
     required this.selectedRole,
+    required this.allowedRoles,
     required this.defaultTenant,
     required this.expirationDays,
     required this.creating,
@@ -284,6 +370,7 @@ class _CreateInvitationCard extends StatelessWidget {
 
   final TextEditingController emailController;
   final String selectedRole;
+  final List<String> allowedRoles;
   final bool defaultTenant;
   final int expirationDays;
   final bool creating;
@@ -317,14 +404,14 @@ class _CreateInvitationCard extends StatelessWidget {
                 border: OutlineInputBorder(),
                 labelText: 'Perfil no tenant',
               ),
-              items: const [
-                DropdownMenuItem(value: 'gerente', child: Text('gerente')),
-                DropdownMenuItem(
-                  value: 'representante',
-                  child: Text('representante'),
-                ),
-                DropdownMenuItem(value: 'vendedor', child: Text('vendedor')),
-              ],
+              items: allowedRoles
+                  .map(
+                    (role) => DropdownMenuItem(
+                      value: role,
+                      child: Text(role),
+                    ),
+                  )
+                  .toList(),
               onChanged: creating
                   ? null
                   : (value) {

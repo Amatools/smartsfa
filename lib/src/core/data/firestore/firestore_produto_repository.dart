@@ -12,6 +12,9 @@ class FirestoreProdutoRepository implements ProdutoRepository {
   CollectionReference<Map<String, dynamic>> get _collection =>
       _firestore.collection('produtos');
 
+    CollectionReference<Map<String, dynamic>> get _counterCollection =>
+      _firestore.collection('tenant_counters');
+
   @override
   Stream<List<Produto>> watchAll({required String tenantId}) {
     final normalizedTenantId = tenantId.trim();
@@ -76,8 +79,31 @@ class FirestoreProdutoRepository implements ProdutoRepository {
   }
 
   @override
-  Future<void> save(Produto entity) {
-    return _collection.doc(entity.id).set(entity.toMap());
+  Future<void> save(Produto entity) async {
+    final docRef = _collection.doc(entity.id);
+
+    await _firestore.runTransaction((transaction) async {
+      final existingDoc = await transaction.get(docRef);
+      if (existingDoc.exists) {
+        transaction.set(docRef, entity.toMap());
+        return;
+      }
+
+      final counterRef = _counterCollection.doc(entity.tenantId);
+      final counterDoc = await transaction.get(counterRef);
+      final currentSequence =
+          ((counterDoc.data()?['productCodeSequence'] as num?) ?? 0).toInt();
+      final nextSequence = currentSequence + 1;
+      final generatedCode = 'PRD-${nextSequence.toString().padLeft(6, '0')}';
+
+      final entityWithCode = entity.copyWith(codigoInterno: generatedCode);
+      transaction.set(counterRef, {
+        'tenantId': entity.tenantId,
+        'productCodeSequence': nextSequence,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+      transaction.set(docRef, entityWithCode.toMap());
+    });
   }
 
   @override

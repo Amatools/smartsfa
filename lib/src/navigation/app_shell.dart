@@ -26,6 +26,7 @@ import '../features/clientes/presentation/pages/clientes_page.dart';
 import '../features/notificacoes/presentation/pages/notificacoes_page.dart';
 import '../features/pedidos/presentation/pages/pedidos_page.dart';
 import '../features/produtos/presentation/pages/produtos_page.dart';
+import '../features/portal/presentation/pages/web_portal_page.dart';
 import '../features/tenant/presentation/pages/tenant_admin_page.dart';
 
 class AppShellPage extends StatefulWidget {
@@ -51,6 +52,10 @@ class _AppShellPageState extends State<AppShellPage> {
     'SEED_FIRESTORE_MOCKS',
     defaultValue: false,
   );
+  static const bool _enableLocalMockFallback = bool.fromEnvironment(
+    'ENABLE_LOCAL_MOCK_FALLBACK',
+    defaultValue: false,
+  );
 
   int _selectedIndex = 0;
   DemoWorkspace? _workspace;
@@ -60,6 +65,7 @@ class _AppShellPageState extends State<AppShellPage> {
   late final PedidoRepository _pedidoRepository;
   final Connectivity _connectivity = Connectivity();
   bool _syncInProgress = false;
+  bool _usingLocalFallback = false;
   StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
 
   @override
@@ -82,10 +88,11 @@ class _AppShellPageState extends State<AppShellPage> {
   }
 
   Future<void> _initializeRepositories() async {
-    final shouldUseLocalFallback = widget.identity.isMock ||
-        await _isOffline();
+    final shouldUseLocalFallback =
+      !kIsWeb && _enableLocalMockFallback && widget.identity.isMock;
 
     if (shouldUseLocalFallback) {
+      _usingLocalFallback = true;
       _workspace = DemoWorkspace.seeded(widget.identity);
       _clienteRepository = _workspace!.clientes;
       _preCadastroRepository = _workspace!.preCadastros;
@@ -98,21 +105,13 @@ class _AppShellPageState extends State<AppShellPage> {
     }
 
     final firestore = FirebaseFirestore.instance;
+  _usingLocalFallback = false;
     _clienteRepository = FirestoreClienteRepository(firestore);
     _preCadastroRepository = FirestoreClientePreCadastroRepository(firestore);
     _produtoRepository = FirestoreProdutoRepository(firestore);
     _pedidoRepository = FirestorePedidoRepository(firestore);
     _seedFirestoreMocksIfNeeded();
     _syncOfflineQueueIfOnline();
-  }
-
-  Future<bool> _isOffline() async {
-    try {
-      final connectivity = await Connectivity().checkConnectivity();
-      return connectivity.contains(ConnectivityResult.none);
-    } catch (_) {
-      return false;
-    }
   }
 
   Future<void> _syncOfflineQueueIfOnline() async {
@@ -276,7 +275,10 @@ class _AppShellPageState extends State<AppShellPage> {
       _ShellItem(
         label: 'Dashboard',
         icon: Icons.space_dashboard_outlined,
-        builder: (context, identity) => _DashboardPage(identity: identity),
+        builder: (context, identity) => _DashboardPage(
+          identity: identity,
+          usingLocalFallback: _usingLocalFallback,
+        ),
       ),
       _ShellItem(
         label: 'Clientes',
@@ -354,6 +356,13 @@ class _AppShellPageState extends State<AppShellPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (kIsWeb) {
+      return WebPortalPage(
+        identity: widget.identity,
+        onSignOut: widget.onSignOut,
+      );
+    }
+
     final items = _buildItems(widget.identity.role);
     final safeIndex = _selectedIndex.clamp(0, items.length - 1);
     final selected = items[safeIndex];
@@ -439,6 +448,7 @@ class _AppShellPageState extends State<AppShellPage> {
             ),
     );
   }
+
 }
 
 class _ShellItem {
@@ -454,9 +464,13 @@ class _ShellItem {
 }
 
 class _DashboardPage extends StatelessWidget {
-  const _DashboardPage({required this.identity});
+  const _DashboardPage({
+    required this.identity,
+    required this.usingLocalFallback,
+  });
 
   final AppIdentity identity;
+  final bool usingLocalFallback;
 
   @override
   Widget build(BuildContext context) {
@@ -466,7 +480,7 @@ class _DashboardPage extends StatelessWidget {
       ('Perfil', identity.role),
       (
         'Conexao',
-        identity.isMock ? 'Local mock / fallback' : 'Firebase autenticado',
+        usingLocalFallback ? 'Local mock / fallback' : 'Firebase autenticado',
       ),
     ];
 

@@ -2,12 +2,16 @@
   "name": "smartsfa-bootstrap-owner",
   "private": true,
   "version": "1.0.0",
-  "description": "Bootstrap do primeiro owner no Firebase Auth + Firestore",
-  "main": "create_owner.js",
+  "description": "Provisionamento oficial dos contextos de teste e da conta enterprise no SmartSFA",
+  "main": "provision_workspace_contexts_v2.mjs",
   "scripts": {
-    "owner:create": "node create_owner.js"
+    "provision:test-contexts": "node provision_workspace_contexts_v2.mjs",
+    "provision:enterprise": "node provision_enterprise_account.mjs",
+    "provision:rep-a": "node provision_representacoes_a_hierarchy_admin.mjs",
+    "cleanup:demo-memberships": "node cleanup_demo_memberships_admin.mjs",
+    "purge:demo-workspace": "node purge_demo_workspace_admin.mjs"
   },
   "dependencies": {
-    "firebase-admin": "^13.4.0"
+    "firebase-admin": "^14.4.0"
   }
 }

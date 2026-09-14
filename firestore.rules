@@ -30,8 +30,18 @@ service cloud.firestore {
       return isGlobalActiveUser() && myPlatformRole() == 'platform_admin';
     }
 
+    function myAccountContractLock() {
+      return hasUserDoc() && me().data.accountContractLock is string
+        ? me().data.accountContractLock
+        : 'flexible';
+    }
+
     function membershipId(tenantId) {
       return tenantId + '_' + uid();
+    }
+
+    function hasMembershipDoc(tenantId) {
+      return exists(/databases/$(database)/documents/tenant_memberships/$(membershipId(tenantId)));
     }
 
     function isPersonalWorkspaceTenant(tenantId) {
@@ -52,7 +62,7 @@ service cloud.firestore {
     }
 
     function hasActiveMembership(tenantId) {
-      return exists(/databases/$(database)/documents/tenant_memberships/$(membershipId(tenantId)))
+      return hasMembershipDoc(tenantId)
         && get(/databases/$(database)/documents/tenant_memberships/$(membershipId(tenantId))).data.ativo == true;
     }
 
@@ -61,23 +71,178 @@ service cloud.firestore {
     }
 
     function myTenantRole(tenantId) {
-      return hasActiveMembership(tenantId) ? myMembership(tenantId).data.role : '';
+      return hasMembershipDoc(tenantId) && myMembership(tenantId).data.ativo == true
+        ? myMembership(tenantId).data.role
+        : '';
     }
 
     function isTenantOwner(tenantId) {
-      return hasActiveMembership(tenantId) && myTenantRole(tenantId) == 'owner';
+      return myTenantRole(tenantId) == 'owner';
     }
 
     function isTenantGerente(tenantId) {
-      return hasActiveMembership(tenantId) && myTenantRole(tenantId) == 'gerente';
+      return myTenantRole(tenantId) == 'gerente';
     }
 
     function isTenantRepresentante(tenantId) {
-      return hasActiveMembership(tenantId) && myTenantRole(tenantId) == 'representante';
+      return myTenantRole(tenantId) == 'representante';
     }
 
     function isTenantVendedor(tenantId) {
-      return hasActiveMembership(tenantId) && myTenantRole(tenantId) == 'vendedor';
+      return myTenantRole(tenantId) == 'vendedor';
+    }
+
+    function isSellerSoloWorkspace(tenantId) {
+      return tenantWorkspaceType(tenantId) == 'seller_solo_workspace';
+    }
+
+    function isRepWorkspace(tenantId) {
+      return tenantWorkspaceType(tenantId) == 'rep_workspace';
+    }
+
+    function isBrandOwnerWorkspace(tenantId) {
+      return tenantWorkspaceType(tenantId) == 'brand_owner_workspace';
+    }
+
+    function hasAnyTenantRole(tenantId) {
+      return myTenantRole(tenantId) in ['owner', 'gerente', 'representante', 'vendedor'];
+    }
+
+    function hasTenantRoleIn(tenantId, roles) {
+      return myTenantRole(tenantId) in roles;
+    }
+
+    function tenantWorkspaceType(tenantId) {
+      return exists(/databases/$(database)/documents/tenants/$(tenantId))
+        && get(/databases/$(database)/documents/tenants/$(tenantId)).data.workspaceType is string
+          ? get(/databases/$(database)/documents/tenants/$(tenantId)).data.workspaceType
+          : 'brand_owner_workspace';
+    }
+
+    function tenantProductSyncFromErpEnabled(tenantId) {
+      return exists(/databases/$(database)/documents/tenants/$(tenantId))
+        && get(/databases/$(database)/documents/tenants/$(tenantId)).data.productSyncFromErpEnabled == true;
+    }
+
+    function productSyncEnabledFromData(data) {
+      return ('productSyncFromErpEnabled' in data)
+        && data.productSyncFromErpEnabled is bool
+        ? data.productSyncFromErpEnabled
+        : false;
+    }
+
+    function validProductSyncFlagForWorkspace(data) {
+      return data.workspaceType == 'brand_owner_workspace'
+        || productSyncEnabledFromData(data) == false;
+    }
+
+    function canChangeProductSyncFlag(tenantId) {
+      return productSyncEnabledFromData(resource.data) == productSyncEnabledFromData(request.resource.data)
+        || (
+          isBrandOwnerWorkspace(tenantId)
+          && isTenantOwner(tenantId)
+        );
+    }
+
+    function canManageRepresentedCompanyPreferenceUpdate(tenantId) {
+      return (
+          (isRepWorkspace(tenantId)
+            && hasTenantRoleIn(tenantId, ['owner', 'representante']))
+          || (isSellerSoloWorkspace(tenantId)
+            && hasTenantRoleIn(tenantId, ['vendedor']))
+        );
+    }
+
+    function isRepresentedPreferenceOnlyTenantUpdate() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        'representedCompanies',
+        'favoriteRepresentedCompanyId',
+        'updatedAt'
+      ]);
+    }
+
+    function canReadTenantDocument(tenantId) {
+      return isPlatformAdmin() || hasActiveMembership(tenantId);
+    }
+
+    function canReadTenantBoundDocument(data) {
+      return isPlatformAdmin()
+        || (hasTenantField(data) && (
+          canAccessOwnPersonalData(data)
+          || hasActiveMembership(data.tenantId)
+        ));
+    }
+
+    function canAccessTenantWorkflow(tenantId) {
+      return isPlatformAdmin()
+        || isPersonalWorkspaceTenant(tenantId)
+        || hasAnyTenantRole(tenantId);
+    }
+
+    function canInviteRoleForTenant(tenantId, targetRole) {
+      return isPlatformAdmin()
+        || (
+          hasActiveMembership(tenantId)
+          && (
+            (isSellerSoloWorkspace(tenantId) && false)
+            || (
+              isRepWorkspace(tenantId)
+              && (
+                (hasTenantRoleIn(tenantId, ['owner'])
+                  && (targetRole == 'representante' || targetRole == 'vendedor'))
+                || (hasTenantRoleIn(tenantId, ['representante']) && targetRole == 'vendedor')
+              )
+            )
+            || (
+              isBrandOwnerWorkspace(tenantId)
+              && (
+                (hasTenantRoleIn(tenantId, ['owner']) && targetRole == 'gerente')
+                || (hasTenantRoleIn(tenantId, ['gerente']) && targetRole == 'representante')
+                || (hasTenantRoleIn(tenantId, ['representante']) && targetRole == 'vendedor')
+              )
+            )
+          )
+        );
+    }
+
+    function canManageMembershipByDirectSuperior(data) {
+      return hasActiveMembership(data.tenantId)
+        && (
+          (
+            isRepWorkspace(data.tenantId)
+            && (
+              (data.role == 'representante'
+                && isTenantOwner(data.tenantId)
+                && data.ownerId == uid())
+              || (data.role == 'vendedor'
+                && (
+                  (isTenantOwner(data.tenantId)
+                    && data.ownerId == uid())
+                  || (isTenantRepresentante(data.tenantId)
+                    && data.representanteId == uid()
+                    && data.gerenteId == ''
+                    && data.ownerId == myMembership(data.tenantId).data.ownerId)
+                ))
+            )
+          )
+          || (
+            isBrandOwnerWorkspace(data.tenantId)
+            && (
+              (data.role == 'gerente'
+                && isTenantOwner(data.tenantId)
+                && data.ownerId == uid())
+              || (data.role == 'representante'
+                && isTenantGerente(data.tenantId)
+                && data.gerenteId == uid()
+                && data.ownerId == myMembership(data.tenantId).data.ownerId)
+              || (data.role == 'vendedor'
+                && isTenantRepresentante(data.tenantId)
+                && data.representanteId == uid()
+                && data.gerenteId == myMembership(data.tenantId).data.gerenteId
+                && data.ownerId == myMembership(data.tenantId).data.ownerId)
+            )
+          )
+        );
     }
 
     function hasTenantField(data) {
@@ -161,6 +326,13 @@ service cloud.firestore {
         && data.erpProvider in ['none', 'sankhya', 'custom'];
     }
 
+    function validWorkspaceTypeFields(data) {
+      return data.workspaceType in ['seller_solo_workspace', 'rep_workspace', 'brand_owner_workspace']
+        && data.hierarchyModel in ['seller_only', 'rep_to_seller', 'full_chain']
+        && data.allowInvitations is bool
+        && data.cnpjBinding in ['informational_only', 'owner_legal_entity'];
+    }
+
     function validPlatformUserDoc(targetUid, data) {
       return data.uid == targetUid
         && data.email is string
@@ -180,7 +352,36 @@ service cloud.firestore {
       return role in ['owner', 'gerente', 'representante', 'vendedor'];
     }
 
-    function validMembershipHierarchy(data) {
+    function validSoloMembershipHierarchy(data) {
+      return data.role == 'vendedor'
+        && data.ownerId == ''
+        && data.gerenteId == ''
+        && data.representanteId == ''
+        && data.vendedorId == data.uid;
+    }
+
+    function validRepMembershipHierarchy(data) {
+      return (data.role == 'owner'
+          && data.ownerId == data.uid
+          && data.gerenteId == ''
+          && data.representanteId == ''
+          && data.vendedorId == '')
+        || (data.role == 'representante'
+          && data.ownerId is string
+          && data.ownerId != ''
+          && data.gerenteId == ''
+          && data.representanteId == data.uid
+          && data.vendedorId == '')
+        || (data.role == 'vendedor'
+          && data.ownerId is string
+          && data.ownerId != ''
+          && data.gerenteId == ''
+          && data.representanteId is string
+          && data.representanteId != ''
+          && data.vendedorId == data.uid);
+    }
+
+    function validEnterpriseMembershipHierarchy(data) {
       return (data.role == 'owner'
           && data.ownerId == data.uid
           && data.gerenteId == ''
@@ -209,7 +410,13 @@ service cloud.firestore {
           && data.vendedorId == data.uid);
     }
 
-    function validMembershipDoc(membershipKey, data) {
+    function validMembershipHierarchy(data) {
+      return (isSellerSoloWorkspace(data.tenantId) && validSoloMembershipHierarchy(data))
+        || (isRepWorkspace(data.tenantId) && validRepMembershipHierarchy(data))
+        || (isBrandOwnerWorkspace(data.tenantId) && validEnterpriseMembershipHierarchy(data));
+    }
+
+    function validMembershipBaseDoc(membershipKey, data) {
       return data.membershipId == membershipKey
         && membershipKey == data.tenantId + '_' + data.uid
         && data.tenantId is string
@@ -220,44 +427,432 @@ service cloud.firestore {
         && data.ownerId is string
         && data.gerenteId is string
         && data.representanteId is string
-        && data.vendedorId is string
+        && data.vendedorId is string;
+    }
+
+    function validMembershipDoc(membershipKey, data) {
+      return validMembershipBaseDoc(membershipKey, data)
         && validMembershipHierarchy(data);
     }
 
-    function validSelfServiceOwnerTenantDoc(tenantId, data) {
-      return isSelfServiceOwnerTenantId(tenantId)
-        && validTenantDoc(tenantId, data)
-        && data.plan in ['solo', 'team', 'enterprise']
-        && data.ownerUid == uid()
+    function validManagedMembershipByDirectSuperior(membershipKey, data) {
+      return validMembershipBaseDoc(membershipKey, data)
         && data.ativo == true
-        && data.operationMode == 'manual'
-        && data.erpProvider == 'none'
+        && data.defaultTenant is bool
         && (
-          (data.plan == 'solo' && isSoloTenant(tenantId))
-          || (data.plan in ['team', 'enterprise']
-            && isSelfServiceTeamOrEnterpriseTenant(tenantId))
+          (
+            isRepWorkspace(data.tenantId)
+            && (
+              (data.role == 'representante'
+                && data.ownerId == uid()
+                && data.gerenteId == ''
+                && data.representanteId == data.uid
+                && data.vendedorId == '')
+              || (data.role == 'vendedor'
+                && data.ownerId == myMembership(data.tenantId).data.ownerId
+                && data.gerenteId == ''
+                && data.representanteId is string
+                && data.representanteId != ''
+                && data.vendedorId == data.uid)
+            )
+          )
+          || (
+            isBrandOwnerWorkspace(data.tenantId)
+            && (
+              (data.role == 'gerente'
+                && data.ownerId == uid()
+                && data.gerenteId == data.uid
+                && data.representanteId == ''
+                && data.vendedorId == '')
+              || (data.role == 'representante'
+                && data.ownerId == myMembership(data.tenantId).data.ownerId
+                && data.gerenteId == uid()
+                && data.representanteId == data.uid
+                && data.vendedorId == '')
+              || (data.role == 'vendedor'
+                && data.ownerId == myMembership(data.tenantId).data.ownerId
+                && data.gerenteId == myMembership(data.tenantId).data.gerenteId
+                && data.representanteId == uid()
+                && data.vendedorId == data.uid)
+            )
+          )
         );
     }
 
-    function validSelfServiceOwnerMembership(membershipKey, data) {
-      return validMembershipDoc(membershipKey, data)
-        && isSelfServiceOwnerTenantId(data.tenantId)
-        && data.uid == uid()
-        && data.role == 'owner'
+    function validSelfServiceOwnerTenantDoc(tenantId, data) {
+      return validSelfServiceTenantBase(tenantId, data)
+        && (
+          (data.plan == 'solo' && validSoloSelfServiceTenantConfig(tenantId, data))
+          || (data.plan == 'team' && validRepSelfServiceTenantConfig(tenantId, data))
+          || (data.plan == 'enterprise' && validEnterpriseSelfServiceTenantConfig(tenantId, data))
+        );
+    }
+
+    function canUseWorkspaceTypeUnderAccountContract(workspaceType) {
+      return workspaceType == 'brand_owner_workspace'
+        || myAccountContractLock() != 'enterprise_only';
+    }
+
+    function canAttemptSelfServiceTenantMutation(tenantId, data) {
+      return data.tenantId == tenantId
+        && data.ownerUid is string
+        && data.ownerUid == uid()
+        && data.plan in ['solo', 'team', 'enterprise']
+        && data.workspaceType in ['seller_solo_workspace', 'rep_workspace', 'brand_owner_workspace']
+        && data.ativo == true
+        && data.operationMode == 'manual'
+        && data.erpProvider == 'none'
+        && canUseWorkspaceTypeUnderAccountContract(data.workspaceType);
+    }
+
+    function validSelfServiceTenantBase(tenantId, data) {
+      return isSelfServiceOwnerTenantId(tenantId)
+        && data.slug is string
+        && data.nomeFantasia is string
+        && validWorkspaceTypeFields(data)
+        && validProductSyncFlagForWorkspace(data);
+    }
+
+    function hasStableTenantIdentityOnUpdate(tenantId) {
+      return request.resource.data.tenantId == tenantId
+        && request.resource.data.workspaceType == resource.data.workspaceType
+        && request.resource.data.plan == resource.data.plan
+        && request.resource.data.ownerUid == resource.data.ownerUid;
+    }
+
+    function canUpdateTenantRepresentedPreferences(tenantId) {
+      return isRepresentedPreferenceOnlyTenantUpdate()
+        && canManageRepresentedCompanyPreferenceUpdate(tenantId);
+    }
+
+    function canUpdateTenantCoreDocument(tenantId) {
+      return !isRepresentedPreferenceOnlyTenantUpdate()
+        && (
+          canTenantOwnerManageTenantDocumentUpdate(tenantId)
+          || canSelfServiceOwnerUpdateTenant(tenantId)
+        );
+    }
+
+    function canUpdateTenantAsNonAdmin(tenantId) {
+      return hasStableTenantIdentityOnUpdate(tenantId)
+        && (
+          canUpdateTenantRepresentedPreferences(tenantId)
+          || canUpdateTenantCoreDocument(tenantId)
+        );
+    }
+
+    function validSoloSelfServiceTenantConfig(tenantId, data) {
+      return data.plan == 'solo'
+        && isSoloTenant(tenantId)
+        && data.workspaceType == 'seller_solo_workspace'
+        && data.hierarchyModel == 'seller_only'
+        && data.allowInvitations == false
+        && data.cnpjBinding == 'informational_only';
+    }
+
+    function validRepSelfServiceTenantConfig(tenantId, data) {
+      return data.plan == 'team'
+        && isSelfServiceTeamOrEnterpriseTenant(tenantId)
+        && data.workspaceType == 'rep_workspace'
+        && data.hierarchyModel in ['rep_to_seller', 'full_chain']
+        && data.allowInvitations == true
+        && data.cnpjBinding == 'informational_only';
+    }
+
+    function validEnterpriseSelfServiceTenantConfig(tenantId, data) {
+      return data.plan == 'enterprise'
+        && isSelfServiceTeamOrEnterpriseTenant(tenantId)
+        && data.workspaceType == 'brand_owner_workspace'
+        && data.hierarchyModel == 'full_chain'
+        && data.allowInvitations == true
+        && data.cnpjBinding == 'owner_legal_entity';
+    }
+
+    function canManageProductCatalogWrite(tenantId) {
+      return isPlatformAdmin()
+        || isPersonalWorkspaceTenant(tenantId)
+        || (
+          hasActiveMembership(tenantId)
+          && !tenantProductSyncFromErpEnabled(tenantId)
+          && (
+            (isBrandOwnerWorkspace(tenantId) && isTenantOwner(tenantId))
+            || isRepWorkspace(tenantId)
+            || (isSellerSoloWorkspace(tenantId) && isTenantVendedor(tenantId))
+          )
+        );
+    }
+
+    function canManagePriceTableWrite(tenantId) {
+      return isPlatformAdmin()
+        || isPersonalWorkspaceTenant(tenantId)
+        || (
+          hasActiveMembership(tenantId)
+          && (
+            (isBrandOwnerWorkspace(tenantId)
+              && (isTenantOwner(tenantId) || isTenantGerente(tenantId)))
+            || isRepWorkspace(tenantId)
+            || (isSellerSoloWorkspace(tenantId)
+              && isTenantVendedor(tenantId))
+          )
+        );
+    }
+
+    function canManageRepresentedCompanyWrite(tenantId) {
+      return isPlatformAdmin()
+        || (
+          hasActiveMembership(tenantId)
+          && (
+            ((isSellerSoloWorkspace(tenantId)
+              || isRepWorkspace(tenantId))
+              && hasTenantRoleIn(tenantId, ['owner', 'representante']))
+            || (isBrandOwnerWorkspace(tenantId)
+              && hasTenantRoleIn(tenantId, ['owner']))
+          )
+        );
+    }
+
+    function validRepresentedCompanyDoc(docId, data) {
+      return data.tenantId is string
+        && data.tenantId != ''
+        && data.companyId is string
+        && data.companyId != ''
+        && docId == data.tenantId + '_' + data.companyId
+        && data.nomeFantasia is string
+        && data.razaoSocial is string
+        && data.cnpj is string
+        && data.cep is string
+        && data.logoUrl is string
+        && data.contato is string
+        && data.telefone is string
+        && data.email is string
+        && data.cidade is string
+        && data.uf is string
+        && data.segmento is string
+        && data.ativo is bool;
+    }
+
+    function isInvitationRecipient(data) {
+      return data.invitedEmail is string
+        && request.auth.token.email is string
+        && request.auth.token.email == data.invitedEmail;
+    }
+
+    function canReadMembershipDoc(data) {
+      return isPlatformAdmin()
+        || uid() == data.uid
+        || (isTenantOwner(data.tenantId) && data.ownerId == uid())
+        || (isTenantGerente(data.tenantId)
+          && data.gerenteId == uid()
+          && (data.role == 'representante' || data.role == 'vendedor'))
+        || (isTenantRepresentante(data.tenantId)
+          && data.representanteId == uid()
+          && data.role == 'vendedor');
+    }
+
+    function canManageInvitationDoc(data) {
+      return isPlatformAdmin()
+        || canInviteRoleForTenant(data.tenantId, data.role);
+    }
+
+    function isPossibleSelfServiceBootstrapMembership(data) {
+      return data.uid == uid()
         && data.defaultTenant == true
-        && data.ownerId == uid()
-        && data.gerenteId == ''
-        && data.representanteId == ''
-        && data.vendedorId == '';
+        && isSelfServiceOwnerTenantId(data.tenantId);
+    }
+
+    function validSelfServiceBootstrapMembership(membershipKey, data) {
+      return validMembershipBaseDoc(membershipKey, data)
+        && isPossibleSelfServiceBootstrapMembership(data)
+        && (
+          (isSoloTenant(data.tenantId)
+            && data.role == 'vendedor'
+            && data.ownerId == ''
+            && data.gerenteId == ''
+            && data.representanteId == ''
+            && data.vendedorId == uid())
+          || (isSelfServiceTeamOrEnterpriseTenant(data.tenantId)
+            && data.role == 'owner'
+            && (
+              data.ownerId == uid()
+              && data.gerenteId == ''
+              && data.representanteId == ''
+              && data.vendedorId == ''))
+        );
+    }
+
+    function validInvitationRoleForTenant(tenantId, role) {
+      return validTenantRole(role)
+        && (
+          (isSellerSoloWorkspace(tenantId) && false)
+          || (isRepWorkspace(tenantId) && role in ['representante', 'vendedor'])
+          || (isBrandOwnerWorkspace(tenantId) && role in ['gerente', 'representante', 'vendedor'])
+        );
+    }
+
+    function validInvitationDoc(data) {
+      return data.token is string
+        && data.token != ''
+        && data.tenantId is string
+        && data.tenantId != ''
+        && validInvitationRoleForTenant(data.tenantId, data.role)
+        && data.status in ['pending', 'accepted', 'declined', 'expired', 'revoked']
+        && data.invitedEmail is string
+        && data.invitedEmail != ''
+        && data.defaultTenant is bool;
+    }
+
+    function hasMatchingPendingInvitationForMembership(data) {
+      return data.invitationToken is string
+        && data.invitationToken != ''
+        && exists(/databases/$(database)/documents/tenant_invitations/$(data.invitationToken))
+        && get(/databases/$(database)/documents/tenant_invitations/$(data.invitationToken)).data.tenantId == data.tenantId
+        && get(/databases/$(database)/documents/tenant_invitations/$(data.invitationToken)).data.role == data.role
+        && get(/databases/$(database)/documents/tenant_invitations/$(data.invitationToken)).data.status == 'pending'
+        && request.auth.token.email is string
+        && get(/databases/$(database)/documents/tenant_invitations/$(data.invitationToken)).data.invitedEmail == request.auth.token.email
+        && (myAccountContractLock() != 'enterprise_only' || tenantWorkspaceType(data.tenantId) == 'brand_owner_workspace')
+        && data.uid == uid();
+    }
+
+    function canUpdateInvitationStatus(resourceData, requestData) {
+      return resourceData.token == requestData.token
+        && resourceData.tenantId == requestData.tenantId
+        && resourceData.role == requestData.role
+        && resourceData.invitedEmail == requestData.invitedEmail
+        && resourceData.defaultTenant == requestData.defaultTenant
+        && resourceData.createdByUid == requestData.createdByUid
+        && (
+          (
+            resourceData.status == 'pending'
+            && requestData.status == 'revoked'
+            && canManageInvitationDoc(resourceData)
+          )
+          || (
+            resourceData.status == 'pending'
+            && isInvitationRecipient(resourceData)
+            && requestData.status == 'accepted'
+            && requestData.acceptedByUid == uid()
+          )
+          || (
+            resourceData.status == 'pending'
+            && isInvitationRecipient(resourceData)
+            && requestData.status == 'declined'
+            && requestData.declinedByUid == uid()
+          )
+        );
+    }
+
+    function canManageOwnTenantSelection() {
+      return resource.data.uid == uid()
+        && request.resource.data.uid == uid()
+        && resource.data.tenantId == request.resource.data.tenantId
+        && resource.data.role == request.resource.data.role
+        && resource.data.ativo == request.resource.data.ativo
+        && resource.data.ownerId == request.resource.data.ownerId
+        && resource.data.gerenteId == request.resource.data.gerenteId
+        && resource.data.representanteId == request.resource.data.representanteId
+        && resource.data.vendedorId == request.resource.data.vendedorId
+        && request.resource.data.state == 'active';
+    }
+
+    function canUpdateOwnUserTenantContext(targetUid, data) {
+      return targetUid == uid()
+        && validPlatformUserDoc(targetUid, data)
+        && data.platformRole == me().data.platformRole
+        && data.ativoGlobal == true;
+    }
+
+    function canSelfServiceOwnerUpdateTenant(tenantId) {
+      return uid() == resource.data.ownerUid
+        && canAttemptSelfServiceTenantMutation(tenantId, request.resource.data)
+        && validSelfServiceOwnerTenantDoc(tenantId, request.resource.data)
+        && canChangeProductSyncFlag(tenantId);
+    }
+
+    function canTenantOwnerManageTenantDocumentUpdate(tenantId) {
+      return uid() == resource.data.ownerUid
+        && isTenantOwner(tenantId)
+        && validTenantDoc(tenantId, request.resource.data)
+        && validWorkspaceTypeFields(request.resource.data)
+        && validProductSyncFlagForWorkspace(request.resource.data)
+        && canChangeProductSyncFlag(tenantId);
+    }
+
+    function canCreateMembershipDocByPlatformAdmin(membershipKey, data) {
+      return isPlatformAdmin()
+        && validMembershipDoc(membershipKey, data);
+    }
+
+    function canCreateMembershipDocByDirectSuperior(membershipKey, data) {
+      return canManageMembershipByDirectSuperior(data)
+        && validManagedMembershipByDirectSuperior(membershipKey, data);
+    }
+
+    function canCreateMembershipDocByInvitation(membershipKey, data) {
+      return hasMatchingPendingInvitationForMembership(data)
+        && validMembershipDoc(membershipKey, data);
+    }
+
+    function canCreateMembershipDocBySelfServiceBootstrap(membershipKey, data) {
+      return isPossibleSelfServiceBootstrapMembership(data)
+        && validSelfServiceBootstrapMembership(membershipKey, data);
+    }
+
+    function canCreateMembershipDoc(membershipKey, data) {
+      return canCreateMembershipDocByPlatformAdmin(membershipKey, data)
+        || canCreateMembershipDocByDirectSuperior(membershipKey, data)
+        || canCreateMembershipDocByInvitation(membershipKey, data)
+        || canCreateMembershipDocBySelfServiceBootstrap(membershipKey, data);
+    }
+
+    function canUpdateMembershipDocByPlatformAdmin(membershipKey, data) {
+      return isPlatformAdmin()
+        && validMembershipDoc(membershipKey, data);
+    }
+
+    function canUpdateMembershipDocByDirectSuperior(membershipKey, data) {
+      return canManageMembershipByDirectSuperior(data)
+        && validManagedMembershipByDirectSuperior(membershipKey, data);
+    }
+
+    function canUpdateMembershipDocByOwnTenantSelection(membershipKey, data) {
+      return canManageOwnTenantSelection()
+        && validMembershipDoc(membershipKey, data);
+    }
+
+    function canUpdateMembershipDocBySelfServiceBootstrap(membershipKey, data) {
+      return isPossibleSelfServiceBootstrapMembership(data)
+        && validSelfServiceBootstrapMembership(membershipKey, data);
+    }
+
+    function canUpdateMembershipDoc(membershipKey, data) {
+      return canUpdateMembershipDocByPlatformAdmin(membershipKey, data)
+        || canUpdateMembershipDocByDirectSuperior(membershipKey, data)
+        || canUpdateMembershipDocByOwnTenantSelection(membershipKey, data)
+        || canUpdateMembershipDocBySelfServiceBootstrap(membershipKey, data);
+    }
+
+    function canDeleteMembershipDoc(data) {
+      return isPlatformAdmin()
+        || canManageMembershipByDirectSuperior(data);
     }
 
     match /tenants/{tenantId} {
-      allow read: if isPlatformAdmin() || hasActiveMembership(tenantId);
+      allow read: if canReadTenantDocument(tenantId);
 
-      allow create, update: if signedIn()
+      allow create: if signedIn()
         && (
           (isPlatformAdmin() && validTenantDoc(tenantId, request.resource.data))
-          || validSelfServiceOwnerTenantDoc(tenantId, request.resource.data)
+          || (
+            canAttemptSelfServiceTenantMutation(tenantId, request.resource.data)
+            && validSelfServiceOwnerTenantDoc(tenantId, request.resource.data)
+          )
+        );
+
+      allow update: if signedIn()
+        && (
+          (isPlatformAdmin() && validTenantDoc(tenantId, request.resource.data))
+          || canUpdateTenantAsNonAdmin(tenantId)
         );
 
       allow delete: if signedIn() && isPlatformAdmin();
@@ -276,57 +871,44 @@ service cloud.firestore {
         && (
           (isPlatformAdmin() && validPlatformUserDoc(targetUid, request.resource.data))
           || validSelfServiceUserDoc(targetUid, request.resource.data)
+          || canUpdateOwnUserTenantContext(targetUid, request.resource.data)
         );
 
       allow delete: if signedIn() && isPlatformAdmin();
     }
 
     match /tenant_memberships/{membershipKey} {
+      allow read: if signedIn() && canReadMembershipDoc(resource.data);
+
+      allow create: if signedIn()
+        && canCreateMembershipDoc(membershipKey, request.resource.data);
+
+      allow update: if signedIn()
+        && resource.data.tenantId == request.resource.data.tenantId
+        && resource.data.uid == request.resource.data.uid
+        && canUpdateMembershipDoc(membershipKey, request.resource.data);
+
+      allow delete: if signedIn() && canDeleteMembershipDoc(resource.data);
+    }
+
+    match /tenant_invitations/{token} {
       allow read: if signedIn() && (
-        isPlatformAdmin()
-        || uid() == resource.data.uid
-        || (isTenantOwner(resource.data.tenantId) && resource.data.ownerId == uid())
-        || (isTenantGerente(resource.data.tenantId)
-          && resource.data.gerenteId == uid()
-          && (resource.data.role == 'representante' || resource.data.role == 'vendedor'))
-        || (isTenantRepresentante(resource.data.tenantId)
-          && resource.data.representanteId == uid()
-          && resource.data.role == 'vendedor')
+        canManageInvitationDoc(resource.data)
+        || isInvitationRecipient(resource.data)
       );
 
       allow create: if signedIn()
-        && validMembershipDoc(membershipKey, request.resource.data)
-        && (
-          isPlatformAdmin()
-          || validSelfServiceOwnerMembership(membershipKey, request.resource.data)
-          || (
-            isTenantOwner(request.resource.data.tenantId)
-            && request.resource.data.ownerId == uid()
-            && request.resource.data.role in ['gerente', 'representante', 'vendedor']
-          )
-        );
+        && request.resource.data.token == token
+        && request.resource.data.status == 'pending'
+        && canInviteRoleForTenant(request.resource.data.tenantId, request.resource.data.role)
+        && validInvitationDoc(request.resource.data);
 
       allow update: if signedIn()
-        && validMembershipDoc(membershipKey, request.resource.data)
-        && resource.data.tenantId == request.resource.data.tenantId
-        && resource.data.uid == request.resource.data.uid
-        && (
-          isPlatformAdmin()
-          || validSelfServiceOwnerMembership(membershipKey, request.resource.data)
-          || (
-            isTenantOwner(request.resource.data.tenantId)
-            && request.resource.data.ownerId == uid()
-            && request.resource.data.role in ['gerente', 'representante', 'vendedor']
-          )
-        );
+        && canUpdateInvitationStatus(resource.data, request.resource.data)
+        && validInvitationDoc(request.resource.data);
 
       allow delete: if signedIn() && (
-        isPlatformAdmin()
-        || (
-          isTenantOwner(resource.data.tenantId)
-          && resource.data.ownerId == uid()
-          && resource.data.role in ['gerente', 'representante', 'vendedor']
-        )
+        canManageInvitationDoc(resource.data)
       );
     }
 
@@ -374,92 +956,134 @@ service cloud.firestore {
     }
 
     match /cliente_pre_cadastros/{preCadastroId} {
-      allow read: if signedIn()
-        && (
-          isPersonalWorkspaceTenant(resource.data.tenantId)
-          || (
-            hasActiveMembership(resource.data.tenantId)
-            && (
-              isPlatformAdmin()
-              || isTenantOwner(resource.data.tenantId)
-              || isTenantGerente(resource.data.tenantId)
-              || isTenantRepresentante(resource.data.tenantId)
-              || isTenantVendedor(resource.data.tenantId)
-            )
-          )
-        );
+      allow read: if signedIn() && canAccessTenantWorkflow(resource.data.tenantId);
 
       allow create: if signedIn()
         && validPreCadastroDoc(request.resource.data)
-        && (
-          isPersonalWorkspaceTenant(request.resource.data.tenantId)
-          || (
-            hasActiveMembership(request.resource.data.tenantId)
-            && (
-              isPlatformAdmin()
-              || isTenantOwner(request.resource.data.tenantId)
-              || isTenantGerente(request.resource.data.tenantId)
-              || isTenantRepresentante(request.resource.data.tenantId)
-              || isTenantVendedor(request.resource.data.tenantId)
-            )
-          )
-        );
+        && canAccessTenantWorkflow(request.resource.data.tenantId);
 
       allow update: if signedIn()
         && validPreCadastroDoc(request.resource.data)
         && resource.data.tenantId == request.resource.data.tenantId
-        && (
-          isPersonalWorkspaceTenant(request.resource.data.tenantId)
-          || (
-            hasActiveMembership(request.resource.data.tenantId)
-            && (
-              isPlatformAdmin()
-              || isTenantOwner(request.resource.data.tenantId)
-              || isTenantGerente(request.resource.data.tenantId)
-              || isTenantRepresentante(request.resource.data.tenantId)
-              || isTenantVendedor(request.resource.data.tenantId)
-            )
-          )
-        );
+        && canAccessTenantWorkflow(request.resource.data.tenantId);
 
-      allow delete: if signedIn()
-        && (
-          isPersonalWorkspaceTenant(resource.data.tenantId)
-          || (
-            hasActiveMembership(resource.data.tenantId)
-            && (
-              isPlatformAdmin()
-              || isTenantOwner(resource.data.tenantId)
-              || isTenantGerente(resource.data.tenantId)
-              || isTenantRepresentante(resource.data.tenantId)
-              || isTenantVendedor(resource.data.tenantId)
-            )
-          )
-        );
+      allow delete: if signedIn() && canAccessTenantWorkflow(resource.data.tenantId);
     }
 
     match /produtos/{produtoId} {
-      allow read: if isPlatformAdmin()
-        || (hasTenantField(resource.data) && (
-          canAccessOwnPersonalData(resource.data)
-          || hasActiveMembership(resource.data.tenantId)
-        ));
+      allow read: if canReadTenantBoundDocument(resource.data);
 
       allow create: if hasTenantField(request.resource.data)
-        && (isPlatformAdmin()
-          || canAccessOwnPersonalData(request.resource.data)
-          || isTenantOwner(request.resource.data.tenantId));
+        && canManageProductCatalogWrite(request.resource.data.tenantId);
 
       allow update: if hasTenantField(request.resource.data)
         && resource.data.tenantId == request.resource.data.tenantId
-        && (isPlatformAdmin()
-          || canAccessOwnPersonalData(request.resource.data)
-          || isTenantOwner(request.resource.data.tenantId));
+        && canManageProductCatalogWrite(request.resource.data.tenantId);
 
       allow delete: if hasTenantField(resource.data)
-        && (isPlatformAdmin()
-          || canAccessOwnPersonalData(resource.data)
-          || isTenantOwner(resource.data.tenantId));
+        && canManageProductCatalogWrite(resource.data.tenantId);
+    }
+
+    match /tenant_counters/{tenantId} {
+      allow read: if signedIn()
+        && resource.data.tenantId == tenantId
+        && canReadTenantDocument(tenantId);
+
+      allow create: if signedIn()
+        && request.resource.data.tenantId == tenantId
+        && canManageProductCatalogWrite(tenantId);
+
+      allow update: if signedIn()
+        && request.resource.data.tenantId == tenantId
+        && resource.data.tenantId == tenantId
+        && canManageProductCatalogWrite(tenantId);
+
+      allow delete: if false;
+    }
+
+    match /tabelas_preco/{tabelaId} {
+      allow read: if canReadTenantBoundDocument(resource.data);
+
+      allow create: if hasTenantField(request.resource.data)
+        && canManagePriceTableWrite(request.resource.data.tenantId);
+
+      allow update: if hasTenantField(request.resource.data)
+        && resource.data.tenantId == request.resource.data.tenantId
+        && canManagePriceTableWrite(request.resource.data.tenantId);
+
+      allow delete: if hasTenantField(resource.data)
+        && canManagePriceTableWrite(resource.data.tenantId);
+    }
+
+    match /product_base_prices/{basePriceId} {
+      allow read: if canReadTenantBoundDocument(resource.data);
+
+      allow create: if hasTenantField(request.resource.data)
+        && canManagePriceTableWrite(request.resource.data.tenantId);
+
+      allow update: if hasTenantField(request.resource.data)
+        && resource.data.tenantId == request.resource.data.tenantId
+        && canManagePriceTableWrite(request.resource.data.tenantId);
+
+      allow delete: if hasTenantField(resource.data)
+        && canManagePriceTableWrite(resource.data.tenantId);
+    }
+
+    match /discount_policies/{policyId} {
+      allow read: if canReadTenantBoundDocument(resource.data);
+
+      allow create: if hasTenantField(request.resource.data)
+        && canManagePriceTableWrite(request.resource.data.tenantId);
+
+      allow update: if hasTenantField(request.resource.data)
+        && resource.data.tenantId == request.resource.data.tenantId
+        && canManagePriceTableWrite(request.resource.data.tenantId);
+
+      allow delete: if hasTenantField(resource.data)
+        && canManagePriceTableWrite(resource.data.tenantId);
+    }
+
+    match /customer_product_rules/{ruleId} {
+      allow read: if canReadTenantBoundDocument(resource.data);
+
+      allow create: if hasTenantField(request.resource.data)
+        && canManagePriceTableWrite(request.resource.data.tenantId);
+
+      allow update: if hasTenantField(request.resource.data)
+        && resource.data.tenantId == request.resource.data.tenantId
+        && canManagePriceTableWrite(request.resource.data.tenantId);
+
+      allow delete: if hasTenantField(resource.data)
+        && canManagePriceTableWrite(resource.data.tenantId);
+    }
+
+    match /customer_price_table_assignments/{assignmentId} {
+      allow read: if canReadTenantBoundDocument(resource.data);
+
+      allow create: if hasTenantField(request.resource.data)
+        && canManagePriceTableWrite(request.resource.data.tenantId);
+
+      allow update: if hasTenantField(request.resource.data)
+        && resource.data.tenantId == request.resource.data.tenantId
+        && canManagePriceTableWrite(request.resource.data.tenantId);
+
+      allow delete: if hasTenantField(resource.data)
+        && canManagePriceTableWrite(resource.data.tenantId);
+    }
+
+    match /tenant_represented_companies/{companyDocId} {
+      allow read: if canReadTenantBoundDocument(resource.data);
+
+      allow create: if validRepresentedCompanyDoc(companyDocId, request.resource.data)
+        && canManageRepresentedCompanyWrite(request.resource.data.tenantId);
+
+      allow update: if validRepresentedCompanyDoc(companyDocId, request.resource.data)
+        && resource.data.tenantId == request.resource.data.tenantId
+        && resource.data.companyId == request.resource.data.companyId
+        && canManageRepresentedCompanyWrite(request.resource.data.tenantId);
+
+      allow delete: if hasTenantField(resource.data)
+        && canManageRepresentedCompanyWrite(resource.data.tenantId);
     }
 
     match /pedidos/{pedidoId} {

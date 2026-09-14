@@ -1,6 +1,8 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import 'auth_error_info.dart';
+
 class SignInPage extends StatefulWidget {
   const SignInPage({super.key});
 
@@ -12,7 +14,7 @@ class _SignInPageState extends State<SignInPage> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   bool _loading = false;
-  String? _error;
+  AuthErrorInfo? _error;
 
   @override
   void dispose() {
@@ -31,30 +33,15 @@ class _SignInPageState extends State<SignInPage> {
       final provider = GoogleAuthProvider();
       await FirebaseAuth.instance.signInWithPopup(provider);
     } on FirebaseAuthException catch (e) {
-      String message;
-      switch (e.code) {
-        case 'operation-not-allowed':
-          message = 'Login Google desabilitado no Firebase. Habilite em Authentication > Sign-in method.';
-          break;
-        case 'unauthorized-domain':
-          message = 'Dominio nao autorizado. Adicione o dominio atual em Authentication > Settings > Authorized domains.';
-          break;
-        case 'popup-blocked':
-          message = 'Popup bloqueado pelo navegador. Libere popups para continuar o login.';
-          break;
-        case 'popup-closed-by-user':
-          message = 'Login cancelado antes da confirmacao.';
-          break;
-        default:
-          message = e.message ?? 'Falha ao autenticar com Google.';
-      }
-
       setState(() {
-        _error = message;
+        _error = AuthErrorInfo.fromFirebaseException(
+          e,
+          provider: 'google',
+        );
       });
     } catch (_) {
       setState(() {
-        _error = 'Erro inesperado durante o login.';
+        _error = AuthErrorInfo.unexpected;
       });
     } finally {
       if (mounted) {
@@ -71,7 +58,10 @@ class _SignInPageState extends State<SignInPage> {
 
     if (email.isEmpty || password.isEmpty) {
       setState(() {
-        _error = 'Informe e-mail e senha para entrar.';
+        _error = const AuthErrorInfo(
+          code: 'validation',
+          message: 'Informe e-mail e senha para entrar.',
+        );
       });
       return;
     }
@@ -87,34 +77,15 @@ class _SignInPageState extends State<SignInPage> {
         password: password,
       );
     } on FirebaseAuthException catch (e) {
-      String message;
-      switch (e.code) {
-        case 'operation-not-allowed':
-          message = 'Login por e-mail/senha desabilitado no Firebase. Habilite em Authentication > Sign-in method.';
-          break;
-        case 'invalid-email':
-          message = 'E-mail invalido.';
-          break;
-        case 'user-disabled':
-          message = 'Usuario desabilitado.';
-          break;
-        case 'user-not-found':
-          message = 'Usuario nao encontrado.';
-          break;
-        case 'wrong-password':
-        case 'invalid-credential':
-          message = 'Credenciais invalidas.';
-          break;
-        default:
-          message = e.message ?? 'Falha ao autenticar com e-mail/senha.';
-      }
-
       setState(() {
-        _error = message;
+        _error = AuthErrorInfo.fromFirebaseException(
+          e,
+          provider: 'password',
+        );
       });
     } catch (_) {
       setState(() {
-        _error = 'Erro inesperado durante o login.';
+        _error = AuthErrorInfo.unexpected;
       });
     } finally {
       if (mounted) {
@@ -149,11 +120,29 @@ class _SignInPageState extends State<SignInPage> {
                   if (_error != null)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 12),
-                      child: Text(
-                        _error!,
-                        style: textTheme.bodyMedium?.copyWith(
-                          color: Theme.of(context).colorScheme.error,
-                        ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Codigo: ${_error!.code}',
+                            style: textTheme.bodyMedium?.copyWith(
+                              color: Theme.of(context).colorScheme.error,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            _error!.message,
+                            style: textTheme.bodyMedium?.copyWith(
+                              color: Theme.of(context).colorScheme.error,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Veja o manual de codigos em docs/firebase/auth_error_codes.md',
+                            style: textTheme.bodySmall,
+                          ),
+                        ],
                       ),
                     ),
                   FilledButton.icon(

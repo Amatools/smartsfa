@@ -31,6 +31,27 @@ Ele precisa suportar:
 - fluxo comercial offline-first;
 - isolamento por tenantId em todo dado de negocio.
 
+### Tipos de workspace do produto
+
+Os tenants/workspaces devem ser classificados em 3 tipos:
+
+- seller_solo_workspace: contexto privado de vendedor, sem interligacao com outros usuarios.
+- rep_workspace: contexto de representacao, com interligacao representante -> vendedores.
+- brand_owner_workspace: contexto oficial da marca contratante com hierarquia completa.
+
+Regra de separacao:
+
+- Joao e Roberto podem operar "Amatools" em workspaces distintos, cada um com base propria;
+- Amatools oficial pode contratar depois e operar em outro tenant proprio;
+- nao existe vinculo automatico entre esses 3 contextos por nome ou CNPJ.
+
+### Canais de uso
+
+- app mobile: operacao comercial, pedidos, orcamentos e dashboards resumidos;
+- portal web: configuracao pesada, politicas de preco, regras, integracoes e governanca.
+
+Ver tambem: [docs/web_portal_architecture.md](web_portal_architecture.md)
+
 ## Regras basicas de arquitetura
 
 ### 1. Tenant sempre vem antes do usuario comercial
@@ -54,6 +75,11 @@ Isso vale para:
 - solicitacoes de acesso;
 - logs de aprovacao;
 - configuracoes operacionais.
+
+Observacao:
+
+- CNPJ em seller_solo_workspace e rep_workspace e apenas metadado informativo;
+- vinculo juridico de CNPJ contratante e exclusivo de brand_owner_workspace.
 
 ### 3. O backend e a UI precisam concordar
 
@@ -134,6 +160,12 @@ Roles recomendados:
 - representante;
 - vendedor.
 
+Papel inicial recomendado por tipo:
+
+- seller_solo_workspace: vendedor
+- rep_workspace: representante
+- brand_owner_workspace: owner
+
 ## Como um usuario entra pela primeira vez
 
 O usuario nao deve ser colocado em um tenant apenas pelo email.
@@ -161,7 +193,7 @@ O app deve oferecer tres caminhos:
 
 - entrar por convite valido;
 - solicitar acesso a um tenant;
-- criar workspace pessoal, se essa opcao estiver habilitada.
+- criar workspace por tipo de uso (seller_solo, rep, brand_owner).
 
 ### Regra para tenants A e B
 

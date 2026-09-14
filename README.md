@@ -6,7 +6,8 @@ SmartSFA e um app Flutter para operacao comercial B2B em modelo SaaS multi-tenan
 
 - Controle de acesso multi-tenant: implementado com Firebase Auth + Firestore.
 - Governanca de memberships (revogar, reativar, trocar papel, auditoria): implementada.
-- Convites: owner-only em Tenant > Convites.
+- Tipos de workspace: seller_solo_workspace, rep_workspace e brand_owner_workspace.
+- Convites: governados por tipo de workspace e hierarquia direta.
 - Notificacoes: apenas aceite/recusa de convite recebido.
 - Clientes, Produtos e Pedidos: ainda operando com repositorios in-memory (mock local).
 

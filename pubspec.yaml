@@ -40,6 +40,8 @@ dependencies:
   http: ^1.2.2
   shared_preferences: ^2.3.2
   connectivity_plus: ^6.1.4
+  file_picker: ^10.1.9
+  image: ^4.2.0
 
 dev_dependencies:
   flutter_test:

@@ -1,0 +1,15 @@
+{
+  "scripts": {
+    "test:firestore-rules": "firebase emulators:exec --only firestore \"node ./scripts/firestore_rules_smoke_test.mjs\"",
+    "test:firestore-rules:represented": "firebase emulators:exec --only firestore \"node ./scripts/firestore_rules_represented_smoke_test.mjs\"",
+    "test:firestore-rules:memberships": "firebase emulators:exec --only firestore \"node ./scripts/firestore_rules_memberships_smoke_test.mjs\"",
+    "test:firestore-rules:tenants": "firebase emulators:exec --only firestore \"node ./scripts/firestore_rules_tenants_smoke_test.mjs\""
+  },
+  "dependencies": {
+    "@google-cloud/firestore": "^9.1.0"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^4.0.1",
+    "firebase": "^11.10.0"
+  }
+}

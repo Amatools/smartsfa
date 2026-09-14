@@ -6,6 +6,7 @@ class TenantEntryOption {
     required this.tenantId,
     required this.tenantName,
     required this.role,
+    required this.workspaceType,
     required this.defaultTenant,
   });
 
@@ -13,6 +14,7 @@ class TenantEntryOption {
   final String tenantId;
   final String tenantName;
   final String role;
+  final String workspaceType;
   final bool defaultTenant;
 
   Map<String, Object?> toMap() {
@@ -21,6 +23,7 @@ class TenantEntryOption {
       'tenantId': tenantId,
       'tenantName': tenantName,
       'role': role,
+      'workspaceType': workspaceType,
       'defaultTenant': defaultTenant,
     };
   }
@@ -52,6 +55,7 @@ class TenantEntryDecision {
           tenantId: tenantId,
           tenantName: tenantName,
           role: role,
+          workspaceType: 'brand_owner_workspace',
           defaultTenant: true,
         ),
       ],
@@ -75,6 +79,7 @@ class TenantEntryDecision {
               tenantId: tenantId,
               tenantName: tenantId,
               role: 'member',
+              workspaceType: 'brand_owner_workspace',
               defaultTenant: defaultTenantId == tenantId,
             ),
           )

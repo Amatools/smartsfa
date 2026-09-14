@@ -50,9 +50,9 @@ Regra de uso: cada item entregue deve ser marcado com [x] e manter evidencias cu
 
 - [x] Auth e acesso multi-tenant em dados reais (Firebase Auth + Firestore)
 - [x] Convites, memberships, politicas e auditoria em colecoes reais
-- [ ] Clientes em base real por tenant (atual: in-memory/mock)
-- [ ] Produtos em base real por tenant (atual: in-memory/mock)
-- [ ] Pedidos em base real por tenant (atual: in-memory/mock)
+- [x] Clientes em base real por tenant (Firestore online + fallback local offline)
+- [x] Produtos em base real por tenant (Firestore online + fallback local offline)
+- [x] Pedidos em base real por tenant (Firestore online + fallback local offline)
 - [x] Isar offline-first conectado aos modulos comerciais (atual: contratos + mock) - persistencia local de sessao e login local ativado para uso sem internet
 
 ## Proxima etapa recomendada (execucao)
@@ -63,7 +63,7 @@ Regra de uso: cada item entregue deve ser marcado com [x] e manter evidencias cu
 - [ ] Replicar estrategia em Pedidos
 - [ ] Fechar ciclo com testes de repositorio e smoke de UI
 - [x] Criar login web responsivo e dedicado para o portal administrativo
-- [ ] Iniciar portal web administrativo separado para configuracao de tenant, regras e tabelas de preco
+- [x] Iniciar portal web administrativo para configuracao de tenant, regras e tabelas de preco (MVP funcional)
 - [ ] Definir e implementar motor de precificacao compartilhado com o portal web
 - [ ] Separar claramente no backlog o que e app operacional e o que e configuracao web
 
@@ -80,6 +80,16 @@ Regra de uso: cada item entregue deve ser marcado com [x] e manter evidencias cu
 - [ ] Detalhar as travas de manga por faixa de desconto (88, 88.5, 89)
 - [ ] Definir a interface final do construtor de regras de politicas comerciais
 - [ ] Definir o fluxo de vinculacao de tabela ou politica a cada cliente
+
+## 0.2) Integracao ERP para produtos (governanca)
+
+- [x] Definir regra de switch por tenant para sincronizacao de produtos via ERP
+- [x] Definir que apenas owner de workspace enterprise controla esse switch
+- [x] Definir ocultacao de importacao/cadastro manual quando ERP estiver ativo
+- [x] Definir bloqueio no backend para create/update/delete manual de produtos nesse modo
+- [x] Definir que rep/individual continuam sem switch e com fluxo manual/Excel
+- [x] Incluir identificadores tecnicos de sincronizacao de produto (`erpProductId`, `erpSyncId`)
+- [x] Implementar rotina de desligamento assistido da integracao (inativar produtos ERP mantendo historico)
 
 ## 0) Validacao de ambiente (hoje)
 
@@ -102,6 +112,16 @@ Use esta secao como checklist operacional do dia a dia.
 - [x] Configurar FlutterFire no projeto atual: flutterfire configure --platforms=android,ios,web
 - [x] Publicar regras Firestore: firebase deploy --only firestore:rules
 - [ ] Criar primeiro owner via script local
+
+## Gate de qualidade para regras Firestore (pre-deploy)
+
+Objetivo: reduzir regressao de permissao antes de publicar regras em producao.
+
+- [x] Rodar suite completa: npm run test:firestore-rules
+- [x] Rodar suite focada de representadas: npm run test:firestore-rules:represented
+- [x] Rodar suite focada de memberships e convites: npm run test:firestore-rules:memberships
+- [x] Rodar suite focada de tenants: npm run test:firestore-rules:tenants
+- [x] Publicar regras apos testes verdes: firebase deploy --only firestore:rules
 
 ## Setup Firebase Auth (Console)
 
@@ -195,7 +215,7 @@ Use esta secao como checklist operacional do dia a dia.
 - [ ] Cadastro manual do tenant sem integracao externa
 - [ ] Cadastro manual de usuarios e vinculos hierarquicos
 - [ ] Importacao manual de clientes via planilha/CSV
-- [ ] Importacao manual de produtos e tabelas de preco via planilha/CSV
+- [x] Importacao manual de produtos e tabelas de preco via planilha/CSV (CSV validado no cliente; XLS/XLSX registrado para processamento)
 - [ ] Configuracao manual de politicas comerciais por tenant
 - [ ] Definir template padrao de importacao de produtos por Excel
 - [ ] Definir template padrao de importacao de clientes por Excel

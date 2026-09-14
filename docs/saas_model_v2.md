@@ -16,6 +16,10 @@ Consolidar a arquitetura do produto como plataforma SaaS multi-tenant, com uso m
 - onboardingStatus
 - operationMode: manual | sankhya | custom
 - erpProvider: none | sankhya | custom
+- workspaceType: seller_solo_workspace | rep_workspace | brand_owner_workspace
+- hierarchyModel: seller_only | rep_to_seller | full_chain
+- allowInvitations: bool
+- cnpjBinding: informational_only | owner_legal_entity
 - createdAt
 - updatedAt
 
@@ -25,6 +29,7 @@ Consolidar a arquitetura do produto como plataforma SaaS multi-tenant, com uso m
 - email
 - displayName
 - platformRole: platform_admin | none
+- accountContractLock: flexible | enterprise_only
 - ativoGlobal
 - createdAt
 - updatedAt
@@ -88,6 +93,11 @@ Sugestao de chave: {tenantId}_{uid}
 2. Nenhuma leitura ou escrita deve ocorrer fora do tenant selecionado.
 3. Hierarquia comercial sempre e avaliada dentro do tenant.
 4. platform_admin fica fora da hierarquia comercial.
+5. nome/CNPJ nao criam vinculo automatico entre tenants distintos.
+6. apenas brand_owner_workspace representa contratacao oficial vinculada ao CNPJ da marca.
+7. a conta que cria um brand_owner_workspace fica travada em modo enterprise_only.
+8. seller_solo_workspace e rep_workspace podem coexistir com outros contexts no mesmo login, desde que a conta nao esteja travada como enterprise_only.
+9. apenas um membership por usuario deve ficar marcado como defaultTenant = true.
 
 ## Modo sem ERP
 

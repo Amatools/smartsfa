@@ -9,11 +9,13 @@ import 'package:http/http.dart' as http;
 import 'package:image/image.dart' as image_lib;
 
 import '../../../../core/data/firestore/firestore_produto_repository.dart';
+import '../../../../core/data/firestore/firestore_tabela_preco_repository.dart';
 import '../../../../core/models/app_identity.dart';
 import '../../../../core/models/tenant_entry_decision.dart';
 import '../../../auth/services/solo_workspace_service.dart';
 import '../../../auth/services/tenant_membership_service.dart';
 import '../../../auth/services/workspace_profile_service.dart';
+import '../../../precos/presentation/pages/tabelas_preco_page.dart';
 import '../../../produtos/presentation/pages/produtos_page.dart';
 
 class WebPortalPage extends StatelessWidget {
@@ -1056,102 +1058,132 @@ class _WebPortalTopBar extends StatelessWidget {
               ).watchWorkspace(activeTenant.tenantId),
               builder: (context, snapshot) {
                 final workspaceData = snapshot.data ?? const <String, dynamic>{};
-                final representedCompanies =
-                    _extractRepresentedCompanies(workspaceData);
                 final supportsRepresentedCompanies =
                     activeTenant.workspaceType == 'seller_solo_workspace' ||
                     activeTenant.workspaceType == 'rep_workspace';
-
-                final selectedId = representedCompanies.any(
-                  (company) => company.id == selectedRepresentedCompanyId,
-                )
-                    ? selectedRepresentedCompanyId
-                    : null;
                 final favoriteRepresentedCompanyId =
                     (workspaceData['favoriteRepresentedCompanyId'] ?? '')
                         .toString()
                         .trim();
-                final isFavoriteSelection =
-                    selectedId != null && selectedId == favoriteRepresentedCompanyId;
+                return StreamBuilder<List<Map<String, Object?>>>(
+                  stream: WorkspaceProfileService(
+                    FirebaseFirestore.instance,
+                  ).watchRepresentedCompanies(activeTenant.tenantId),
+                  builder: (context, representedSnapshot) {
+                    final representedCompanies = _representedCompaniesFromStorage(
+                      representedSnapshot.data ?? const <Map<String, Object?>>[],
+                    );
+                    final selectedId = representedCompanies.any(
+                      (company) => company.id == selectedRepresentedCompanyId,
+                    )
+                        ? selectedRepresentedCompanyId
+                        : null;
+                    final favoriteId = representedCompanies.any(
+                      (company) => company.id == favoriteRepresentedCompanyId,
+                    )
+                        ? favoriteRepresentedCompanyId
+                        : null;
+                    final effectiveSelectedId = selectedId ?? favoriteId;
+                    if (effectiveSelectedId != null &&
+                        effectiveSelectedId != selectedRepresentedCompanyId) {
+                      _RepresentedCompany? selectedCompany;
+                      for (final company in representedCompanies) {
+                        if (company.id == effectiveSelectedId) {
+                          selectedCompany = company;
+                          break;
+                        }
+                      }
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        onRepresentedCompanySelected(
+                          effectiveSelectedId,
+                          selectedCompany?.nomeFantasia,
+                        );
+                      });
+                    }
+                    final isFavoriteSelection =
+                        effectiveSelectedId != null &&
+                            effectiveSelectedId == favoriteRepresentedCompanyId;
 
-                return Row(
-                  children: [
-                    Expanded(
-                      child: DropdownButtonFormField<String?>(
-                        initialValue: selectedId,
-                        isExpanded: true,
-                        decoration: const InputDecoration(
-                          labelText: 'Representada ativa',
-                          border: OutlineInputBorder(),
-                          isDense: true,
-                        ),
-                        items: [
-                          const DropdownMenuItem<String?>(
-                            value: null,
-                            child: Text('Nenhuma selecionada'),
-                          ),
-                          ...representedCompanies.map(
-                            (company) => DropdownMenuItem<String?>(
-                              value: company.id,
-                              child: Row(
-                                children: [
-                                  _RepresentedCompanyAvatar(
-                                    company: company,
-                                    size: 40,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      company.nomeFantasia,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                ],
+                    return Row(
+                      children: [
+                        Expanded(
+                          child: DropdownButtonFormField<String?>(
+                            initialValue: effectiveSelectedId,
+                            isExpanded: true,
+                            decoration: const InputDecoration(
+                              labelText: 'Representada ativa',
+                              border: OutlineInputBorder(),
+                              isDense: true,
+                            ),
+                            items: [
+                              const DropdownMenuItem<String?>(
+                                value: null,
+                                child: Text('Nenhuma selecionada'),
                               ),
+                              ...representedCompanies.map(
+                                (company) => DropdownMenuItem<String?>(
+                                  value: company.id,
+                                  child: Row(
+                                    children: [
+                                      _RepresentedCompanyAvatar(
+                                        company: company,
+                                        size: 40,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          company.nomeFantasia,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                            onChanged: !supportsRepresentedCompanies
+                                ? null
+                                : (value) {
+                                    _RepresentedCompany? selectedCompany;
+                                    for (final company in representedCompanies) {
+                                      if (company.id == value) {
+                                        selectedCompany = company;
+                                        break;
+                                      }
+                                    }
+                                    onRepresentedCompanySelected(
+                                      value,
+                                      selectedCompany?.nomeFantasia,
+                                    );
+                                  },
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Tooltip(
+                          message: effectiveSelectedId == null
+                              ? 'Selecione uma representada para favoritar'
+                              : isFavoriteSelection
+                              ? 'Representada favorita'
+                              : 'Favoritar representada ativa',
+                          child: IconButton.outlined(
+                            onPressed: effectiveSelectedId == null ||
+                                    settingFavoriteRepresented ||
+                                    !supportsRepresentedCompanies
+                                ? null
+                                : () => onToggleFavoriteRepresented(
+                                      activeTenant: activeTenant,
+                                      selectedRepresentedCompanyId: effectiveSelectedId,
+                                      favoriteRepresentedCompanyId:
+                                          favoriteRepresentedCompanyId,
+                                    ),
+                            icon: Icon(
+                              isFavoriteSelection ? Icons.star : Icons.star_outline,
                             ),
                           ),
-                        ],
-                        onChanged: !supportsRepresentedCompanies
-                            ? null
-                            : (value) {
-                                _RepresentedCompany? selectedCompany;
-                                for (final company in representedCompanies) {
-                                  if (company.id == value) {
-                                    selectedCompany = company;
-                                    break;
-                                  }
-                                }
-                                onRepresentedCompanySelected(
-                                  value,
-                                  selectedCompany?.nomeFantasia,
-                                );
-                              },
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Tooltip(
-                      message: selectedId == null
-                          ? 'Selecione uma representada para favoritar'
-                          : isFavoriteSelection
-                          ? 'Representada favorita'
-                          : 'Favoritar representada ativa',
-                      child: IconButton.outlined(
-                        onPressed: selectedId == null ||
-                                settingFavoriteRepresented ||
-                                !supportsRepresentedCompanies
-                            ? null
-                            : () => onToggleFavoriteRepresented(
-                                  activeTenant: activeTenant,
-                                  selectedRepresentedCompanyId: selectedId,
-                                  favoriteRepresentedCompanyId:
-                                      favoriteRepresentedCompanyId,
-                                ),
-                        icon: Icon(
-                          isFavoriteSelection ? Icons.star : Icons.star_outline,
                         ),
-                      ),
-                    ),
-                  ],
+                      ],
+                    );
+                  },
                 );
               },
             ),
@@ -1481,106 +1513,148 @@ class _RepresentedCompaniesSection extends StatelessWidget {
                   stream: WorkspaceProfileService(
                     FirebaseFirestore.instance,
                   ).watchWorkspace(activeTenant.tenantId),
-                  builder: (context, snapshot) {
-                    final workspaceData = snapshot.data ?? const <String, dynamic>{};
-                    final representedCompanies = _extractRepresentedCompanies(workspaceData);
+                  builder: (context, workspaceSnapshot) {
+                    final workspaceData = workspaceSnapshot.data ?? const <String, dynamic>{};
+                    final favoriteRepresentedCompanyId =
+                        (workspaceData['favoriteRepresentedCompanyId'] ?? '')
+                            .toString()
+                            .trim();
 
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
+                    return StreamBuilder<List<Map<String, Object?>>>(
+                      stream: WorkspaceProfileService(
+                        FirebaseFirestore.instance,
+                      ).watchRepresentedCompanies(activeTenant.tenantId),
+                      builder: (context, snapshot) {
+                        final representedCompanies = _representedCompaniesFromStorage(
+                          snapshot.data ?? const <Map<String, Object?>>[],
+                        );
+
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Expanded(
-                              child: Text(
-                                'Empresas representadas',
-                                style: textTheme.titleMedium,
-                              ),
-                            ),
-                            if (supportsRepresentedCompanies && canManageRepresentedCompanies)
-                              FilledButton.icon(
-                                onPressed: () => _createRepresentedCompany(
-                                  context,
-                                  activeTenant,
-                                ),
-                                icon: const Icon(Icons.add_business_outlined),
-                                label: const Text('Adicionar'),
-                              ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        if (!supportsRepresentedCompanies) ...[
-                          const Text(
-                            'Disponivel apenas para workspaces Individual e Representacoes.',
-                          ),
-                          const SizedBox(height: 6),
-                          const Text(
-                            'No contexto Empresa (BrandOp), esta conta administra apenas a empresa contratante.',
-                          ),
-                        ] else if (representedCompanies.isEmpty) ...[
-                          const Text('Nenhuma representada cadastrada ainda.'),
-                          const SizedBox(height: 6),
-                          const Text(
-                            'Use esta lista para manter as empresas que voce representa neste workspace.',
-                          ),
-                        ] else ...[
-                          for (final company in representedCompanies)
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 12),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          company.nomeFantasia.isEmpty
-                                              ? 'Sem nome fantasia'
-                                              : company.nomeFantasia,
-                                          style: textTheme.titleSmall,
-                                        ),
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          'CNPJ: ${company.cnpj.isEmpty ? 'Nao informado' : company.cnpj}',
-                                        ),
-                                        Text(
-                                          'Cidade/UF: ${company.cidade.isEmpty ? 'Nao informado' : company.cidade}${company.uf.isEmpty ? '' : '/${company.uf}'}',
-                                        ),
-                                        if (company.segmento.isNotEmpty)
-                                          Text('Segmento: ${company.segmento}'),
-                                      ],
-                                    ),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    'Empresas representadas',
+                                    style: textTheme.titleMedium,
                                   ),
-                                  if (supportsRepresentedCompanies && canManageRepresentedCompanies) ...[
-                                    Tooltip(
-                                      message: 'Editar',
-                                      child: IconButton.outlined(
-                                        onPressed: () => _editRepresentedCompany(
-                                          context,
-                                          activeTenant,
-                                          company,
-                                        ),
-                                        icon: const Icon(Icons.edit_outlined),
-                                      ),
+                                ),
+                                if (supportsRepresentedCompanies && canManageRepresentedCompanies)
+                                  FilledButton.icon(
+                                    onPressed: () => _createRepresentedCompany(
+                                      context,
+                                      activeTenant,
                                     ),
-                                    const SizedBox(width: 8),
-                                    Tooltip(
-                                      message: 'Excluir',
-                                      child: IconButton.outlined(
-                                        onPressed: () => _deleteRepresentedCompany(
-                                          context,
-                                          activeTenant,
-                                          company,
-                                        ),
-                                        icon: const Icon(Icons.delete_outline),
-                                      ),
-                                    ),
-                                  ],
-                                ],
-                              ),
+                                    icon: const Icon(Icons.add_business_outlined),
+                                    label: const Text('Adicionar'),
+                                  ),
+                              ],
                             ),
-                        ],
-                      ],
+                            const SizedBox(height: 12),
+                            if (!supportsRepresentedCompanies) ...[
+                              const Text(
+                                'Disponivel apenas para workspaces Individual e Representacoes.',
+                              ),
+                              const SizedBox(height: 6),
+                              const Text(
+                                'No contexto Empresa (BrandOp), esta conta administra apenas a empresa contratante.',
+                              ),
+                            ] else if (representedCompanies.isEmpty) ...[
+                              const Text('Nenhuma representada cadastrada ainda.'),
+                              const SizedBox(height: 6),
+                              const Text(
+                                'Use esta lista para manter as empresas que voce representa neste workspace.',
+                              ),
+                            ] else ...[
+                              for (final company in representedCompanies)
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 12),
+                                  child: Row(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              company.nomeFantasia.isEmpty
+                                                  ? 'Sem nome fantasia'
+                                                  : company.nomeFantasia,
+                                              style: textTheme.titleSmall,
+                                            ),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              'CNPJ: ${company.cnpj.isEmpty ? 'Nao informado' : company.cnpj}',
+                                            ),
+                                            if (company.logradouro.isNotEmpty ||
+                                                company.numero.isNotEmpty)
+                                              Text(
+                                                'Endereco: ${company.logradouro.isEmpty ? 'Nao informado' : company.logradouro}${company.numero.isEmpty ? '' : ', ${company.numero}'}',
+                                              ),
+                                            Text(
+                                              'CEP: ${company.cep.isEmpty ? 'Nao informado' : company.cep}',
+                                            ),
+                                            Text(
+                                              'Cidade/UF: ${company.cidade.isEmpty ? 'Nao informado' : company.cidade}${company.uf.isEmpty ? '' : '/${company.uf}'}',
+                                            ),
+                                            if (company.segmento.isNotEmpty)
+                                              Text('Segmento: ${company.segmento}'),
+                                          ],
+                                        ),
+                                      ),
+                                      if (supportsRepresentedCompanies && canManageRepresentedCompanies) ...[
+                                        Tooltip(
+                                          message: company.id == favoriteRepresentedCompanyId
+                                              ? 'Representada favorita'
+                                              : 'Definir como favorita',
+                                          child: IconButton.outlined(
+                                            onPressed: company.id == favoriteRepresentedCompanyId
+                                                ? null
+                                                : () => _setFavoriteRepresentedCompany(
+                                                      context,
+                                                      activeTenant,
+                                                      company,
+                                                    ),
+                                            icon: Icon(
+                                              company.id == favoriteRepresentedCompanyId
+                                                  ? Icons.star
+                                                  : Icons.star_outline,
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Tooltip(
+                                          message: 'Editar',
+                                          child: IconButton.outlined(
+                                            onPressed: () => _editRepresentedCompany(
+                                              context,
+                                              activeTenant,
+                                              company,
+                                            ),
+                                            icon: const Icon(Icons.edit_outlined),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Tooltip(
+                                          message: 'Excluir',
+                                          child: IconButton.outlined(
+                                            onPressed: () => _deleteRepresentedCompany(
+                                              context,
+                                              activeTenant,
+                                              company,
+                                            ),
+                                            icon: const Icon(Icons.delete_outline),
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                            ],
+                          ],
+                        );
+                      },
                     );
                   },
                 ),
@@ -1703,6 +1777,37 @@ class _RepresentedCompaniesSection extends StatelessWidget {
       );
     }
   }
+
+  Future<void> _setFavoriteRepresentedCompany(
+    BuildContext context,
+    TenantEntryOption activeTenant,
+    _RepresentedCompany company,
+  ) async {
+    try {
+      await WorkspaceProfileService(FirebaseFirestore.instance)
+          .setFavoriteRepresentedCompany(
+        tenantId: activeTenant.tenantId,
+        companyId: company.id,
+      );
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Representada favorita: ${company.nomeFantasia.isEmpty ? company.id : company.nomeFantasia}',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Falha ao atualizar favorita: $error')),
+      );
+    }
+  }
 }
 
 class _RepresentedCompany {
@@ -1711,6 +1816,9 @@ class _RepresentedCompany {
     required this.nomeFantasia,
     required this.razaoSocial,
     required this.cnpj,
+    required this.cep,
+    required this.logradouro,
+    required this.numero,
     required this.logoUrl,
     required this.contato,
     required this.telefone,
@@ -1725,6 +1833,9 @@ class _RepresentedCompany {
   final String nomeFantasia;
   final String razaoSocial;
   final String cnpj;
+  final String cep;
+  final String logradouro;
+  final String numero;
   final String logoUrl;
   final String contato;
   final String telefone;
@@ -1735,39 +1846,15 @@ class _RepresentedCompany {
   final bool ativo;
 }
 
-List<_RepresentedCompany> _extractRepresentedCompanies(
-  Map<String, dynamic> workspaceData,
+List<_RepresentedCompany> _representedCompaniesFromStorage(
+  List<Map<String, Object?>> storedCompanies,
 ) {
-  final raw = workspaceData['representedCompanies'];
-  if (raw is! List) {
-    return const <_RepresentedCompany>[];
-  }
-
   final result = <_RepresentedCompany>[];
-  for (final item in raw) {
-    if (item is Map) {
-      final map = item.map((key, value) => MapEntry(key.toString(), value));
-      final id = (map['id'] ?? '').toString();
-      if (id.trim().isEmpty) {
-        continue;
-      }
 
-      result.add(
-        _RepresentedCompany(
-          id: id,
-          nomeFantasia: (map['nomeFantasia'] ?? '').toString(),
-          razaoSocial: (map['razaoSocial'] ?? '').toString(),
-          cnpj: (map['cnpj'] ?? '').toString(),
-          logoUrl: (map['logoUrl'] ?? '').toString(),
-          contato: (map['contato'] ?? '').toString(),
-          telefone: (map['telefone'] ?? '').toString(),
-          email: (map['email'] ?? '').toString(),
-          cidade: (map['cidade'] ?? '').toString(),
-          uf: (map['uf'] ?? '').toString(),
-          segmento: (map['segmento'] ?? '').toString(),
-          ativo: map['ativo'] == true,
-        ),
-      );
+  for (final rawCompany in storedCompanies) {
+    final company = _representedCompanyFromMap(rawCompany);
+    if (company != null) {
+      result.add(company);
     }
   }
 
@@ -1775,6 +1862,31 @@ List<_RepresentedCompany> _extractRepresentedCompanies(
     (a, b) => a.nomeFantasia.toLowerCase().compareTo(b.nomeFantasia.toLowerCase()),
   );
   return result;
+}
+
+_RepresentedCompany? _representedCompanyFromMap(Map<String, Object?> map) {
+  final id = (map['companyId'] ?? map['id'] ?? '').toString().trim();
+  if (id.isEmpty) {
+    return null;
+  }
+
+  return _RepresentedCompany(
+    id: id,
+    nomeFantasia: (map['nomeFantasia'] ?? '').toString(),
+    razaoSocial: (map['razaoSocial'] ?? '').toString(),
+    cnpj: (map['cnpj'] ?? '').toString(),
+    cep: (map['cep'] ?? '').toString(),
+    logradouro: (map['logradouro'] ?? '').toString(),
+    numero: (map['numero'] ?? '').toString(),
+    logoUrl: (map['logoUrl'] ?? '').toString(),
+    contato: (map['contato'] ?? '').toString(),
+    telefone: (map['telefone'] ?? '').toString(),
+    email: (map['email'] ?? '').toString(),
+    cidade: (map['cidade'] ?? '').toString(),
+    uf: (map['uf'] ?? '').toString(),
+    segmento: (map['segmento'] ?? '').toString(),
+    ativo: map['ativo'] == true,
+  );
 }
 
 class _RepresentedCompanyAvatar extends StatelessWidget {
@@ -1890,6 +2002,9 @@ Future<Map<String, Object?>?> _openRepresentedCompanyEditor(
     text: initial?.razaoSocial ?? '',
   );
   final cnpjController = TextEditingController(text: initial?.cnpj ?? '');
+  final cepController = TextEditingController(text: initial?.cep ?? '');
+  final logradouroController = TextEditingController(text: initial?.logradouro ?? '');
+  final numeroController = TextEditingController(text: initial?.numero ?? '');
   final contatoController = TextEditingController(text: initial?.contato ?? '');
   final telefoneController = TextEditingController(text: initial?.telefone ?? '');
   final emailController = TextEditingController(text: initial?.email ?? '');
@@ -1898,6 +2013,64 @@ Future<Map<String, Object?>?> _openRepresentedCompanyEditor(
   final segmentoController = TextEditingController(text: initial?.segmento ?? '');
   var ativo = initial?.ativo ?? true;
   var logoData = initial?.logoUrl ?? '';
+  var buscandoCep = false;
+
+  Future<void> buscarCep(StateSetter setDialogState) async {
+    final cep = cepController.text.replaceAll(RegExp(r'\D'), '');
+    if (cep.length != 8) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Informe um CEP valido com 8 digitos.')),
+        );
+      }
+      return;
+    }
+
+    setDialogState(() {
+      buscandoCep = true;
+    });
+
+    try {
+      final response = await http.get(
+        Uri.parse('https://brasilapi.com.br/api/cep/v2/$cep'),
+      );
+      if (response.statusCode != 200) {
+        throw StateError('cep_lookup_error');
+      }
+
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final city = (data['city'] ?? data['cidade'] ?? '').toString().trim();
+      final state = (data['state'] ?? data['uf'] ?? '').toString().trim();
+      final street = (data['street'] ?? data['logradouro'] ?? '').toString().trim();
+
+      if (street.isNotEmpty) {
+        logradouroController.text = street;
+      }
+
+      if (city.isNotEmpty) {
+        cidadeController.text = city;
+      }
+      if (state.isNotEmpty) {
+        ufController.text = state.toUpperCase();
+      }
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Endereco localizado pelo CEP.')),
+        );
+      }
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Nao foi possivel consultar esse CEP agora.')),
+        );
+      }
+    } finally {
+      setDialogState(() {
+        buscandoCep = false;
+      });
+    }
+  }
 
   final shouldSave = await showDialog<bool>(
     context: context,
@@ -1938,6 +2111,117 @@ Future<Map<String, Object?>?> _openRepresentedCompanyEditor(
                       ),
                     ),
                     const SizedBox(height: 12),
+                    TextField(
+                      controller: contatoController,
+                      decoration: const InputDecoration(
+                        labelText: 'Contato',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: telefoneController,
+                      decoration: const InputDecoration(
+                        labelText: 'Telefone',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: emailController,
+                      decoration: const InputDecoration(
+                        labelText: 'E-mail',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: logradouroController,
+                            decoration: const InputDecoration(
+                              labelText: 'Logradouro',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        SizedBox(
+                          width: 120,
+                          child: TextField(
+                            controller: numeroController,
+                            decoration: const InputDecoration(
+                              labelText: 'Numero',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: cepController,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                              labelText: 'CEP',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        FilledButton.tonalIcon(
+                          onPressed: buscandoCep
+                              ? null
+                              : () => buscarCep(setDialogState),
+                          icon: buscandoCep
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : const Icon(Icons.search),
+                          label: Text(buscandoCep ? 'Buscando...' : 'Buscar CEP'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: cidadeController,
+                            decoration: const InputDecoration(
+                              labelText: 'Cidade',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        SizedBox(
+                          width: 100,
+                          child: TextField(
+                            controller: ufController,
+                            decoration: const InputDecoration(
+                              labelText: 'UF',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: segmentoController,
+                      decoration: const InputDecoration(
+                        labelText: 'Segmento',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
                     Row(
                       children: [
                         _RepresentedCompanyAvatar(
@@ -1946,6 +2230,9 @@ Future<Map<String, Object?>?> _openRepresentedCompanyEditor(
                             nomeFantasia: nomeFantasiaController.text,
                             razaoSocial: razaoSocialController.text,
                             cnpj: cnpjController.text,
+                            cep: cepController.text,
+                            logradouro: logradouroController.text,
+                            numero: numeroController.text,
                             logoUrl: logoData,
                             contato: contatoController.text,
                             telefone: telefoneController.text,
@@ -1999,63 +2286,6 @@ Future<Map<String, Object?>?> _openRepresentedCompanyEditor(
                       ),
                     ),
                     const SizedBox(height: 12),
-                    TextField(
-                      controller: contatoController,
-                      decoration: const InputDecoration(
-                        labelText: 'Contato',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: telefoneController,
-                      decoration: const InputDecoration(
-                        labelText: 'Telefone',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: emailController,
-                      decoration: const InputDecoration(
-                        labelText: 'E-mail',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: cidadeController,
-                            decoration: const InputDecoration(
-                              labelText: 'Cidade',
-                              border: OutlineInputBorder(),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        SizedBox(
-                          width: 100,
-                          child: TextField(
-                            controller: ufController,
-                            decoration: const InputDecoration(
-                              labelText: 'UF',
-                              border: OutlineInputBorder(),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: segmentoController,
-                      decoration: const InputDecoration(
-                        labelText: 'Segmento',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
                       title: const Text('Ativa'),
@@ -2089,6 +2319,9 @@ Future<Map<String, Object?>?> _openRepresentedCompanyEditor(
   final nomeFantasia = nomeFantasiaController.text.trim();
   final razaoSocial = razaoSocialController.text.trim();
   final cnpj = cnpjController.text.trim();
+  final cep = cepController.text.trim();
+  final logradouro = logradouroController.text.trim();
+  final numero = numeroController.text.trim();
   final logoUrl = logoData.trim();
   final contato = contatoController.text.trim();
   final telefone = telefoneController.text.trim();
@@ -2100,6 +2333,9 @@ Future<Map<String, Object?>?> _openRepresentedCompanyEditor(
   nomeFantasiaController.dispose();
   razaoSocialController.dispose();
   cnpjController.dispose();
+  cepController.dispose();
+  logradouroController.dispose();
+  numeroController.dispose();
   contatoController.dispose();
   telefoneController.dispose();
   emailController.dispose();
@@ -2124,6 +2360,9 @@ Future<Map<String, Object?>?> _openRepresentedCompanyEditor(
     'nomeFantasia': nomeFantasia,
     'razaoSocial': razaoSocial,
     'cnpj': cnpj,
+    'cep': cep,
+    'logradouro': logradouro,
+    'numero': numero,
     'logoUrl': logoUrl,
     'contato': contato,
     'telefone': telefone,
@@ -2458,226 +2697,24 @@ class _PricingCatalogSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-    final representedName = activeRepresentedCompanyName?.trim() ?? '';
-    final representedLabel = representedName.isEmpty
-        ? 'sem representada selecionada'
-        : 'representada $representedName';
+    final userLabel = FirebaseAuth.instance.currentUser?.displayName?.trim();
+    final identity = AppIdentity(
+      tenantId: activeTenant.tenantId,
+      userLabel: (userLabel == null || userLabel.isEmpty) ? 'Portal' : userLabel,
+      role: activeTenant.role,
+      tenantName: activeTenant.tenantName,
+      isMock: false,
+      membershipId: activeTenant.membershipId,
+      isPersonalWorkspace: activeTenant.workspaceType == 'seller_solo_workspace',
+    );
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Tabelas de preço', style: textTheme.headlineMedium),
-        const SizedBox(height: 8),
-        Text(
-          'Cadastro de tabelas de preço por tenant para $representedLabel.',
-          style: textTheme.bodyLarge,
-        ),
-        const SizedBox(height: 20),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Como este módulo vai funcionar', style: textTheme.titleMedium),
-                const SizedBox(height: 12),
-                const _FeatureRow(
-                  icon: Icons.upload_file_outlined,
-                  title: 'Importacao via Excel',
-                  subtitle: 'Subida de planilha para carga inicial e atualizacao em lote.',
-                ),
-                const SizedBox(height: 8),
-                const _FeatureRow(
-                  icon: Icons.edit_outlined,
-                  title: 'Cadastro manual',
-                  subtitle: 'Edicao tabela a tabela quando precisar tratar excecoes.',
-                ),
-                const SizedBox(height: 8),
-                const _FeatureRow(
-                  icon: Icons.sync_outlined,
-                  title: 'Integração ERP enterprise',
-                  subtitle: 'No futuro, a base do ERP alimenta todos os membros da enterprise.',
-                ),
-                const SizedBox(height: 16),
-                _SimpleCardSection(
-                  title: 'Modelos suportados',
-                  subtitle:
-                      'O modulo precisa suportar tabela por cliente/regiao/canal e política comercial por desconto sobre o bruto.',
-                  items: const [
-                    'Tabela de preco por cliente, grupo, regiao ou campanha',
-                    'Politica comercial com descontos, acrescimos e promocoes',
-                    'Travas por perfil e regras de elegibilidade',
-                    'Versao/validade e prioridade de aplicacao',
-                  ],
-                ),
-                const SizedBox(height: 16),
-                _SimpleCardSection(
-                  title: 'Vinculo da tabela',
-                  subtitle:
-                      'A mesma planilha pode ser geral ou ser amarrada a cliente, regiao ou canal. O sistema deve aceitar sem forcar um unico modelo.',
-                  items: const [
-                    'Tabela sem vinculo: aplica como base geral',
-                    'Tabela por cliente: herda direto para um cliente especifico',
-                    'Tabela por regiao: aplica para um conjunto geografico',
-                    'Tabela por canal: ajuda em times/comerciais distintos',
-                  ],
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    FilledButton.icon(
-                      onPressed: () => _showPriceTableImportSheet(context),
-                      icon: const Icon(Icons.upload_file_outlined),
-                      label: const Text('Importar planilha'),
-                    ),
-                    const SizedBox(width: 12),
-                    OutlinedButton.icon(
-                      onPressed: () => _showSoon(context, 'Cadastro manual de tabela de preço'),
-                      icon: const Icon(Icons.add),
-                      label: const Text('Nova tabela'),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
+    return TabelasPrecoPage(
+      identity: identity,
+      activeTenant: activeTenant,
+      activeRepresentedCompanyName: activeRepresentedCompanyName,
+      repository: FirestoreTabelaPrecoRepository(FirebaseFirestore.instance),
     );
   }
-}
-
-void _showSoon(BuildContext context, String feature) {
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(content: Text('$feature ainda esta em construcao.')),
-  );
-}
-
-Future<void> _showPriceTableImportSheet(BuildContext context) async {
-  var scope = 'general';
-  String? selectedFileName;
-
-  await showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    useSafeArea: true,
-    showDragHandle: true,
-    builder: (sheetContext) {
-      return StatefulBuilder(
-        builder: (context, setSheetState) {
-          Future<void> pickFile() async {
-            final result = await FilePicker.platform.pickFiles(
-              type: FileType.custom,
-              allowedExtensions: const ['xlsx', 'xls', 'csv'],
-              allowMultiple: false,
-              withData: true,
-            );
-
-            final file = result?.files.isNotEmpty == true ? result!.files.first : null;
-            if (file == null) {
-              return;
-            }
-
-            setSheetState(() {
-              selectedFileName = file.name;
-            });
-          }
-
-          return Padding(
-            padding: EdgeInsets.only(
-              left: 20,
-              right: 20,
-              bottom: 20 + MediaQuery.of(sheetContext).viewInsets.bottom,
-            ),
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'Importar tabela de preço',
-                    style: Theme.of(sheetContext).textTheme.headlineSmall,
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Escolha a planilha e defina se ela sera geral, por cliente ou por regiao.',
-                  ),
-                  const SizedBox(height: 16),
-                  Card(
-                    child: Column(
-                      children: [
-                        RadioListTile<String>(
-                          value: 'general',
-                          groupValue: scope,
-                          title: const Text('Tabela sem vínculo'),
-                          subtitle: const Text('Aplica como base geral do tenant.'),
-                          onChanged: (value) {
-                            if (value == null) return;
-                            setSheetState(() => scope = value);
-                          },
-                        ),
-                        RadioListTile<String>(
-                          value: 'client',
-                          groupValue: scope,
-                          title: const Text('Vincular a cliente'),
-                          subtitle: const Text('Usa uma tabela específica para um cliente.'),
-                          onChanged: (value) {
-                            if (value == null) return;
-                            setSheetState(() => scope = value);
-                          },
-                        ),
-                        RadioListTile<String>(
-                          value: 'region',
-                          groupValue: scope,
-                          title: const Text('Vincular a região'),
-                          subtitle: const Text('Usa uma tabela por praça, UF ou grupo regional.'),
-                          onChanged: (value) {
-                            if (value == null) return;
-                            setSheetState(() => scope = value);
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  if (selectedFileName != null)
-                    Card(
-                      child: ListTile(
-                        leading: const Icon(Icons.description_outlined),
-                        title: const Text('Planilha selecionada'),
-                        subtitle: Text(selectedFileName!),
-                      ),
-                    ),
-                  const SizedBox(height: 16),
-                  Wrap(
-                    spacing: 12,
-                    runSpacing: 12,
-                    children: [
-                      FilledButton.icon(
-                        onPressed: pickFile,
-                        icon: const Icon(Icons.upload_file_outlined),
-                        label: const Text('Selecionar planilha'),
-                      ),
-                      OutlinedButton.icon(
-                        onPressed: () => _showSoon(context, 'Mapeamento e validacao da planilha'),
-                        icon: const Icon(Icons.verified_outlined),
-                        label: const Text('Validar estrutura'),
-                      ),
-                      TextButton(
-                        onPressed: () => Navigator.of(sheetContext).pop(),
-                        child: const Text('Fechar'),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-      );
-    },
-  );
 }
 
 class _SimpleSectionPage extends StatelessWidget {
@@ -2804,42 +2841,7 @@ class _ProductsCatalogSection extends StatelessWidget {
     return ProdutosPage(
       identity: identity,
       repository: FirestoreProdutoRepository(FirebaseFirestore.instance),
-    );
-  }
-}
-
-class _FeatureRow extends StatelessWidget {
-  const _FeatureRow({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(top: 4),
-          child: Icon(icon, size: 18),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: Theme.of(context).textTheme.titleSmall),
-              const SizedBox(height: 2),
-              Text(subtitle),
-            ],
-          ),
-        ),
-      ],
+      activeRepresentedCompanyName: activeRepresentedCompanyName,
     );
   }
 }

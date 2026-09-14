@@ -1,4 +1,4 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+﻿import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
@@ -84,20 +84,20 @@ class _TenantAdminPageState extends State<TenantAdminPage> {
   }
 
   Future<void> _loadPolicy() async {
-    if (widget.identity.isMock) {
-      return;
-    }
+    try {
+      final policy = await _membershipService.loadGovernancePolicy(
+        widget.identity.tenantId,
+      );
+      if (!mounted) {
+        return;
+      }
 
-    final policy = await _membershipService.loadGovernancePolicy(
-      widget.identity.tenantId,
-    );
-    if (!mounted) {
-      return;
+      setState(() {
+        _policy = policy;
+      });
+    } catch (_) {
+      // Best effort: keep default policy values when backend is unavailable.
     }
-
-    setState(() {
-      _policy = policy;
-    });
   }
 
   Future<void> _savePolicy({
@@ -408,13 +408,7 @@ class _TenantAdminPageState extends State<TenantAdminPage> {
               },
             ),
             const SizedBox(height: 12),
-            if (widget.identity.isMock)
-              const AppInfoCard(
-                title: 'Modo mock',
-                subtitle: 'A administracao real de memberships usa Firestore e Firebase Auth.',
-              )
-            else
-              StreamBuilder<List<TenantMembership>>(
+            StreamBuilder<List<TenantMembership>>(
                 stream: _membershipService.watchMembershipsForTenant(
                   widget.identity.tenantId,
                 ),

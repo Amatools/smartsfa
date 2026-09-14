@@ -17,6 +17,22 @@ Esse modelo permite:
 - Bloquear qualquer conta Google nao liberada internamente.
 - Manter historico e governanca de quem autorizou cada acesso.
 
+## Tipos oficiais de workspace (v2)
+
+O produto passa a operar com 3 tipos oficiais de tenant/workspace:
+
+- seller_solo_workspace: uso individual de vendedor, base privada, sem interligacao com outros usuarios.
+- rep_workspace: uso de representacao comercial, com interligacao entre representante e vendedores convidados.
+- brand_owner_workspace: tenant oficial da marca contratante, com hierarquia completa owner > gerente > representante > vendedor.
+
+Regra estrutural:
+
+- mesmo nome de empresa representada pode existir em workspaces diferentes sem qualquer vinculo automatico;
+- CNPJ informado em seller_solo_workspace e rep_workspace e apenas informativo interno;
+- vinculo legal de CNPJ existe apenas em brand_owner_workspace.
+- a conta que cria um brand_owner_workspace passa a ficar travada em modo enterprise_only;
+- conta enterprise_only nao pode criar workspace seller_solo_workspace nem rep_workspace.
+
 ## Fluxo de acesso
 
 1. Usuario entra com Google.
@@ -45,36 +61,40 @@ A melhor pratica nao e descobrir o tenant apenas pelo email. O tenant deve ser d
 5. Se nao existir nenhum membership ativo, o app mostra uma tela de vinculo com tres caminhos:
 	- entrar por convite;
 	- solicitar acesso a um tenant;
-	- criar workspace solo (self-service) para entrar como owner do proprio tenant.
+	- criar novo workspace conforme contexto de uso.
 
 Regra de uso recomendada:
 
-- Solo: criar workspace solo e operar como owner.
-- Team/Enterprise: entrar por convite do owner do tenant.
-- Solicitacao de acesso: manter para fluxo assistido quando nao houver convite imediato.
+- vendedor simples: criar seller_solo_workspace e operar em base privada sem equipe.
+- representacao: criar rep_workspace e operar com convites de vendedores.
+- marca contratante: criar brand_owner_workspace para operacao corporativa completa.
+- solicitacao de acesso: manter para fluxo assistido quando nao houver convite imediato.
+
+Para diagnosticar falhas de login no web, consulte [docs/firebase/auth_error_codes.md](docs/firebase/auth_error_codes.md).
 
 ### Sobre tenant A e tenant B
 
 - o mesmo email pode existir em varios tenants;
 - a selecao do tenant nao e inferida automaticamente pelo email;
-- o tenant atual precisa ficar gravado na sessao do usuario como `defaultTenant`, quando houver mais de uma opcao.
+- o tenant atual precisa ficar gravado na sessao do usuario como `defaultTenant`, quando houver mais de uma opcao;
+- somente um membership por usuario deve permanecer com `defaultTenant = true` ao mesmo tempo.
 
 ### Workspace pessoal ou uso singular
 
-Quando o produto permitir uso individual sem empresa, a melhor pratica e criar um tenant pessoal separado, nao misturar esse caso com tenant corporativo.
+Quando o produto permitir uso individual sem empresa, a melhor pratica e criar seller_solo_workspace separado, nao misturar esse caso com tenant corporativo.
 
-Esse tenant pessoal deve ter:
+Esse workspace deve ter:
 
-- um owner unico;
-- sem hierarquia comercial completa, se o produto nao precisar;
+- membership inicial como vendedor;
+- sem convites e sem hierarquia interligada;
 - regras simplificadas de produto e cliente;
-- possibilidade de migrar depois para um tenant corporativo, se necessario.
+- possibilidade de coexistir com outros tenants no mesmo login.
 
 Regra de produto recomendada:
 
-- vendedor solo nao deve existir como "vendedor sem superior".
-- vendedor solo entra como owner do proprio tenant solo.
-- quando convidar equipe, o mesmo tenant evolui para modelo team sem migracao de conta.
+- vendedor solo existe como contexto privado isolado;
+- representacao e brand owner usam fluxo interligado por convite e membership;
+- nao existe unificacao automatica por CNPJ entre tenants distintos.
 
 ## Niveis recomendados de papel
 
@@ -119,7 +139,7 @@ Melhor pratica:
 ### Plano Solo
 
 - usuario individual sem equipe;
-- tenant solo com owner unico;
+- tenant solo com membership inicial vendedor;
 - sem integracao ERP obrigatoria;
 - sincronizacao essencial e foco em baixo custo.
 
@@ -136,6 +156,7 @@ Melhor pratica:
 - owner paga a assinatura corporativa;
 - convidados entram por convite no tenant;
 - Firestore segue como camada de colaboracao, acesso, offline e estado operacional.
+- a conta que cria o tenant oficial da marca deve ser dedicada a esse contexto enterprise.
 
 ## Estrutura recomendada (Firestore)
 
@@ -162,6 +183,7 @@ Campos:
 - email: string
 - displayName: string
 - platformRole: platform_admin | none
+- accountContractLock: flexible | enterprise_only
 - sankhyaPartnerIds: array<string>
 - defaultTenantId: string? (sinal de conveniencia, nao e membership)
 - lastSelectedTenantId: string? (sinal de conveniencia, nao e membership)
@@ -253,8 +275,12 @@ Aceite obrigatorio:
 
 Governanca de convite:
 
-- somente owner ativo do tenant pode emitir convite com e-mail, role e expiracao;
-- somente owner ativo do tenant pode revogar convite enquanto estiver pendente;
+- seller_solo_workspace: nao permite envio de convites;
+- rep_workspace: representante (e owner, se existir) pode convidar apenas vendedor;
+- brand_owner_workspace:
+	- owner pode convidar gerente, representante e vendedor;
+	- gerente pode convidar representante e vendedor;
+	- representante pode convidar vendedor;
 - convite revogado nao pode mais ser aceito;
 - convite tambem pode ser recusado pelo usuario convidado (status declined);
 - apos aceite valido, o app revalida os memberships para refletir acesso imediatamente.
@@ -326,3 +352,10 @@ A atribuicao de role e hierarquia deve ser somente por aprovacao interna do tena
 - Integracao Sankhya: primeiro adaptador ERP.
 - Operacao manual: obrigatoria no MVP para reduzir dependencia de integracoes.
 - Isolamento: sempre por tenantId, nunca apenas por role.
+
+## Portal web versus app mobile
+
+- app mobile: foco operacional para vendedores, representantes, gerentes e owner em campo;
+- portal web: foco administrativo e parametrico para configuracoes de negocio, politicas e integracoes;
+- o onboarding define o primeiro contexto do usuario, mas nao substitui a governanca de tenant;
+- os dois canais compartilham o mesmo login Firebase, os mesmos memberships e as mesmas rules.

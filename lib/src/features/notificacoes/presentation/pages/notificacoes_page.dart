@@ -126,12 +126,7 @@ class _NotificacoesPageState extends State<NotificacoesPage> {
               'Esta tela e apenas para aceitar ou recusar convites pessoais. O envio e gerenciamento ficam no modulo Tenant.',
             ),
             const SizedBox(height: 16),
-            if (widget.identity.isMock)
-              const AppInfoCard(
-                title: 'Modo mock',
-                subtitle: 'No modo mock, notificacoes reais de convite nao sao carregadas.',
-              )
-            else if (email.isEmpty)
+            if (email.isEmpty)
               const AppInfoCard(
                 title: 'Sem e-mail autenticado',
                 subtitle: 'Nao foi possivel identificar convites para a sessao atual.',

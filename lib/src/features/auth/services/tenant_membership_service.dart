@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../../../core/models/tenant_entry_decision.dart';
 import '../../../core/models/tenant_membership.dart';
 
 class TenantMembershipService {
@@ -46,6 +47,112 @@ class TenantMembershipService {
 
       return memberships;
     });
+  }
+
+  Stream<List<TenantEntryOption>> watchTenantChoicesForUser(String uid) {
+    final normalizedUid = uid.trim();
+    if (normalizedUid.isEmpty) {
+      return Stream.value(const []);
+    }
+
+    return _firestore
+        .collection('tenant_memberships')
+        .where('uid', isEqualTo: normalizedUid)
+        .where('ativo', isEqualTo: true)
+        .snapshots()
+        .asyncMap((snapshot) async {
+      final options = <TenantEntryOption>[];
+
+      for (final doc in snapshot.docs) {
+        final data = doc.data();
+        final tenantId = (data['tenantId'] ?? '').toString().trim();
+        if (tenantId.isEmpty) {
+          continue;
+        }
+
+        final tenantDoc = await _firestore.collection('tenants').doc(tenantId).get();
+        if (!tenantDoc.exists) {
+          continue;
+        }
+
+        final tenantData = tenantDoc.data() ?? <String, dynamic>{};
+        if (tenantData['ativo'] != true) {
+          continue;
+        }
+
+        final supersededBy =
+            (tenantData['supersededByTenantId'] ?? '').toString().trim();
+        if (supersededBy.isNotEmpty) {
+          continue;
+        }
+
+        options.add(
+          TenantEntryOption(
+            membershipId: doc.id,
+            tenantId: tenantId,
+            tenantName: (tenantData['nomeFantasia'] ?? tenantId).toString(),
+            role: (data['role'] ?? 'member').toString(),
+            workspaceType: (tenantData['workspaceType'] ?? 'brand_owner_workspace')
+                .toString(),
+            defaultTenant: data['defaultTenant'] == true,
+          ),
+        );
+      }
+
+      options.sort((a, b) {
+        if (a.defaultTenant != b.defaultTenant) {
+          return a.defaultTenant ? -1 : 1;
+        }
+
+        return a.tenantName.toLowerCase().compareTo(b.tenantName.toLowerCase());
+      });
+
+      return options;
+    });
+  }
+
+  Future<void> setDefaultTenantForUser({
+    required String uid,
+    required String membershipId,
+    required String tenantId,
+  }) async {
+    final normalizedUid = uid.trim();
+    final normalizedMembershipId = membershipId.trim();
+    final normalizedTenantId = tenantId.trim();
+    if (normalizedUid.isEmpty ||
+        normalizedMembershipId.isEmpty ||
+        normalizedTenantId.isEmpty) {
+      throw StateError('Contexto invalido para definir tenant padrao.');
+    }
+
+    final memberships = await _firestore
+        .collection('tenant_memberships')
+        .where('uid', isEqualTo: normalizedUid)
+        .get();
+
+    final batch = _firestore.batch();
+    for (final doc in memberships.docs) {
+      batch.set(
+        doc.reference,
+        {
+          'defaultTenant': doc.id == normalizedMembershipId,
+          'updatedAt': DateTime.now().toIso8601String(),
+        },
+        SetOptions(merge: true),
+      );
+    }
+
+    batch.set(
+      _firestore.collection('usuarios').doc(normalizedUid),
+      {
+        'defaultTenantId': normalizedTenantId,
+        'lastSelectedTenantId': normalizedTenantId,
+        'updatedAt': DateTime.now().toIso8601String(),
+      },
+      SetOptions(merge: true),
+    );
+
+    await batch.commit();
   }
 
   Stream<List<Map<String, dynamic>>> watchAuditForTenant(String tenantId) {
@@ -467,23 +574,49 @@ class TenantMembershipService {
 
     final actorRole =
         (actorSnapshot.docs.first.data()['role'] ?? '').toString().toLowerCase();
+    final actorData = actorSnapshot.docs.first.data();
     final targetRole = target.role.trim().toLowerCase();
-
-    if (actorRole == 'owner') {
-      return targetRole == 'gerente' ||
-          targetRole == 'representante' ||
-          targetRole == 'vendedor';
-    }
-
+    final tenantDoc = await _firestore.collection('tenants').doc(tenantId).get();
+    final workspaceType =
+        (tenantDoc.data()?['workspaceType'] ?? 'brand_owner_workspace')
+            .toString()
+            .trim()
+            .toLowerCase();
     final policy = await loadGovernancePolicy(tenantId);
-    if (actorRole == 'gerente') {
-      return policy['allowManagerDisableRepresentative'] == true &&
-          targetRole == 'representante';
+
+    if (workspaceType == 'rep_workspace') {
+      if (actorRole == 'owner') {
+        return targetRole != 'owner' && target.ownerId == actorUid;
+      }
+
+      if (actorRole == 'representante') {
+        return policy['allowRepresentativeDisableSeller'] == true &&
+            targetRole == 'vendedor' &&
+            target.representanteId == actorUid &&
+            target.gerenteId == '' &&
+            target.ownerId == (actorData['ownerId'] ?? '').toString();
+      }
+
+      return false;
     }
 
-    if (actorRole == 'representante') {
+    if (workspaceType == 'brand_owner_workspace' && actorRole == 'owner') {
+      return targetRole == 'gerente' && target.ownerId == actorUid;
+    }
+
+    if (workspaceType == 'brand_owner_workspace' && actorRole == 'gerente') {
+      return policy['allowManagerDisableRepresentative'] == true &&
+          targetRole == 'representante' &&
+          target.gerenteId == actorUid &&
+          target.ownerId == (actorData['ownerId'] ?? '').toString();
+    }
+
+    if (workspaceType == 'brand_owner_workspace' && actorRole == 'representante') {
       return policy['allowRepresentativeDisableSeller'] == true &&
-          targetRole == 'vendedor';
+          targetRole == 'vendedor' &&
+          target.representanteId == actorUid &&
+          target.gerenteId == (actorData['gerenteId'] ?? '').toString() &&
+          target.ownerId == (actorData['ownerId'] ?? '').toString();
     }
 
     return false;
