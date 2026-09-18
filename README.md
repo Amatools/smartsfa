@@ -31,3 +31,6 @@ O login e exclusivamente via Firebase Auth (Google ou e-mail/senha cadastrados n
 - `appdev.md`: board de execucao e proximas etapas.
 - `docs/guia_implementacao_saas.md`: referencia principal de arquitetura e regras.
 - `docs/auth_access_model.md`: modelo de login/autorizacao.
+
+
+flutter run -d chrome --web-port 43177 --target lib/main.dart

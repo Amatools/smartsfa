@@ -6,6 +6,7 @@ import 'package:smartsfa/src/core/data/in_memory/in_memory_cliente_repository.da
 import 'package:smartsfa/src/core/models/app_identity.dart';
 import 'package:smartsfa/src/core/models/cliente_pre_cadastro.dart';
 import 'package:smartsfa/src/core/models/domain_types.dart';
+import 'package:smartsfa/src/core/models/produto.dart';
 import 'package:smartsfa/src/core/services/offline_sync_queue.dart';
 import 'package:smartsfa/src/features/clientes/presentation/pages/clientes_page.dart';
 
@@ -80,5 +81,28 @@ void main() {
       tenantId: 'tenant-1',
     );
     expect(remaining, isEmpty);
+  });
+
+  test('produto keeps storage path metadata for thumbnail recovery after reopen', () {
+    final original = Produto(
+      id: 'prd-1',
+      tenantId: 'tenant-1',
+      codigoInterno: 'P-1',
+      descricao: 'Parafuso',
+      origemCadastro: ProductSource.manual,
+      status: ProductStatus.active,
+      fotoUrl: 'https://example.invalid/image.jpg',
+      storagePath: 'tenants/tenant-1/product_media/tenant_default/pma_123.jpg',
+      thumbnailBase64: 'dGVzdA==',
+    );
+
+    final map = original.toMap();
+    final restored = Produto.fromMap(map);
+
+    expect(map['storagePath'], 'tenants/tenant-1/product_media/tenant_default/pma_123.jpg');
+    expect(map['thumbnailBase64'], 'dGVzdA==');
+    expect(restored.storagePath, 'tenants/tenant-1/product_media/tenant_default/pma_123.jpg');
+    expect(restored.thumbnailBase64, 'dGVzdA==');
+    expect(restored.fotoUrl, 'https://example.invalid/image.jpg');
   });
 }

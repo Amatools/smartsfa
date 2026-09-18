@@ -8,6 +8,7 @@ import '../../../../core/models/app_identity.dart';
 import '../../../../core/models/tabela_preco.dart';
 import '../../../../core/models/tenant_entry_decision.dart';
 import '../../../../core/repositories/tabela_preco_repository.dart';
+import '../services/default_price_table_guard.dart';
 
 class TabelasPrecoPage extends StatelessWidget {
   const TabelasPrecoPage({
@@ -15,12 +16,14 @@ class TabelasPrecoPage extends StatelessWidget {
     required this.identity,
     required this.activeTenant,
     required this.repository,
+    this.selectedRepresentedCompanyId,
     this.activeRepresentedCompanyName,
   });
 
   final AppIdentity identity;
   final TenantEntryOption activeTenant;
   final TabelaPrecoRepository repository;
+  final String? selectedRepresentedCompanyId;
   final String? activeRepresentedCompanyName;
 
   @override
@@ -39,6 +42,53 @@ class TabelasPrecoPage extends StatelessWidget {
       initialData: const [],
       builder: (context, snapshot) {
         final tabelas = snapshot.data ?? const [];
+        DefaultPriceTableGuard.queueEnsureDefaultPriceTableIfMissing(
+          identity: identity,
+          activeTenant: activeTenant,
+          repository: repository,
+          allTables: tabelas,
+          selectedRepresentedCompanyId: selectedRepresentedCompanyId,
+          activeRepresentedCompanyName: activeRepresentedCompanyName,
+        );
+        DefaultPriceTableGuard.queueSyncDefaultPriceTableRowCount(
+          identity: identity,
+          activeTenant: activeTenant,
+          repository: repository,
+          allTables: tabelas,
+          selectedRepresentedCompanyId: selectedRepresentedCompanyId,
+          activeRepresentedCompanyName: activeRepresentedCompanyName,
+        );
+        final workspaceType = activeTenant.workspaceType.trim().toLowerCase();
+        final hasRepresentedContext = representedName.isNotEmpty;
+        final selectedRepresented = (selectedRepresentedCompanyId ?? '').trim();
+        final scopedTables = (workspaceType == 'rep_workspace' || hasRepresentedContext)
+            ? tabelas
+                .where(
+                  (tabela) {
+                    final isSystemDefault =
+                        tabela.origem.trim().toLowerCase() == 'system' &&
+                        tabela.nome.trim().toLowerCase() ==
+                            reservedSystemDefaultPriceTableName;
+                    if (!isSystemDefault) {
+                      return true;
+                    }
+                    final linked = (tabela.linkedEntityId ?? '').trim();
+                    final isTenantScoped = linked.isEmpty;
+                    if (isTenantScoped) {
+                      return false;
+                    }
+                    if (selectedRepresented.isEmpty) {
+                      return true;
+                    }
+                    return linked == selectedRepresented;
+                  },
+                )
+                .toList(growable: false)
+            : tabelas;
+        final visibleTabelas = DefaultPriceTableGuard.dedupeSystemDefaultTables(
+          scopedTables,
+          collapseRepresentedDefaults: hasRepresentedContext,
+        );
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -56,7 +106,7 @@ class TabelasPrecoPage extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'As tabelas sao separadas do modulo de produtos, mas podem compartilhar codigo interno e regras por cliente/regiao.',
+                      'As tabelas sao separadas do modulo de produtos e a vinculacao por cliente/regiao sera feita em tela dedicada.',
                     ),
                     const SizedBox(height: 12),
                     Wrap(
@@ -101,7 +151,7 @@ class TabelasPrecoPage extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 12),
-            if (tabelas.isEmpty)
+            if (visibleTabelas.isEmpty)
               const Card(
                 child: ListTile(
                   title: Text('Nenhuma tabela cadastrada'),
@@ -109,7 +159,7 @@ class TabelasPrecoPage extends StatelessWidget {
                 ),
               )
             else
-              ...tabelas.map((tabela) => _PriceTableCard(tabela: tabela)),
+              ...visibleTabelas.map((tabela) => _PriceTableCard(tabela: tabela)),
           ],
         );
       },
@@ -164,8 +214,6 @@ class _PriceTableCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scopeLabel = tabela.scopeLabel.trim().isEmpty ? 'Sem vinculo' : tabela.scopeLabel;
-
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Card(
@@ -173,11 +221,9 @@ class _PriceTableCard extends StatelessWidget {
           leading: const Icon(Icons.price_change_outlined),
           title: Text(tabela.nome),
           subtitle: Text(
-            '${_scopeLabel(tabela.scopeType)} · $scopeLabel\n'
             'Origem: ${tabela.origem} · Status: ${tabela.status}'
             '${tabela.rowCount != null ? ' · Itens: ${tabela.rowCount}' : ''}',
           ),
-          isThreeLine: true,
           trailing: Text(_formatDate(tabela.updatedAt)),
         ),
       ),
@@ -191,8 +237,6 @@ Future<void> _openCreateTableDialog(
   required TabelaPrecoRepository repository,
 }) async {
   final nameController = TextEditingController();
-  final scopeValueController = TextEditingController();
-  var scopeType = 'general';
 
   await showDialog<void>(
     context: context,
@@ -207,20 +251,29 @@ Future<void> _openCreateTableDialog(
               );
               return;
             }
+            if (name.toLowerCase() == reservedSystemDefaultPriceTableName) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text(
+                    '"Tabela padrao" e um nome reservado para a tabela automatica do sistema.',
+                  ),
+                ),
+              );
+              return;
+            }
 
-            final scopeValue = scopeValueController.text.trim();
             final now = DateTime.now().toUtc();
             final id = 'pt_${now.microsecondsSinceEpoch}';
             final tabela = TabelaPreco(
               id: id,
               tenantId: identity.tenantId,
               nome: name,
-              scopeType: scopeType,
-              scopeLabel: scopeValue,
-              scopeIndex: _buildScopeIndex(scopeType, scopeValue),
+              scopeType: 'general',
+              scopeLabel: '',
+              scopeIndex: const ['general'],
               origem: 'manual',
               status: 'ativo',
-              linkedEntityId: scopeValue,
+              linkedEntityId: null,
               createdAt: now,
               updatedAt: now,
             );
@@ -246,34 +299,7 @@ Future<void> _openCreateTableDialog(
                     controller: nameController,
                     decoration: const InputDecoration(
                       labelText: 'Nome da tabela',
-                      hintText: 'Ex.: Varejo SP 2026',
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    initialValue: scopeType,
-                    items: const [
-                      DropdownMenuItem(value: 'general', child: Text('Sem vinculo')),
-                      DropdownMenuItem(value: 'client', child: Text('Por cliente')),
-                      DropdownMenuItem(value: 'region', child: Text('Por regiao')),
-                      DropdownMenuItem(value: 'channel', child: Text('Por canal')),
-                    ],
-                    onChanged: (value) {
-                      if (value == null) {
-                        return;
-                      }
-                      setDialogState(() {
-                        scopeType = value;
-                      });
-                    },
-                    decoration: const InputDecoration(labelText: 'Escopo'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: scopeValueController,
-                    decoration: InputDecoration(
-                      labelText: 'Vinculo (opcional)',
-                      hintText: _scopeHint(scopeType),
+                      hintText: 'Ex.: Tabela Sul 2026',
                     ),
                   ),
                 ],
@@ -301,8 +327,6 @@ Future<void> _openImportSheet(
   required AppIdentity identity,
   required TabelaPrecoRepository repository,
 }) async {
-  var scopeType = 'general';
-  final scopeValueController = TextEditingController();
   PlatformFile? selectedFile;
   _PriceImportValidation? validation;
   var importing = false;
@@ -375,17 +399,28 @@ Future<void> _openImportSheet(
 
             try {
               final now = DateTime.now().toUtc();
-              final scopeValue = scopeValueController.text.trim();
+              final importedName = _buildImportedName(file.name);
+              if (importedName.trim().toLowerCase() ==
+                  reservedSystemDefaultPriceTableName) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      '"Tabela padrao" e reservado. Renomeie o arquivo antes de importar.',
+                    ),
+                  ),
+                );
+                return;
+              }
               final tabela = TabelaPreco(
                 id: 'pt_${now.microsecondsSinceEpoch}',
                 tenantId: identity.tenantId,
-                nome: _buildImportedName(file.name, scopeType),
-                scopeType: scopeType,
-                scopeLabel: scopeValue,
-                scopeIndex: _buildScopeIndex(scopeType, scopeValue),
+                nome: importedName,
+                scopeType: 'general',
+                scopeLabel: '',
+                scopeIndex: const ['general'],
                 origem: 'excel',
                 status: 'ativo',
-                linkedEntityId: scopeValue,
+                linkedEntityId: null,
                 fileName: file.name,
                 rowCount: report.rows,
                 createdAt: now,
@@ -428,33 +463,6 @@ Future<void> _openImportSheet(
                   const SizedBox(height: 8),
                   const Text(
                     'CSV e validado localmente por cabecalho (codigoInterno, preco). Arquivos XLS/XLSX sao aceitos e registrados para processamento no backend.',
-                  ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    initialValue: scopeType,
-                    items: const [
-                      DropdownMenuItem(value: 'general', child: Text('Sem vinculo')),
-                      DropdownMenuItem(value: 'client', child: Text('Por cliente')),
-                      DropdownMenuItem(value: 'region', child: Text('Por regiao')),
-                      DropdownMenuItem(value: 'channel', child: Text('Por canal')),
-                    ],
-                    onChanged: (value) {
-                      if (value == null) {
-                        return;
-                      }
-                      setSheetState(() {
-                        scopeType = value;
-                      });
-                    },
-                    decoration: const InputDecoration(labelText: 'Escopo da tabela'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: scopeValueController,
-                    decoration: InputDecoration(
-                      labelText: 'Vinculo (opcional)',
-                      hintText: _scopeHint(scopeType),
-                    ),
                   ),
                   const SizedBox(height: 12),
                   if (selectedFile != null)
@@ -599,35 +607,9 @@ String _decodeFile(Uint8List bytes) {
   }
 }
 
-String _scopeLabel(String scopeType) {
-  switch (scopeType) {
-    case 'client':
-      return 'Cliente';
-    case 'region':
-      return 'Regiao';
-    case 'channel':
-      return 'Canal';
-    default:
-      return 'Geral';
-  }
-}
-
-String _scopeHint(String scopeType) {
-  switch (scopeType) {
-    case 'client':
-      return 'Ex.: cliente_123';
-    case 'region':
-      return 'Ex.: SP, SUL, NORDESTE';
-    case 'channel':
-      return 'Ex.: atacado';
-    default:
-      return 'Opcional para tabela geral';
-  }
-}
-
-String _buildImportedName(String fileName, String scopeType) {
+String _buildImportedName(String fileName) {
   final stamp = DateTime.now().toIso8601String().substring(0, 10);
-  return 'Import $stamp (${_scopeLabel(scopeType)}) - $fileName';
+  return 'Import $stamp - $fileName';
 }
 
 String _formatDate(DateTime? value) {
@@ -642,23 +624,6 @@ String _formatDate(DateTime? value) {
   final hour = local.hour.toString().padLeft(2, '0');
   final minute = local.minute.toString().padLeft(2, '0');
   return '$day/$month/$year $hour:$minute';
-}
-
-List<String> _buildScopeIndex(String scopeType, String rawScopeValue) {
-  final cleaned = rawScopeValue.trim().toLowerCase();
-  if (cleaned.isEmpty) {
-    return [scopeType];
-  }
-
-  final separators = RegExp('[,;|/]');
-  final tokens = cleaned
-      .split(separators)
-      .map((item) => item.trim())
-      .where((item) => item.isNotEmpty)
-      .toSet()
-      .toList(growable: false);
-
-  return [scopeType, ...tokens];
 }
 
 String _detectSeparator(String line) {

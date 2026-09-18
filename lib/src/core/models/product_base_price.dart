@@ -9,6 +9,7 @@ class ProductBasePrice implements TenantScopedEntity {
     required this.regionId,
     required this.basePrice,
     required this.status,
+    this.currencyCode,
     this.validFrom,
     this.validUntil,
     this.createdAt,
@@ -24,6 +25,7 @@ class ProductBasePrice implements TenantScopedEntity {
       regionId: map['regionId'] as String? ?? '',
       basePrice: _readDouble(map['basePrice']) ?? 0,
       status: map['status'] as String? ?? 'active',
+      currencyCode: map['currencyCode'] as String?,
       validFrom: _readDateTime(map['validFrom']),
       validUntil: _readDateTime(map['validUntil']),
       createdAt: _readDateTime(map['createdAt']),
@@ -40,6 +42,7 @@ class ProductBasePrice implements TenantScopedEntity {
   final String regionId;
   final double basePrice;
   final String status;
+  final String? currencyCode;
   final DateTime? validFrom;
   final DateTime? validUntil;
   final DateTime? createdAt;
@@ -55,6 +58,7 @@ class ProductBasePrice implements TenantScopedEntity {
     String? regionId,
     double? basePrice,
     String? status,
+    String? currencyCode,
     DateTime? validFrom,
     DateTime? validUntil,
     DateTime? createdAt,
@@ -68,6 +72,7 @@ class ProductBasePrice implements TenantScopedEntity {
       regionId: regionId ?? this.regionId,
       basePrice: basePrice ?? this.basePrice,
       status: status ?? this.status,
+      currencyCode: currencyCode ?? this.currencyCode,
       validFrom: validFrom ?? this.validFrom,
       validUntil: validUntil ?? this.validUntil,
       createdAt: createdAt ?? this.createdAt,
@@ -84,6 +89,7 @@ class ProductBasePrice implements TenantScopedEntity {
       'regionId': regionId,
       'basePrice': basePrice,
       'status': status,
+      'currencyCode': currencyCode,
       'validFrom': validFrom?.toIso8601String(),
       'validUntil': validUntil?.toIso8601String(),
       'createdAt': createdAt?.toIso8601String(),

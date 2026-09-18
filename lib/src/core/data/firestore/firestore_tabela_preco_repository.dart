@@ -90,6 +90,13 @@ class FirestoreTabelaPrecoRepository implements TabelaPrecoRepository {
       return;
     }
 
+    final isProtectedDefault =
+        existing.origem.trim().toLowerCase() == 'system' &&
+        existing.nome.trim().toLowerCase() == 'tabela padrao';
+    if (isProtectedDefault) {
+      throw StateError('A tabela padrao do sistema nao pode ser excluida manualmente.');
+    }
+
     await _collection.doc(id).delete();
   }
 }

@@ -15,6 +15,8 @@ class SoloWorkspaceService {
     'cliente_pre_cadastros',
     'produtos',
   ];
+  static const String _defaultPriceRegionId = 'default';
+  static const String _defaultPriceTableName = 'Tabela padrao';
 
   Future<SoloWorkspaceResult> bootstrapOwnerWorkspace(User user) async {
     return createOwnerWorkspace(
@@ -144,6 +146,10 @@ class SoloWorkspaceService {
       uid: user.uid,
       selectedMembershipId: membershipId,
       selectedTenantId: tenantId,
+    );
+    await _bootstrapDefaultCatalogAndPricing(
+      tenantId: tenantId,
+      workspaceType: effectiveWorkspaceType,
     );
 
     return SoloWorkspaceResult(
@@ -306,12 +312,69 @@ class SoloWorkspaceService {
       );
     }
 
+    await _bootstrapDefaultCatalogAndPricing(
+      tenantId: targetTenantId,
+      workspaceType: WorkspaceType.repWorkspace,
+    );
+
     return UpgradeToRepResult(
       sourceTenantId: sourceTenantId,
       targetTenantId: targetTenantId,
       targetMembershipId: targetMembershipId,
       migratedScopedDocs: migratedScopedDocs,
       migratedTenantOnlyDocs: migratedTenantOnlyDocs,
+    );
+  }
+
+  Future<void> _bootstrapDefaultCatalogAndPricing({
+    required String tenantId,
+    required WorkspaceType workspaceType,
+  }) async {
+    final normalizedTenantId = tenantId.trim();
+    if (normalizedTenantId.isEmpty) {
+      return;
+    }
+
+    if (workspaceType == WorkspaceType.repWorkspace) {
+      return;
+    }
+
+    final defaultPriceTableId = 'pt_default_$normalizedTenantId';
+    const scopeKey = 'tenant_default';
+    final now = DateTime.now().toUtc().toIso8601String();
+
+    await _firestore.collection('tabelas_preco').doc(defaultPriceTableId).set(
+      {
+        'id': defaultPriceTableId,
+        'tenantId': normalizedTenantId,
+        'nome': _defaultPriceTableName,
+        'scopeType': 'general',
+        'scopeLabel': 'Tabela principal da conta',
+        'scopeIndex': const <String>['general', _defaultPriceRegionId],
+        'origem': 'system',
+        'status': 'ativo',
+        'linkedEntityId': null,
+        'rowCount': 0,
+        'createdAt': now,
+        'updatedAt': now,
+      },
+      SetOptions(merge: true),
+    );
+
+    await _firestore.collection('tenants').doc(normalizedTenantId).set(
+      {
+        'defaultPriceTableIds': {scopeKey: defaultPriceTableId},
+        'defaultPriceRegionIds': {scopeKey: _defaultPriceRegionId},
+        'defaultProductCatalogIds': {
+          scopeKey: 'products_default_${normalizedTenantId}_$scopeKey',
+        },
+        // Backward compatibility for legacy readers.
+        'defaultPriceTableId': defaultPriceTableId,
+        'defaultPriceRegionId': _defaultPriceRegionId,
+        'defaultProductCatalogId': 'products_default',
+        'updatedAt': FieldValue.serverTimestamp(),
+      },
+      SetOptions(merge: true),
     );
   }
 

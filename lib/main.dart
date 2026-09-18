@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 
 import 'firebase_options.dart';
+import 'src/shared/presentation/theme/app_field_tokens.dart';
 import 'src/features/auth/presentation/pages/firebase_auth_gate_page.dart';
 
 Future<void> main() async {
@@ -28,11 +29,42 @@ class SmartSfaApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final baseTheme = ThemeData(useMaterial3: true);
+    final sharpTextTheme = baseTheme.textTheme.apply(
+      fontFamily: 'Segoe UI',
+    ).copyWith(
+      bodyLarge: baseTheme.textTheme.bodyLarge?.copyWith(letterSpacing: -0.1),
+      bodyMedium: baseTheme.textTheme.bodyMedium?.copyWith(letterSpacing: -0.1),
+      bodySmall: baseTheme.textTheme.bodySmall?.copyWith(letterSpacing: -0.1),
+      titleMedium: baseTheme.textTheme.titleMedium?.copyWith(
+        letterSpacing: -0.1,
+        fontWeight: FontWeight.w600,
+      ),
+      labelLarge: baseTheme.textTheme.labelLarge?.copyWith(
+        letterSpacing: -0.05,
+        fontWeight: FontWeight.w600,
+      ),
+    );
+
     return MaterialApp(
       title: 'SmartSFA',
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF0B5D4B)),
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFF0175C2),
+        ).copyWith(
+          primary: const Color(0xFF0175C2),
+          secondary: const Color(0xFF13B9FD),
+        ),
         useMaterial3: true,
+        fontFamily: 'Segoe UI',
+        textTheme: sharpTextTheme,
+        inputDecorationTheme: const InputDecorationTheme(
+          isDense: true,
+          contentPadding: AppFieldTokens.mediumFieldContentPadding,
+          border: OutlineInputBorder(
+            borderRadius: AppFieldTokens.mediumFieldRadius,
+          ),
+        ),
       ),
       home: kIsWeb ? const FirebaseAuthGatePage() : const SplashFlowPage(),
     );

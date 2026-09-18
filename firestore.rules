@@ -573,11 +573,13 @@ service cloud.firestore {
         || isPersonalWorkspaceTenant(tenantId)
         || (
           hasActiveMembership(tenantId)
-          && !tenantProductSyncFromErpEnabled(tenantId)
+          && (!isBrandOwnerWorkspace(tenantId)
+            || !tenantProductSyncFromErpEnabled(tenantId))
           && (
             (isBrandOwnerWorkspace(tenantId) && isTenantOwner(tenantId))
             || isRepWorkspace(tenantId)
-            || (isSellerSoloWorkspace(tenantId) && isTenantVendedor(tenantId))
+            || (isSellerSoloWorkspace(tenantId)
+              && hasTenantRoleIn(tenantId, ['owner', 'vendedor']))
           )
         );
     }
@@ -592,7 +594,7 @@ service cloud.firestore {
               && (isTenantOwner(tenantId) || isTenantGerente(tenantId)))
             || isRepWorkspace(tenantId)
             || (isSellerSoloWorkspace(tenantId)
-              && isTenantVendedor(tenantId))
+              && hasTenantRoleIn(tenantId, ['owner', 'vendedor']))
           )
         );
     }
@@ -984,9 +986,23 @@ service cloud.firestore {
         && canManageProductCatalogWrite(resource.data.tenantId);
     }
 
+    match /product_media_assets/{assetId} {
+      allow read: if canReadTenantBoundDocument(resource.data);
+
+      allow create: if hasTenantField(request.resource.data)
+        && canManageProductCatalogWrite(request.resource.data.tenantId);
+
+      allow update: if hasTenantField(request.resource.data)
+        && resource.data.tenantId == request.resource.data.tenantId
+        && canManageProductCatalogWrite(request.resource.data.tenantId);
+
+      allow delete: if hasTenantField(resource.data)
+        && canManageProductCatalogWrite(resource.data.tenantId);
+    }
+
     match /tenant_counters/{tenantId} {
       allow read: if signedIn()
-        && resource.data.tenantId == tenantId
+        && (resource == null || resource.data.tenantId == tenantId)
         && canReadTenantDocument(tenantId);
 
       allow create: if signedIn()

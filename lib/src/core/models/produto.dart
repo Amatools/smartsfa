@@ -10,6 +10,8 @@ class Produto implements TenantScopedEntity {
     required this.origemCadastro,
     required this.status,
     this.fotoUrl,
+    this.storagePath,
+    this.thumbnailBase64,
     this.descricaoResumida,
     this.descricaoLonga,
     this.codigoFabricante,
@@ -21,6 +23,7 @@ class Produto implements TenantScopedEntity {
     this.colecao,
     this.bitola,
     this.bitolaUnidade,
+    this.moeda,
     this.comprimentoMm,
     this.larguraMm,
     this.alturaMm,
@@ -57,6 +60,8 @@ class Produto implements TenantScopedEntity {
         map['status'] as String? ?? ProductStatus.active.value,
       ),
       fotoUrl: map['fotoUrl'] as String?,
+      storagePath: map['storagePath'] as String?,
+      thumbnailBase64: map['thumbnailBase64'] as String?,
       descricaoResumida: map['descricaoResumida'] as String?,
       descricaoLonga: map['descricaoLonga'] as String? ?? map['descricaoResumida'] as String?,
       codigoFabricante: map['codigoFabricante'] as String?,
@@ -68,6 +73,7 @@ class Produto implements TenantScopedEntity {
       colecao: map['colecao'] as String?,
       bitola: map['bitola'] as String?,
       bitolaUnidade: map['bitolaUnidade'] as String?,
+      moeda: map['moeda'] as String?,
       comprimentoMm: _readDouble(map['comprimentoMm']),
       larguraMm: _readDouble(map['larguraMm']),
       alturaMm: _readDouble(map['alturaMm']),
@@ -101,6 +107,8 @@ class Produto implements TenantScopedEntity {
   final ProductSource origemCadastro;
   final ProductStatus status;
   final String? fotoUrl;
+  final String? storagePath;
+  final String? thumbnailBase64;
   final String? descricaoResumida;
   final String? descricaoLonga;
   final String? codigoFabricante;
@@ -112,6 +120,7 @@ class Produto implements TenantScopedEntity {
   final String? colecao;
   final String? bitola;
   final String? bitolaUnidade;
+  final String? moeda;
   final double? comprimentoMm;
   final double? larguraMm;
   final double? alturaMm;
@@ -142,6 +151,8 @@ class Produto implements TenantScopedEntity {
     ProductSource? origemCadastro,
     ProductStatus? status,
     String? fotoUrl,
+    String? storagePath,
+    String? thumbnailBase64,
     String? descricaoResumida,
     String? descricaoLonga,
     String? codigoFabricante,
@@ -153,6 +164,7 @@ class Produto implements TenantScopedEntity {
     String? colecao,
     String? bitola,
     String? bitolaUnidade,
+    String? moeda,
     double? comprimentoMm,
     double? larguraMm,
     double? alturaMm,
@@ -183,6 +195,8 @@ class Produto implements TenantScopedEntity {
       origemCadastro: origemCadastro ?? this.origemCadastro,
       status: status ?? this.status,
       fotoUrl: fotoUrl ?? this.fotoUrl,
+      storagePath: storagePath ?? this.storagePath,
+      thumbnailBase64: thumbnailBase64 ?? this.thumbnailBase64,
       descricaoResumida: descricaoResumida ?? this.descricaoResumida,
       descricaoLonga: descricaoLonga ?? this.descricaoLonga,
       codigoFabricante: codigoFabricante ?? this.codigoFabricante,
@@ -194,6 +208,7 @@ class Produto implements TenantScopedEntity {
       colecao: colecao ?? this.colecao,
       bitola: bitola ?? this.bitola,
       bitolaUnidade: bitolaUnidade ?? this.bitolaUnidade,
+      moeda: moeda ?? this.moeda,
       comprimentoMm: comprimentoMm ?? this.comprimentoMm,
       larguraMm: larguraMm ?? this.larguraMm,
       alturaMm: alturaMm ?? this.alturaMm,
@@ -227,6 +242,8 @@ class Produto implements TenantScopedEntity {
       'origemCadastro': origemCadastro.value,
       'status': status.value,
       'fotoUrl': fotoUrl,
+      'storagePath': storagePath,
+      'thumbnailBase64': thumbnailBase64,
       'descricaoResumida': descricaoResumida,
       'descricaoLonga': descricaoLonga,
       'codigoFabricante': codigoFabricante,
@@ -238,6 +255,7 @@ class Produto implements TenantScopedEntity {
       'colecao': colecao,
       'bitola': bitola,
       'bitolaUnidade': bitolaUnidade,
+      'moeda': moeda,
       'comprimentoMm': comprimentoMm,
       'larguraMm': larguraMm,
       'alturaMm': alturaMm,
