@@ -6,28 +6,21 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-import '../core/data/firestore/firestore_cliente_pre_cadastro_repository.dart';
-import '../core/data/firestore/firestore_cliente_repository.dart';
-import '../core/data/firestore/firestore_mock_seed_service.dart';
-import '../core/data/firestore/firestore_pedido_repository.dart';
-import '../core/data/firestore/firestore_produto_repository.dart';
-import '../core/data/in_memory/demo_workspace.dart';
-import '../core/diagnostics/app_diagnostics.dart';
 import '../core/models/app_identity.dart';
-import '../core/models/cliente.dart';
-import '../core/models/cliente_pre_cadastro.dart';
-import '../core/repositories/cliente_pre_cadastro_repository.dart';
-import '../core/services/offline_sync_queue.dart';
-import '../core/repositories/cliente_repository.dart';
-import '../core/repositories/pedido_repository.dart';
-import '../core/repositories/produto_repository.dart';
-import '../features/auth/presentation/pages/account_settings_page.dart';
-import '../features/clientes/presentation/pages/clientes_page.dart';
-import '../features/notificacoes/presentation/pages/notificacoes_page.dart';
-import '../features/pedidos/presentation/pages/pedidos_page.dart';
-import '../features/produtos/presentation/pages/produtos_page.dart';
 import '../features/portal/presentation/pages/web_portal_page.dart';
-import '../features/tenant/presentation/pages/tenant_admin_page.dart';
+import 'models/app_shell_item.dart';
+import 'models/app_shell_repository_bundle.dart';
+import 'models/app_shell_scaffold_payload.dart';
+import 'models/app_shell_selection.dart';
+import 'models/app_shell_view_state.dart';
+import 'services/app_shell_connectivity_coordinator.dart';
+import 'services/app_shell_mock_seed_coordinator.dart';
+import 'services/app_shell_navigation_factory.dart';
+import 'services/app_shell_offline_sync_coordinator.dart';
+import 'services/app_shell_repository_bootstrap_coordinator.dart';
+import 'services/app_shell_selection_coordinator.dart';
+import 'services/app_shell_view_state_coordinator.dart';
+import 'widgets/app_shell_scaffold.dart';
 
 class AppShellPage extends StatefulWidget {
   const AppShellPage({
@@ -57,27 +50,44 @@ class _AppShellPageState extends State<AppShellPage> {
     defaultValue: false,
   );
 
-  int _selectedIndex = 0;
-  DemoWorkspace? _workspace;
-  late final ClienteRepository _clienteRepository;
-  late final ClientePreCadastroRepository _preCadastroRepository;
-  late final ProdutoRepository _produtoRepository;
-  late final PedidoRepository _pedidoRepository;
+  AppShellViewState _viewState = AppShellViewState.initial();
   final Connectivity _connectivity = Connectivity();
-  bool _syncInProgress = false;
-  bool _usingLocalFallback = false;
   StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
+  final AppShellNavigationFactory _navigationFactory =
+      const AppShellNavigationFactory();
+  final AppShellOfflineSyncCoordinator _offlineSyncCoordinator =
+      const AppShellOfflineSyncCoordinator();
+  final AppShellRepositoryBootstrapCoordinator _repositoryBootstrapCoordinator =
+      const AppShellRepositoryBootstrapCoordinator();
+  final AppShellConnectivityCoordinator _connectivityCoordinator =
+      const AppShellConnectivityCoordinator();
+  final AppShellMockSeedCoordinator _mockSeedCoordinator =
+      const AppShellMockSeedCoordinator();
+  final AppShellSelectionCoordinator _selectionCoordinator =
+      const AppShellSelectionCoordinator();
+  final AppShellViewStateCoordinator _viewStateCoordinator =
+      const AppShellViewStateCoordinator();
+
+  AppShellRepositoryBundle? get _repositoryBundle =>
+      _viewState.repositoryBundle;
+  bool get _usingLocalFallback =>
+      _repositoryBundle?.usingLocalFallback ?? false;
+
+  void _updateViewState(
+    AppShellViewState Function(AppShellViewState state) update,
+  ) {
+    setState(() {
+      _viewState = update(_viewState);
+    });
+  }
 
   @override
   void initState() {
     super.initState();
-    _connectivitySubscription = _connectivity.onConnectivityChanged.listen((results) {
-      if (results.contains(ConnectivityResult.none)) {
-        return;
-      }
-
-      _syncOfflineQueueIfOnline();
-    });
+    _connectivitySubscription = _connectivityCoordinator.watchOnlineChanges(
+      connectivity: _connectivity,
+      onOnline: _syncOfflineQueueIfOnline,
+    );
     _initializeRepositories();
   }
 
@@ -88,270 +98,129 @@ class _AppShellPageState extends State<AppShellPage> {
   }
 
   Future<void> _initializeRepositories() async {
-    final shouldUseLocalFallback =
-      !kIsWeb && _enableLocalMockFallback && widget.identity.isMock;
-
-    if (shouldUseLocalFallback) {
-      _usingLocalFallback = true;
-      _workspace = DemoWorkspace.seeded(widget.identity);
-      _clienteRepository = _workspace!.clientes;
-      _preCadastroRepository = _workspace!.preCadastros;
-      _produtoRepository = _workspace!.produtos;
-      _pedidoRepository = _workspace!.pedidos;
-      if (mounted) {
-        setState(() {});
-      }
+    final AppShellRepositoryBundle repositoryBundle =
+        _repositoryBootstrapCoordinator.build(
+          identity: widget.identity,
+          isWeb: kIsWeb,
+          enableLocalMockFallback: _enableLocalMockFallback,
+          firestore: FirebaseFirestore.instance,
+        );
+    if (!mounted) {
       return;
     }
 
-    final firestore = FirebaseFirestore.instance;
-  _usingLocalFallback = false;
-    _clienteRepository = FirestoreClienteRepository(firestore);
-    _preCadastroRepository = FirestoreClientePreCadastroRepository(firestore);
-    _produtoRepository = FirestoreProdutoRepository(firestore);
-    _pedidoRepository = FirestorePedidoRepository(firestore);
+    _updateViewState(
+      (state) => _viewStateCoordinator.applyRepositoryBundle(
+        state: state,
+        bundle: repositoryBundle,
+      ),
+    );
+
+    if (repositoryBundle.usingLocalFallback) {
+      return;
+    }
+
     _seedFirestoreMocksIfNeeded();
     _syncOfflineQueueIfOnline();
   }
 
   Future<void> _syncOfflineQueueIfOnline() async {
-    if (_syncInProgress) {
+    final repositoryBundle = _repositoryBundle;
+    if (repositoryBundle == null || _viewState.syncInProgress) {
       return;
     }
 
-    final connectivity = await Connectivity().checkConnectivity();
-    final hasConnection = connectivity.contains(ConnectivityResult.none) == false;
+    final hasConnection = await _connectivityCoordinator.hasConnection(
+      _connectivity,
+    );
     if (!hasConnection) {
       return;
     }
 
-    _syncInProgress = true;
+    _updateViewState(_viewStateCoordinator.beginSync);
     try {
-      final pending = await OfflineSyncQueue.readAll();
-      final pendingDeletesPreview = await OfflineSyncQueue.readPendingDeletes();
-      if (pending.isEmpty && pendingDeletesPreview.isEmpty) {
-        return;
-      }
-
-      for (final item in pending) {
-        if (item.synced) {
-          continue;
-        }
-
-        if (item.type == 'cliente_pre_cadastro') {
-          try {
-            final payload = item.payloadMap;
-            final entity = ClientePreCadastro.fromMap(payload);
-            if (entity.tenantId == widget.identity.tenantId ||
-                widget.identity.isPersonalWorkspace) {
-              await _preCadastroRepository.save(entity);
-              await OfflineSyncQueue.markSynced(item.id);
-            }
-          } catch (error, stackTrace) {
-            AppDiagnostics.log(
-              tag: 'app_shell.sync.pre_cadastro',
-              message: 'Falha ao sincronizar pré-cadastro em segundo plano.',
-              error: error,
-              stackTrace: stackTrace,
-            );
-            // keep pending until the next sync pass.
-          }
-        } else if (item.type == 'cliente') {
-          try {
-            final payload = item.payloadMap;
-            final entity = Cliente.fromMap(payload);
-            if (entity.tenantId == widget.identity.tenantId ||
-                widget.identity.isPersonalWorkspace) {
-              await _clienteRepository.save(entity);
-              await OfflineSyncQueue.markSynced(item.id);
-            }
-          } catch (error, stackTrace) {
-            AppDiagnostics.log(
-              tag: 'app_shell.sync.cliente',
-              message: 'Falha ao sincronizar cliente em segundo plano.',
-              error: error,
-              stackTrace: stackTrace,
-            );
-            // keep pending until the next sync pass.
-          }
-        }
-      }
-
-      // Also retry any pending local deletes (tombstones): a delete that
-      // failed remotely earlier (offline, transient error, permission
-      // mismatch) must keep being retried in the background too, not only
-      // when the user manually presses "Sincronizar agora" on the Clientes
-      // screen — otherwise it stays excluded locally forever while still
-      // existing on the server.
-      for (final tombstone in pendingDeletesPreview) {
-        final type = tombstone['type']?.toString();
-        final id = tombstone['id']?.toString() ?? '';
-        final tenantId = tombstone['tenantId']?.toString() ?? '';
-        if (id.isEmpty) {
-          continue;
-        }
-        if (tenantId != widget.identity.tenantId &&
-            !widget.identity.isPersonalWorkspace) {
-          continue;
-        }
-
-        try {
-          if (type == 'cliente_pre_cadastro') {
-            await _preCadastroRepository.delete(tenantId: tenantId, id: id);
-            await OfflineSyncQueue.clearTombstone(id);
-          } else if (type == 'cliente') {
-            await _clienteRepository.delete(tenantId: tenantId, id: id);
-            await OfflineSyncQueue.clearTombstone(id);
-          }
-        } catch (error, stackTrace) {
-          AppDiagnostics.log(
-            tag: 'app_shell.sync.delete_retry',
-            message: 'Falha ao confirmar exclusão remota de $type/$id em segundo plano.',
-            error: error,
-            stackTrace: stackTrace,
-          );
-          // keep the tombstone until the next sync pass.
-        }
-      }
+      await _offlineSyncCoordinator.syncPendingChanges(
+        identity: widget.identity,
+        clienteRepository: repositoryBundle.clienteRepository,
+        preCadastroRepository: repositoryBundle.preCadastroRepository,
+      );
     } finally {
-      _syncInProgress = false;
+      if (mounted) {
+        _updateViewState(_viewStateCoordinator.endSync);
+      }
     }
   }
 
   Future<void> _seedFirestoreMocksIfNeeded() async {
-    if (!kDebugMode || !_enableFirestoreMockSeed) {
+    final feedbackMessage = await _mockSeedCoordinator.seedIfNeeded(
+      isDebugMode: kDebugMode,
+      enableFirestoreMockSeed: _enableFirestoreMockSeed,
+      identity: widget.identity,
+      firestore: FirebaseFirestore.instance,
+      actorUid: FirebaseAuth.instance.currentUser?.uid,
+    );
+    if (feedbackMessage == null || !mounted) {
       return;
     }
 
-    final role = widget.identity.role.trim().toLowerCase();
-    if (role != 'owner' && role != 'platform_admin') {
-      return;
-    }
-
-    final actorUid = FirebaseAuth.instance.currentUser?.uid;
-    if (actorUid == null || actorUid.isEmpty) {
-      return;
-    }
-
-    try {
-      final seedService = FirestoreMockSeedService(FirebaseFirestore.instance);
-      final result = await seedService.seedIfEmpty(
-        identity: widget.identity,
-        actorUid: actorUid,
-      );
-
-      if (!mounted || !result.anySeeded) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
         return;
       }
 
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) {
-          return;
-        }
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Mock no banco carregado: ${result.seededClientes} clientes, '
-              '${result.seededProdutos} produtos, ${result.seededPedidos} pedidos.',
-            ),
-          ),
-        );
-      });
-    } catch (error, stackTrace) {
-      AppDiagnostics.log(
-        tag: 'app_shell.seed_mocks',
-        message: 'Falha ao carregar dados de exemplo (mock) no Firestore.',
-        error: error,
-        stackTrace: stackTrace,
-      );
-      // Seeding is best-effort for dev bootstrap only.
-    }
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(feedbackMessage)));
+    });
   }
 
-  List<_ShellItem> _buildItems(String role) {
-    final normalizedRole = role.toLowerCase().replaceAll(' ', '_');
-    final items = <_ShellItem>[
-      _ShellItem(
-        label: 'Dashboard',
-        icon: Icons.space_dashboard_outlined,
-        builder: (context, identity) => _DashboardPage(
-          identity: identity,
-          usingLocalFallback: _usingLocalFallback,
-        ),
-      ),
-      _ShellItem(
-        label: 'Clientes',
-        icon: Icons.people_outline,
-        builder: (context, identity) => ClientesPage(
-          identity: identity,
-          repository: _clienteRepository,
-          preCadastroRepository: _preCadastroRepository,
-        ),
-      ),
-      _ShellItem(
-        label: 'Produtos',
-        icon: Icons.inventory_2_outlined,
-        builder: (context, identity) =>
-            ProdutosPage(identity: identity, repository: _produtoRepository),
-      ),
-      _ShellItem(
-        label: 'Pedidos',
-        icon: Icons.receipt_long_outlined,
-        builder: (context, identity) =>
-            PedidosPage(identity: identity, repository: _pedidoRepository),
-      ),
-      _ShellItem(
-        label: 'Avisos',
-        icon: Icons.notifications_none,
-        builder: (context, identity) => NotificacoesPage(
-          identity: identity,
-          onAccessUpdated: widget.onAccessUpdated,
-        ),
-      ),
-      _ShellItem(
-        label: 'Conta',
-        icon: Icons.manage_accounts_outlined,
-        builder: (context, identity) => AccountSettingsPage(
-          identity: identity,
-          onAccessUpdated: widget.onAccessUpdated,
-        ),
-      ),
-    ];
-
-    if (normalizedRole == 'platform_admin' ||
-        normalizedRole == 'owner' ||
-        normalizedRole == 'gerente' ||
-        normalizedRole == 'representante') {
-      items.add(
-        _ShellItem(
-          label: 'Tenant',
-          icon: Icons.business_outlined,
-          builder: (context, identity) => TenantAdminPage(identity: identity),
-        ),
-      );
+  List<AppShellItem> _buildItems() {
+    final repositoryBundle = _repositoryBundle;
+    if (repositoryBundle == null) {
+      return const <AppShellItem>[];
     }
 
-    if (normalizedRole == 'platform_admin') {
-      items.add(
-        _ShellItem(
-          label: 'Plataforma',
-          icon: Icons.admin_panel_settings_outlined,
-          builder: (context, identity) => _ModulePage(
-            title: 'Plataforma',
-            subtitle:
-                'Visao global do SaaS para onboarding, governanca e suporte.',
-            bullets: const [
-              'Gestao de tenants',
-              'Ambientes e recursos',
-              'Observabilidade e suporte',
-            ],
-          ),
-        ),
-      );
-    }
+    return _navigationFactory.buildItems(
+      role: widget.identity.role,
+      usingLocalFallback: _usingLocalFallback,
+      clienteRepository: repositoryBundle.clienteRepository,
+      preCadastroRepository: repositoryBundle.preCadastroRepository,
+      produtoRepository: repositoryBundle.produtoRepository,
+      pedidoRepository: repositoryBundle.pedidoRepository,
+      onAccessUpdated: widget.onAccessUpdated,
+    );
+  }
 
-    return items;
+  void _setSelectedIndex(int index) {
+    _updateViewState(
+      (state) => _viewStateCoordinator.applySelectedIndex(
+        state: state,
+        selectedIndex: index,
+      ),
+    );
+  }
+
+  void _normalizeSelectedIndexAfterBuild(int normalizedIndex) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      _setSelectedIndex(normalizedIndex);
+    });
+  }
+
+  AppShellScaffoldPayload _buildScaffoldPayload({
+    required List<AppShellItem> items,
+    required AppShellSelection selection,
+  }) {
+    return AppShellScaffoldPayload(
+      identity: widget.identity,
+      items: items,
+      selectedIndex: selection.safeIndex,
+      selectedItem: selection.selectedItem,
+      onDestinationSelected: _setSelectedIndex,
+      onSignOut: widget.onSignOut,
+      onSwitchProfile: widget.onSwitchProfile,
+    );
   }
 
   @override
@@ -363,254 +232,34 @@ class _AppShellPageState extends State<AppShellPage> {
       );
     }
 
-    final items = _buildItems(widget.identity.role);
-    final safeIndex = _selectedIndex.clamp(0, items.length - 1);
-    final selected = items[safeIndex];
-
-    if (safeIndex != _selectedIndex) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) {
-          return;
-        }
-        setState(() {
-          _selectedIndex = safeIndex;
-        });
-      });
+    if (!_viewState.hasRepositories) {
+      return const Scaffold(
+        body: SafeArea(child: Center(child: CircularProgressIndicator())),
+      );
     }
 
-    final isWide = MediaQuery.sizeOf(context).width >= 900;
+    final items = _buildItems();
+    final AppShellSelection? selection = _selectionCoordinator.resolve(
+      selectedIndex: _viewState.selectedIndex,
+      items: items,
+    );
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(selected.label),
-        actions: [
-          if (widget.onSwitchProfile != null)
-            IconButton(
-              onPressed: widget.onSwitchProfile,
-              icon: const Icon(Icons.swap_horiz),
-              tooltip: 'Trocar perfil',
-            ),
-          IconButton(
-            onPressed: widget.onSignOut,
-            icon: const Icon(Icons.logout),
-            tooltip: 'Sair',
+    if (selection == null) {
+      return const Scaffold(
+        body: SafeArea(
+          child: Center(
+            child: Text('Nenhum modulo disponivel para este perfil.'),
           ),
-        ],
-      ),
-      body: SafeArea(
-        child: isWide
-            ? Row(
-                children: [
-                  NavigationRail(
-                    selectedIndex: safeIndex,
-                    onDestinationSelected: (index) {
-                      setState(() {
-                        _selectedIndex = index;
-                      });
-                    },
-                    labelType: NavigationRailLabelType.all,
-                    destinations: items
-                        .map(
-                          (item) => NavigationRailDestination(
-                            icon: Icon(item.icon),
-                            label: Text(item.label),
-                          ),
-                        )
-                        .toList(),
-                  ),
-                  const VerticalDivider(width: 1),
-                  Expanded(child: selected.builder(context, widget.identity)),
-                ],
-              )
-            : Column(
-                children: [
-                  Expanded(child: selected.builder(context, widget.identity)),
-                ],
-              ),
-      ),
-      bottomNavigationBar: isWide
-          ? null
-          : NavigationBar(
-              selectedIndex: safeIndex,
-              onDestinationSelected: (index) {
-                setState(() {
-                  _selectedIndex = index;
-                });
-              },
-              destinations: items
-                  .map(
-                    (item) => NavigationDestination(
-                      icon: Icon(item.icon),
-                      label: item.label,
-                    ),
-                  )
-                  .toList(),
-            ),
-    );
-  }
-
-}
-
-class _ShellItem {
-  const _ShellItem({
-    required this.label,
-    required this.icon,
-    required this.builder,
-  });
-
-  final String label;
-  final IconData icon;
-  final Widget Function(BuildContext context, AppIdentity identity) builder;
-}
-
-class _DashboardPage extends StatelessWidget {
-  const _DashboardPage({
-    required this.identity,
-    required this.usingLocalFallback,
-  });
-
-  final AppIdentity identity;
-  final bool usingLocalFallback;
-
-  @override
-  Widget build(BuildContext context) {
-    final cards = [
-      ('Tenant', identity.tenantName),
-      ('Usuario', identity.userLabel),
-      ('Perfil', identity.role),
-      (
-        'Conexao',
-        usingLocalFallback ? 'Local mock / fallback' : 'Firebase autenticado',
-      ),
-    ];
-
-    return SingleChildScrollView(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Painel inicial',
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Shell base do Smart SFA preparada para multi-tenant, navegacao por perfil e evolucao modular.',
-              style: Theme.of(context).textTheme.bodyLarge,
-            ),
-            const SizedBox(height: 16),
-            Column(
-              children: cards
-                  .map(
-                    (entry) => Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  entry.$1,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .titleMedium,
-                                ),
-                              ),
-                              Flexible(
-                                child: Text(entry.$2, textAlign: TextAlign.end),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  )
-                  .toList(),
-            ),
-            const SizedBox(height: 16),
-            const _StageCard(
-              title: 'Proxima entrega',
-              lines: [
-                'Refatorar dados para tenants e memberships',
-                'Criar navegacao funcional por modulo',
-                'Mostrar listas reais de clientes, produtos e pedidos',
-              ],
-            ),
-          ],
         ),
-      ),
-    );
-  }
-}
+      );
+    }
 
-class _ModulePage extends StatelessWidget {
-  const _ModulePage({
-    required this.title,
-    required this.subtitle,
-    required this.bullets,
-  });
+    if (selection.shouldNormalizeIndex) {
+      _normalizeSelectedIndexAfterBuild(selection.safeIndex);
+    }
 
-  final String title;
-  final String subtitle;
-  final List<String> bullets;
-
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: Theme.of(context).textTheme.headlineSmall),
-            const SizedBox(height: 8),
-            Text(subtitle, style: Theme.of(context).textTheme.bodyLarge),
-            const SizedBox(height: 16),
-            _StageCard(title: 'Escopo inicial', lines: bullets),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _StageCard extends StatelessWidget {
-  const _StageCard({required this.title, required this.lines});
-
-  final String title;
-  final List<String> lines;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 12),
-            ...lines.map(
-              (line) => Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Padding(
-                      padding: EdgeInsets.only(top: 6, right: 8),
-                      child: Icon(Icons.circle, size: 8),
-                    ),
-                    Expanded(child: Text(line)),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
+    return AppShellScaffold(
+      payload: _buildScaffoldPayload(items: items, selection: selection),
     );
   }
 }

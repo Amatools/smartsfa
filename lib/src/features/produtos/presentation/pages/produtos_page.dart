@@ -14,26 +14,19 @@ import '../../../../shared/presentation/state/mounted_state_mixin.dart';
 import '../../../auth/services/workspace_profile_service.dart';
 import '../../../precos/presentation/services/default_price_table_guard.dart';
 import '../services/product_catalog_async_flow_coordinator.dart';
+import '../services/product_catalog_defaults.dart';
 import '../services/product_catalog_editor_action_coordinator.dart';
 import '../services/product_catalog_editor_state_coordinator.dart';
 import '../services/product_catalog_erp_disable_flow_coordinator.dart';
 import '../services/product_catalog_erp_products_deactivation_coordinator.dart';
 import '../services/product_catalog_feedback.dart';
+import '../services/product_catalog_page_state_coordinator.dart';
 import '../services/product_catalog_page_view_state.dart';
+import '../services/product_catalog_workspace_payload.dart';
 import '../services/product_list_price_formatter.dart';
 import '../widgets/disable_erp_sync_dialog.dart';
 import '../widgets/product_catalog_workspace_section.dart';
 import '../widgets/product_import_sheet.dart';
-
-const String _defaultCurrencyCode = 'BRL';
-
-const Map<String, String> _currencyLabels = <String, String>{
-  'BRL': 'R\$',
-  'USD': 'US\$',
-  'EUR': 'EUR',
-};
-
-const String _unknownErrorMessage = 'erro desconhecido';
 
 class ProdutosPage extends StatefulWidget {
   const ProdutosPage({
@@ -65,6 +58,8 @@ class _ProdutosPageState extends State<ProdutosPage>
   final ProductCatalogErpProductsDeactivationCoordinator
   _erpProductsDeactivationCoordinator =
       const ProductCatalogErpProductsDeactivationCoordinator();
+  final ProductCatalogPageStateCoordinator _pageStateCoordinator =
+      const ProductCatalogPageStateCoordinator();
   late final TabelaPrecoRepository? _priceTableRepository;
   late final ProductBasePriceRepository? _basePriceRepository;
 
@@ -99,16 +94,20 @@ class _ProdutosPageState extends State<ProdutosPage>
 
   void _setCatalogEditorState(ProductCatalogEditorState state) {
     _updateCatalogState(
-      (currentState) => currentState.withEditorState(
-        editingProduto: state.editingProduto,
-        editorOpen: state.editorOpen,
-        brandFilter: state.brandFilter,
+      (currentState) => _pageStateCoordinator.applyEditorState(
+        currentState: currentState,
+        editorState: state,
       ),
     );
   }
 
   void _setCatalogBrandFilter(String value) {
-    _updateCatalogState((state) => state.withBrandFilter(value));
+    _updateCatalogState(
+      (state) => _pageStateCoordinator.applyBrandFilter(
+        currentState: state,
+        brandFilter: value,
+      ),
+    );
   }
 
   void _openImportSheet() {
@@ -121,19 +120,28 @@ class _ProdutosPageState extends State<ProdutosPage>
 
   void _setErpSyncUpdating(bool isLoading) {
     _updateCatalogStateIfMounted(
-      (state) => state.withUpdatingErpSync(isLoading),
+      (state) => _pageStateCoordinator.applyErpSyncLoading(
+        currentState: state,
+        isLoading: isLoading,
+      ),
     );
   }
 
   void _addUpdatingStatusProductId(String productId) {
     _updateCatalogState(
-      (state) => state.withAddedUpdatingStatusProductId(productId),
+      (state) => _pageStateCoordinator.addUpdatingStatusProductId(
+        currentState: state,
+        productId: productId,
+      ),
     );
   }
 
   void _removeUpdatingStatusProductId(String productId) {
     _updateCatalogStateIfMounted(
-      (state) => state.withRemovedUpdatingStatusProductId(productId),
+      (state) => _pageStateCoordinator.removeUpdatingStatusProductId(
+        currentState: state,
+        productId: productId,
+      ),
     );
   }
 
@@ -233,8 +241,8 @@ class _ProdutosPageState extends State<ProdutosPage>
   String _formatCatalogPrice(Produto produto) {
     return ProductListPriceFormatter.format(
       produto,
-      defaultCurrencyCode: _defaultCurrencyCode,
-      currencyLabels: _currencyLabels,
+      defaultCurrencyCode: ProductCatalogDefaults.defaultCurrencyCode,
+      currencyLabels: ProductCatalogDefaults.currencyLabels,
     );
   }
 
@@ -278,12 +286,11 @@ class _ProdutosPageState extends State<ProdutosPage>
   }
 
   Object _resolveCatalogError(Object? error) {
-    return error ?? _unknownErrorMessage;
+    return error ?? ProductCatalogDefaults.unknownErrorMessage;
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return ProductCatalogWorkspaceSection(
+  ProductCatalogWorkspacePayload _buildWorkspacePayload() {
+    return ProductCatalogWorkspacePayload(
       identity: widget.identity,
       repository: widget.repository,
       workspaceService: _workspaceService,
@@ -309,5 +316,10 @@ class _ProdutosPageState extends State<ProdutosPage>
       erpSyncChangeEnabled: !_updatingErpSync,
       isMounted: () => mounted,
     );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ProductCatalogWorkspaceSection(payload: _buildWorkspacePayload());
   }
 }

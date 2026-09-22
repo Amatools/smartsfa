@@ -13,7 +13,6 @@ class ProductInformationTabSection extends StatelessWidget {
     required this.eanController,
     required this.marcaController,
     required this.descricaoLongaController,
-    required this.estoqueVersaoController,
     required this.availableBrands,
     required this.labelStyle,
     required this.inputTextStyle,
@@ -30,7 +29,6 @@ class ProductInformationTabSection extends StatelessWidget {
   final TextEditingController eanController;
   final TextEditingController marcaController;
   final TextEditingController descricaoLongaController;
-  final TextEditingController estoqueVersaoController;
   final List<String> availableBrands;
   final TextStyle labelStyle;
   final TextStyle inputTextStyle;
@@ -98,7 +96,11 @@ class ProductInformationTabSection extends StatelessWidget {
             spacing: 8,
             runSpacing: 8,
             children: availableBrands
-                .where((item) => item.toLowerCase() != marcaController.text.trim().toLowerCase())
+                .where(
+                  (item) =>
+                      item.toLowerCase() !=
+                      marcaController.text.trim().toLowerCase(),
+                )
                 .take(12)
                 .map(
                   (brand) => ActionChip(
@@ -117,12 +119,6 @@ class ProductInformationTabSection extends StatelessWidget {
         ),
         const SizedBox(height: 10),
         imageLibraryField,
-        const SizedBox(height: 10),
-        editorFieldBuilder(
-          estoqueVersaoController,
-          'Referencia de controle manual',
-          readOnly: readOnly,
-        ),
       ],
     );
   }

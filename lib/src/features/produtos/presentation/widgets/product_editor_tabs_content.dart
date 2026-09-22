@@ -1,69 +1,18 @@
 import 'package:flutter/material.dart';
 
-import '../../../../core/models/domain_types.dart';
-import '../services/product_editor_initialization_coordinator.dart';
 import 'product_editor_compact_tab.dart';
-import 'product_editor_field_builder.dart';
 import 'product_editor_information_tab_section.dart';
 import 'product_editor_price_tab_fields.dart';
+import 'product_editor_tabs_payload.dart';
 import 'product_editor_tabs_sections.dart';
 import 'product_editor_tabs_shell.dart';
 import 'product_editor_variations_tab_section.dart';
 import 'product_image_library_field.dart';
 
 class ProductEditorTabsContent extends StatelessWidget {
-  const ProductEditorTabsContent({
-    super.key,
-    required this.readOnly,
-    required this.controllers,
-    required this.status,
-    required this.currencyCode,
-    required this.bitolaUnit,
-    required this.loadingTablePrice,
-    required this.isEnterprise,
-    required this.availableBrands,
-    required this.bitolaUnits,
-    required this.currencyLabels,
-    required this.currencyHints,
-    required this.labelStyle,
-    required this.inputTextStyle,
-    required this.fieldHeight,
-    required this.priceFieldWidth,
-    required this.priceFieldGap,
-    required this.representedCompanyName,
-    required this.onStatusChanged,
-    required this.onCurrencyCodeChanged,
-    required this.onBrandSelected,
-    required this.onBitolaUnitChanged,
-    required this.onOpenMediaLibrary,
-    required this.onClearImage,
-    required this.editorFieldBuilder,
-  });
+  const ProductEditorTabsContent({super.key, required this.payload});
 
-  final bool readOnly;
-  final ProductEditorFormControllers controllers;
-  final ProductStatus status;
-  final String currencyCode;
-  final String bitolaUnit;
-  final bool loadingTablePrice;
-  final bool isEnterprise;
-  final List<String> availableBrands;
-  final List<String> bitolaUnits;
-  final Map<String, String> currencyLabels;
-  final Map<String, String> currencyHints;
-  final TextStyle labelStyle;
-  final TextStyle inputTextStyle;
-  final double fieldHeight;
-  final double priceFieldWidth;
-  final double priceFieldGap;
-  final String? representedCompanyName;
-  final ValueChanged<ProductStatus> onStatusChanged;
-  final ValueChanged<String> onCurrencyCodeChanged;
-  final ValueChanged<String> onBrandSelected;
-  final ValueChanged<String> onBitolaUnitChanged;
-  final VoidCallback onOpenMediaLibrary;
-  final VoidCallback onClearImage;
-  final ProductEditorFieldBuilder editorFieldBuilder;
+  final ProductEditorTabsPayload payload;
 
   @override
   Widget build(BuildContext context) {
@@ -81,52 +30,52 @@ class ProductEditorTabsContent extends StatelessWidget {
       children: [
         const SizedBox(height: 8),
         Wrap(
-          spacing: priceFieldGap,
+          spacing: payload.priceFieldGap,
           runSpacing: 12,
           children: [
             ProductCurrencySelectorField(
-              readOnly: readOnly,
-              currencyCode: currencyCode,
-              currencyLabels: currencyLabels,
-              labelStyle: labelStyle,
-              inputTextStyle: inputTextStyle,
-              fieldHeight: fieldHeight,
-              onChanged: onCurrencyCodeChanged,
+              readOnly: payload.readOnly,
+              currencyCode: payload.currencyCode,
+              currencyLabels: payload.currencyLabels,
+              labelStyle: payload.labelStyle,
+              inputTextStyle: payload.inputTextStyle,
+              fieldHeight: payload.fieldHeight,
+              onChanged: payload.onCurrencyCodeChanged,
             ),
             SizedBox(
-              width: priceFieldWidth,
+              width: payload.priceFieldWidth,
               child: ProductGroupedMoneyField(
                 label: 'Preco Minimo',
-                controller: controllers.precoMinimo,
-                currencyCode: currencyCode,
-                currencyLabels: currencyLabels,
-                currencyHints: currencyHints,
-                readOnly: readOnly,
-                inputTextStyle: inputTextStyle,
-                labelStyle: labelStyle,
-                fieldHeight: fieldHeight,
-                fieldWidth: priceFieldWidth,
+                controller: payload.controllers.precoMinimo,
+                currencyCode: payload.currencyCode,
+                currencyLabels: payload.currencyLabels,
+                currencyHints: payload.currencyHints,
+                readOnly: payload.readOnly,
+                inputTextStyle: payload.inputTextStyle,
+                labelStyle: payload.labelStyle,
+                fieldHeight: payload.fieldHeight,
+                fieldWidth: payload.priceFieldWidth,
                 showInfoIcon: true,
               ),
             ),
             SizedBox(
-              width: priceFieldWidth,
+              width: payload.priceFieldWidth,
               child: ProductGroupedMoneyField(
                 label: '* Preco de Tabela',
-                controller: controllers.precoTabela,
-                currencyCode: currencyCode,
-                currencyLabels: currencyLabels,
-                currencyHints: currencyHints,
-                readOnly: readOnly,
-                inputTextStyle: inputTextStyle,
-                labelStyle: labelStyle,
-                fieldHeight: fieldHeight,
-                fieldWidth: priceFieldWidth,
+                controller: payload.controllers.precoTabela,
+                currencyCode: payload.currencyCode,
+                currencyLabels: payload.currencyLabels,
+                currencyHints: payload.currencyHints,
+                readOnly: payload.readOnly,
+                inputTextStyle: payload.inputTextStyle,
+                labelStyle: payload.labelStyle,
+                fieldHeight: payload.fieldHeight,
+                fieldWidth: payload.priceFieldWidth,
               ),
             ),
           ],
         ),
-        if (loadingTablePrice) _buildPriceTableSyncLoadingIndicator(),
+        if (payload.loadingTablePrice) _buildPriceTableSyncLoadingIndicator(),
       ],
     );
   }
@@ -147,28 +96,46 @@ class ProductEditorTabsContent extends StatelessWidget {
     return ProductEditorCompactTab(
       children: [
         ProductInformationTabSection(
-          readOnly: readOnly,
-          codigoController: controllers.codigo,
-          status: status,
-          eanController: controllers.ean,
-          marcaController: controllers.marca,
-          descricaoLongaController: controllers.descricaoLonga,
-          estoqueVersaoController: controllers.estoqueVersao,
-          availableBrands: availableBrands,
-          labelStyle: labelStyle,
-          inputTextStyle: inputTextStyle,
-          fieldHeight: fieldHeight,
+          readOnly: payload.readOnly,
+          codigoController: payload.controllers.codigo,
+          status: payload.status,
+          eanController: payload.controllers.ean,
+          marcaController: payload.controllers.marca,
+          descricaoLongaController: payload.controllers.descricaoLonga,
+          availableBrands: payload.availableBrands,
+          labelStyle: payload.labelStyle,
+          inputTextStyle: payload.inputTextStyle,
+          fieldHeight: payload.fieldHeight,
           imageLibraryField: _buildInformationImageLibraryField(context),
-          editorFieldBuilder: editorFieldBuilder,
-          onStatusChanged: onStatusChanged,
-          onBrandSelected: onBrandSelected,
+          editorFieldBuilder: payload.editorFieldBuilder,
+          onStatusChanged: payload.onStatusChanged,
+          onBrandSelected: payload.onBrandSelected,
+        ),
+        const SizedBox(height: 10),
+        ProductVariationsTabSection(
+          readOnly: payload.readOnly,
+          isEnterprise: payload.isEnterprise,
+          bitolaController: payload.controllers.bitola,
+          subcategoriaController: payload.controllers.subcategoria,
+          tabelaVersaoController: payload.controllers.tabelaVersao,
+          multiploVendaController: payload.controllers.multiploVenda,
+          estoqueVersaoController: payload.controllers.estoqueVersao,
+          erpProductIdController: payload.controllers.erpProductId,
+          erpSyncIdController: payload.controllers.erpSyncId,
+          bitolaUnit: payload.bitolaUnit,
+          bitolaUnits: payload.bitolaUnits,
+          labelStyle: payload.labelStyle,
+          inputTextStyle: payload.inputTextStyle,
+          fieldHeight: payload.fieldHeight,
+          onBitolaUnitChanged: payload.onBitolaUnitChanged,
+          editorFieldBuilder: payload.editorFieldBuilder,
         ),
       ],
     );
   }
 
   String _buildImageLibraryScopeLabel() {
-    final representedName = (representedCompanyName ?? '').trim();
+    final representedName = (payload.representedCompanyName ?? '').trim();
     if (representedName.isNotEmpty) {
       return representedName;
     }
@@ -177,12 +144,12 @@ class ProductEditorTabsContent extends StatelessWidget {
 
   Widget _buildInformationImageLibraryField(BuildContext context) {
     return ProductImageLibraryField(
-      readOnly: readOnly,
-      hasImage: controllers.fotoUrl.text.trim().isNotEmpty,
+      readOnly: payload.readOnly,
+      hasImage: payload.controllers.fotoUrl.text.trim().isNotEmpty,
       scopeLabel: _buildImageLibraryScopeLabel(),
       helperTextStyle: Theme.of(context).textTheme.bodySmall,
-      onOpenLibrary: onOpenMediaLibrary,
-      onClearImage: onClearImage,
+      onOpenLibrary: payload.onOpenMediaLibrary,
+      onClearImage: payload.onClearImage,
     );
   }
 
@@ -190,13 +157,13 @@ class ProductEditorTabsContent extends StatelessWidget {
     return ProductEditorCompactTab(
       children: [
         ProductFiscalTabSection(
-          readOnly: readOnly,
-          ncmController: controllers.ncm,
-          cfopController: controllers.cfop,
-          icmsController: controllers.icms,
-          pisController: controllers.pis,
-          cofinsController: controllers.cofins,
-          editorFieldBuilder: editorFieldBuilder,
+          readOnly: payload.readOnly,
+          ncmController: payload.controllers.ncm,
+          cfopController: payload.controllers.cfop,
+          icmsController: payload.controllers.icms,
+          pisController: payload.controllers.pis,
+          cofinsController: payload.controllers.cofins,
+          editorFieldBuilder: payload.editorFieldBuilder,
         ),
       ],
     );
@@ -205,23 +172,16 @@ class ProductEditorTabsContent extends StatelessWidget {
   Widget _buildVariationsTab() {
     return ProductEditorCompactTab(
       children: [
-        ProductVariationsTabSection(
-          readOnly: readOnly,
-          isEnterprise: isEnterprise,
-          bitolaController: controllers.bitola,
-          subcategoriaController: controllers.subcategoria,
-          tabelaVersaoController: controllers.tabelaVersao,
-          multiploVendaController: controllers.multiploVenda,
-          estoqueVersaoController: controllers.estoqueVersao,
-          erpProductIdController: controllers.erpProductId,
-          erpSyncIdController: controllers.erpSyncId,
-          bitolaUnit: bitolaUnit,
-          bitolaUnits: bitolaUnits,
-          labelStyle: labelStyle,
-          inputTextStyle: inputTextStyle,
-          fieldHeight: fieldHeight,
-          onBitolaUnitChanged: onBitolaUnitChanged,
-          editorFieldBuilder: editorFieldBuilder,
+        const SizedBox(height: 8),
+        Card(
+          margin: EdgeInsets.zero,
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Text(
+              'Use esta aba para variacoes de produto (ex.: combinacoes de atributos, grade e regras especificas por variacao).',
+              style: payload.inputTextStyle,
+            ),
+          ),
         ),
       ],
     );
@@ -231,12 +191,12 @@ class ProductEditorTabsContent extends StatelessWidget {
     return ProductEditorCompactTab(
       children: [
         ProductWeightDimensionsTabSection(
-          readOnly: readOnly,
-          pesoController: controllers.peso,
-          comprimentoMmController: controllers.comprimentoMm,
-          larguraMmController: controllers.larguraMm,
-          alturaMmController: controllers.alturaMm,
-          editorFieldBuilder: editorFieldBuilder,
+          readOnly: payload.readOnly,
+          pesoController: payload.controllers.peso,
+          comprimentoMmController: payload.controllers.comprimentoMm,
+          larguraMmController: payload.controllers.larguraMm,
+          alturaMmController: payload.controllers.alturaMm,
+          editorFieldBuilder: payload.editorFieldBuilder,
         ),
       ],
     );

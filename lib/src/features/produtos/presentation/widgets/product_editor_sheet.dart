@@ -14,47 +14,27 @@ import '../../../../shared/presentation/theme/app_field_tokens.dart';
 import '../../../auth/services/workspace_profile_service.dart';
 import '../../../precos/presentation/services/default_price_table_guard.dart';
 import '../services/product_default_price_sync_service.dart';
-import '../services/product_editor_action_flow_coordinator.dart';
-import '../services/product_editor_bootstrap_coordinator.dart';
+import '../services/product_editor_async_actions_coordinator.dart';
+import '../services/product_editor_controller_binding_coordinator.dart';
 import '../services/product_editor_default_table_price_coordinator.dart';
 import '../services/product_editor_defaults.dart';
-import '../services/product_editor_delete_outcome_coordinator.dart';
 import '../services/product_editor_feedback.dart';
 import '../services/product_editor_form_reset_coordinator.dart';
 import '../services/product_editor_initialization_coordinator.dart';
-import '../services/product_editor_local_view_state_coordinator.dart';
-import '../services/product_editor_media_flow_coordinator.dart';
 import '../services/product_editor_media_upload_coordinator.dart';
-import '../services/product_editor_save_outcome_coordinator.dart';
+import '../services/product_editor_outcome_dispatcher.dart';
+import '../services/product_editor_sheet_bootstrap_coordinator.dart';
 import '../services/product_editor_thumbnail_preview_builder.dart';
 import '../services/product_editor_title_builder.dart';
 import '../services/product_editor_view_state.dart';
 import '../services/product_media_editor_coordinator.dart';
 import '../services/product_media_upload_service.dart';
 import 'product_category_dropdown_field.dart';
-import 'product_editor_fields.dart';
+import 'product_editor_field_builder.dart';
+import 'product_editor_field_style_factory.dart';
 import 'product_editor_sheet_layout.dart';
-
-const List<String> _productBitolaUnits = <String>[
-  ProductEditorDefaults.defaultBitolaUnit,
-  'cm',
-  'm',
-];
-const String _defaultCurrencyCode = 'BRL';
-
-const Map<String, String> _currencyLabels = <String, String>{
-  'BRL': 'R\$',
-  'USD': 'US\$',
-  'EUR': 'EUR',
-};
-
-const Map<String, String> _currencyHints = <String, String>{
-  'BRL': '0,00',
-  'USD': '0.00',
-  'EUR': '0,00',
-};
-
-const String _unknownErrorMessage = 'erro desconhecido';
+import 'product_editor_sheet_layout_payload.dart';
+import 'product_editor_tabs_payload.dart';
 
 class ProductEditorSheet extends StatefulWidget {
   const ProductEditorSheet({
@@ -108,16 +88,18 @@ class _ProductEditorSheetState extends State<ProductEditorSheet>
   late final ProductDefaultPriceSyncService _defaultPriceSyncService;
   late final ProductEditorDefaultTablePriceCoordinator
   _defaultTablePriceCoordinator;
-  final ProductEditorActionFlowCoordinator _actionFlowCoordinator =
-      const ProductEditorActionFlowCoordinator();
+  final ProductEditorAsyncActionsCoordinator _asyncActionsCoordinator =
+      const ProductEditorAsyncActionsCoordinator();
   final ProductEditorThumbnailPreviewBuilder _thumbnailPreviewBuilder =
       const ProductEditorThumbnailPreviewBuilder();
-  final ProductEditorBootstrapCoordinator _bootstrapCoordinator =
-      const ProductEditorBootstrapCoordinator();
-  final ProductEditorLocalViewStateCoordinator _localViewStateCoordinator =
-      const ProductEditorLocalViewStateCoordinator();
-  final ProductEditorMediaFlowCoordinator _mediaFlowCoordinator =
-      const ProductEditorMediaFlowCoordinator();
+  final ProductEditorSheetBootstrapCoordinator _sheetBootstrapCoordinator =
+      const ProductEditorSheetBootstrapCoordinator();
+  final ProductEditorControllerBindingCoordinator _bindingCoordinator =
+      const ProductEditorControllerBindingCoordinator();
+  final ProductEditorOutcomeDispatcher _outcomeDispatcher =
+      const ProductEditorOutcomeDispatcher();
+  final ProductEditorFieldStyleFactory _fieldStyleFactory =
+      const ProductEditorFieldStyleFactory();
   final ProductEditorMediaUploadCoordinator _mediaUploadCoordinator =
       const ProductEditorMediaUploadCoordinator();
   final ProductMediaEditorCoordinator _mediaEditorCoordinator =
@@ -144,29 +126,22 @@ class _ProductEditorSheetState extends State<ProductEditorSheet>
   @override
   void initState() {
     super.initState();
-    final bootstrap = _bootstrapCoordinator.build(
+    final bootstrapState = _sheetBootstrapCoordinator.build(
       identity: widget.identity,
       existingProduct: widget.produto,
       representedCompanyId: widget.representedCompanyId,
       basePriceRepository: widget.basePriceRepository,
       tableRepository: widget.priceTableRepository,
       existingProducts: widget.existingProducts,
-      defaultCurrencyCode: _defaultCurrencyCode,
-      currencyLabels: _currencyLabels,
-      bitolaUnits: _productBitolaUnits,
+      defaultCurrencyCode: ProductEditorDefaults.defaultCurrencyCode,
+      currencyLabels: ProductEditorDefaults.currencyLabels,
+      bitolaUnits: ProductEditorDefaults.bitolaUnits,
     );
-    final initialState = bootstrap.initializationState;
-    _emptyDraft = bootstrap.emptyDraft;
-    _formControllers = initialState.controllers;
-    _editorState = ProductEditorViewState.initial(
-      status: initialState.status,
-      bitolaUnit: initialState.bitolaUnit,
-      currencyCode: initialState.currencyCode,
-      currentImageStoragePath: initialState.currentImageStoragePath,
-      currentImageThumbBase64: initialState.currentImageThumbBase64,
-    );
-    _defaultPriceSyncService = bootstrap.defaultPriceSyncService;
-    _defaultTablePriceCoordinator = bootstrap.defaultTablePriceCoordinator;
+    _emptyDraft = bootstrapState.emptyDraft;
+    _formControllers = bootstrapState.formControllers;
+    _editorState = bootstrapState.editorState;
+    _defaultPriceSyncService = bootstrapState.defaultPriceSyncService;
+    _defaultTablePriceCoordinator = bootstrapState.defaultTablePriceCoordinator;
     _loadDefaultTablePriceForEditor();
   }
 
@@ -187,7 +162,7 @@ class _ProductEditorSheetState extends State<ProductEditorSheet>
 
   void _setEditorStatus(ProductStatus value) {
     _updateEditorState(
-      (state) => _localViewStateCoordinator.applyStatus(state, value),
+      (state) => _bindingCoordinator.applyStatus(state, value),
     );
   }
 
@@ -201,25 +176,25 @@ class _ProductEditorSheetState extends State<ProductEditorSheet>
 
   void _setEditorCategory(String value) {
     setStateIfMounted(() {
-      _formControllers.categoria.text = value;
+      _bindingCoordinator.setCategory(_formControllers, value);
     });
   }
 
   void _setEditorCurrencyCode(String value) {
     _updateEditorState(
-      (state) => _localViewStateCoordinator.applyCurrencyCode(state, value),
+      (state) => _bindingCoordinator.applyCurrencyCode(state, value),
     );
   }
 
   void _setEditorBrand(String brand) {
     setStateIfMounted(() {
-      _formControllers.marca.text = brand;
+      _bindingCoordinator.setBrand(_formControllers, brand);
     });
   }
 
   void _setEditorBitolaUnit(String value) {
     _updateEditorState(
-      (state) => _localViewStateCoordinator.applyBitolaUnit(state, value),
+      (state) => _bindingCoordinator.applyBitolaUnit(state, value),
     );
   }
 
@@ -229,24 +204,27 @@ class _ProductEditorSheetState extends State<ProductEditorSheet>
 
   void _setSaving(bool value) {
     _updateEditorState(
-      (state) => _localViewStateCoordinator.applySaving(state, value),
+      (state) => _bindingCoordinator.applySaving(state, value),
     );
   }
 
   void _setTablePriceLoading(bool value) {
     _updateEditorState(
-      (state) =>
-          _localViewStateCoordinator.applyLoadingTablePrice(state, value),
+      (state) => _bindingCoordinator.applyLoadingTablePrice(state, value),
     );
   }
 
   void _setUploadingImage(bool value) {
     _updateEditorState(
-      (state) => _localViewStateCoordinator.applyUploadingImage(state, value),
+      (state) => _bindingCoordinator.applyUploadingImage(state, value),
     );
   }
 
-  Widget _buildQuickStartCategoryField(bool readOnly) {
+  Widget _buildQuickStartCategoryField({
+    required bool readOnly,
+    required TextStyle labelStyle,
+    required TextStyle inputTextStyle,
+  }) {
     return ProductCategoryDropdownField(
       workspaceStream: _workspaceService.watchWorkspace(
         widget.identity.tenantId,
@@ -254,23 +232,60 @@ class _ProductEditorSheetState extends State<ProductEditorSheet>
       representedCompanyId: widget.representedCompanyId,
       categoriaController: _formControllers.categoria,
       readOnly: readOnly,
-      labelStyle: _fieldLabelStyle,
-      inputTextStyle: _compactInputTextStyle,
+      labelStyle: labelStyle,
+      inputTextStyle: inputTextStyle,
       fieldHeight: _compactFieldHeight,
       onCategoryChanged: _setEditorCategory,
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final readOnly = !widget.allowManualActions;
+  ProductEditorTabsPayload _buildTabsPayload({
+    required bool readOnly,
+    required TextStyle labelStyle,
+    required TextStyle inputTextStyle,
+    required ProductEditorFieldBuilder editorFieldBuilder,
+  }) {
+    return ProductEditorTabsPayload(
+      readOnly: readOnly,
+      controllers: _formControllers,
+      status: _status,
+      currencyCode: _currencyCode,
+      bitolaUnit: _bitolaUnit,
+      loadingTablePrice: _loadingTablePrice,
+      isEnterprise: widget.isEnterprise,
+      availableBrands: widget.availableBrands,
+      bitolaUnits: ProductEditorDefaults.bitolaUnits,
+      currencyLabels: ProductEditorDefaults.currencyLabels,
+      currencyHints: ProductEditorDefaults.currencyHints,
+      labelStyle: labelStyle,
+      inputTextStyle: inputTextStyle,
+      fieldHeight: _compactFieldHeight,
+      priceFieldWidth: _priceFieldWidth,
+      priceFieldGap: _priceFieldGap,
+      representedCompanyName: widget.representedCompanyName,
+      onStatusChanged: _setEditorStatus,
+      onCurrencyCodeChanged: _setEditorCurrencyCode,
+      onBrandSelected: _setEditorBrand,
+      onBitolaUnitChanged: _setEditorBitolaUnit,
+      onOpenMediaLibrary: _openProductMediaLibrary,
+      onClearImage: _clearImageSelectionInState,
+      editorFieldBuilder: editorFieldBuilder,
+    );
+  }
 
-    return ProductEditorSheetLayout(
+  ProductEditorSheetLayoutPayload _buildLayoutPayload({
+    required bool readOnly,
+    required TextStyle labelStyle,
+    required Widget categoryField,
+    required ProductEditorFieldBuilder editorFieldBuilder,
+    required ProductEditorTabsPayload tabsPayload,
+  }) {
+    return ProductEditorSheetLayoutPayload(
       readOnly: readOnly,
       title: _buildEditorTitle(),
       status: _status,
       saving: _saving,
-      labelStyle: _fieldLabelStyle,
+      labelStyle: labelStyle,
       onClose: widget.onClose,
       onStatusChanged: _setEditorStatus,
       thumbnailProduto: _buildQuickStartThumbnailProduto(),
@@ -280,25 +295,9 @@ class _ProductEditorSheetState extends State<ProductEditorSheet>
       currentImagePreviewBytes: _currentImagePreviewBytes,
       onOpenMediaLibrary: readOnly ? null : _openProductMediaLibrary,
       controllers: _formControllers,
-      categoryField: _buildQuickStartCategoryField(readOnly),
-      editorFieldBuilder: _editorField,
-      currencyCode: _currencyCode,
-      bitolaUnit: _bitolaUnit,
-      loadingTablePrice: _loadingTablePrice,
-      isEnterprise: widget.isEnterprise,
-      availableBrands: widget.availableBrands,
-      bitolaUnits: _productBitolaUnits,
-      currencyLabels: _currencyLabels,
-      currencyHints: _currencyHints,
-      inputTextStyle: _compactInputTextStyle,
-      fieldHeight: _compactFieldHeight,
-      priceFieldWidth: _priceFieldWidth,
-      priceFieldGap: _priceFieldGap,
-      representedCompanyName: widget.representedCompanyName,
-      onCurrencyCodeChanged: _setEditorCurrencyCode,
-      onBrandSelected: _setEditorBrand,
-      onBitolaUnitChanged: _setEditorBitolaUnit,
-      onClearImage: _clearImageSelectionInState,
+      categoryField: categoryField,
+      editorFieldBuilder: editorFieldBuilder,
+      tabsPayload: tabsPayload,
       isEditing: widget.produto != null,
       onDelete: _delete,
       onSave: _save,
@@ -306,50 +305,54 @@ class _ProductEditorSheetState extends State<ProductEditorSheet>
     );
   }
 
-  TextStyle get _compactInputTextStyle {
-    return Theme.of(context).textTheme.bodySmall?.copyWith(
-          fontSize: AppFieldTokens.mediumFieldFontSize,
-          height: 1.0,
-        ) ??
-        const TextStyle(
-          fontSize: AppFieldTokens.mediumFieldFontSize,
-          height: 1.0,
-        );
-  }
+  @override
+  Widget build(BuildContext context) {
+    final readOnly = !widget.allowManualActions;
+    final inputTextStyle = _fieldStyleFactory.inputTextStyle(context);
+    final labelStyle = _fieldStyleFactory.labelStyle(context);
 
-  TextStyle get _fieldLabelStyle {
-    return Theme.of(context).textTheme.bodyMedium?.copyWith(
-          fontSize: AppFieldTokens.mediumFieldLabelFontSize,
-          fontWeight: FontWeight.w500,
-          height: 1.15,
-        ) ??
-        const TextStyle(
-          fontSize: AppFieldTokens.mediumFieldLabelFontSize,
-          fontWeight: FontWeight.w500,
-          height: 1.15,
-        );
-  }
+    Widget editorFieldBuilder(
+      TextEditingController controller,
+      String label, {
+      required bool readOnly,
+      TextInputType? keyboardType,
+      int maxLines = 1,
+      TextAlign textAlign = TextAlign.right,
+    }) {
+      return _fieldStyleFactory.buildEditorField(
+        context: context,
+        controller: controller,
+        label: label,
+        readOnly: readOnly,
+        inputTextStyle: inputTextStyle,
+        labelStyle: labelStyle,
+        fieldHeight: _compactFieldHeight,
+        keyboardType: keyboardType,
+        maxLines: maxLines,
+        textAlign: textAlign,
+      );
+    }
 
-  Widget _editorField(
-    TextEditingController controller,
-    String label, {
-    required bool readOnly,
-    TextInputType? keyboardType,
-    int maxLines = 1,
-    TextAlign textAlign = TextAlign.right,
-  }) {
-    return buildProductEditorField(
-      context: context,
-      controller: controller,
-      label: label,
+    final tabsPayload = _buildTabsPayload(
       readOnly: readOnly,
-      inputTextStyle: _compactInputTextStyle,
-      labelStyle: _fieldLabelStyle,
-      fieldHeight: _compactFieldHeight,
-      keyboardType: keyboardType,
-      maxLines: maxLines,
-      textAlign: textAlign,
+      labelStyle: labelStyle,
+      inputTextStyle: inputTextStyle,
+      editorFieldBuilder: editorFieldBuilder,
     );
+    final categoryField = _buildQuickStartCategoryField(
+      readOnly: readOnly,
+      labelStyle: labelStyle,
+      inputTextStyle: inputTextStyle,
+    );
+    final layoutPayload = _buildLayoutPayload(
+      readOnly: readOnly,
+      labelStyle: labelStyle,
+      categoryField: categoryField,
+      editorFieldBuilder: editorFieldBuilder,
+      tabsPayload: tabsPayload,
+    );
+
+    return ProductEditorSheetLayout(payload: layoutPayload);
   }
 
   String get _mediaScopeKey =>
@@ -358,33 +361,42 @@ class _ProductEditorSheetState extends State<ProductEditorSheet>
       );
 
   Future<void> _openProductMediaLibrary() async {
-    await _mediaFlowCoordinator.openLibrary(
+    final uiAction = await _asyncActionsCoordinator.openMediaLibrary(
       context: context,
-      mediaEditorCoordinator: _mediaEditorCoordinator,
-      mediaUploadCoordinator: _mediaUploadCoordinator,
-      uploadService: _mediaUploadService,
+      state: _editorState,
+      selectedUrl: _formControllers.fotoUrl.text.trim(),
       tenantId: widget.identity.tenantId,
       representedCompanyId: widget.representedCompanyId,
       representedCompanyName: widget.representedCompanyName,
-      selectedUrl: _formControllers.fotoUrl.text.trim(),
       scopeKey: _mediaScopeKey,
+      mediaEditorCoordinator: _mediaEditorCoordinator,
+      mediaUploadCoordinator: _mediaUploadCoordinator,
+      uploadService: _mediaUploadService,
       isUploadingImage: () => _uploadingImage,
       onUploadingChanged: _setUploadingImage,
-      onStateReady: (state) {
-        setStateIfMounted(() {
-          _applyMediaEditorState(state);
-        });
-      },
-      onFeedback: (message) {
-        runIfMounted(() {
-          _showEditorFeedback(message);
-        });
-      },
     );
+
+    runIfMounted(() {
+      for (final message in uiAction.feedbackMessages) {
+        _showEditorFeedback(message);
+      }
+
+      if (!uiAction.hasStateChange) {
+        return;
+      }
+
+      setStateIfMounted(() {
+        _editorState = _bindingCoordinator.applyMediaIntegrationAction(
+          state: _editorState,
+          uiAction: uiAction,
+          controllers: _formControllers,
+        );
+      });
+    });
   }
 
   Future<void> _save({bool createAnother = false}) async {
-    final uiAction = await _actionFlowCoordinator.executeSave(
+    final uiAction = await _asyncActionsCoordinator.save(
       repository: widget.repository,
       identity: widget.identity,
       existingProduct: widget.produto,
@@ -401,102 +413,66 @@ class _ProductEditorSheetState extends State<ProductEditorSheet>
       currentImageThumbBase64: _currentImageThumbBase64,
       syncDefaultTablePrice: _syncDefaultTablePrice,
       existingProducts: widget.existingProducts,
-      defaultCurrencyCode: _defaultCurrencyCode,
+      defaultCurrencyCode: ProductEditorDefaults.defaultCurrencyCode,
       requiredDescriptionMessage:
           ProductEditorFeedback.requiredDescriptionMessage,
       requiredTablePriceMessage:
           ProductEditorFeedback.requiredTablePriceMessage,
-      unknownErrorMessage: _unknownErrorMessage,
+      unknownErrorMessage: ProductEditorDefaults.unknownErrorMessage,
       onSaveStarted: () {
         _setSaving(true);
       },
     );
 
     runIfMounted(() {
-      _handleSaveUiAction(uiAction);
+      _outcomeDispatcher.dispatchSave(
+        action: uiAction,
+        onFeedback: _showEditorFeedback,
+        onApplyResetValues: _applyPostSaveResetValues,
+        onSaved: widget.onSaved,
+        onStopSaving: _stopSaving,
+      );
     });
-  }
-
-  void _handleSaveUiAction(ProductEditorSaveOutcomeUiAction uiAction) {
-    for (final message in uiAction.feedbackMessages) {
-      _showEditorFeedback(message);
-    }
-
-    final resetValues = uiAction.resetValues;
-    if (resetValues != null) {
-      _applyPostSaveResetValues(resetValues);
-    }
-
-    final savedEntity = uiAction.savedEntity;
-    if (savedEntity != null) {
-      widget.onSaved(savedEntity);
-      return;
-    }
-
-    if (uiAction.shouldStopSaving) {
-      _stopSaving();
-    }
   }
 
   void _stopSaving() {
     _setSaving(false);
   }
 
-  void _showEditorFeedbackIfAny(String? message) {
-    if (message == null) {
-      return;
-    }
-    _showEditorFeedback(message);
-  }
-
   void _applyPostSaveResetValues(ProductEditorFormResetValues resetValues) {
     _applyMediaEditorState(_mediaEditorCoordinator.emptySelectionState());
-    _editorState = _localViewStateCoordinator.applyPostSaveReset(
+    _editorState = _bindingCoordinator.applyPostSaveReset(
       state: _editorState,
       resetValues: resetValues,
     );
   }
 
   Future<void> _delete() async {
-    final existing = widget.produto;
-    if (existing == null) {
-      return;
-    }
-
-    final uiAction = await _actionFlowCoordinator.confirmAndExecuteDelete(
+    final uiAction = await _asyncActionsCoordinator.delete(
       context: context,
-      existing: existing,
+      existingProduct: widget.produto,
       tenantId: widget.identity.tenantId,
       repository: widget.repository,
       defaultPriceSyncService: _defaultPriceSyncService,
-      unknownErrorMessage: _unknownErrorMessage,
+      unknownErrorMessage: ProductEditorDefaults.unknownErrorMessage,
       onExecutionStarted: () {
         _setSaving(true);
       },
     );
 
+    if (uiAction == null) {
+      return;
+    }
+
     runIfMounted(() {
-      _handleDeleteUiAction(uiAction);
+      _outcomeDispatcher.dispatchDelete(
+        action: uiAction,
+        onFeedback: _showEditorFeedback,
+        onCloseEditor: widget.onClose,
+        onDeleted: widget.onDeleted,
+        onStopSaving: _stopSaving,
+      );
     });
-  }
-
-  void _handleDeleteUiAction(ProductEditorDeleteOutcomeUiAction uiAction) {
-    _showEditorFeedbackIfAny(uiAction.feedbackMessage);
-
-    switch (uiAction.followUpAction) {
-      case ProductEditorDeleteFollowUpAction.none:
-        break;
-      case ProductEditorDeleteFollowUpAction.closeEditor:
-        widget.onClose();
-        return;
-      case ProductEditorDeleteFollowUpAction.notifyDeleted:
-        widget.onDeleted();
-        return;
-    }
-
-    if (uiAction.shouldStopSaving) {
-      _stopSaving();
-    }
   }
 
   void _showEditorFeedback(String message) {
@@ -512,29 +488,31 @@ class _ProductEditorSheetState extends State<ProductEditorSheet>
   }
 
   Future<void> _loadDefaultTablePriceForEditor() async {
-    final loadedState = await _defaultTablePriceCoordinator.loadForEditor(
+    final uiAction = await _asyncActionsCoordinator.loadDefaultTablePrice(
+      defaultTablePriceCoordinator: _defaultTablePriceCoordinator,
+      state: _editorState,
       existingProduct: widget.produto,
       currentCurrencyCode: _currencyCode,
-      currencyLabels: _currencyLabels,
+      currencyLabels: ProductEditorDefaults.currencyLabels,
       onLoadingChanged: _setTablePriceLoading,
     );
 
-    if (loadedState == null) {
+    if (uiAction == null) {
       return;
     }
 
     setStateIfMounted(() {
-      final applyResult = _localViewStateCoordinator.applyLoadedTablePrice(
+      _editorState = _bindingCoordinator.applyDefaultTableLoadAction(
         state: _editorState,
-        loadedState: loadedState,
+        uiAction: uiAction,
+        controllers: _formControllers,
       );
-      _editorState = applyResult.state;
-      _formControllers.precoTabela.text = applyResult.tablePriceText;
     });
   }
 
   Future<void> _syncDefaultTablePrice(Produto entity) async {
-    await _defaultTablePriceCoordinator.syncForProduct(
+    await _asyncActionsCoordinator.syncDefaultTablePrice(
+      defaultTablePriceCoordinator: _defaultTablePriceCoordinator,
       produto: entity,
       tablePriceText: _formControllers.precoTabela.text,
       currencyCode: _currencyCode,
@@ -547,11 +525,10 @@ class _ProductEditorSheetState extends State<ProductEditorSheet>
   }
 
   void _applyMediaEditorState(ProductMediaEditorState state) {
-    final applyResult = _localViewStateCoordinator.applyMediaState(
+    _editorState = _bindingCoordinator.applyMediaState(
       state: _editorState,
       mediaState: state,
+      controllers: _formControllers,
     );
-    _editorState = applyResult.state;
-    _formControllers.fotoUrl.text = applyResult.fotoUrlText;
   }
 }
