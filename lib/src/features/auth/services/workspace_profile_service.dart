@@ -46,12 +46,27 @@ class CommercialAdjustmentRule {
   }
 }
 
+class ProductCategoryTaxonomyItem {
+  const ProductCategoryTaxonomyItem({
+    required this.name,
+    required this.subcategories,
+  });
+
+  final String name;
+  final List<String> subcategories;
+
+  Map<String, Object> toMap() {
+    return <String, Object>{'name': name, 'subcategories': subcategories};
+  }
+}
+
 class WorkspaceProfileService {
   WorkspaceProfileService(this._firestore);
 
   final FirebaseFirestore _firestore;
 
-  CollectionReference<Map<String, dynamic>> get _representedCompaniesCollection =>
+  CollectionReference<Map<String, dynamic>>
+  get _representedCompaniesCollection =>
       _firestore.collection('tenant_represented_companies');
 
   static const String _defaultPriceRegionId = 'default';
@@ -62,9 +77,11 @@ class WorkspaceProfileService {
       return Stream.value(null);
     }
 
-    return _firestore.collection('tenants').doc(normalizedTenantId).snapshots().map(
-      (doc) => doc.data(),
-    );
+    return _firestore
+        .collection('tenants')
+        .doc(normalizedTenantId)
+        .snapshots()
+        .map((doc) => doc.data());
   }
 
   Stream<List<String>> watchTextRuleList({
@@ -77,22 +94,26 @@ class WorkspaceProfileService {
       return Stream.value(const <String>[]);
     }
 
-    return _firestore.collection('tenants').doc(normalizedTenantId).snapshots().map((doc) {
-      final data = doc.data() ?? const <String, dynamic>{};
-      final raw = data[normalizedFieldName];
-      if (raw is! List) {
-        return const <String>[];
-      }
+    return _firestore
+        .collection('tenants')
+        .doc(normalizedTenantId)
+        .snapshots()
+        .map((doc) {
+          final data = doc.data() ?? const <String, dynamic>{};
+          final raw = data[normalizedFieldName];
+          if (raw is! List) {
+            return const <String>[];
+          }
 
-      final result = <String>[];
-      for (final item in raw) {
-        final value = item?.toString().trim() ?? '';
-        if (value.isNotEmpty) {
-          result.add(value);
-        }
-      }
-      return result;
-    });
+          final result = <String>[];
+          for (final item in raw) {
+            final value = item?.toString().trim() ?? '';
+            if (value.isNotEmpty) {
+              result.add(value);
+            }
+          }
+          return result;
+        });
   }
 
   Stream<List<PaymentConditionRule>> watchPaymentConditionRules({
@@ -103,45 +124,57 @@ class WorkspaceProfileService {
       return Stream.value(const <PaymentConditionRule>[]);
     }
 
-    return _firestore.collection('tenants').doc(normalizedTenantId).snapshots().map((doc) {
-      final data = doc.data() ?? const <String, dynamic>{};
-      final raw = data['paymentConditionRules'];
-      if (raw is! List) {
-        return const <PaymentConditionRule>[];
-      }
-
-      final result = <PaymentConditionRule>[];
-      for (final item in raw) {
-        if (item is String) {
-          final description = item.trim();
-          if (description.isEmpty) {
-            continue;
-          }
-          result.add(PaymentConditionRule(description: description, minimumValue: 0));
-          continue;
-        }
-
-        if (item is Map) {
-          final map = item.cast<Object?, Object?>();
-          final description = (map['description'] ?? map['descricao'] ?? '').toString().trim();
-          if (description.isEmpty) {
-            continue;
+    return _firestore
+        .collection('tenants')
+        .doc(normalizedTenantId)
+        .snapshots()
+        .map((doc) {
+          final data = doc.data() ?? const <String, dynamic>{};
+          final raw = data['paymentConditionRules'];
+          if (raw is! List) {
+            return const <PaymentConditionRule>[];
           }
 
-          result.add(
-            PaymentConditionRule(
-              description: description,
-              minimumValue: _toDouble(map['minimumValue'] ?? map['valorMinimo']),
-            ),
-          );
-        }
-      }
+          final result = <PaymentConditionRule>[];
+          for (final item in raw) {
+            if (item is String) {
+              final description = item.trim();
+              if (description.isEmpty) {
+                continue;
+              }
+              result.add(
+                PaymentConditionRule(description: description, minimumValue: 0),
+              );
+              continue;
+            }
 
-      return result;
-    });
+            if (item is Map) {
+              final map = item.cast<Object?, Object?>();
+              final description = (map['description'] ?? map['descricao'] ?? '')
+                  .toString()
+                  .trim();
+              if (description.isEmpty) {
+                continue;
+              }
+
+              result.add(
+                PaymentConditionRule(
+                  description: description,
+                  minimumValue: _toDouble(
+                    map['minimumValue'] ?? map['valorMinimo'],
+                  ),
+                ),
+              );
+            }
+          }
+
+          return result;
+        });
   }
 
-  Stream<List<Map<String, Object?>>> watchRepresentedCompanies(String tenantId) {
+  Stream<List<Map<String, Object?>>> watchRepresentedCompanies(
+    String tenantId,
+  ) {
     final normalizedTenantId = tenantId.trim();
     if (normalizedTenantId.isEmpty) {
       return Stream.value(const <Map<String, Object?>>[]);
@@ -152,7 +185,11 @@ class WorkspaceProfileService {
         .snapshots()
         .map((snapshot) {
           final companies = snapshot.docs
-              .map((doc) => doc.data().map((key, value) => MapEntry(key, value as Object?)))
+              .map(
+                (doc) => doc.data().map(
+                  (key, value) => MapEntry(key, value as Object?),
+                ),
+              )
               .toList(growable: false);
           companies.sort((a, b) {
             final aName = (a['nomeFantasia'] ?? '').toString().toLowerCase();
@@ -173,27 +210,50 @@ class WorkspaceProfileService {
     }
 
     final scopeKey = _scopeKey(representedCompanyId);
-    return _firestore.collection('tenants').doc(normalizedTenantId).snapshots().map((doc) {
-      final data = doc.data() ?? const <String, dynamic>{};
-      final root = data['representedProductCategories'];
-      if (root is! Map) {
-        return const <String>[];
-      }
-      final scoped = root[scopeKey] ?? root['__tenant__'];
-      if (scoped is! List) {
-        return const <String>[];
-      }
+    return _firestore
+        .collection('tenants')
+        .doc(normalizedTenantId)
+        .snapshots()
+        .map((doc) {
+          final data = doc.data() ?? const <String, dynamic>{};
+          final taxonomy = _readTaxonomyForScope(
+            data: data,
+            scopeKey: scopeKey,
+          );
+          final categories = taxonomy
+              .map((item) => item.name.trim())
+              .where((value) => value.isNotEmpty)
+              .toList(growable: false);
+          categories.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+          return categories;
+        });
+  }
 
-      final categories = <String>[];
-      for (final item in scoped) {
-        final value = item?.toString().trim() ?? '';
-        if (value.isNotEmpty) {
-          categories.add(value);
-        }
-      }
-      categories.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
-      return categories;
-    });
+  Stream<List<ProductCategoryTaxonomyItem>> watchRepresentedProductTaxonomy({
+    required String tenantId,
+    required String? representedCompanyId,
+  }) {
+    final normalizedTenantId = tenantId.trim();
+    if (normalizedTenantId.isEmpty) {
+      return Stream.value(const <ProductCategoryTaxonomyItem>[]);
+    }
+
+    final scopeKey = _scopeKey(representedCompanyId);
+    return _firestore
+        .collection('tenants')
+        .doc(normalizedTenantId)
+        .snapshots()
+        .map((doc) {
+          final data = doc.data() ?? const <String, dynamic>{};
+          final taxonomy = _readTaxonomyForScope(
+            data: data,
+            scopeKey: scopeKey,
+          );
+          taxonomy.sort(
+            (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+          );
+          return taxonomy;
+        });
   }
 
   Stream<List<CommercialAdjustmentRule>> watchCommercialAdjustmentRules({
@@ -206,40 +266,45 @@ class WorkspaceProfileService {
     }
 
     final scopeKey = _scopeKey(representedCompanyId);
-    return _firestore.collection('tenants').doc(normalizedTenantId).snapshots().map((doc) {
-      final data = doc.data() ?? const <String, dynamic>{};
-      final root = data['representedCommercialAdjustments'];
-      if (root is! Map) {
-        return const <CommercialAdjustmentRule>[];
-      }
-      final scoped = root[scopeKey] ?? root['__tenant__'];
-      if (scoped is! List) {
-        return const <CommercialAdjustmentRule>[];
-      }
+    return _firestore
+        .collection('tenants')
+        .doc(normalizedTenantId)
+        .snapshots()
+        .map((doc) {
+          final data = doc.data() ?? const <String, dynamic>{};
+          final root = data['representedCommercialAdjustments'];
+          if (root is! Map) {
+            return const <CommercialAdjustmentRule>[];
+          }
+          final scoped = root[scopeKey] ?? root['__tenant__'];
+          if (scoped is! List) {
+            return const <CommercialAdjustmentRule>[];
+          }
 
-      final rules = <CommercialAdjustmentRule>[];
-      for (final item in scoped) {
-        if (item is! Map) {
-          continue;
-        }
-        final map = item.cast<Object?, Object?>();
-        final name = (map['name'] ?? '').toString().trim();
-        if (name.isEmpty) {
-          continue;
-        }
-        rules.add(
-          CommercialAdjustmentRule(
-            name: name,
-            adjustmentType: (map['adjustmentType'] ?? 'discount').toString(),
-            valueType: (map['valueType'] ?? 'percent').toString(),
-            value: _toDouble(map['value']),
-            scope: (map['scope'] ?? 'geral').toString(),
-            scopeTarget: (map['scopeTarget'] ?? '').toString(),
-          ),
-        );
-      }
-      return rules;
-    });
+          final rules = <CommercialAdjustmentRule>[];
+          for (final item in scoped) {
+            if (item is! Map) {
+              continue;
+            }
+            final map = item.cast<Object?, Object?>();
+            final name = (map['name'] ?? '').toString().trim();
+            if (name.isEmpty) {
+              continue;
+            }
+            rules.add(
+              CommercialAdjustmentRule(
+                name: name,
+                adjustmentType: (map['adjustmentType'] ?? 'discount')
+                    .toString(),
+                valueType: (map['valueType'] ?? 'percent').toString(),
+                value: _toDouble(map['value']),
+                scope: (map['scope'] ?? 'geral').toString(),
+                scopeTarget: (map['scopeTarget'] ?? '').toString(),
+              ),
+            );
+          }
+          return rules;
+        });
   }
 
   Future<void> updateTextRuleList({
@@ -258,13 +323,10 @@ class WorkspaceProfileService {
         .where((value) => value.isNotEmpty)
         .toList(growable: false);
 
-    await _firestore.collection('tenants').doc(normalizedTenantId).set(
-      {
-        normalizedFieldName: normalizedValues,
-        'updatedAt': FieldValue.serverTimestamp(),
-      },
-      SetOptions(merge: true),
-    );
+    await _firestore.collection('tenants').doc(normalizedTenantId).set({
+      normalizedFieldName: normalizedValues,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
   }
 
   Future<void> updatePaymentConditionRules({
@@ -287,13 +349,10 @@ class WorkspaceProfileService {
         .map((rule) => rule.toMap())
         .toList(growable: false);
 
-    await _firestore.collection('tenants').doc(normalizedTenantId).set(
-      {
-        'paymentConditionRules': normalizedValues,
-        'updatedAt': FieldValue.serverTimestamp(),
-      },
-      SetOptions(merge: true),
-    );
+    await _firestore.collection('tenants').doc(normalizedTenantId).set({
+      'paymentConditionRules': normalizedValues,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
   }
 
   Future<void> updateRepresentedProductCategories({
@@ -312,15 +371,55 @@ class WorkspaceProfileService {
         .toList(growable: false);
     final scopeKey = _scopeKey(representedCompanyId);
 
-    await _firestore.collection('tenants').doc(normalizedTenantId).set(
-      {
-        'representedProductCategories': {
-          scopeKey: normalizedCategories,
+    await _firestore.collection('tenants').doc(normalizedTenantId).set({
+      'representedProductCategories': {scopeKey: normalizedCategories},
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
+  Future<void> updateRepresentedProductTaxonomy({
+    required String tenantId,
+    required String? representedCompanyId,
+    required List<ProductCategoryTaxonomyItem> taxonomy,
+  }) async {
+    final normalizedTenantId = tenantId.trim();
+    if (normalizedTenantId.isEmpty) {
+      throw StateError('Dados invalidos para salvar taxonomia de categorias.');
+    }
+
+    final scopeKey = _scopeKey(representedCompanyId);
+    final normalizedTaxonomy =
+        taxonomy
+            .map(
+              (item) => ProductCategoryTaxonomyItem(
+                name: item.name.trim(),
+                subcategories:
+                    item.subcategories
+                        .map((sub) => sub.trim())
+                        .where((sub) => sub.isNotEmpty)
+                        .toSet()
+                        .toList(growable: false)
+                      ..sort(
+                        (a, b) => a.toLowerCase().compareTo(b.toLowerCase()),
+                      ),
+              ),
+            )
+            .where((item) => item.name.isNotEmpty)
+            .toList(growable: false)
+          ..sort(
+            (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+          );
+
+    await _firestore.collection('tenants').doc(normalizedTenantId).set({
+      'representedProductTaxonomy': {
+        scopeKey: {
+          'categories': normalizedTaxonomy
+              .map((item) => item.toMap())
+              .toList(growable: false),
         },
-        'updatedAt': FieldValue.serverTimestamp(),
       },
-      SetOptions(merge: true),
-    );
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
   }
 
   Future<void> updateCommercialAdjustmentRules({
@@ -330,7 +429,9 @@ class WorkspaceProfileService {
   }) async {
     final normalizedTenantId = tenantId.trim();
     if (normalizedTenantId.isEmpty) {
-      throw StateError('Dados invalidos para salvar regras de acrescimos e descontos.');
+      throw StateError(
+        'Dados invalidos para salvar regras de acrescimos e descontos.',
+      );
     }
 
     final normalizedRules = rules
@@ -349,15 +450,10 @@ class WorkspaceProfileService {
         .toList(growable: false);
     final scopeKey = _scopeKey(representedCompanyId);
 
-    await _firestore.collection('tenants').doc(normalizedTenantId).set(
-      {
-        'representedCommercialAdjustments': {
-          scopeKey: normalizedRules,
-        },
-        'updatedAt': FieldValue.serverTimestamp(),
-      },
-      SetOptions(merge: true),
-    );
+    await _firestore.collection('tenants').doc(normalizedTenantId).set({
+      'representedCommercialAdjustments': {scopeKey: normalizedRules},
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
   }
 
   List<PaymentConditionRule> filterPaymentConditionsByOrderValue({
@@ -365,7 +461,9 @@ class WorkspaceProfileService {
     required double orderTotal,
   }) {
     final normalizedTotal = orderTotal < 0 ? 0 : orderTotal;
-    return rules.where((rule) => normalizedTotal >= rule.minimumValue).toList(growable: false);
+    return rules
+        .where((rule) => normalizedTotal >= rule.minimumValue)
+        .toList(growable: false);
   }
 
   Future<void> updateWorkspaceProfile({
@@ -391,13 +489,22 @@ class WorkspaceProfileService {
     }
 
     writeIfPresent('nomeFantasia', _normalize(values['nomeFantasia']));
-    writeIfPresent('contatoResponsavel', _normalize(values['contatoResponsavel']));
-    writeIfPresent('telefoneComercial', _normalize(values['telefoneComercial']));
+    writeIfPresent(
+      'contatoResponsavel',
+      _normalize(values['contatoResponsavel']),
+    );
+    writeIfPresent(
+      'telefoneComercial',
+      _normalize(values['telefoneComercial']),
+    );
     writeIfPresent('emailComercial', _normalize(values['emailComercial']));
     writeIfPresent('website', _normalize(values['website']));
     writeIfPresent('segmento', _normalize(values['segmento']));
     writeIfPresent('regiaoAtuacao', _normalize(values['regiaoAtuacao']));
-    writeIfPresent('marcasRepresentadas', _normalize(values['marcasRepresentadas']));
+    writeIfPresent(
+      'marcasRepresentadas',
+      _normalize(values['marcasRepresentadas']),
+    );
     writeIfPresent('logradouro', _normalize(values['logradouro']));
     writeIfPresent('numero', _normalize(values['numero']));
     writeIfPresent('complemento', _normalize(values['complemento']));
@@ -411,10 +518,10 @@ class WorkspaceProfileService {
       payload.remove('marcasRepresentadas');
     }
 
-    await _firestore.collection('tenants').doc(normalizedTenantId).set(
-          payload,
-          SetOptions(merge: true),
-        );
+    await _firestore
+        .collection('tenants')
+        .doc(normalizedTenantId)
+        .set(payload, SetOptions(merge: true));
   }
 
   Future<void> setProductSyncFromErpEnabled({
@@ -423,16 +530,15 @@ class WorkspaceProfileService {
   }) async {
     final normalizedTenantId = tenantId.trim();
     if (normalizedTenantId.isEmpty) {
-      throw StateError('Workspace invalido para configurar sincronizacao de produtos.');
+      throw StateError(
+        'Workspace invalido para configurar sincronizacao de produtos.',
+      );
     }
 
-    await _firestore.collection('tenants').doc(normalizedTenantId).set(
-      {
-        'productSyncFromErpEnabled': enabled,
-        'updatedAt': FieldValue.serverTimestamp(),
-      },
-      SetOptions(merge: true),
-    );
+    await _firestore.collection('tenants').doc(normalizedTenantId).set({
+      'productSyncFromErpEnabled': enabled,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
   }
 
   Future<void> setAdvancedPricingEnabled({
@@ -441,17 +547,16 @@ class WorkspaceProfileService {
   }) async {
     final normalizedTenantId = tenantId.trim();
     if (normalizedTenantId.isEmpty) {
-      throw StateError('Workspace invalido para configurar precificacao avancada.');
+      throw StateError(
+        'Workspace invalido para configurar precificacao avancada.',
+      );
     }
 
-    await _firestore.collection('tenants').doc(normalizedTenantId).set(
-      {
-        'advancedPricingEnabled': enabled,
-        'featureFlags.advancedPricingEnabled': enabled,
-        'updatedAt': FieldValue.serverTimestamp(),
-      },
-      SetOptions(merge: true),
-    );
+    await _firestore.collection('tenants').doc(normalizedTenantId).set({
+      'advancedPricingEnabled': enabled,
+      'featureFlags.advancedPricingEnabled': enabled,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
   }
 
   Future<void> updateWorkspaceFeatureFlags({
@@ -479,10 +584,10 @@ class WorkspaceProfileService {
       return;
     }
 
-    await _firestore.collection('tenants').doc(normalizedTenantId).set(
-      payload,
-      SetOptions(merge: true),
-    );
+    await _firestore
+        .collection('tenants')
+        .doc(normalizedTenantId)
+        .set(payload, SetOptions(merge: true));
   }
 
   Future<void> setWorkspacePlanTier({
@@ -498,13 +603,10 @@ class WorkspaceProfileService {
       throw StateError('Nivel de plano invalido. Use base ou upgrade.');
     }
 
-    await _firestore.collection('tenants').doc(normalizedTenantId).set(
-      {
-        'planTier': normalizedTier,
-        'updatedAt': FieldValue.serverTimestamp(),
-      },
-      SetOptions(merge: true),
-    );
+    await _firestore.collection('tenants').doc(normalizedTenantId).set({
+      'planTier': normalizedTier,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
   }
 
   Future<void> upsertRepresentedCompany({
@@ -522,24 +624,134 @@ class WorkspaceProfileService {
         : companyId!.trim();
     final docId = '${normalizedTenantId}_$normalizedId';
     final nowIso = DateTime.now().toUtc().toIso8601String();
+    final nomeFantasia = _normalize(values['nomeFantasia']);
+    if (nomeFantasia.isEmpty) {
+      throw StateError('Nome fantasia é obrigatório.');
+    }
+
+    final cnpjDigits = _digitsOnly(values['cnpj']);
+    if (!_isValidCnpjDigits(cnpjDigits)) {
+      throw StateError('CNPJ inválido. Informe um CNPJ válido com 14 dígitos.');
+    }
+    final formattedCnpj = _formatCnpj(cnpjDigits);
+    final cnpjRoot = cnpjDigits.substring(0, 8);
+
+    final cepDigits = _digitsOnly(values['cep']);
+    if (cepDigits.isNotEmpty && cepDigits.length != 8) {
+      throw StateError('CEP inválido. Informe um CEP com 8 dígitos.');
+    }
+
+    final telefoneDigits = _digitsOnly(values['telefone']);
+    if (telefoneDigits.isNotEmpty &&
+        (telefoneDigits.length < 10 || telefoneDigits.length > 11)) {
+      throw StateError('Telefone inválido. Informe 10 ou 11 dígitos.');
+    }
+
+    final normalizedEmail = _normalize(values['email']).toLowerCase();
+    if (normalizedEmail.isNotEmpty && !_isValidEmailAddress(normalizedEmail)) {
+      throw StateError('E-mail inválido.');
+    }
+
+    final normalizedUf = _normalize(values['uf']).toUpperCase();
+    if (!_validBrazilStates.contains(normalizedUf)) {
+      throw StateError('UF inválida.');
+    }
+
+    final parentCompanyId = _normalize(values['parentCompanyId']);
+    if (parentCompanyId == normalizedId) {
+      throw StateError('Uma empresa não pode ser matriz dela mesma.');
+    }
+
+    QuerySnapshot<Map<String, dynamic>>? linkedChildrenSnapshot;
+    try {
+      linkedChildrenSnapshot = await _representedCompaniesCollection
+          .where('tenantId', isEqualTo: normalizedTenantId)
+          .where('parentCompanyId', isEqualTo: normalizedId)
+          .limit(1)
+          .get();
+    } on FirebaseException catch (error) {
+      if (!_isConnectivityLimitedError(error)) {
+        rethrow;
+      }
+    }
+    if (parentCompanyId.isNotEmpty &&
+        linkedChildrenSnapshot != null &&
+        linkedChildrenSnapshot.docs.isNotEmpty) {
+      throw StateError(
+        'Esta empresa já possui filiais vinculadas e não pode ser marcada como filial.',
+      );
+    }
+
+    if (parentCompanyId.isNotEmpty) {
+      DocumentSnapshot<Map<String, dynamic>>? parentDoc;
+      try {
+        parentDoc = await _representedCompaniesCollection
+            .doc('${normalizedTenantId}_$parentCompanyId')
+            .get();
+      } on FirebaseException catch (error) {
+        if (!_isConnectivityLimitedError(error)) {
+          rethrow;
+        }
+      }
+
+      final parentData = parentDoc?.data();
+      if (parentData != null) {
+        final parentParentCompanyId = _normalize(parentData['parentCompanyId']);
+        if (parentParentCompanyId.isNotEmpty) {
+          throw StateError('A matriz selecionada já é uma filial.');
+        }
+
+        final parentCnpjDigits = _digitsOnly(parentData['cnpj']);
+        if (parentCnpjDigits.length == 14 &&
+            parentCnpjDigits.substring(0, 8) != cnpjRoot) {
+          throw StateError(
+            'Filial e matriz devem compartilhar a mesma raiz de CNPJ (8 primeiros dígitos).',
+          );
+        }
+      }
+    }
+
+    QuerySnapshot<Map<String, dynamic>>? duplicatedCnpjSnapshot;
+    try {
+      duplicatedCnpjSnapshot = await _representedCompaniesCollection
+          .where('tenantId', isEqualTo: normalizedTenantId)
+          .where('cnpj', isEqualTo: formattedCnpj)
+          .limit(2)
+          .get();
+    } on FirebaseException catch (error) {
+      if (!_isConnectivityLimitedError(error)) {
+        rethrow;
+      }
+    }
+    if (duplicatedCnpjSnapshot != null) {
+      for (final doc in duplicatedCnpjSnapshot.docs) {
+        final existingCompanyId = _normalize(doc.data()['companyId']);
+        if (existingCompanyId != normalizedId) {
+          throw StateError('Já existe uma representada com esse CNPJ.');
+        }
+      }
+    }
 
     await _representedCompaniesCollection.doc(docId).set({
       'tenantId': normalizedTenantId,
       'companyId': normalizedId,
-      'nomeFantasia': _normalize(values['nomeFantasia']),
+      'parentCompanyId': parentCompanyId,
+      'nomeFantasia': nomeFantasia,
       'razaoSocial': _normalize(values['razaoSocial']),
-      'cnpj': _normalize(values['cnpj']),
-      'cep': _normalize(values['cep']),
+      'cnpj': formattedCnpj,
+      'cep': _formatCep(cepDigits),
       'logradouro': _normalize(values['logradouro']),
       'numero': _normalize(values['numero']),
       'logoUrl': _normalize(values['logoUrl']),
       'contato': _normalize(values['contato']),
-      'telefone': _normalize(values['telefone']),
-      'email': _normalize(values['email']),
+      'telefone': _formatPhone(telefoneDigits),
+      'email': normalizedEmail,
       'cidade': _normalize(values['cidade']),
-      'uf': _normalize(values['uf']).toUpperCase(),
+      'uf': normalizedUf,
       'segmento': _normalize(values['segmento']),
       'ativo': values['ativo'] != false,
+      'companyUnits': FieldValue.delete(),
+      'defaultOrderOriginUnitId': FieldValue.delete(),
       'updatedAt': nowIso,
       'createdAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
@@ -568,41 +780,36 @@ class WorkspaceProfileService {
     final defaultCatalogId = 'products_default_${normalizedTenantId}_$scopeKey';
     final nowIso = DateTime.now().toUtc().toIso8601String();
 
-    await _firestore.collection('tabelas_preco').doc(defaultPriceTableId).set(
-      {
-        'id': defaultPriceTableId,
-        'tenantId': normalizedTenantId,
-        'nome': 'Tabela padrao',
-        'scopeType': 'represented_company',
-        'scopeLabel': representedCompanyName.isEmpty
-            ? 'Tabela padrao da representada'
-            : 'Tabela padrao - $representedCompanyName',
-        'scopeIndex': <String>['default', scopeKey],
-        'origem': 'system',
-        'status': 'ativo',
-        'linkedEntityId': normalizedRepresentedId,
-        'rowCount': 0,
-        'createdAt': nowIso,
-        'updatedAt': nowIso,
-      },
-      SetOptions(merge: true),
-    );
+    await _firestore.collection('tabelas_preco').doc(defaultPriceTableId).set({
+      'id': defaultPriceTableId,
+      'tenantId': normalizedTenantId,
+      'nome': 'Tabela padrao',
+      'scopeType': 'represented_company',
+      'scopeLabel': representedCompanyName.isEmpty
+          ? 'Tabela padrao da representada'
+          : 'Tabela padrao - $representedCompanyName',
+      'scopeIndex': <String>['default', scopeKey],
+      'origem': 'system',
+      'status': 'ativo',
+      'linkedEntityId': normalizedRepresentedId,
+      'rowCount': 0,
+      'createdAt': nowIso,
+      'updatedAt': nowIso,
+    }, SetOptions(merge: true));
 
-    await _firestore.collection('tenants').doc(normalizedTenantId).set(
-      {
-        'defaultPriceTableIds': {scopeKey: defaultPriceTableId},
-        'defaultPriceRegionIds': {scopeKey: _defaultPriceRegionId},
-        'defaultProductCatalogIds': {scopeKey: defaultCatalogId},
-        'defaultPriceTableId': defaultPriceTableId,
-        'defaultPriceRegionId': _defaultPriceRegionId,
-        'defaultProductCatalogId': defaultCatalogId,
-        'updatedAt': FieldValue.serverTimestamp(),
-      },
-      SetOptions(merge: true),
-    );
+    await _firestore.collection('tenants').doc(normalizedTenantId).set({
+      'defaultPriceTableIds': {scopeKey: defaultPriceTableId},
+      'defaultPriceRegionIds': {scopeKey: _defaultPriceRegionId},
+      'defaultProductCatalogIds': {scopeKey: defaultCatalogId},
+      'defaultPriceTableId': defaultPriceTableId,
+      'defaultPriceRegionId': _defaultPriceRegionId,
+      'defaultProductCatalogId': defaultCatalogId,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
 
     if (legacyScopeKey != scopeKey) {
-      final legacyDefaultPriceTableId = 'pt_default_${normalizedTenantId}_$legacyScopeKey';
+      final legacyDefaultPriceTableId =
+          'pt_default_${normalizedTenantId}_$legacyScopeKey';
       final legacyDoc = await _firestore
           .collection('tabelas_preco')
           .doc(legacyDefaultPriceTableId)
@@ -617,32 +824,34 @@ class WorkspaceProfileService {
         await legacyDoc.reference.delete();
       }
 
-      await _firestore.collection('tenants').doc(normalizedTenantId).set(
-        {
-          'defaultPriceTableIds': {legacyScopeKey: FieldValue.delete()},
-          'defaultPriceRegionIds': {legacyScopeKey: FieldValue.delete()},
-          'defaultProductCatalogIds': {legacyScopeKey: FieldValue.delete()},
-          'updatedAt': FieldValue.serverTimestamp(),
-        },
-        SetOptions(merge: true),
-      );
+      await _firestore.collection('tenants').doc(normalizedTenantId).set({
+        'defaultPriceTableIds': {legacyScopeKey: FieldValue.delete()},
+        'defaultPriceRegionIds': {legacyScopeKey: FieldValue.delete()},
+        'defaultProductCatalogIds': {legacyScopeKey: FieldValue.delete()},
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
     }
 
-    final tenantDoc = await _firestore.collection('tenants').doc(normalizedTenantId).get();
-    final workspaceType =
-        (tenantDoc.data()?['workspaceType'] ?? '').toString().trim().toLowerCase();
+    final tenantDoc = await _firestore
+        .collection('tenants')
+        .doc(normalizedTenantId)
+        .get();
+    final workspaceType = (tenantDoc.data()?['workspaceType'] ?? '')
+        .toString()
+        .trim()
+        .toLowerCase();
     if (workspaceType == 'rep_workspace') {
       final tenantDefaultPriceTableId = 'pt_default_$normalizedTenantId';
-      await _firestore.collection('tabelas_preco').doc(tenantDefaultPriceTableId).delete();
-      await _firestore.collection('tenants').doc(normalizedTenantId).set(
-        {
-          'defaultPriceTableIds': {'tenant_default': FieldValue.delete()},
-          'defaultPriceRegionIds': {'tenant_default': FieldValue.delete()},
-          'defaultProductCatalogIds': {'tenant_default': FieldValue.delete()},
-          'updatedAt': FieldValue.serverTimestamp(),
-        },
-        SetOptions(merge: true),
-      );
+      await _firestore
+          .collection('tabelas_preco')
+          .doc(tenantDefaultPriceTableId)
+          .delete();
+      await _firestore.collection('tenants').doc(normalizedTenantId).set({
+        'defaultPriceTableIds': {'tenant_default': FieldValue.delete()},
+        'defaultPriceRegionIds': {'tenant_default': FieldValue.delete()},
+        'defaultProductCatalogIds': {'tenant_default': FieldValue.delete()},
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
     }
   }
 
@@ -657,21 +866,27 @@ class WorkspaceProfileService {
     }
 
     final tenantRef = _firestore.collection('tenants').doc(normalizedTenantId);
-    final representedRef =
-        _representedCompaniesCollection.doc('${normalizedTenantId}_$normalizedCompanyId');
+    final representedRef = _representedCompaniesCollection.doc(
+      '${normalizedTenantId}_$normalizedCompanyId',
+    );
     final scopeKey = _normalizeDefaultPricingScopeKey(normalizedCompanyId);
     final legacyScopeKey = normalizedCompanyId.replaceAll('/', '_');
     final defaultPriceTableId = 'pt_default_${normalizedTenantId}_$scopeKey';
-    final legacyDefaultPriceTableId = 'pt_default_${normalizedTenantId}_$legacyScopeKey';
-    final defaultPriceTableRef =
-        _firestore.collection('tabelas_preco').doc(defaultPriceTableId);
-    final legacyDefaultPriceTableRef =
-        _firestore.collection('tabelas_preco').doc(legacyDefaultPriceTableId);
+    final legacyDefaultPriceTableId =
+        'pt_default_${normalizedTenantId}_$legacyScopeKey';
+    final defaultPriceTableRef = _firestore
+        .collection('tabelas_preco')
+        .doc(defaultPriceTableId);
+    final legacyDefaultPriceTableRef = _firestore
+        .collection('tabelas_preco')
+        .doc(legacyDefaultPriceTableId);
 
     await _firestore.runTransaction((transaction) async {
       final tenantSnapshot = await transaction.get(tenantRef);
       final favoriteId =
-          (tenantSnapshot.data()?['favoriteRepresentedCompanyId'] ?? '').toString().trim();
+          (tenantSnapshot.data()?['favoriteRepresentedCompanyId'] ?? '')
+              .toString()
+              .trim();
 
       transaction.delete(representedRef);
       transaction.delete(defaultPriceTableRef);
@@ -679,35 +894,33 @@ class WorkspaceProfileService {
         transaction.delete(legacyDefaultPriceTableRef);
       }
 
-      final defaultPriceTableIdsPatch = <String, Object?>{scopeKey: FieldValue.delete()};
-      final defaultPriceRegionIdsPatch = <String, Object?>{scopeKey: FieldValue.delete()};
-      final defaultProductCatalogIdsPatch = <String, Object?>{scopeKey: FieldValue.delete()};
+      final defaultPriceTableIdsPatch = <String, Object?>{
+        scopeKey: FieldValue.delete(),
+      };
+      final defaultPriceRegionIdsPatch = <String, Object?>{
+        scopeKey: FieldValue.delete(),
+      };
+      final defaultProductCatalogIdsPatch = <String, Object?>{
+        scopeKey: FieldValue.delete(),
+      };
       if (legacyScopeKey != scopeKey) {
         defaultPriceTableIdsPatch[legacyScopeKey] = FieldValue.delete();
         defaultPriceRegionIdsPatch[legacyScopeKey] = FieldValue.delete();
         defaultProductCatalogIdsPatch[legacyScopeKey] = FieldValue.delete();
       }
 
-      transaction.set(
-        tenantRef,
-        {
-          'defaultPriceTableIds': defaultPriceTableIdsPatch,
-          'defaultPriceRegionIds': defaultPriceRegionIdsPatch,
-          'defaultProductCatalogIds': defaultProductCatalogIdsPatch,
-          'updatedAt': FieldValue.serverTimestamp(),
-        },
-        SetOptions(merge: true),
-      );
+      transaction.set(tenantRef, {
+        'defaultPriceTableIds': defaultPriceTableIdsPatch,
+        'defaultPriceRegionIds': defaultPriceRegionIdsPatch,
+        'defaultProductCatalogIds': defaultProductCatalogIdsPatch,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
 
       if (favoriteId == normalizedCompanyId) {
-        transaction.set(
-          tenantRef,
-          {
-            'favoriteRepresentedCompanyId': '',
-            'updatedAt': FieldValue.serverTimestamp(),
-          },
-          SetOptions(merge: true),
-        );
+        transaction.set(tenantRef, {
+          'favoriteRepresentedCompanyId': '',
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
       }
     });
   }
@@ -722,17 +935,127 @@ class WorkspaceProfileService {
       throw StateError('Dados invalidos para favoritar representada.');
     }
 
-    await _firestore.collection('tenants').doc(normalizedTenantId).set(
-      {
-        'favoriteRepresentedCompanyId': normalizedCompanyId,
-        'updatedAt': FieldValue.serverTimestamp(),
-      },
-      SetOptions(merge: true),
-    );
+    await _firestore.collection('tenants').doc(normalizedTenantId).set({
+      'favoriteRepresentedCompanyId': normalizedCompanyId,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
   }
+
   String _normalize(Object? value) {
     return value?.toString().trim() ?? '';
   }
+
+  String _digitsOnly(Object? value) {
+    return _normalize(value).replaceAll(RegExp(r'\D'), '');
+  }
+
+  bool _isConnectivityLimitedError(FirebaseException error) {
+    final code = error.code.trim().toLowerCase();
+    return code == 'unavailable' ||
+        code == 'network-request-failed' ||
+        code == 'deadline-exceeded';
+  }
+
+  bool _isValidEmailAddress(String value) {
+    final normalized = value.trim();
+    if (normalized.isEmpty) {
+      return true;
+    }
+
+    return RegExp(
+      r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$',
+    ).hasMatch(normalized);
+  }
+
+  bool _isValidCnpjDigits(String value) {
+    if (value.length != 14) {
+      return false;
+    }
+
+    if (RegExp(r'^(\d)\1{13}$').hasMatch(value)) {
+      return false;
+    }
+
+    int calcDigit(String source, List<int> weights) {
+      var sum = 0;
+      for (var i = 0; i < weights.length; i++) {
+        sum += int.parse(source[i]) * weights[i];
+      }
+      final remainder = sum % 11;
+      return remainder < 2 ? 0 : 11 - remainder;
+    }
+
+    final firstDigit = calcDigit(value.substring(0, 12), <int>[5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]);
+    final secondDigit = calcDigit(
+      value.substring(0, 12) + firstDigit.toString(),
+      <int>[6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2],
+    );
+
+    return value.endsWith('$firstDigit$secondDigit');
+  }
+
+  String _formatCnpj(String digits) {
+    if (digits.isEmpty) {
+      return '';
+    }
+    final safe = digits.length > 14 ? digits.substring(0, 14) : digits;
+    return '${safe.substring(0, 2)}.${safe.substring(2, 5)}.${safe.substring(5, 8)}/${safe.substring(8, 12)}-${safe.substring(12, 14)}';
+  }
+
+  String _formatCep(String digits) {
+    if (digits.isEmpty) {
+      return '';
+    }
+    final safe = digits.length > 8 ? digits.substring(0, 8) : digits;
+    if (safe.length < 8) {
+      return safe;
+    }
+    return '${safe.substring(0, 5)}-${safe.substring(5, 8)}';
+  }
+
+  String _formatPhone(String digits) {
+    if (digits.isEmpty) {
+      return '';
+    }
+    final safe = digits.length > 11 ? digits.substring(0, 11) : digits;
+    if (safe.length == 10) {
+      return '(${safe.substring(0, 2)}) ${safe.substring(2, 6)}-${safe.substring(6, 10)}';
+    }
+    if (safe.length == 11) {
+      return '(${safe.substring(0, 2)}) ${safe.substring(2, 7)}-${safe.substring(7, 11)}';
+    }
+    return safe;
+  }
+
+  static const Set<String> _validBrazilStates = <String>{
+    'AC',
+    'AL',
+    'AP',
+    'AM',
+    'BA',
+    'CE',
+    'DF',
+    'ES',
+    'GO',
+    'MA',
+    'MT',
+    'MS',
+    'MG',
+    'PA',
+    'PB',
+    'PR',
+    'PE',
+    'PI',
+    'RJ',
+    'RN',
+    'RS',
+    'RO',
+    'RR',
+    'SC',
+    'SP',
+    'SE',
+    'TO',
+  };
 
   double _toDouble(Object? value) {
     if (value is num) {
@@ -745,8 +1068,12 @@ class WorkspaceProfileService {
         return 0;
       }
 
-      final withDotDecimal = normalized.replaceAll('.', '').replaceAll(',', '.');
-      return double.tryParse(withDotDecimal) ?? double.tryParse(normalized.replaceAll(',', '.')) ?? 0;
+      final withDotDecimal = normalized
+          .replaceAll('.', '')
+          .replaceAll(',', '.');
+      return double.tryParse(withDotDecimal) ??
+          double.tryParse(normalized.replaceAll(',', '.')) ??
+          0;
     }
 
     return 0;
@@ -758,6 +1085,89 @@ class WorkspaceProfileService {
       return 'tenant_default';
     }
     return normalized.replaceAll('.', '_');
+  }
+
+  List<ProductCategoryTaxonomyItem> _readTaxonomyForScope({
+    required Map<String, dynamic> data,
+    required String scopeKey,
+  }) {
+    final root = data['representedProductTaxonomy'];
+    if (root is Map) {
+      final taxonomy = _readTaxonomyScopedNode(root: root, scopeKey: scopeKey);
+      if (taxonomy.isNotEmpty) {
+        return taxonomy;
+      }
+    }
+
+    final legacyRoot = data['representedProductCategories'];
+    if (legacyRoot is Map) {
+      final scoped = legacyRoot[scopeKey] ?? legacyRoot['__tenant__'];
+      if (scoped is List) {
+        final categories = <String>[];
+        for (final item in scoped) {
+          final value = item?.toString().trim() ?? '';
+          if (value.isNotEmpty) {
+            categories.add(value);
+          }
+        }
+
+        return categories
+            .toSet()
+            .map(
+              (category) => ProductCategoryTaxonomyItem(
+                name: category,
+                subcategories: const <String>[],
+              ),
+            )
+            .toList(growable: false);
+      }
+    }
+
+    return const <ProductCategoryTaxonomyItem>[];
+  }
+
+  List<ProductCategoryTaxonomyItem> _readTaxonomyScopedNode({
+    required Map root,
+    required String scopeKey,
+  }) {
+    final scoped = root[scopeKey] ?? root['__tenant__'];
+    if (scoped is! Map) {
+      return const <ProductCategoryTaxonomyItem>[];
+    }
+
+    final rawCategories = scoped['categories'];
+    if (rawCategories is! List) {
+      return const <ProductCategoryTaxonomyItem>[];
+    }
+
+    final result = <ProductCategoryTaxonomyItem>[];
+    for (final item in rawCategories) {
+      if (item is! Map) {
+        continue;
+      }
+
+      final name = (item['name'] ?? '').toString().trim();
+      if (name.isEmpty) {
+        continue;
+      }
+
+      final subcategories = <String>[];
+      final rawSubcategories = item['subcategories'];
+      if (rawSubcategories is List) {
+        for (final sub in rawSubcategories) {
+          final value = sub?.toString().trim() ?? '';
+          if (value.isNotEmpty) {
+            subcategories.add(value);
+          }
+        }
+      }
+
+      result.add(
+        ProductCategoryTaxonomyItem(name: name, subcategories: subcategories),
+      );
+    }
+
+    return result;
   }
 
   String _normalizeDefaultPricingScopeKey(String? representedCompanyId) {

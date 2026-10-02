@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../theme/app_field_tokens.dart';
 
@@ -44,8 +45,15 @@ class AppMediumLabeledControl extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final labelWidget = Text(label, style: labelStyle ?? Theme.of(context).textTheme.bodySmall);
-    final control = AppMediumControlFrame(height: height, width: width, child: child);
+    final labelWidget = Text(
+      label,
+      style: labelStyle ?? Theme.of(context).textTheme.bodySmall,
+    );
+    final control = AppMediumControlFrame(
+      height: height,
+      width: width,
+      child: child,
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -64,18 +72,23 @@ class AppMediumTextField extends StatelessWidget {
     required this.controller,
     required this.readOnly,
     this.keyboardType,
+    this.inputFormatters,
     this.textAlign = TextAlign.right,
     this.textAlignVertical = TextAlignVertical.center,
     this.style,
     this.hintText,
     this.hintStyle,
     this.borderRadius = AppFieldTokens.mediumFieldRadius,
-    this.contentPadding = const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+    this.contentPadding = const EdgeInsets.symmetric(
+      horizontal: 10,
+      vertical: 8,
+    ),
   });
 
   final TextEditingController controller;
   final bool readOnly;
   final TextInputType? keyboardType;
+  final List<TextInputFormatter>? inputFormatters;
   final TextAlign textAlign;
   final TextAlignVertical textAlignVertical;
   final TextStyle? style;
@@ -87,7 +100,8 @@ class AppMediumTextField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final effectiveStyle = style ?? Theme.of(context).textTheme.bodySmall;
-    final outlineColor = Theme.of(context).colorScheme.outline.withValues(alpha: 0.45);
+    final outlineColor = Theme.of(context).colorScheme.outline
+        .withValues(alpha: 0.45);
     final fillColor = Theme.of(context).colorScheme.surface;
     final innerShadeTop = Colors.white.withValues(alpha: 0.55);
     final innerShadeBottom = Colors.black.withValues(alpha: 0.035);
@@ -120,6 +134,7 @@ class AppMediumTextField extends StatelessWidget {
           controller: controller,
           readOnly: readOnly,
           keyboardType: keyboardType,
+          inputFormatters: inputFormatters,
           maxLines: 1,
           textAlign: textAlign,
           textAlignVertical: textAlignVertical,
@@ -146,6 +161,7 @@ class AppMediumDropdown<T> extends StatelessWidget {
     this.style,
     this.icon,
     this.hint,
+    this.alignment = AlignmentDirectional.centerEnd,
     this.borderRadius = AppFieldTokens.mediumFieldRadius,
     this.contentPadding = const EdgeInsets.symmetric(horizontal: 10),
   });
@@ -156,12 +172,14 @@ class AppMediumDropdown<T> extends StatelessWidget {
   final TextStyle? style;
   final Widget? icon;
   final Widget? hint;
+  final AlignmentGeometry alignment;
   final BorderRadius borderRadius;
   final EdgeInsets contentPadding;
 
   @override
   Widget build(BuildContext context) {
-    final outlineColor = Theme.of(context).colorScheme.outline.withValues(alpha: 0.45);
+    final outlineColor = Theme.of(context).colorScheme.outline
+        .withValues(alpha: 0.45);
     final fillColor = Theme.of(context).colorScheme.surface;
     final innerShadeTop = Colors.white.withValues(alpha: 0.55);
     final innerShadeBottom = Colors.black.withValues(alpha: 0.035);
@@ -194,7 +212,7 @@ class AppMediumDropdown<T> extends StatelessWidget {
           child: DropdownButton<T>(
             value: value,
             isExpanded: true,
-            alignment: AlignmentDirectional.centerEnd,
+            alignment: alignment,
             style: style,
             icon: icon,
             hint: hint,

@@ -14,6 +14,27 @@ import 'pending_access_page.dart';
 import 'sign_in_page.dart';
 import 'web_sign_in_page.dart';
 
+enum _WebUiMode { auto, web, mobile }
+
+_WebUiMode _resolveWebUiMode() {
+  if (!kIsWeb) {
+    return _WebUiMode.auto;
+  }
+
+  final rawMode = (Uri.base.queryParameters['mode'] ??
+          Uri.base.queryParameters['view'] ??
+          '')
+      .trim()
+      .toLowerCase();
+  if (rawMode == 'mobile' || rawMode == 'app') {
+    return _WebUiMode.mobile;
+  }
+  if (rawMode == 'web' || rawMode == 'portal') {
+    return _WebUiMode.web;
+  }
+  return _WebUiMode.auto;
+}
+
 class FirebaseAuthGatePage extends StatelessWidget {
   const FirebaseAuthGatePage({super.key});
 
@@ -22,25 +43,49 @@ class FirebaseAuthGatePage extends StatelessWidget {
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, authSnapshot) {
+        final webUiMode = _resolveWebUiMode();
+
         if (authSnapshot.connectionState == ConnectionState.waiting) {
           return const LoadingPage(label: 'Validando autenticacao...');
         }
 
         final user = authSnapshot.data;
         if (user == null) {
-          return kIsWeb ? const WebSignInPage() : const SignInPage();
+          if (!kIsWeb) {
+            return const SignInPage();
+          }
+
+          if (webUiMode == _WebUiMode.mobile) {
+            return const SignInPage();
+          }
+          if (webUiMode == _WebUiMode.web) {
+            return const WebSignInPage();
+          }
+
+          final screenWidth = MediaQuery.sizeOf(context).width;
+          return screenWidth < 840
+              ? const SignInPage()
+              : const WebSignInPage();
         }
 
-        return _UserAccessResolver(user: user);
+        return _UserAccessResolver(
+          user: user,
+          forceMobilePreviewOnWeb:
+              kIsWeb && webUiMode == _WebUiMode.mobile,
+        );
       },
     );
   }
 }
 
 class _UserAccessResolver extends StatefulWidget {
-  const _UserAccessResolver({required this.user});
+  const _UserAccessResolver({
+    required this.user,
+    required this.forceMobilePreviewOnWeb,
+  });
 
   final User user;
+  final bool forceMobilePreviewOnWeb;
 
   @override
   State<_UserAccessResolver> createState() => _UserAccessResolverState();
@@ -86,6 +131,7 @@ class _UserAccessResolverState extends State<_UserAccessResolver> {
               user: widget.user,
               decision: decision,
               onAccessUpdated: _refreshAccess,
+              forceMobilePreviewOnWeb: widget.forceMobilePreviewOnWeb,
             );
           case TenantEntryPath.invitation:
             return PendingAccessPage(
@@ -108,11 +154,13 @@ class _TenantAccessResolver extends StatefulWidget {
     required this.user,
     required this.decision,
     required this.onAccessUpdated,
+    required this.forceMobilePreviewOnWeb,
   });
 
   final User user;
   final TenantEntryDecision decision;
   final VoidCallback onAccessUpdated;
+  final bool forceMobilePreviewOnWeb;
 
   @override
   State<_TenantAccessResolver> createState() => _TenantAccessResolverState();
@@ -213,6 +261,7 @@ class _TenantAccessResolverState extends State<_TenantAccessResolver> {
             isPersonalWorkspace: false,
           ),
           onAccessUpdated: widget.onAccessUpdated,
+          forceMobilePreviewOnWeb: widget.forceMobilePreviewOnWeb,
           onSignOut: () => FirebaseAuth.instance.signOut(),
           onSwitchProfile: () {
             _showAccessPicker(

@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/models/domain_types.dart';
 import '../services/product_editor_initialization_coordinator.dart';
+import '../services/product_unit_catalog_service.dart';
 import 'product_editor_field_builder.dart';
 
 class ProductEditorTabsPayload {
   const ProductEditorTabsPayload({
     required this.readOnly,
+    required this.tenantId,
     required this.controllers,
     required this.status,
     required this.currencyCode,
@@ -14,7 +16,6 @@ class ProductEditorTabsPayload {
     required this.loadingTablePrice,
     required this.isEnterprise,
     required this.availableBrands,
-    required this.bitolaUnits,
     required this.currencyLabels,
     required this.currencyHints,
     required this.labelStyle,
@@ -27,12 +28,15 @@ class ProductEditorTabsPayload {
     required this.onCurrencyCodeChanged,
     required this.onBrandSelected,
     required this.onBitolaUnitChanged,
+    required this.onStandardUnitChanged,
     required this.onOpenMediaLibrary,
     required this.onClearImage,
     required this.editorFieldBuilder,
+    required this.unitCatalogService,
   });
 
   final bool readOnly;
+  final String tenantId;
   final ProductEditorFormControllers controllers;
   final ProductStatus status;
   final String currencyCode;
@@ -40,7 +44,6 @@ class ProductEditorTabsPayload {
   final bool loadingTablePrice;
   final bool isEnterprise;
   final List<String> availableBrands;
-  final List<String> bitolaUnits;
   final Map<String, String> currencyLabels;
   final Map<String, String> currencyHints;
   final TextStyle labelStyle;
@@ -53,7 +56,9 @@ class ProductEditorTabsPayload {
   final ValueChanged<String> onCurrencyCodeChanged;
   final ValueChanged<String> onBrandSelected;
   final ValueChanged<String> onBitolaUnitChanged;
+  final ValueChanged<String> onStandardUnitChanged;
   final VoidCallback onOpenMediaLibrary;
   final VoidCallback onClearImage;
   final ProductEditorFieldBuilder editorFieldBuilder;
+  final ProductUnitCatalogService unitCatalogService;
 }

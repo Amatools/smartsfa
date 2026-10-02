@@ -1,5 +1,6 @@
 import '../../../../core/models/produto.dart';
 import 'product_draft_factory.dart';
+import 'product_editor_defaults.dart';
 import 'product_editor_form_reset_coordinator.dart';
 import 'product_editor_initialization_coordinator.dart';
 import 'product_internal_code_generator.dart';
@@ -32,7 +33,8 @@ class ProductEditorPostSaveCoordinator {
 
     return _formResetCoordinator.resetAfterSave(
       nextCodigoInterno: nextDraft.codigoInterno,
-      unidadePadrao: nextDraft.unidade ?? 'UN',
+      unidadePadrao:
+          nextDraft.unidade ?? ProductEditorDefaults.defaultStandardUnit,
       defaultCurrencyCode: defaultCurrencyCode,
       controllers: controllers,
     );

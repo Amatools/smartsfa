@@ -114,9 +114,19 @@ class ProductDefaultPriceSyncService {
 
     try {
       final allBasePrices = await pricesRepository.fetchAll(tenantId: identity.tenantId);
-      final rows = allBasePrices.where((item) {
-        return item.priceTableId == _defaultPriceTableId && item.status == 'active';
-      }).length;
+      final activeProductIds = await _loadActiveProductIds();
+      final linkedActiveProductIds = <String>{};
+      for (final item in allBasePrices) {
+        if (item.priceTableId != _defaultPriceTableId || item.status != 'active') {
+          continue;
+        }
+        final productId = item.productId.trim();
+        if (productId.isEmpty || !activeProductIds.contains(productId)) {
+          continue;
+        }
+        linkedActiveProductIds.add(productId);
+      }
+      final rows = linkedActiveProductIds.length;
 
       final existingTable = await pricesTableRepository.fetchById(
         tenantId: identity.tenantId,
@@ -138,5 +148,27 @@ class ProductDefaultPriceSyncService {
       }
       // In read-only contexts, keep product operations working.
     }
+  }
+
+  Future<Set<String>> _loadActiveProductIds() async {
+    final snapshot = await FirebaseFirestore.instance
+        .collection('produtos')
+        .where('tenantId', isEqualTo: identity.tenantId)
+        .get();
+
+    const activeStatuses = <String>{'ativo', 'active'};
+    final ids = <String>{};
+    for (final doc in snapshot.docs) {
+      final data = doc.data();
+      final status = (data['status'] as String? ?? '').trim().toLowerCase();
+      if (!activeStatuses.contains(status)) {
+        continue;
+      }
+      final id = (data['id'] as String? ?? doc.id).trim();
+      if (id.isNotEmpty) {
+        ids.add(id);
+      }
+    }
+    return ids;
   }
 }

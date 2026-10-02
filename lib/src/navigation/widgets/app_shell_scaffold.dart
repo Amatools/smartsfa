@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../models/app_shell_scaffold_payload.dart';
@@ -9,7 +10,16 @@ class AppShellScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isWide = MediaQuery.sizeOf(context).width >= 900;
+    final rawMode =
+        (kIsWeb ? Uri.base.queryParameters['mode'] : null)
+            ?.trim()
+            .toLowerCase() ??
+        '';
+    final isWebMobilePreview =
+        kIsWeb && (rawMode == 'mobile' || rawMode == 'app');
+    final isWide = kIsWeb
+        ? !isWebMobilePreview
+        : MediaQuery.sizeOf(context).width >= 900;
 
     return Scaffold(
       appBar: AppBar(

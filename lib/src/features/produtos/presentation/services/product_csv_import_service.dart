@@ -63,11 +63,13 @@ class ProductCsvImportService {
     }
 
     final separator = _detectCsvSeparator(lines.first);
-    final headers = _splitCsvLine(lines.first, separator)
-        .map(_normalizeHeader)
-        .toList(growable: false);
+    final headers = _splitCsvLine(
+      lines.first,
+      separator,
+    ).map(_normalizeHeader).toList(growable: false);
 
-    final hasDescricao = headers.contains('descricao') || headers.contains('nome');
+    final hasDescricao =
+        headers.contains('descricao') || headers.contains('nome');
 
     if (!hasDescricao) {
       return const ProductImportValidation(
@@ -125,32 +127,63 @@ class ProductCsvImportService {
         descricao: descricao,
         origemCadastro: ProductSource.excel,
         status: status,
-        descricaoResumida: _readRowValue(row, const ['descricaoresumida', 'descricao_resumida']),
-        descricaoLonga: _readRowValue(row, const ['descricaolonga', 'descricao_longa']),
-        codigoFabricante: _readRowValue(row, const ['codigofabricante', 'codigo_fabricante']),
+        descricaoResumida: _readRowValue(row, const [
+          'descricaoresumida',
+          'descricao_resumida',
+        ]),
+        descricaoLonga: _readRowValue(row, const [
+          'descricaolonga',
+          'descricao_longa',
+        ]),
+        codigoFabricante: _readRowValue(row, const [
+          'codigofabricante',
+          'codigo_fabricante',
+        ]),
         sku: _readRowValue(row, const ['sku', 'skucomercial', 'sku_comercial']),
         ean: _readRowValue(row, const ['ean', 'gtin']),
         marca: _readRowValue(row, const ['marca']),
         categoria: _readRowValue(row, const ['categoria']),
-        subcategoria: _readRowValue(row, const ['subcategoria', 'sub_categoria']),
+        subcategoria: _readRowValue(row, const [
+          'subcategoria',
+          'sub_categoria',
+        ]),
         bitola: _readRowValue(row, const ['bitola', 'medida']),
-        bitolaUnidade: _readRowValue(row, const ['bitolaunidade', 'bitola_unidade', 'unidadebitola', 'unidade_bitola']),
+        bitolaUnidade: _readRowValue(row, const [
+          'bitolaunidade',
+          'bitola_unidade',
+          'unidadebitola',
+          'unidade_bitola',
+        ]),
         unidade: _readRowValue(row, const ['unidade']),
-        multiploVenda: _readDoubleFromRow(row, const ['multiplovenda', 'multiplo_venda']),
-        quantidadeMinima: _readDoubleFromRow(row, const ['quantidademinima', 'quantidade_minima']),
+        multiploVenda: _readDoubleFromRow(row, const [
+          'multiplovenda',
+          'multiplo_venda',
+        ]),
+        quantidadeMinima: _readDoubleFromRow(row, const [
+          'quantidademinima',
+          'quantidade_minima',
+        ]),
         ncm: _readRowValue(row, const ['ncm']),
-        cfop: _readRowValue(row, const ['cfop']),
-        aliquotaIcms: _readDoubleFromRow(row, const ['aliquotaicms', 'aliquota_icms']),
-        aliquotaPis: _readDoubleFromRow(row, const ['aliquotapis', 'aliquota_pis']),
-        aliquotaCofins: _readDoubleFromRow(row, const ['aliquotacofins', 'aliquota_cofins']),
+        cest: _readRowValue(row, const ['cest']),
+        aliquotaIpiBase: _readDoubleFromRow(row, const [
+          'aliquotaipibase',
+          'aliquota_ipi_base',
+          'aliquotaipi',
+          'aliquota_ipi',
+          'ipi',
+        ]),
         pesoKg: _readDoubleFromRow(row, const ['pesokg', 'peso_kg']),
-        comprimentoMm: _readDoubleFromRow(row, const ['comprimentomm', 'comprimento_mm']),
+        comprimentoMm: _readDoubleFromRow(row, const [
+          'comprimentomm',
+          'comprimento_mm',
+        ]),
         larguraMm: _readDoubleFromRow(row, const ['larguramm', 'largura_mm']),
         alturaMm: _readDoubleFromRow(row, const ['alturamm', 'altura_mm']),
-        erpProductId: _readRowValue(row, const ['erpproductid', 'erp_product_id']),
+        erpProductId: _readRowValue(row, const [
+          'erpproductid',
+          'erp_product_id',
+        ]),
         erpSyncId: _readRowValue(row, const ['erpsyncid', 'erp_sync_id']),
-        tabelaPrecoVersao: _readRowValue(row, const ['tabelaprecoversao', 'tabela_preco_versao']),
-        estoqueVersao: _readRowValue(row, const ['estoqueversao', 'estoque_versao']),
         createdAt: now,
         updatedAt: now,
       );

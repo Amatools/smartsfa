@@ -97,6 +97,19 @@ class FirestoreTabelaPrecoRepository implements TabelaPrecoRepository {
       throw StateError('A tabela padrao do sistema nao pode ser excluida manualmente.');
     }
 
+    final basePrices = await _firestore
+        .collection('product_base_prices')
+        .where('tenantId', isEqualTo: tenantId.trim())
+        .where('priceTableId', isEqualTo: id.trim())
+        .get();
+    if (basePrices.docs.isNotEmpty) {
+      final batch = _firestore.batch();
+      for (final doc in basePrices.docs) {
+        batch.delete(doc.reference);
+      }
+      await batch.commit();
+    }
+
     await _collection.doc(id).delete();
   }
 }

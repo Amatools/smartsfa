@@ -39,13 +39,19 @@ class ProductEditorSaveCommandBuilder {
     required Future<void> Function(Produto entity) syncDefaultTablePrice,
     required String requiredDescriptionMessage,
     required String requiredTablePriceMessage,
+    required String requiredCategoryMessage,
+    required String requiredSubcategoryMessage,
   }) {
     final tablePrice = ProductFormValueCodec.parseDecimal(tablePriceText);
     final validationMessage = ProductEditorSaveValidation.validateRequired(
       descricao: formData.descricaoText,
       tablePrice: tablePrice,
+      categoria: formData.categoriaText,
+      subcategoria: formData.subcategoriaText,
       requiredDescriptionMessage: requiredDescriptionMessage,
       requiredTablePriceMessage: requiredTablePriceMessage,
+      requiredCategoryMessage: requiredCategoryMessage,
+      requiredSubcategoryMessage: requiredSubcategoryMessage,
     );
 
     if (validationMessage != null) {

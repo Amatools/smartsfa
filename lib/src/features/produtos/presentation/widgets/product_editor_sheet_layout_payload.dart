@@ -25,6 +25,7 @@ class ProductEditorSheetLayoutPayload {
     required this.onOpenMediaLibrary,
     required this.controllers,
     required this.categoryField,
+    required this.subcategoryField,
     required this.editorFieldBuilder,
     required this.tabsPayload,
     required this.isEditing,
@@ -48,6 +49,7 @@ class ProductEditorSheetLayoutPayload {
   final VoidCallback? onOpenMediaLibrary;
   final ProductEditorFormControllers controllers;
   final Widget categoryField;
+  final Widget subcategoryField;
   final ProductEditorFieldBuilder editorFieldBuilder;
   final ProductEditorTabsPayload tabsPayload;
   final bool isEditing;

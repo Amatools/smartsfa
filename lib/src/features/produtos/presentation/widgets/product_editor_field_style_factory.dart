@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../../shared/presentation/theme/app_field_tokens.dart';
 import 'product_editor_fields.dart';
@@ -39,6 +40,7 @@ class ProductEditorFieldStyleFactory {
     required TextStyle labelStyle,
     required double fieldHeight,
     TextInputType? keyboardType,
+    List<TextInputFormatter>? inputFormatters,
     int maxLines = 1,
     TextAlign textAlign = TextAlign.right,
   }) {
@@ -51,6 +53,7 @@ class ProductEditorFieldStyleFactory {
       labelStyle: labelStyle,
       fieldHeight: fieldHeight,
       keyboardType: keyboardType,
+      inputFormatters: inputFormatters,
       maxLines: maxLines,
       textAlign: textAlign,
     );

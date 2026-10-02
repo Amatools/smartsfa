@@ -34,15 +34,11 @@ class Produto implements TenantScopedEntity {
     this.multiploVenda,
     this.quantidadeMinima,
     this.ncm,
-    this.cfop,
-    this.aliquotaIcms,
-    this.aliquotaPis,
-    this.aliquotaCofins,
+    this.cest,
+    this.aliquotaIpiBase,
     this.pesoKg,
     this.erpProductId,
     this.erpSyncId,
-    this.tabelaPrecoVersao,
-    this.estoqueVersao,
     this.createdAt,
     this.updatedAt,
   });
@@ -63,7 +59,9 @@ class Produto implements TenantScopedEntity {
       storagePath: map['storagePath'] as String?,
       thumbnailBase64: map['thumbnailBase64'] as String?,
       descricaoResumida: map['descricaoResumida'] as String?,
-      descricaoLonga: map['descricaoLonga'] as String? ?? map['descricaoResumida'] as String?,
+      descricaoLonga:
+          map['descricaoLonga'] as String? ??
+          map['descricaoResumida'] as String?,
       codigoFabricante: map['codigoFabricante'] as String?,
       sku: map['sku'] as String?,
       ean: map['ean'] as String?,
@@ -84,15 +82,11 @@ class Produto implements TenantScopedEntity {
       multiploVenda: _readDouble(map['multiploVenda']),
       quantidadeMinima: _readDouble(map['quantidadeMinima']),
       ncm: map['ncm'] as String?,
-      cfop: map['cfop'] as String?,
-      aliquotaIcms: _readDouble(map['aliquotaIcms']),
-      aliquotaPis: _readDouble(map['aliquotaPis']),
-      aliquotaCofins: _readDouble(map['aliquotaCofins']),
+      cest: map['cest'] as String?,
+      aliquotaIpiBase: _readDouble(map['aliquotaIpiBase']),
       pesoKg: _readDouble(map['pesoKg']),
       erpProductId: map['erpProductId'] as String?,
       erpSyncId: map['erpSyncId'] as String?,
-      tabelaPrecoVersao: map['tabelaPrecoVersao'] as String?,
-      estoqueVersao: map['estoqueVersao'] as String?,
       createdAt: _readDateTime(map['createdAt']),
       updatedAt: _readDateTime(map['updatedAt']),
     );
@@ -131,15 +125,11 @@ class Produto implements TenantScopedEntity {
   final double? multiploVenda;
   final double? quantidadeMinima;
   final String? ncm;
-  final String? cfop;
-  final double? aliquotaIcms;
-  final double? aliquotaPis;
-  final double? aliquotaCofins;
+  final String? cest;
+  final double? aliquotaIpiBase;
   final double? pesoKg;
   final String? erpProductId;
   final String? erpSyncId;
-  final String? tabelaPrecoVersao;
-  final String? estoqueVersao;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -175,15 +165,11 @@ class Produto implements TenantScopedEntity {
     double? multiploVenda,
     double? quantidadeMinima,
     String? ncm,
-    String? cfop,
-    double? aliquotaIcms,
-    double? aliquotaPis,
-    double? aliquotaCofins,
+    String? cest,
+    double? aliquotaIpiBase,
     double? pesoKg,
     String? erpProductId,
     String? erpSyncId,
-    String? tabelaPrecoVersao,
-    String? estoqueVersao,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -219,15 +205,11 @@ class Produto implements TenantScopedEntity {
       multiploVenda: multiploVenda ?? this.multiploVenda,
       quantidadeMinima: quantidadeMinima ?? this.quantidadeMinima,
       ncm: ncm ?? this.ncm,
-      cfop: cfop ?? this.cfop,
-      aliquotaIcms: aliquotaIcms ?? this.aliquotaIcms,
-      aliquotaPis: aliquotaPis ?? this.aliquotaPis,
-      aliquotaCofins: aliquotaCofins ?? this.aliquotaCofins,
+      cest: cest ?? this.cest,
+      aliquotaIpiBase: aliquotaIpiBase ?? this.aliquotaIpiBase,
       pesoKg: pesoKg ?? this.pesoKg,
       erpProductId: erpProductId ?? this.erpProductId,
       erpSyncId: erpSyncId ?? this.erpSyncId,
-      tabelaPrecoVersao: tabelaPrecoVersao ?? this.tabelaPrecoVersao,
-      estoqueVersao: estoqueVersao ?? this.estoqueVersao,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -266,15 +248,11 @@ class Produto implements TenantScopedEntity {
       'multiploVenda': multiploVenda,
       'quantidadeMinima': quantidadeMinima,
       'ncm': ncm,
-      'cfop': cfop,
-      'aliquotaIcms': aliquotaIcms,
-      'aliquotaPis': aliquotaPis,
-      'aliquotaCofins': aliquotaCofins,
+      'cest': cest,
+      'aliquotaIpiBase': aliquotaIpiBase,
       'pesoKg': pesoKg,
       'erpProductId': erpProductId,
       'erpSyncId': erpSyncId,
-      'tabelaPrecoVersao': tabelaPrecoVersao,
-      'estoqueVersao': estoqueVersao,
       'createdAt': createdAt?.toIso8601String(),
       'updatedAt': updatedAt?.toIso8601String(),
     };

@@ -12,7 +12,6 @@ class DefaultPriceTableGuard {
   static const String defaultPriceRegionId = 'default';
   static final Set<String> _autoEnsuredDefaultPriceScopes = <String>{};
   static final Set<String> _autoEnsuringDefaultPriceScopes = <String>{};
-  static final Set<String> _autoSyncedDefaultPriceRowCounts = <String>{};
   static final Set<String> _autoSyncingDefaultPriceRowCounts = <String>{};
 
   static String normalizeDefaultPricingScopeKey(String? representedCompanyId) {
@@ -270,8 +269,7 @@ class DefaultPriceTableGuard {
     final scopeKey = shouldUseRepresentedScope
         ? normalizeDefaultPricingScopeKey(representedId)
         : 'tenant_default';
-    if (_autoSyncedDefaultPriceRowCounts.contains(scopeKey) ||
-        _autoSyncingDefaultPriceRowCounts.contains(scopeKey)) {
+    if (_autoSyncingDefaultPriceRowCounts.contains(scopeKey)) {
       return;
     }
 
@@ -302,13 +300,23 @@ class DefaultPriceTableGuard {
     _autoSyncingDefaultPriceRowCounts.add(scopeKey);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       try {
+        final activeProductIds = await _loadActiveProductIds(identity.tenantId);
         final prices = await FirebaseFirestore.instance
             .collection('product_base_prices')
             .where('tenantId', isEqualTo: identity.tenantId)
             .where('priceTableId', isEqualTo: targetDefault!.id)
             .where('status', isEqualTo: 'active')
             .get();
-        final rowCount = prices.docs.length;
+        final seenProductIds = <String>{};
+        for (final doc in prices.docs) {
+          final data = doc.data();
+          final productId = (data['productId'] as String? ?? '').trim();
+          if (productId.isEmpty || !activeProductIds.contains(productId)) {
+            continue;
+          }
+          seenProductIds.add(productId);
+        }
+        final rowCount = seenProductIds.length;
 
         if ((targetDefault?.rowCount ?? 0) != rowCount) {
           await repository.save(
@@ -318,14 +326,34 @@ class DefaultPriceTableGuard {
             ),
           );
         }
-
-        _autoSyncedDefaultPriceRowCounts.add(scopeKey);
       } catch (_) {
         // Best effort: failing to sync count must not break the page.
       } finally {
         _autoSyncingDefaultPriceRowCounts.remove(scopeKey);
       }
     });
+  }
+
+  static Future<Set<String>> _loadActiveProductIds(String tenantId) async {
+    final snapshot = await FirebaseFirestore.instance
+        .collection('produtos')
+        .where('tenantId', isEqualTo: tenantId)
+        .get();
+
+    const activeStatuses = <String>{'ativo', 'active'};
+    final ids = <String>{};
+    for (final doc in snapshot.docs) {
+      final data = doc.data();
+      final status = (data['status'] as String? ?? '').trim().toLowerCase();
+      if (!activeStatuses.contains(status)) {
+        continue;
+      }
+      final id = (data['id'] as String? ?? doc.id).trim();
+      if (id.isNotEmpty) {
+        ids.add(id);
+      }
+    }
+    return ids;
   }
 
   static List<TabelaPreco> dedupeSystemDefaultTables(

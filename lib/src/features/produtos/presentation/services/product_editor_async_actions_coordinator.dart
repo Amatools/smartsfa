@@ -76,6 +76,8 @@ class ProductEditorAsyncActionsCoordinator {
     required String defaultCurrencyCode,
     required String requiredDescriptionMessage,
     required String requiredTablePriceMessage,
+    required String requiredCategoryMessage,
+    required String requiredSubcategoryMessage,
     required String unknownErrorMessage,
     required VoidCallback onSaveStarted,
   }) {
@@ -99,6 +101,8 @@ class ProductEditorAsyncActionsCoordinator {
       defaultCurrencyCode: defaultCurrencyCode,
       requiredDescriptionMessage: requiredDescriptionMessage,
       requiredTablePriceMessage: requiredTablePriceMessage,
+      requiredCategoryMessage: requiredCategoryMessage,
+      requiredSubcategoryMessage: requiredSubcategoryMessage,
       unknownErrorMessage: unknownErrorMessage,
       onSaveStarted: onSaveStarted,
     );

@@ -38,6 +38,8 @@ class ProductEditorSheetLayout extends StatelessWidget {
               const SizedBox(height: 12),
               ProductEditorQuickStart(
                 readOnly: payload.readOnly,
+                tenantId: payload.tabsPayload.tenantId,
+                unitCatalogService: payload.tabsPayload.unitCatalogService,
                 thumbnailProduto: payload.thumbnailProduto,
                 imageTileSize: payload.imageTileSize,
                 uploadingImage: payload.uploadingImage,
@@ -49,7 +51,13 @@ class ProductEditorSheetLayout extends StatelessWidget {
                     payload.controllers.codigoFabricante,
                 unidadeController: payload.controllers.unidade,
                 multiploVendaController: payload.controllers.multiploVenda,
+                labelStyle: payload.tabsPayload.labelStyle,
+                inputTextStyle: payload.tabsPayload.inputTextStyle,
+                fieldHeight: payload.tabsPayload.fieldHeight,
+                onStandardUnitChanged:
+                    payload.tabsPayload.onStandardUnitChanged,
                 categoryField: payload.categoryField,
+                subcategoryField: payload.subcategoryField,
                 editorFieldBuilder: payload.editorFieldBuilder,
               ),
               const SizedBox(height: 12),

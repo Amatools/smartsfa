@@ -1,5 +1,5 @@
 import { assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
-import { doc, setDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 
 import { createTestContext, ids, seedBaseData } from './firestore_rules_test_support.mjs';
 
@@ -76,6 +76,56 @@ try {
     updateDoc(doc(repDb, 'tenants', ids.repTenantId), {
       nomeFantasia: 'Nao Pode Atualizar Tenant',
     }),
+  );
+
+  const unitDocRef = doc(
+    ownerDb,
+    'tenants',
+    ids.repTenantId,
+    'product_standard_units',
+    'unit-1',
+  );
+
+  await assertSucceeds(
+    setDoc(unitDocRef, {
+      name: 'Unidade',
+      normalizedName: 'unidade',
+    }),
+  );
+
+  await assertSucceeds(
+    updateDoc(unitDocRef, {
+      name: 'Unidade geral',
+      normalizedName: 'unidade geral',
+    }),
+  );
+
+  await assertSucceeds(
+    getDoc(
+      doc(
+        repDb,
+        'tenants',
+        ids.repTenantId,
+        'product_standard_units',
+        'unit-1',
+      ),
+    ),
+  );
+
+  await assertFails(
+    setDoc(
+      doc(
+        soloDb,
+        'tenants',
+        ids.repTenantId,
+        'product_standard_units',
+        'unit-outsider',
+      ),
+      {
+        name: 'Outsider',
+        normalizedName: 'outsider',
+      },
+    ),
   );
 
   await testEnv.withSecurityRulesDisabled(async (context) => {

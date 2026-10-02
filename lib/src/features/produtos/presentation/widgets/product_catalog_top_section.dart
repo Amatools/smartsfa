@@ -40,8 +40,7 @@ class ProductCatalogTopSection extends StatelessWidget {
         if (!creatingNewProduct)
           HeaderCard(
             title: 'Produtos',
-            subtitle:
-                'Cadastro de atributos fisicos e fiscais do produto. Precos e politicas comerciais ficam em modulos dedicados.',
+            subtitle: 'Cadastro de atributos fisicos e tributarios do produto. Precos e politicas comerciais ficam em modulos dedicados.',
             actions: [
               if (canCreateOrImportProducts) ...[
                 OutlinedButton.icon(

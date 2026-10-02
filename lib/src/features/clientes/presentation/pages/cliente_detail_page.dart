@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/constants/brazil_states.dart';
 import '../../../../core/diagnostics/app_diagnostics.dart';
 import '../../../../core/diagnostics/error_dialog.dart';
 import '../../../../core/models/app_identity.dart';
@@ -80,8 +81,9 @@ class _ClienteDetailPageState extends State<ClienteDetailPage> {
     _nomeFantasiaController = TextEditingController(text: cliente.nomeFantasia);
     _documentoController = TextEditingController(text: cliente.documento);
     _emailController = TextEditingController(text: cliente.email);
-    _emailFinanceiroController =
-        TextEditingController(text: cliente.emailFinanceiro);
+    _emailFinanceiroController = TextEditingController(
+      text: cliente.emailFinanceiro,
+    );
     _celularController = TextEditingController(text: cliente.celular);
     _telefoneController = TextEditingController(text: cliente.telefone);
     _cepController = TextEditingController(text: cliente.cep);
@@ -92,10 +94,12 @@ class _ClienteDetailPageState extends State<ClienteDetailPage> {
     _cidadeController = TextEditingController(text: cliente.cidade);
     _estadoController = TextEditingController(text: cliente.estado);
     _paisController = TextEditingController(text: cliente.pais);
-    _inscricaoEstadualController =
-        TextEditingController(text: cliente.inscricaoEstadual);
-    _inscricaoMunicipalController =
-        TextEditingController(text: cliente.inscricaoMunicipal);
+    _inscricaoEstadualController = TextEditingController(
+      text: cliente.inscricaoEstadual,
+    );
+    _inscricaoMunicipalController = TextEditingController(
+      text: cliente.inscricaoMunicipal,
+    );
     _observacoesController = TextEditingController(text: cliente.observacoes);
     _tipoPessoa = cliente.tipoPessoa;
     _canal = cliente.canal;
@@ -256,7 +260,8 @@ class _ClienteDetailPageState extends State<ClienteDetailPage> {
   }
 
   Future<void> _delete() async {
-    final confirmed = await showDialog<bool>(
+    final confirmed =
+        await showDialog<bool>(
           context: context,
           builder: (dialogContext) => AlertDialog(
             title: const Text('Excluir cliente'),
@@ -295,7 +300,10 @@ class _ClienteDetailPageState extends State<ClienteDetailPage> {
     );
 
     try {
-      await widget.repository.delete(tenantId: _cliente.tenantId, id: _cliente.id);
+      await widget.repository.delete(
+        tenantId: _cliente.tenantId,
+        id: _cliente.id,
+      );
       await OfflineSyncQueue.clearTombstone(_cliente.id);
     } catch (error, stackTrace) {
       AppDiagnostics.log(
@@ -385,7 +393,9 @@ class _ClienteDetailPageState extends State<ClienteDetailPage> {
             ),
           if (_isEditing)
             TextButton(
-              onPressed: _saving ? null : () => setState(() => _isEditing = false),
+              onPressed: _saving
+                  ? null
+                  : () => setState(() => _isEditing = false),
               child: const Text('Cancelar'),
             ),
           if (!_isEditing && _canManageLifecycle)
@@ -417,8 +427,7 @@ class _ClienteDetailPageState extends State<ClienteDetailPage> {
             const Padding(
               padding: EdgeInsets.only(right: 16),
               child: Tooltip(
-                message:
-                    'Gerenciado pelo ERP: exclusão/inativação devem ser feitas no sistema de origem.',
+                message: 'Gerenciado pelo ERP: exclusão/inativação devem ser feitas no sistema de origem.',
                 child: Icon(Icons.lock_outline),
               ),
             ),
@@ -432,143 +441,189 @@ class _ClienteDetailPageState extends State<ClienteDetailPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildFormSection(
-                        'Identificação',
-                        [
-                          TextFormField(
-                            controller: _nomeController,
-                            decoration: const InputDecoration(labelText: 'Nome / razão social'),
+                      _buildFormSection('Identificação', [
+                        TextFormField(
+                          controller: _nomeController,
+                          decoration: const InputDecoration(
+                            labelText: 'Nome / razão social',
                           ),
-                          const SizedBox(height: 12),
-                          TextFormField(
-                            controller: _nomeFantasiaController,
-                            decoration: const InputDecoration(labelText: 'Nome fantasia'),
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: _nomeFantasiaController,
+                          decoration: const InputDecoration(
+                            labelText: 'Nome fantasia',
                           ),
-                          const SizedBox(height: 12),
-                          DropdownButtonFormField<String>(
-                            initialValue: _tipoPessoa,
-                            items: const [
-                              DropdownMenuItem(value: 'pj', child: Text('Pessoa jurídica')),
-                              DropdownMenuItem(value: 'pf', child: Text('Pessoa física')),
-                            ],
-                            onChanged: (value) {
-                              if (value != null) {
-                                setState(() => _tipoPessoa = value);
-                              }
-                            },
-                            decoration: const InputDecoration(labelText: 'Tipo de pessoa'),
+                        ),
+                        const SizedBox(height: 12),
+                        DropdownButtonFormField<String>(
+                          initialValue: _tipoPessoa,
+                          items: const [
+                            DropdownMenuItem(
+                              value: 'pj',
+                              child: Text('Pessoa jurídica'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'pf',
+                              child: Text('Pessoa física'),
+                            ),
+                          ],
+                          onChanged: (value) {
+                            if (value != null) {
+                              setState(() => _tipoPessoa = value);
+                            }
+                          },
+                          decoration: const InputDecoration(
+                            labelText: 'Tipo de pessoa',
                           ),
-                          const SizedBox(height: 12),
-                          TextFormField(
-                            controller: _documentoController,
-                            decoration: const InputDecoration(labelText: 'CPF / CNPJ'),
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: _documentoController,
+                          decoration: const InputDecoration(
+                            labelText: 'CPF / CNPJ',
                           ),
-                          const SizedBox(height: 12),
-                          TextFormField(
-                            controller: _inscricaoEstadualController,
-                            decoration: const InputDecoration(labelText: 'Inscrição estadual'),
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: _inscricaoEstadualController,
+                          decoration: const InputDecoration(
+                            labelText: 'Inscrição estadual',
                           ),
-                          const SizedBox(height: 12),
-                          TextFormField(
-                            controller: _inscricaoMunicipalController,
-                            decoration: const InputDecoration(labelText: 'Inscrição municipal'),
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: _inscricaoMunicipalController,
+                          decoration: const InputDecoration(
+                            labelText: 'Inscrição municipal',
                           ),
-                        ],
-                      ),
-                      _buildFormSection(
-                        'Contato',
-                        [
-                          TextFormField(
-                            controller: _emailController,
-                            decoration: const InputDecoration(labelText: 'E-mail'),
+                        ),
+                      ]),
+                      _buildFormSection('Contato', [
+                        TextFormField(
+                          controller: _emailController,
+                          decoration: const InputDecoration(
+                            labelText: 'E-mail',
                           ),
-                          const SizedBox(height: 12),
-                          TextFormField(
-                            controller: _emailFinanceiroController,
-                            decoration: const InputDecoration(labelText: 'E-mail financeiro'),
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: _emailFinanceiroController,
+                          decoration: const InputDecoration(
+                            labelText: 'E-mail financeiro',
                           ),
-                          const SizedBox(height: 12),
-                          TextFormField(
-                            controller: _celularController,
-                            decoration: const InputDecoration(labelText: 'Celular'),
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: _celularController,
+                          decoration: const InputDecoration(
+                            labelText: 'Celular',
                           ),
-                          const SizedBox(height: 12),
-                          TextFormField(
-                            controller: _telefoneController,
-                            decoration: const InputDecoration(labelText: 'Telefone'),
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: _telefoneController,
+                          decoration: const InputDecoration(
+                            labelText: 'Telefone',
                           ),
-                        ],
-                      ),
-                      _buildFormSection(
-                        'Endereço',
-                        [
-                          TextFormField(
-                            controller: _cepController,
-                            decoration: const InputDecoration(labelText: 'CEP'),
+                        ),
+                      ]),
+                      _buildFormSection('Endereço', [
+                        TextFormField(
+                          controller: _cepController,
+                          decoration: const InputDecoration(labelText: 'CEP'),
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: _logradouroController,
+                          decoration: const InputDecoration(
+                            labelText: 'Logradouro',
                           ),
-                          const SizedBox(height: 12),
-                          TextFormField(
-                            controller: _logradouroController,
-                            decoration: const InputDecoration(labelText: 'Logradouro'),
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: _numeroController,
+                          decoration: const InputDecoration(
+                            labelText: 'Número',
                           ),
-                          const SizedBox(height: 12),
-                          TextFormField(
-                            controller: _numeroController,
-                            decoration: const InputDecoration(labelText: 'Número'),
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: _complementoController,
+                          decoration: const InputDecoration(
+                            labelText: 'Complemento',
                           ),
-                          const SizedBox(height: 12),
-                          TextFormField(
-                            controller: _complementoController,
-                            decoration: const InputDecoration(labelText: 'Complemento'),
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: _bairroController,
+                          decoration: const InputDecoration(
+                            labelText: 'Bairro',
                           ),
-                          const SizedBox(height: 12),
-                          TextFormField(
-                            controller: _bairroController,
-                            decoration: const InputDecoration(labelText: 'Bairro'),
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: _cidadeController,
+                          decoration: const InputDecoration(
+                            labelText: 'Cidade',
                           ),
-                          const SizedBox(height: 12),
-                          TextFormField(
-                            controller: _cidadeController,
-                            decoration: const InputDecoration(labelText: 'Cidade'),
+                        ),
+                        const SizedBox(height: 12),
+                        DropdownButtonFormField<String>(
+                          key: ValueKey<String>(_estadoController.text),
+                          initialValue: brazilStateOrNull(
+                            _estadoController.text,
                           ),
-                          const SizedBox(height: 12),
-                          TextFormField(
-                            controller: _estadoController,
-                            decoration: const InputDecoration(labelText: 'Estado'),
+                          items: brazilStates
+                              .map(
+                                (uf) => DropdownMenuItem<String>(
+                                  value: uf,
+                                  child: Text(uf),
+                                ),
+                              )
+                              .toList(growable: false),
+                          onChanged: (value) {
+                            _estadoController.text = (value ?? '').trim();
+                          },
+                          decoration: const InputDecoration(labelText: 'UF'),
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: _paisController,
+                          decoration: const InputDecoration(labelText: 'País'),
+                        ),
+                      ]),
+                      _buildFormSection('Cadastro', [
+                        DropdownButtonFormField<String>(
+                          initialValue: _canal,
+                          items: const [
+                            DropdownMenuItem(
+                              value: 'vendedor',
+                              child: Text('Vendedor'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'representante',
+                              child: Text('Representante'),
+                            ),
+                            DropdownMenuItem(value: 'erp', child: Text('ERP')),
+                          ],
+                          onChanged: (value) {
+                            if (value != null) {
+                              setState(() => _canal = value);
+                            }
+                          },
+                          decoration: const InputDecoration(labelText: 'Canal'),
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: _observacoesController,
+                          minLines: 3,
+                          maxLines: 5,
+                          decoration: const InputDecoration(
+                            labelText: 'Observações',
                           ),
-                          const SizedBox(height: 12),
-                          TextFormField(
-                            controller: _paisController,
-                            decoration: const InputDecoration(labelText: 'País'),
-                          ),
-                        ],
-                      ),
-                      _buildFormSection(
-                        'Cadastro',
-                        [
-                          DropdownButtonFormField<String>(
-                            initialValue: _canal,
-                            items: const [
-                              DropdownMenuItem(value: 'vendedor', child: Text('Vendedor')),
-                              DropdownMenuItem(value: 'representante', child: Text('Representante')),
-                              DropdownMenuItem(value: 'erp', child: Text('ERP')),
-                            ],
-                            onChanged: (value) {
-                              if (value != null) {
-                                setState(() => _canal = value);
-                              }
-                            },
-                            decoration: const InputDecoration(labelText: 'Canal'),
-                          ),
-                          const SizedBox(height: 12),
-                          TextFormField(
-                            controller: _observacoesController,
-                            minLines: 3,
-                            maxLines: 5,
-                            decoration: const InputDecoration(labelText: 'Observações'),
-                          ),
-                        ],
-                      ),
+                        ),
+                      ]),
                       const SizedBox(height: 12),
                       SizedBox(
                         width: double.infinity,
@@ -578,10 +633,14 @@ class _ClienteDetailPageState extends State<ClienteDetailPage> {
                               ? const SizedBox(
                                   width: 16,
                                   height: 16,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
                                 )
                               : const Icon(Icons.save_outlined),
-                          label: Text(_saving ? 'Salvando...' : 'Salvar alterações'),
+                          label: Text(
+                            _saving ? 'Salvando...' : 'Salvar alterações',
+                          ),
                         ),
                       ),
                     ],

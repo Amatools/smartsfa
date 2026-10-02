@@ -48,15 +48,11 @@ class ProductEditorSaveFormData {
     required this.multiploVendaText,
     required this.quantidadeMinimaText,
     required this.ncmText,
-    required this.cfopText,
-    required this.icmsText,
-    required this.pisText,
-    required this.cofinsText,
+    required this.cestText,
+    required this.ipiBaseText,
     required this.pesoText,
     required this.erpProductIdText,
     required this.erpSyncIdText,
-    required this.tabelaVersaoText,
-    required this.estoqueVersaoText,
     required this.currentImageStoragePath,
     required this.currentImageThumbBase64,
   });
@@ -82,15 +78,11 @@ class ProductEditorSaveFormData {
   final String multiploVendaText;
   final String quantidadeMinimaText;
   final String ncmText;
-  final String cfopText;
-  final String icmsText;
-  final String pisText;
-  final String cofinsText;
+  final String cestText;
+  final String ipiBaseText;
   final String pesoText;
   final String erpProductIdText;
   final String erpSyncIdText;
-  final String tabelaVersaoText;
-  final String estoqueVersaoText;
   final String? currentImageStoragePath;
   final String? currentImageThumbBase64;
 }
@@ -188,15 +180,11 @@ class ProductEditorSaveCoordinator {
       multiploVendaText: formData.multiploVendaText,
       quantidadeMinimaText: formData.quantidadeMinimaText,
       ncmText: formData.ncmText,
-      cfopText: formData.cfopText,
-      icmsText: formData.icmsText,
-      pisText: formData.pisText,
-      cofinsText: formData.cofinsText,
+      cestText: formData.cestText,
+      ipiBaseText: formData.ipiBaseText,
       pesoText: formData.pesoText,
       erpProductIdText: formData.erpProductIdText,
       erpSyncIdText: formData.erpSyncIdText,
-      tabelaVersaoText: formData.tabelaVersaoText,
-      estoqueVersaoText: formData.estoqueVersaoText,
       currentImageStoragePath: formData.currentImageStoragePath,
       currentImageThumbBase64: formData.currentImageThumbBase64,
     );

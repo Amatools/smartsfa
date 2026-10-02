@@ -29,12 +29,14 @@ class AppShellPage extends StatefulWidget {
     required this.onSignOut,
     this.onAccessUpdated,
     this.onSwitchProfile,
+    this.forceMobilePreviewOnWeb = false,
   });
 
   final AppIdentity identity;
   final VoidCallback onSignOut;
   final VoidCallback? onAccessUpdated;
   final VoidCallback? onSwitchProfile;
+  final bool forceMobilePreviewOnWeb;
 
   @override
   State<AppShellPage> createState() => _AppShellPageState();
@@ -143,6 +145,7 @@ class _AppShellPageState extends State<AppShellPage> {
         identity: widget.identity,
         clienteRepository: repositoryBundle.clienteRepository,
         preCadastroRepository: repositoryBundle.preCadastroRepository,
+        pedidoRepository: repositoryBundle.pedidoRepository,
       );
     } finally {
       if (mounted) {
@@ -225,7 +228,7 @@ class _AppShellPageState extends State<AppShellPage> {
 
   @override
   Widget build(BuildContext context) {
-    if (kIsWeb) {
+    if (kIsWeb && !widget.forceMobilePreviewOnWeb) {
       return WebPortalPage(
         identity: widget.identity,
         onSignOut: widget.onSignOut,

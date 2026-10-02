@@ -7,7 +7,6 @@ import 'product_editor_tabs_payload.dart';
 import 'product_editor_tabs_sections.dart';
 import 'product_editor_tabs_shell.dart';
 import 'product_editor_variations_tab_section.dart';
-import 'product_image_library_field.dart';
 
 class ProductEditorTabsContent extends StatelessWidget {
   const ProductEditorTabsContent({super.key, required this.payload});
@@ -18,8 +17,8 @@ class ProductEditorTabsContent extends StatelessWidget {
   Widget build(BuildContext context) {
     return ProductEditorTabsShell(
       priceTab: _buildPriceTab(),
-      informationTab: _buildInformationTab(context),
-      fiscalTab: _buildFiscalTab(),
+      informationTab: _buildInformationTab(),
+      taxationTab: _buildTaxationTab(),
       variationsTab: _buildVariationsTab(),
       weightDimensionsTab: _buildWeightAndDimensionsTab(),
     );
@@ -92,7 +91,7 @@ class ProductEditorTabsContent extends StatelessWidget {
     );
   }
 
-  Widget _buildInformationTab(BuildContext context) {
+  Widget _buildInformationTab() {
     return ProductEditorCompactTab(
       children: [
         ProductInformationTabSection(
@@ -106,7 +105,6 @@ class ProductEditorTabsContent extends StatelessWidget {
           labelStyle: payload.labelStyle,
           inputTextStyle: payload.inputTextStyle,
           fieldHeight: payload.fieldHeight,
-          imageLibraryField: _buildInformationImageLibraryField(context),
           editorFieldBuilder: payload.editorFieldBuilder,
           onStatusChanged: payload.onStatusChanged,
           onBrandSelected: payload.onBrandSelected,
@@ -114,16 +112,13 @@ class ProductEditorTabsContent extends StatelessWidget {
         const SizedBox(height: 10),
         ProductVariationsTabSection(
           readOnly: payload.readOnly,
+          tenantId: payload.tenantId,
+          unitCatalogService: payload.unitCatalogService,
           isEnterprise: payload.isEnterprise,
           bitolaController: payload.controllers.bitola,
-          subcategoriaController: payload.controllers.subcategoria,
-          tabelaVersaoController: payload.controllers.tabelaVersao,
-          multiploVendaController: payload.controllers.multiploVenda,
-          estoqueVersaoController: payload.controllers.estoqueVersao,
           erpProductIdController: payload.controllers.erpProductId,
           erpSyncIdController: payload.controllers.erpSyncId,
           bitolaUnit: payload.bitolaUnit,
-          bitolaUnits: payload.bitolaUnits,
           labelStyle: payload.labelStyle,
           inputTextStyle: payload.inputTextStyle,
           fieldHeight: payload.fieldHeight,
@@ -134,35 +129,14 @@ class ProductEditorTabsContent extends StatelessWidget {
     );
   }
 
-  String _buildImageLibraryScopeLabel() {
-    final representedName = (payload.representedCompanyName ?? '').trim();
-    if (representedName.isNotEmpty) {
-      return representedName;
-    }
-    return 'Tenant principal';
-  }
-
-  Widget _buildInformationImageLibraryField(BuildContext context) {
-    return ProductImageLibraryField(
-      readOnly: payload.readOnly,
-      hasImage: payload.controllers.fotoUrl.text.trim().isNotEmpty,
-      scopeLabel: _buildImageLibraryScopeLabel(),
-      helperTextStyle: Theme.of(context).textTheme.bodySmall,
-      onOpenLibrary: payload.onOpenMediaLibrary,
-      onClearImage: payload.onClearImage,
-    );
-  }
-
-  Widget _buildFiscalTab() {
+  Widget _buildTaxationTab() {
     return ProductEditorCompactTab(
       children: [
-        ProductFiscalTabSection(
+        ProductTaxationTabSection(
           readOnly: payload.readOnly,
           ncmController: payload.controllers.ncm,
-          cfopController: payload.controllers.cfop,
-          icmsController: payload.controllers.icms,
-          pisController: payload.controllers.pis,
-          cofinsController: payload.controllers.cofins,
+          cestController: payload.controllers.cest,
+          ipiBaseController: payload.controllers.ipiBase,
           editorFieldBuilder: payload.editorFieldBuilder,
         ),
       ],

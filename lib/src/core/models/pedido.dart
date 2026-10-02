@@ -13,6 +13,13 @@ class Pedido implements TenantScopedEntity {
     this.gerenteId,
     this.representanteId,
     this.vendedorId,
+    this.representedCompanyId,
+    this.originCompanyUnitId,
+    this.originCompanyUnitLabel,
+    this.originCompanyUf,
+    this.itens = const [],
+    this.totalItens = 0,
+    this.totalBruto = 0,
     this.createdAt,
     this.updatedAt,
   });
@@ -28,12 +35,21 @@ class Pedido implements TenantScopedEntity {
         map['statusFila'] as String? ?? OrderStatus.draft.value,
       ),
       clienteReferencia: map['clienteReferencia'] is Map<String, Object?>
-          ? ClienteReference.fromMap(map['clienteReferencia'] as Map<String, Object?>)
+          ? ClienteReference.fromMap(
+              map['clienteReferencia'] as Map<String, Object?>,
+            )
           : null,
       ownerId: map['ownerId'] as String?,
       gerenteId: map['gerenteId'] as String?,
       representanteId: map['representanteId'] as String?,
       vendedorId: map['vendedorId'] as String?,
+      representedCompanyId: map['representedCompanyId'] as String?,
+      originCompanyUnitId: map['originCompanyUnitId'] as String?,
+      originCompanyUnitLabel: map['originCompanyUnitLabel'] as String?,
+      originCompanyUf: map['originCompanyUf'] as String?,
+      itens: _readItems(map['itens']),
+      totalItens: _readDouble(map['totalItens']) ?? 0,
+      totalBruto: _readDouble(map['totalBruto']) ?? 0,
       createdAt: _readDateTime(map['createdAt']),
       updatedAt: _readDateTime(map['updatedAt']),
     );
@@ -50,6 +66,13 @@ class Pedido implements TenantScopedEntity {
   final String? gerenteId;
   final String? representanteId;
   final String? vendedorId;
+  final String? representedCompanyId;
+  final String? originCompanyUnitId;
+  final String? originCompanyUnitLabel;
+  final String? originCompanyUf;
+  final List<PedidoItem> itens;
+  final double totalItens;
+  final double totalBruto;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -63,6 +86,13 @@ class Pedido implements TenantScopedEntity {
     String? gerenteId,
     String? representanteId,
     String? vendedorId,
+    String? representedCompanyId,
+    String? originCompanyUnitId,
+    String? originCompanyUnitLabel,
+    String? originCompanyUf,
+    List<PedidoItem>? itens,
+    double? totalItens,
+    double? totalBruto,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -76,6 +106,14 @@ class Pedido implements TenantScopedEntity {
       gerenteId: gerenteId ?? this.gerenteId,
       representanteId: representanteId ?? this.representanteId,
       vendedorId: vendedorId ?? this.vendedorId,
+      representedCompanyId: representedCompanyId ?? this.representedCompanyId,
+      originCompanyUnitId: originCompanyUnitId ?? this.originCompanyUnitId,
+      originCompanyUnitLabel:
+          originCompanyUnitLabel ?? this.originCompanyUnitLabel,
+      originCompanyUf: originCompanyUf ?? this.originCompanyUf,
+      itens: itens ?? this.itens,
+      totalItens: totalItens ?? this.totalItens,
+      totalBruto: totalBruto ?? this.totalBruto,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -92,10 +130,226 @@ class Pedido implements TenantScopedEntity {
       'gerenteId': gerenteId,
       'representanteId': representanteId,
       'vendedorId': vendedorId,
+      'representedCompanyId': representedCompanyId,
+      'originCompanyUnitId': originCompanyUnitId,
+      'originCompanyUnitLabel': originCompanyUnitLabel,
+      'originCompanyUf': originCompanyUf,
+      'itens': itens.map((item) => item.toMap()).toList(),
+      'totalItens': totalItens,
+      'totalBruto': totalBruto,
       'createdAt': createdAt?.toIso8601String(),
       'updatedAt': updatedAt?.toIso8601String(),
     };
   }
+}
+
+class PedidoItem {
+  const PedidoItem({
+    required this.id,
+    required this.productId,
+    required this.productCode,
+    required this.productName,
+    required this.quantity,
+    required this.unitPrice,
+    required this.totalPrice,
+    this.unit,
+    this.ncm,
+    this.taxSnapshot,
+  });
+
+  factory PedidoItem.fromMap(Map<String, Object?> map) {
+    return PedidoItem(
+      id: map['id'] as String? ?? '',
+      productId: map['productId'] as String? ?? '',
+      productCode: map['productCode'] as String? ?? '',
+      productName: map['productName'] as String? ?? '',
+      quantity: _readDouble(map['quantity']) ?? 0,
+      unitPrice: _readDouble(map['unitPrice']) ?? 0,
+      totalPrice: _readDouble(map['totalPrice']) ?? 0,
+      unit: map['unit'] as String?,
+      ncm: map['ncm'] as String?,
+      taxSnapshot: map['taxSnapshot'] is Map
+          ? PedidoItemTaxSnapshot.fromMap(
+              Map<String, Object?>.from(map['taxSnapshot'] as Map),
+            )
+          : null,
+    );
+  }
+
+  final String id;
+  final String productId;
+  final String productCode;
+  final String productName;
+  final double quantity;
+  final double unitPrice;
+  final double totalPrice;
+  final String? unit;
+  final String? ncm;
+  final PedidoItemTaxSnapshot? taxSnapshot;
+
+  PedidoItem copyWith({
+    String? id,
+    String? productId,
+    String? productCode,
+    String? productName,
+    double? quantity,
+    double? unitPrice,
+    double? totalPrice,
+    String? unit,
+    String? ncm,
+    PedidoItemTaxSnapshot? taxSnapshot,
+  }) {
+    return PedidoItem(
+      id: id ?? this.id,
+      productId: productId ?? this.productId,
+      productCode: productCode ?? this.productCode,
+      productName: productName ?? this.productName,
+      quantity: quantity ?? this.quantity,
+      unitPrice: unitPrice ?? this.unitPrice,
+      totalPrice: totalPrice ?? this.totalPrice,
+      unit: unit ?? this.unit,
+      ncm: ncm ?? this.ncm,
+      taxSnapshot: taxSnapshot ?? this.taxSnapshot,
+    );
+  }
+
+  Map<String, Object?> toMap() {
+    return {
+      'id': id,
+      'productId': productId,
+      'productCode': productCode,
+      'productName': productName,
+      'quantity': quantity,
+      'unitPrice': unitPrice,
+      'totalPrice': totalPrice,
+      'unit': unit,
+      'ncm': ncm,
+      'taxSnapshot': taxSnapshot?.toMap(),
+    };
+  }
+}
+
+class PedidoItemTaxSnapshot {
+  const PedidoItemTaxSnapshot({
+    this.regraFiscalId,
+    this.tabelaId,
+    this.ufDestino,
+    this.ncm,
+    this.cest,
+    this.aliquotaIpiPercent,
+    this.aliquotaDestinoPercent,
+    this.aliquotaCreditoPercent,
+    this.aliquotaDifalPercent,
+    this.valorIpi,
+    this.valorSt,
+    this.valorDifal,
+    this.valorTotalItem,
+  });
+
+  factory PedidoItemTaxSnapshot.fromMap(Map<String, Object?> map) {
+    return PedidoItemTaxSnapshot(
+      regraFiscalId: map['regraFiscalId'] as String?,
+      tabelaId: map['tabelaId'] as String?,
+      ufDestino: map['ufDestino'] as String?,
+      ncm: map['ncm'] as String?,
+      cest: map['cest'] as String?,
+      aliquotaIpiPercent: _readDouble(map['aliquotaIpiPercent']),
+      aliquotaDestinoPercent: _readDouble(map['aliquotaDestinoPercent']),
+      aliquotaCreditoPercent: _readDouble(map['aliquotaCreditoPercent']),
+      aliquotaDifalPercent: _readDouble(map['aliquotaDifalPercent']),
+      valorIpi: _readDouble(map['valorIpi']),
+      valorSt: _readDouble(map['valorSt']),
+      valorDifal: _readDouble(map['valorDifal']),
+      valorTotalItem: _readDouble(map['valorTotalItem']),
+    );
+  }
+
+  final String? regraFiscalId;
+  final String? tabelaId;
+  final String? ufDestino;
+  final String? ncm;
+  final String? cest;
+  final double? aliquotaIpiPercent;
+  final double? aliquotaDestinoPercent;
+  final double? aliquotaCreditoPercent;
+  final double? aliquotaDifalPercent;
+  final double? valorIpi;
+  final double? valorSt;
+  final double? valorDifal;
+  final double? valorTotalItem;
+
+  PedidoItemTaxSnapshot copyWith({
+    String? regraFiscalId,
+    String? tabelaId,
+    String? ufDestino,
+    String? ncm,
+    String? cest,
+    double? aliquotaIpiPercent,
+    double? aliquotaDestinoPercent,
+    double? aliquotaCreditoPercent,
+    double? aliquotaDifalPercent,
+    double? valorIpi,
+    double? valorSt,
+    double? valorDifal,
+    double? valorTotalItem,
+  }) {
+    return PedidoItemTaxSnapshot(
+      regraFiscalId: regraFiscalId ?? this.regraFiscalId,
+      tabelaId: tabelaId ?? this.tabelaId,
+      ufDestino: ufDestino ?? this.ufDestino,
+      ncm: ncm ?? this.ncm,
+      cest: cest ?? this.cest,
+      aliquotaIpiPercent: aliquotaIpiPercent ?? this.aliquotaIpiPercent,
+      aliquotaDestinoPercent:
+          aliquotaDestinoPercent ?? this.aliquotaDestinoPercent,
+      aliquotaCreditoPercent:
+          aliquotaCreditoPercent ?? this.aliquotaCreditoPercent,
+      aliquotaDifalPercent: aliquotaDifalPercent ?? this.aliquotaDifalPercent,
+      valorIpi: valorIpi ?? this.valorIpi,
+      valorSt: valorSt ?? this.valorSt,
+      valorDifal: valorDifal ?? this.valorDifal,
+      valorTotalItem: valorTotalItem ?? this.valorTotalItem,
+    );
+  }
+
+  Map<String, Object?> toMap() {
+    return {
+      'regraFiscalId': regraFiscalId,
+      'tabelaId': tabelaId,
+      'ufDestino': ufDestino,
+      'ncm': ncm,
+      'cest': cest,
+      'aliquotaIpiPercent': aliquotaIpiPercent,
+      'aliquotaDestinoPercent': aliquotaDestinoPercent,
+      'aliquotaCreditoPercent': aliquotaCreditoPercent,
+      'aliquotaDifalPercent': aliquotaDifalPercent,
+      'valorIpi': valorIpi,
+      'valorSt': valorSt,
+      'valorDifal': valorDifal,
+      'valorTotalItem': valorTotalItem,
+    };
+  }
+}
+
+List<PedidoItem> _readItems(Object? value) {
+  if (value is! List) {
+    return const [];
+  }
+
+  return value
+      .whereType<Map>()
+      .map((item) => PedidoItem.fromMap(Map<String, Object?>.from(item)))
+      .toList();
+}
+
+double? _readDouble(Object? value) {
+  if (value is num) {
+    return value.toDouble();
+  }
+  if (value is String) {
+    return double.tryParse(value.replaceAll(',', '.'));
+  }
+  return null;
 }
 
 DateTime? _readDateTime(Object? value) {

@@ -2,8 +2,10 @@ import '../../core/diagnostics/app_diagnostics.dart';
 import '../../core/models/app_identity.dart';
 import '../../core/models/cliente.dart';
 import '../../core/models/cliente_pre_cadastro.dart';
+import '../../core/models/pedido.dart';
 import '../../core/repositories/cliente_pre_cadastro_repository.dart';
 import '../../core/repositories/cliente_repository.dart';
+import '../../core/repositories/pedido_repository.dart';
 import '../../core/services/offline_sync_queue.dart';
 
 class AppShellOfflineSyncCoordinator {
@@ -13,6 +15,7 @@ class AppShellOfflineSyncCoordinator {
     required AppIdentity identity,
     required ClienteRepository clienteRepository,
     required ClientePreCadastroRepository preCadastroRepository,
+    required PedidoRepository pedidoRepository,
   }) async {
     final pending = await OfflineSyncQueue.readAll();
     final pendingDeletesPreview = await OfflineSyncQueue.readPendingDeletes();
@@ -39,6 +42,15 @@ class AppShellOfflineSyncCoordinator {
           item,
           identity: identity,
           clienteRepository: clienteRepository,
+        );
+        continue;
+      }
+
+      if (item.type == 'pedido') {
+        await _syncPedidoItem(
+          item,
+          identity: identity,
+          pedidoRepository: pedidoRepository,
         );
       }
     }
@@ -93,6 +105,29 @@ class AppShellOfflineSyncCoordinator {
       AppDiagnostics.log(
         tag: 'app_shell.sync.cliente',
         message: 'Falha ao sincronizar cliente em segundo plano.',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
+  }
+
+  Future<void> _syncPedidoItem(
+    OfflineSyncQueueItem item, {
+    required AppIdentity identity,
+    required PedidoRepository pedidoRepository,
+  }) async {
+    try {
+      final payload = item.payloadMap;
+      final entity = Pedido.fromMap(payload);
+      if (entity.tenantId == identity.tenantId ||
+          identity.isPersonalWorkspace) {
+        await pedidoRepository.save(entity);
+        await OfflineSyncQueue.markSynced(item.id);
+      }
+    } catch (error, stackTrace) {
+      AppDiagnostics.log(
+        tag: 'app_shell.sync.pedido',
+        message: 'Falha ao sincronizar pedido em segundo plano.',
         error: error,
         stackTrace: stackTrace,
       );

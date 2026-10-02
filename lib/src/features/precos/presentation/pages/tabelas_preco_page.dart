@@ -159,7 +159,18 @@ class TabelasPrecoPage extends StatelessWidget {
                 ),
               )
             else
-              ...visibleTabelas.map((tabela) => _PriceTableCard(tabela: tabela)),
+              ...visibleTabelas.map(
+                (tabela) => _PriceTableCard(
+                  tabela: tabela,
+                  canManage: policy.canManage,
+                  onDelete: () => _deleteTable(
+                    context,
+                    identity: identity,
+                    repository: repository,
+                    tabela: tabela,
+                  ),
+                ),
+              ),
           ],
         );
       },
@@ -208,12 +219,25 @@ class _PriceTablePolicy {
 }
 
 class _PriceTableCard extends StatelessWidget {
-  const _PriceTableCard({required this.tabela});
+  const _PriceTableCard({
+    required this.tabela,
+    required this.canManage,
+    required this.onDelete,
+  });
 
   final TabelaPreco tabela;
+  final bool canManage;
+  final Future<void> Function() onDelete;
+
+  bool get _isSystemDefault {
+    return tabela.origem.trim().toLowerCase() == 'system' &&
+        tabela.nome.trim().toLowerCase() == reservedSystemDefaultPriceTableName;
+  }
 
   @override
   Widget build(BuildContext context) {
+    final deleteEnabled = canManage && !_isSystemDefault;
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Card(
@@ -224,7 +248,82 @@ class _PriceTableCard extends StatelessWidget {
             'Origem: ${tabela.origem} · Status: ${tabela.status}'
             '${tabela.rowCount != null ? ' · Itens: ${tabela.rowCount}' : ''}',
           ),
-          trailing: Text(_formatDate(tabela.updatedAt)),
+          trailing: Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 8,
+            children: [
+              Text(_formatDate(tabela.updatedAt)),
+              if (deleteEnabled)
+                IconButton(
+                  tooltip: 'Excluir tabela',
+                  onPressed: onDelete,
+                  icon: const Icon(Icons.delete_outline),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+Future<void> _deleteTable(
+  BuildContext context, {
+  required AppIdentity identity,
+  required TabelaPrecoRepository repository,
+  required TabelaPreco tabela,
+}) async {
+  final isSystemDefault =
+      tabela.origem.trim().toLowerCase() == 'system' &&
+      tabela.nome.trim().toLowerCase() == reservedSystemDefaultPriceTableName;
+  if (isSystemDefault) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('A tabela padrao do sistema nao pode ser excluida.'),
+      ),
+    );
+    return;
+  }
+
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: const Text('Excluir tabela'),
+      content: Text('Deseja excluir a tabela "${tabela.nome}"?'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(false),
+          child: const Text('Cancelar'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(dialogContext).pop(true),
+          child: const Text('Excluir'),
+        ),
+      ],
+    ),
+  );
+
+  if (confirmed != true) {
+    return;
+  }
+
+  try {
+    await repository.delete(tenantId: identity.tenantId, id: tabela.id);
+    if (!context.mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Tabela excluida com sucesso.')),
+    );
+  } on StateError catch (error) {
+    if (!context.mounted) {
+      return;
+    }
+    final message = error.message.toString().trim();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          message.isEmpty ? 'Nao foi possivel excluir a tabela.' : message,
         ),
       ),
     );

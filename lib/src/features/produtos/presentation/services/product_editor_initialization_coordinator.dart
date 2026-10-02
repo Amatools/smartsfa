@@ -20,10 +20,8 @@ class ProductEditorFormControllers {
     required this.bitola,
     required this.unidade,
     required this.ncm,
-    required this.cfop,
-    required this.icms,
-    required this.pis,
-    required this.cofins,
+    required this.cest,
+    required this.ipiBase,
     required this.peso,
     required this.comprimentoMm,
     required this.larguraMm,
@@ -33,8 +31,6 @@ class ProductEditorFormControllers {
     required this.fotoUrl,
     required this.erpProductId,
     required this.erpSyncId,
-    required this.tabelaVersao,
-    required this.estoqueVersao,
   });
 
   final TextEditingController codigo;
@@ -50,10 +46,8 @@ class ProductEditorFormControllers {
   final TextEditingController bitola;
   final TextEditingController unidade;
   final TextEditingController ncm;
-  final TextEditingController cfop;
-  final TextEditingController icms;
-  final TextEditingController pis;
-  final TextEditingController cofins;
+  final TextEditingController cest;
+  final TextEditingController ipiBase;
   final TextEditingController peso;
   final TextEditingController comprimentoMm;
   final TextEditingController larguraMm;
@@ -63,8 +57,6 @@ class ProductEditorFormControllers {
   final TextEditingController fotoUrl;
   final TextEditingController erpProductId;
   final TextEditingController erpSyncId;
-  final TextEditingController tabelaVersao;
-  final TextEditingController estoqueVersao;
 
   factory ProductEditorFormControllers.fromProduto(Produto produto) {
     return ProductEditorFormControllers._(
@@ -87,17 +79,13 @@ class ProductEditorFormControllers {
       categoria: TextEditingController(text: produto.categoria ?? ''),
       subcategoria: TextEditingController(text: produto.subcategoria ?? ''),
       bitola: TextEditingController(text: produto.bitola ?? ''),
-      unidade: TextEditingController(text: produto.unidade ?? 'UN'),
-      ncm: TextEditingController(text: produto.ncm ?? ''),
-      cfop: TextEditingController(text: produto.cfop ?? ''),
-      icms: TextEditingController(
-        text: ProductFormValueCodec.toText(produto.aliquotaIcms),
+      unidade: TextEditingController(
+        text: produto.unidade ?? ProductEditorDefaults.defaultStandardUnit,
       ),
-      pis: TextEditingController(
-        text: ProductFormValueCodec.toText(produto.aliquotaPis),
-      ),
-      cofins: TextEditingController(
-        text: ProductFormValueCodec.toText(produto.aliquotaCofins),
+      ncm: TextEditingController(text: _formatNcmMasked(produto.ncm)),
+      cest: TextEditingController(text: produto.cest ?? ''),
+      ipiBase: TextEditingController(
+        text: ProductFormValueCodec.toText(produto.aliquotaIpiBase),
       ),
       peso: TextEditingController(
         text: ProductFormValueCodec.toText(produto.pesoKg),
@@ -120,15 +108,6 @@ class ProductEditorFormControllers {
       fotoUrl: TextEditingController(text: produto.fotoUrl ?? ''),
       erpProductId: TextEditingController(text: produto.erpProductId ?? ''),
       erpSyncId: TextEditingController(text: produto.erpSyncId ?? ''),
-      tabelaVersao: TextEditingController(
-        text:
-            produto.tabelaPrecoVersao ??
-            ProductEditorDefaults.defaultManualVersion,
-      ),
-      estoqueVersao: TextEditingController(
-        text:
-            produto.estoqueVersao ?? ProductEditorDefaults.defaultManualVersion,
-      ),
     );
   }
 
@@ -146,10 +125,8 @@ class ProductEditorFormControllers {
     bitola.dispose();
     unidade.dispose();
     ncm.dispose();
-    cfop.dispose();
-    icms.dispose();
-    pis.dispose();
-    cofins.dispose();
+    cest.dispose();
+    ipiBase.dispose();
     peso.dispose();
     comprimentoMm.dispose();
     larguraMm.dispose();
@@ -159,9 +136,24 @@ class ProductEditorFormControllers {
     fotoUrl.dispose();
     erpProductId.dispose();
     erpSyncId.dispose();
-    tabelaVersao.dispose();
-    estoqueVersao.dispose();
   }
+}
+
+String _formatNcmMasked(String? value) {
+  final digits = (value ?? '').replaceAll(RegExp(r'[^0-9]'), '');
+  if (digits.isEmpty) {
+    return '';
+  }
+
+  final buffer = StringBuffer();
+  final limited = digits.length > 8 ? digits.substring(0, 8) : digits;
+  for (var i = 0; i < limited.length; i++) {
+    if (i == 4 || i == 6) {
+      buffer.write('.');
+    }
+    buffer.write(limited[i]);
+  }
+  return buffer.toString();
 }
 
 class ProductEditorInitializationState {
@@ -202,10 +194,9 @@ class ProductEditorInitializationCoordinator {
     final currencyCode = currencyLabels.containsKey(incomingCurrency)
         ? incomingCurrency
         : defaultCurrencyCode;
-    final incomingUnit =
-        (produto.bitolaUnidade ?? ProductEditorDefaults.defaultBitolaUnit)
-            .trim()
-            .toLowerCase();
+    final incomingUnit = _normalizeMeasureUnit(
+      produto.bitolaUnidade ?? ProductEditorDefaults.defaultBitolaUnit,
+    );
     final bitolaUnit = bitolaUnits.contains(incomingUnit)
         ? incomingUnit
         : ProductEditorDefaults.defaultBitolaUnit;
@@ -218,5 +209,19 @@ class ProductEditorInitializationCoordinator {
       currentImageStoragePath: produto.storagePath,
       currentImageThumbBase64: produto.thumbnailBase64,
     );
+  }
+
+  String _normalizeMeasureUnit(String rawValue) {
+    final normalized = rawValue.trim().toLowerCase();
+    switch (normalized) {
+      case 'mm':
+        return 'milimetro';
+      case 'cm':
+        return 'centimetro';
+      case 'm':
+        return 'metro';
+      default:
+        return normalized;
+    }
   }
 }

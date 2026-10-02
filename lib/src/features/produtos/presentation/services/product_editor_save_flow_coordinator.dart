@@ -76,6 +76,8 @@ class ProductEditorSaveFlowCoordinator {
     required String defaultCurrencyCode,
     required String requiredDescriptionMessage,
     required String requiredTablePriceMessage,
+    required String requiredCategoryMessage,
+    required String requiredSubcategoryMessage,
     required String unknownErrorMessage,
     required VoidCallback onSaveStarted,
   }) async {
@@ -101,6 +103,8 @@ class ProductEditorSaveFlowCoordinator {
       syncDefaultTablePrice: syncDefaultTablePrice,
       requiredDescriptionMessage: requiredDescriptionMessage,
       requiredTablePriceMessage: requiredTablePriceMessage,
+      requiredCategoryMessage: requiredCategoryMessage,
+      requiredSubcategoryMessage: requiredSubcategoryMessage,
     );
 
     final validationMessage = commandBuildResult.validationMessage;

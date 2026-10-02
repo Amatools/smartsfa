@@ -9,6 +9,7 @@ import '../../../../core/models/cliente_pre_cadastro.dart';
 import '../../../../core/models/domain_types.dart';
 import '../../../../core/diagnostics/app_diagnostics.dart';
 import '../../../../core/diagnostics/error_dialog.dart';
+import '../../../../core/constants/brazil_states.dart';
 import '../../../../core/repositories/cliente_pre_cadastro_repository.dart';
 import '../../../../core/repositories/cliente_repository.dart';
 import '../../../../core/services/offline_sync_queue.dart';
@@ -59,6 +60,10 @@ class _ClientePreCadastroPageState extends State<ClientePreCadastroPage> {
   bool _saving = false;
   bool _buscandoCep = false;
 
+  String? _normalizeUfForDropdown(String? rawValue) {
+    return brazilStateOrNull(rawValue);
+  }
+
   String _normalizeDocumento(String value) {
     final onlyDigits = value.replaceAll(RegExp(r'\D'), '');
     if (onlyDigits.isNotEmpty) {
@@ -88,8 +93,9 @@ class _ClientePreCadastroPageState extends State<ClientePreCadastroPage> {
       remote = const <ClientePreCadastro>[];
     }
 
-    final deletedIds =
-        await OfflineSyncQueue.readDeletedIds(type: 'cliente_pre_cadastro');
+    final deletedIds = await OfflineSyncQueue.readDeletedIds(
+      type: 'cliente_pre_cadastro',
+    );
     remote = remote.where((item) => !deletedIds.contains(item.id)).toList();
 
     final queued = await OfflineSyncQueue.readQueuedPreCadastros(
@@ -116,7 +122,9 @@ class _ClientePreCadastroPageState extends State<ClientePreCadastroPage> {
 
     var remote = const <Cliente>[];
     try {
-      remote = await widget.clienteRepository!.fetchAll(tenantId: widget.tenantId);
+      remote = await widget.clienteRepository!.fetchAll(
+        tenantId: widget.tenantId,
+      );
     } catch (error, stackTrace) {
       // Remote check is best-effort only, same rationale as the pre-cadastro
       // duplicate check above.
@@ -145,9 +153,9 @@ class _ClientePreCadastroPageState extends State<ClientePreCadastroPage> {
 
   Future<bool> _resolveIsOffline() async {
     try {
-      final connectivity = await Connectivity()
-          .checkConnectivity()
-          .timeout(const Duration(seconds: 3));
+      final connectivity = await Connectivity().checkConnectivity().timeout(
+        const Duration(seconds: 3),
+      );
       return connectivity.contains(ConnectivityResult.none);
     } catch (_) {
       // If we cannot determine connectivity within a bounded time (plugin
@@ -192,10 +200,14 @@ class _ClientePreCadastroPageState extends State<ClientePreCadastroPage> {
     final emailFinanceiro = _emailFinanceiroController.text.trim();
     final celular = _celularController.text.trim();
 
-    if (nome.isEmpty || documento.isEmpty || (email.isEmpty && celular.isEmpty)) {
+    if (nome.isEmpty ||
+        documento.isEmpty ||
+        (email.isEmpty && celular.isEmpty)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Preencha nome, documento e pelo menos email ou celular.'),
+          content: Text(
+            'Preencha nome, documento e pelo menos email ou celular.',
+          ),
         ),
       );
       return;
@@ -334,11 +346,14 @@ class _ClientePreCadastroPageState extends State<ClientePreCadastroPage> {
       _logradouroController.text = (data['street'] ?? '').toString();
       _bairroController.text = (data['neighborhood'] ?? '').toString();
       _cidadeController.text = (data['city'] ?? '').toString();
-      _estadoController.text = (data['state'] ?? '').toString();
+      final state = (data['state'] ?? '').toString().trim().toUpperCase();
+      _estadoController.text = brazilStateOrNull(state) ?? '';
       _paisController.text = 'Brasil';
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Endereco preenchido automaticamente pelo CEP.')),
+        const SnackBar(
+          content: Text('Endereco preenchido automaticamente pelo CEP.'),
+        ),
       );
     } catch (error, stackTrace) {
       AppDiagnostics.log(
@@ -349,7 +364,9 @@ class _ClientePreCadastroPageState extends State<ClientePreCadastroPage> {
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Nao foi possivel buscar esse CEP no momento.')),
+        const SnackBar(
+          content: Text('Nao foi possivel buscar esse CEP no momento.'),
+        ),
       );
     } finally {
       if (mounted) {
@@ -360,244 +377,394 @@ class _ClientePreCadastroPageState extends State<ClientePreCadastroPage> {
 
   @override
   Widget build(BuildContext context) {
+    const formChromeColor = Color(0xFFF5F6F8);
+    const formBodyColor = Colors.white;
+    const formBorderColor = Color(0xFFE3E6EA);
+    const formFocusedBorderColor = Color(0xFFD0D6DE);
+
+    InputDecoration formInputDecoration() {
+      return InputDecoration(
+        isDense: true,
+        filled: true,
+        fillColor: formBodyColor,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 12,
+          vertical: 12,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: formBorderColor, width: 1),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: formBorderColor, width: 1),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: formFocusedBorderColor, width: 1),
+        ),
+      );
+    }
+
+    Widget sectionTitle(String text) {
+      return Text(
+        text,
+        style: Theme.of(context).textTheme.titleSmall
+            ?.copyWith(fontWeight: FontWeight.w600),
+      );
+    }
+
+    Widget labeledField({required String label, required Widget child}) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: Theme.of(context).textTheme.bodySmall),
+          const SizedBox(height: 6),
+          child,
+        ],
+      );
+    }
+
+    Widget textField({
+      required TextEditingController controller,
+      required String label,
+      TextInputType? keyboardType,
+      FormFieldValidator<String>? validator,
+      int maxLines = 1,
+      bool alignLabelWithHint = false,
+    }) {
+      return labeledField(
+        label: label,
+        child: TextFormField(
+          controller: controller,
+          keyboardType: keyboardType,
+          validator: validator,
+          maxLines: maxLines,
+          decoration: formInputDecoration().copyWith(
+            alignLabelWithHint: alignLabelWithHint,
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Novo pré-cadastro'),
-      ),
+      appBar: AppBar(title: const Text('Novo pré-cadastro')),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Cadastro de parceiro / cliente',
-                  style: Theme.of(context).textTheme.titleLarge,
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 980),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: formBodyColor,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: formBorderColor, width: 1),
                 ),
-                const SizedBox(height: 16),
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    final isNarrow = constraints.maxWidth < 560;
-
-                    if (isNarrow) {
-                      return DropdownButtonFormField<String>(
-                        initialValue: _tipoPessoa,
-                        isExpanded: true,
-                        decoration: const InputDecoration(labelText: 'Tipo de pessoa'),
-                        items: const [
-                          DropdownMenuItem(value: 'pj', child: Text('Pessoa juridica')),
-                          DropdownMenuItem(value: 'pf', child: Text('Pessoa fisica')),
+                clipBehavior: Clip.antiAlias,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: double.infinity,
+                      color: formChromeColor,
+                      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Cadastro de parceiro / cliente',
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w600),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Pré-cadastro inicial para orçamento e conversão posterior.',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
                         ],
-                        onChanged: (value) {
-                          if (value != null) {
-                            setState(() => _tipoPessoa = value);
-                          }
-                        },
-                      );
-                    }
-
-                    return DropdownButtonFormField<String>(
-                      initialValue: _tipoPessoa,
-                      isExpanded: true,
-                      decoration: const InputDecoration(labelText: 'Tipo de pessoa'),
-                      items: const [
-                        DropdownMenuItem(value: 'pj', child: Text('Pessoa juridica')),
-                        DropdownMenuItem(value: 'pf', child: Text('Pessoa fisica')),
-                      ],
-                      onChanged: (value) {
-                        if (value != null) {
-                          setState(() => _tipoPessoa = value);
-                        }
-                      },
-                    );
-                  },
-                ),
-                const SizedBox(height: 16),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.primaryContainer,
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      'Canal: $_canal',
-                      style: Theme.of(context).textTheme.labelLarge,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _nomeController,
-                  decoration: const InputDecoration(labelText: 'Nome / razao social *'),
-                  validator: (value) {
-                    if ((value ?? '').trim().isEmpty) {
-                      return 'Informe o nome ou a razao social.';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _nomeFantasiaController,
-                  decoration: const InputDecoration(labelText: 'Nome fantasia'),
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _documentoController,
-                  decoration: const InputDecoration(labelText: 'CPF / CNPJ *'),
-                  validator: (value) {
-                    if ((value ?? '').trim().isEmpty) {
-                      return 'Informe o documento.';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _emailController,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: const InputDecoration(labelText: 'E-mail'),
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _emailFinanceiroController,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: const InputDecoration(labelText: 'E-mail financeiro'),
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _celularController,
-                  keyboardType: TextInputType.phone,
-                  decoration: const InputDecoration(labelText: 'Celular'),
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _telefoneController,
-                  keyboardType: TextInputType.phone,
-                  decoration: const InputDecoration(labelText: 'Telefone'),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextFormField(
-                        controller: _cepController,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(labelText: 'CEP'),
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    FilledButton.tonal(
-                      onPressed: _buscandoCep ? null : _buscarCep,
-                      child: _buscandoCep
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Text('Buscar CEP'),
+                    Container(
+                      color: formBodyColor,
+                      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+                      child: Form(
+                        key: _formKey,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            sectionTitle('Dados principais'),
+                            const SizedBox(height: 10),
+                            labeledField(
+                              label: 'Tipo de pessoa',
+                              child: DropdownButtonFormField<String>(
+                                initialValue: _tipoPessoa,
+                                isExpanded: true,
+                                decoration: formInputDecoration(),
+                                items: const [
+                                  DropdownMenuItem(
+                                    value: 'pj',
+                                    child: Text('Pessoa juridica'),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: 'pf',
+                                    child: Text('Pessoa fisica'),
+                                  ),
+                                ],
+                                onChanged: (value) {
+                                  if (value != null) {
+                                    setState(() => _tipoPessoa = value);
+                                  }
+                                },
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .primaryContainer,
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                                child: Text(
+                                  'Canal: $_canal',
+                                  style: Theme.of(context).textTheme.labelLarge,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            textField(
+                              controller: _nomeController,
+                              label: 'Nome / razao social *',
+                              validator: (value) {
+                                if ((value ?? '').trim().isEmpty) {
+                                  return 'Informe o nome ou a razao social.';
+                                }
+                                return null;
+                              },
+                            ),
+                            const SizedBox(height: 12),
+                            textField(
+                              controller: _nomeFantasiaController,
+                              label: 'Nome fantasia',
+                            ),
+                            const SizedBox(height: 12),
+                            textField(
+                              controller: _documentoController,
+                              label: 'CPF / CNPJ *',
+                              validator: (value) {
+                                if ((value ?? '').trim().isEmpty) {
+                                  return 'Informe o documento.';
+                                }
+                                return null;
+                              },
+                            ),
+                            const SizedBox(height: 18),
+                            sectionTitle('Contato'),
+                            const SizedBox(height: 10),
+                            textField(
+                              controller: _emailController,
+                              label: 'E-mail',
+                              keyboardType: TextInputType.emailAddress,
+                            ),
+                            const SizedBox(height: 12),
+                            textField(
+                              controller: _emailFinanceiroController,
+                              label: 'E-mail financeiro',
+                              keyboardType: TextInputType.emailAddress,
+                            ),
+                            const SizedBox(height: 12),
+                            textField(
+                              controller: _celularController,
+                              label: 'Celular',
+                              keyboardType: TextInputType.phone,
+                            ),
+                            const SizedBox(height: 12),
+                            textField(
+                              controller: _telefoneController,
+                              label: 'Telefone',
+                              keyboardType: TextInputType.phone,
+                            ),
+                            const SizedBox(height: 18),
+                            sectionTitle('Endereco'),
+                            const SizedBox(height: 10),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Expanded(
+                                  child: textField(
+                                    controller: _cepController,
+                                    label: 'CEP',
+                                    keyboardType: TextInputType.number,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                SizedBox(
+                                  height: 48,
+                                  child: FilledButton.tonalIcon(
+                                    onPressed: _buscandoCep ? null : _buscarCep,
+                                    icon: _buscandoCep
+                                        ? const SizedBox(
+                                            width: 16,
+                                            height: 16,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                            ),
+                                          )
+                                        : const Icon(Icons.search_outlined),
+                                    label: Text(
+                                      _buscandoCep
+                                          ? 'Buscando...'
+                                          : 'Buscar CEP',
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: textField(
+                                    controller: _logradouroController,
+                                    label: 'Logradouro',
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                SizedBox(
+                                  width: 120,
+                                  child: textField(
+                                    controller: _numeroController,
+                                    label: 'Numero',
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            textField(
+                              controller: _complementoController,
+                              label: 'Complemento',
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: textField(
+                                    controller: _bairroController,
+                                    label: 'Bairro',
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: textField(
+                                    controller: _cidadeController,
+                                    label: 'Cidade',
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: labeledField(
+                                    label: 'UF',
+                                    child: DropdownButtonFormField<String>(
+                                      key: ValueKey<String>(
+                                        _estadoController.text,
+                                      ),
+                                      initialValue: _normalizeUfForDropdown(
+                                        _estadoController.text,
+                                      ),
+                                      isExpanded: true,
+                                      decoration: formInputDecoration(),
+                                      items: brazilStates
+                                          .map(
+                                            (uf) => DropdownMenuItem<String>(
+                                              value: uf,
+                                              child: Text(uf),
+                                            ),
+                                          )
+                                          .toList(growable: false),
+                                      validator: (value) {
+                                        if ((value ?? '').trim().isEmpty) {
+                                          return 'Selecione a UF.';
+                                        }
+                                        return null;
+                                      },
+                                      onChanged: (value) {
+                                        _estadoController.text = (value ?? '')
+                                            .trim();
+                                      },
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: textField(
+                                    controller: _paisController,
+                                    label: 'Pais',
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 18),
+                            sectionTitle('Documentacao fiscal'),
+                            const SizedBox(height: 10),
+                            textField(
+                              controller: _inscricaoEstadualController,
+                              label: 'Inscricao estadual',
+                            ),
+                            const SizedBox(height: 12),
+                            textField(
+                              controller: _inscricaoMunicipalController,
+                              label: 'Inscricao municipal',
+                            ),
+                            const SizedBox(height: 18),
+                            sectionTitle('Observacoes'),
+                            const SizedBox(height: 10),
+                            textField(
+                              controller: _observacoesController,
+                              label: 'Anotacoes internas',
+                              maxLines: 3,
+                              alignLabelWithHint: true,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    Container(
+                      width: double.infinity,
+                      color: formChromeColor,
+                      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: FilledButton.icon(
+                          onPressed: _saving ? null : _submit,
+                          icon: _saving
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.save_outlined),
+                          label: Text(
+                            _saving ? 'Salvando...' : 'Salvar pré-cadastro',
+                          ),
+                        ),
+                      ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextFormField(
-                        controller: _logradouroController,
-                        decoration: const InputDecoration(labelText: 'Logradouro'),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    SizedBox(
-                      width: 120,
-                      child: TextFormField(
-                        controller: _numeroController,
-                        decoration: const InputDecoration(labelText: 'Numero'),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _complementoController,
-                  decoration: const InputDecoration(labelText: 'Complemento'),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextFormField(
-                        controller: _bairroController,
-                        decoration: const InputDecoration(labelText: 'Bairro'),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: TextFormField(
-                        controller: _cidadeController,
-                        decoration: const InputDecoration(labelText: 'Cidade'),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextFormField(
-                        controller: _estadoController,
-                        decoration: const InputDecoration(labelText: 'Estado'),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: TextFormField(
-                        controller: _paisController,
-                        decoration: const InputDecoration(labelText: 'Pais'),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _inscricaoEstadualController,
-                  decoration: const InputDecoration(labelText: 'Inscricao estadual'),
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _inscricaoMunicipalController,
-                  decoration: const InputDecoration(labelText: 'Inscricao municipal'),
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _observacoesController,
-                  maxLines: 3,
-                  decoration: const InputDecoration(
-                    labelText: 'Observacoes',
-                    alignLabelWithHint: true,
-                  ),
-                ),
-                const SizedBox(height: 20),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: FilledButton.icon(
-                    onPressed: _saving ? null : _submit,
-                    icon: _saving
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.save_outlined),
-                    label: Text(_saving ? 'Salvando...' : 'Salvar pré-cadastro'),
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
         ),

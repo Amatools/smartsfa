@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../../shared/presentation/theme/app_field_tokens.dart';
 import '../../../../shared/presentation/widgets/app_medium_controls.dart';
@@ -12,6 +13,7 @@ Widget buildProductEditorField({
   required TextStyle labelStyle,
   required double fieldHeight,
   TextInputType? keyboardType,
+  List<TextInputFormatter>? inputFormatters,
   int maxLines = 1,
   TextAlign textAlign = TextAlign.right,
 }) {
@@ -24,6 +26,7 @@ Widget buildProductEditorField({
         controller: controller,
         readOnly: readOnly,
         keyboardType: keyboardType,
+        inputFormatters: inputFormatters,
         style: inputTextStyle,
         textAlign: textAlign,
         textAlignVertical: TextAlignVertical.center,
@@ -35,6 +38,7 @@ Widget buildProductEditorField({
     controller: controller,
     readOnly: readOnly,
     keyboardType: keyboardType,
+    inputFormatters: inputFormatters,
     maxLines: maxLines,
     style: inputTextStyle,
     textAlignVertical: TextAlignVertical.top,
@@ -53,7 +57,8 @@ InputDecoration _compactDecoration({
   String? hintText,
   BorderRadius? borderRadius,
 }) {
-  final outlineColor = Theme.of(context).colorScheme.outline.withValues(alpha: 0.45);
+  final outlineColor = Theme.of(context).colorScheme.outline
+      .withValues(alpha: 0.45);
 
   return InputDecoration(
     labelText: labelText,

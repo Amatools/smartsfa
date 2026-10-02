@@ -174,6 +174,14 @@ Deve suportar, no minimo:
 - excecoes por politica;
 - logs de decisao de preco.
 
+## Estado implementado de regras (referencia viva)
+
+As regras de negocio atualmente implementadas para tabelas de preco, fallback por regiao, politicas de desconto e tributacao por NCM/UF estao consolidadas em:
+
+- `docs/pricing_taxation_rules.md`
+
+Este arquivo deve ser atualizado sempre que houver alteracao nas regras de calculo ou no contrato das colecoes relacionadas.
+
 ## Cadastro de produto
 
 O cadastro de produto deve ser tratado como cadastro mestre completo.

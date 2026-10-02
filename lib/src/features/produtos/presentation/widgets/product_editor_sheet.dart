@@ -1,7 +1,6 @@
-import 'dart:typed_data';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../../core/models/app_identity.dart';
 import '../../../../core/models/domain_types.dart';
@@ -29,6 +28,7 @@ import '../services/product_editor_title_builder.dart';
 import '../services/product_editor_view_state.dart';
 import '../services/product_media_editor_coordinator.dart';
 import '../services/product_media_upload_service.dart';
+import '../services/product_unit_catalog_service.dart';
 import 'product_category_dropdown_field.dart';
 import 'product_editor_field_builder.dart';
 import 'product_editor_field_style_factory.dart';
@@ -106,6 +106,8 @@ class _ProductEditorSheetState extends State<ProductEditorSheet>
       const ProductMediaEditorCoordinator();
   final ProductMediaUploadService _mediaUploadService =
       const ProductMediaUploadService();
+  late final ProductUnitCatalogService _unitCatalogService =
+      ProductUnitCatalogService(FirebaseFirestore.instance);
 
   late final Produto _emptyDraft;
   late final ProductEditorFormControllers _formControllers;
@@ -142,7 +144,28 @@ class _ProductEditorSheetState extends State<ProductEditorSheet>
     _editorState = bootstrapState.editorState;
     _defaultPriceSyncService = bootstrapState.defaultPriceSyncService;
     _defaultTablePriceCoordinator = bootstrapState.defaultTablePriceCoordinator;
+    _primeUnitCatalogs();
     _loadDefaultTablePriceForEditor();
+  }
+
+  void _primeUnitCatalogs() {
+    Future<void>(() async {
+      try {
+        await _unitCatalogService.ensureDefaultUnits(
+          tenantId: widget.identity.tenantId,
+          type: ProductUnitCatalogType.measure,
+          defaultValues: ProductEditorDefaults.bitolaUnits,
+          defaultShortCodes: ProductEditorDefaults.bitolaUnitShortCodes,
+        );
+        await _unitCatalogService.ensureDefaultUnits(
+          tenantId: widget.identity.tenantId,
+          type: ProductUnitCatalogType.standard,
+          defaultValues: ProductEditorDefaults.standardUnits,
+        );
+      } catch (_) {
+        // Best effort: if seeding fails, editor still loads with current values.
+      }
+    });
   }
 
   @override
@@ -180,6 +203,12 @@ class _ProductEditorSheetState extends State<ProductEditorSheet>
     });
   }
 
+  void _setEditorSubcategory(String value) {
+    setStateIfMounted(() {
+      _bindingCoordinator.setSubcategory(_formControllers, value);
+    });
+  }
+
   void _setEditorCurrencyCode(String value) {
     _updateEditorState(
       (state) => _bindingCoordinator.applyCurrencyCode(state, value),
@@ -196,6 +225,17 @@ class _ProductEditorSheetState extends State<ProductEditorSheet>
     _updateEditorState(
       (state) => _bindingCoordinator.applyBitolaUnit(state, value),
     );
+  }
+
+  void _setEditorStandardUnit(String value) {
+    final normalized = value.trim();
+    if (normalized.isEmpty) {
+      return;
+    }
+
+    setStateIfMounted(() {
+      _formControllers.unidade.text = normalized;
+    });
   }
 
   void _clearImageSelectionInState() {
@@ -221,21 +261,41 @@ class _ProductEditorSheetState extends State<ProductEditorSheet>
   }
 
   Widget _buildQuickStartCategoryField({
+    required Stream<Map<String, dynamic>?> workspaceStream,
     required bool readOnly,
     required TextStyle labelStyle,
     required TextStyle inputTextStyle,
   }) {
     return ProductCategoryDropdownField(
-      workspaceStream: _workspaceService.watchWorkspace(
-        widget.identity.tenantId,
-      ),
+      workspaceStream: workspaceStream,
       representedCompanyId: widget.representedCompanyId,
       categoriaController: _formControllers.categoria,
+      subcategoriaController: _formControllers.subcategoria,
       readOnly: readOnly,
       labelStyle: labelStyle,
       inputTextStyle: inputTextStyle,
       fieldHeight: _compactFieldHeight,
       onCategoryChanged: _setEditorCategory,
+      onSubcategoryChanged: _setEditorSubcategory,
+    );
+  }
+
+  Widget _buildQuickStartSubcategoryField({
+    required Stream<Map<String, dynamic>?> workspaceStream,
+    required bool readOnly,
+    required TextStyle labelStyle,
+    required TextStyle inputTextStyle,
+  }) {
+    return ProductSubcategoryDropdownField(
+      workspaceStream: workspaceStream,
+      representedCompanyId: widget.representedCompanyId,
+      categoriaController: _formControllers.categoria,
+      subcategoriaController: _formControllers.subcategoria,
+      readOnly: readOnly,
+      labelStyle: labelStyle,
+      inputTextStyle: inputTextStyle,
+      fieldHeight: _compactFieldHeight,
+      onSubcategoryChanged: _setEditorSubcategory,
     );
   }
 
@@ -247,6 +307,7 @@ class _ProductEditorSheetState extends State<ProductEditorSheet>
   }) {
     return ProductEditorTabsPayload(
       readOnly: readOnly,
+      tenantId: widget.identity.tenantId,
       controllers: _formControllers,
       status: _status,
       currencyCode: _currencyCode,
@@ -254,7 +315,6 @@ class _ProductEditorSheetState extends State<ProductEditorSheet>
       loadingTablePrice: _loadingTablePrice,
       isEnterprise: widget.isEnterprise,
       availableBrands: widget.availableBrands,
-      bitolaUnits: ProductEditorDefaults.bitolaUnits,
       currencyLabels: ProductEditorDefaults.currencyLabels,
       currencyHints: ProductEditorDefaults.currencyHints,
       labelStyle: labelStyle,
@@ -267,9 +327,11 @@ class _ProductEditorSheetState extends State<ProductEditorSheet>
       onCurrencyCodeChanged: _setEditorCurrencyCode,
       onBrandSelected: _setEditorBrand,
       onBitolaUnitChanged: _setEditorBitolaUnit,
+      onStandardUnitChanged: _setEditorStandardUnit,
       onOpenMediaLibrary: _openProductMediaLibrary,
       onClearImage: _clearImageSelectionInState,
       editorFieldBuilder: editorFieldBuilder,
+      unitCatalogService: _unitCatalogService,
     );
   }
 
@@ -277,6 +339,7 @@ class _ProductEditorSheetState extends State<ProductEditorSheet>
     required bool readOnly,
     required TextStyle labelStyle,
     required Widget categoryField,
+    required Widget subcategoryField,
     required ProductEditorFieldBuilder editorFieldBuilder,
     required ProductEditorTabsPayload tabsPayload,
   }) {
@@ -296,6 +359,7 @@ class _ProductEditorSheetState extends State<ProductEditorSheet>
       onOpenMediaLibrary: readOnly ? null : _openProductMediaLibrary,
       controllers: _formControllers,
       categoryField: categoryField,
+      subcategoryField: subcategoryField,
       editorFieldBuilder: editorFieldBuilder,
       tabsPayload: tabsPayload,
       isEditing: widget.produto != null,
@@ -316,6 +380,7 @@ class _ProductEditorSheetState extends State<ProductEditorSheet>
       String label, {
       required bool readOnly,
       TextInputType? keyboardType,
+      List<TextInputFormatter>? inputFormatters,
       int maxLines = 1,
       TextAlign textAlign = TextAlign.right,
     }) {
@@ -328,6 +393,7 @@ class _ProductEditorSheetState extends State<ProductEditorSheet>
         labelStyle: labelStyle,
         fieldHeight: _compactFieldHeight,
         keyboardType: keyboardType,
+        inputFormatters: inputFormatters,
         maxLines: maxLines,
         textAlign: textAlign,
       );
@@ -339,7 +405,17 @@ class _ProductEditorSheetState extends State<ProductEditorSheet>
       inputTextStyle: inputTextStyle,
       editorFieldBuilder: editorFieldBuilder,
     );
+    final workspaceStream = _workspaceService.watchWorkspace(
+      widget.identity.tenantId,
+    );
     final categoryField = _buildQuickStartCategoryField(
+      workspaceStream: workspaceStream,
+      readOnly: readOnly,
+      labelStyle: labelStyle,
+      inputTextStyle: inputTextStyle,
+    );
+    final subcategoryField = _buildQuickStartSubcategoryField(
+      workspaceStream: workspaceStream,
       readOnly: readOnly,
       labelStyle: labelStyle,
       inputTextStyle: inputTextStyle,
@@ -348,6 +424,7 @@ class _ProductEditorSheetState extends State<ProductEditorSheet>
       readOnly: readOnly,
       labelStyle: labelStyle,
       categoryField: categoryField,
+      subcategoryField: subcategoryField,
       editorFieldBuilder: editorFieldBuilder,
       tabsPayload: tabsPayload,
     );
@@ -418,6 +495,9 @@ class _ProductEditorSheetState extends State<ProductEditorSheet>
           ProductEditorFeedback.requiredDescriptionMessage,
       requiredTablePriceMessage:
           ProductEditorFeedback.requiredTablePriceMessage,
+      requiredCategoryMessage: ProductEditorFeedback.requiredCategoryMessage,
+      requiredSubcategoryMessage:
+          ProductEditorFeedback.requiredSubcategoryMessage,
       unknownErrorMessage: ProductEditorDefaults.unknownErrorMessage,
       onSaveStarted: () {
         _setSaving(true);

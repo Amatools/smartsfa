@@ -5,21 +5,21 @@ class ProductEditorTabsShell extends StatelessWidget {
     super.key,
     required this.priceTab,
     required this.informationTab,
-    required this.fiscalTab,
+    required this.taxationTab,
     required this.variationsTab,
     required this.weightDimensionsTab,
   });
 
   final Widget priceTab;
   final Widget informationTab;
-  final Widget fiscalTab;
+  final Widget taxationTab;
   final Widget variationsTab;
   final Widget weightDimensionsTab;
 
   List<Widget> get _tabs => <Widget>[
     priceTab,
     informationTab,
-    fiscalTab,
+    taxationTab,
     variationsTab,
     weightDimensionsTab,
   ];
@@ -35,7 +35,7 @@ class ProductEditorTabsShell extends StatelessWidget {
             const Tab(icon: Icon(Icons.info_outline), text: 'Informacoes'),
             const Tab(
               icon: Icon(Icons.account_balance_outlined),
-              text: 'Fiscal',
+              text: 'Tributacao',
             ),
             const Tab(icon: Icon(Icons.tune_outlined), text: 'Outras infos'),
             const Tab(

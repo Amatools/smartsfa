@@ -57,6 +57,10 @@ class ProductEditorControllerBindingCoordinator {
     controllers.categoria.text = value;
   }
 
+  void setSubcategory(ProductEditorFormControllers controllers, String value) {
+    controllers.subcategoria.text = value;
+  }
+
   void setBrand(ProductEditorFormControllers controllers, String value) {
     controllers.marca.text = value;
   }

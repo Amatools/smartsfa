@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/cliente.dart';
 import '../models/cliente_pre_cadastro.dart';
 import '../models/domain_types.dart';
+import '../models/pedido.dart';
 
 class LocalPreCadastroRecord {
   const LocalPreCadastroRecord({required this.entity, required this.synced});
@@ -17,6 +18,13 @@ class LocalClienteRecord {
   const LocalClienteRecord({required this.entity, required this.synced});
 
   final Cliente entity;
+  final bool synced;
+}
+
+class LocalPedidoRecord {
+  const LocalPedidoRecord({required this.entity, required this.synced});
+
+  final Pedido entity;
   final bool synced;
 }
 
@@ -39,10 +47,7 @@ class OfflineSyncQueueItem {
 
   Map<String, dynamic> get payloadMap => payload;
 
-  OfflineSyncQueueItem copyWith({
-    Map<String, dynamic>? payload,
-    bool? synced,
-  }) {
+  OfflineSyncQueueItem copyWith({Map<String, dynamic>? payload, bool? synced}) {
     return OfflineSyncQueueItem(
       id: id,
       type: type,
@@ -70,7 +75,8 @@ class OfflineSyncQueueItem {
       type: map['type']?.toString() ?? 'unknown',
       tenantId: map['tenantId']?.toString() ?? '',
       payload: Map<String, dynamic>.from(map['payload'] ?? const {}),
-      createdAt: DateTime.tryParse(map['createdAt']?.toString() ?? '') ??
+      createdAt:
+          DateTime.tryParse(map['createdAt']?.toString() ?? '') ??
           DateTime.now(),
       synced: map['synced'] == true,
     );
@@ -109,10 +115,7 @@ class OfflineSyncQueue {
       synced: synced,
     );
 
-    final next = [
-      ...existing.where((entry) => entry.id != id),
-      item,
-    ];
+    final next = [...existing.where((entry) => entry.id != id), item];
     await prefs.setString(
       _key,
       jsonEncode(next.map((entry) => entry.toMap()).toList()),
@@ -142,15 +145,25 @@ class OfflineSyncQueue {
   /// how many duplicate records were removed.
   static Future<int> deduplicatePreCadastros() async {
     final all = await readAll();
-    final others = all.where((item) => item.type != 'cliente_pre_cadastro').toList();
-    final preCadastros = all.where((item) => item.type == 'cliente_pre_cadastro').toList();
+    final others = all
+        .where((item) => item.type != 'cliente_pre_cadastro')
+        .toList();
+    final preCadastros = all
+        .where((item) => item.type == 'cliente_pre_cadastro')
+        .toList();
 
     final groups = <String, List<OfflineSyncQueueItem>>{};
     for (final item in preCadastros) {
-      final entity = ClientePreCadastro.fromMap(Map<String, Object?>.from(item.payload));
-      final normalizedDocumento = entity.documento.replaceAll(RegExp(r'\D'), '');
-      final documentoKey =
-          normalizedDocumento.isNotEmpty ? normalizedDocumento : entity.documento.trim().toLowerCase();
+      final entity = ClientePreCadastro.fromMap(
+        Map<String, Object?>.from(item.payload),
+      );
+      final normalizedDocumento = entity.documento.replaceAll(
+        RegExp(r'\D'),
+        '',
+      );
+      final documentoKey = normalizedDocumento.isNotEmpty
+          ? normalizedDocumento
+          : entity.documento.trim().toLowerCase();
       final key = '${entity.tenantId.trim()}::$documentoKey';
       groups.putIfAbsent(key, () => []).add(item);
     }
@@ -168,8 +181,12 @@ class OfflineSyncQueue {
         if (a.synced != b.synced) {
           return a.synced ? -1 : 1;
         }
-        final entityA = ClientePreCadastro.fromMap(Map<String, Object?>.from(a.payload));
-        final entityB = ClientePreCadastro.fromMap(Map<String, Object?>.from(b.payload));
+        final entityA = ClientePreCadastro.fromMap(
+          Map<String, Object?>.from(a.payload),
+        );
+        final entityB = ClientePreCadastro.fromMap(
+          Map<String, Object?>.from(b.payload),
+        );
         final dateA = entityA.updatedAt ?? entityA.createdAt ?? a.createdAt;
         final dateB = entityB.updatedAt ?? entityB.createdAt ?? b.createdAt;
         return dateB.compareTo(dateA);
@@ -208,19 +225,23 @@ class OfflineSyncQueue {
         continue;
       }
 
-      final entity = ClientePreCadastro.fromMap(Map<String, Object?>.from(item.payload));
+      final entity = ClientePreCadastro.fromMap(
+        Map<String, Object?>.from(item.payload),
+      );
       final normalizedTenantId = (tenantId ?? '').trim();
       final normalizedEntityTenant = entity.tenantId.trim();
 
       final matchesScope = normalizedTenantId.isEmpty
           ? normalizedEntityTenant.isEmpty ||
-              (includePersonalWorkspace && normalizedEntityTenant.startsWith('personal_'))
+                (includePersonalWorkspace &&
+                    normalizedEntityTenant.startsWith('personal_'))
           : normalizedEntityTenant == normalizedTenantId ||
-              (includePersonalWorkspace &&
-                  (normalizedEntityTenant.startsWith('personal_') ||
-                      normalizedEntityTenant.isEmpty));
+                (includePersonalWorkspace &&
+                    (normalizedEntityTenant.startsWith('personal_') ||
+                        normalizedEntityTenant.isEmpty));
 
-      final isOrphan = entity.status == PreRegistrationStatus.approved &&
+      final isOrphan =
+          entity.status == PreRegistrationStatus.approved &&
           (entity.mergedClienteId == null || entity.mergedClienteId!.isEmpty);
 
       if (matchesScope && isOrphan) {
@@ -252,7 +273,10 @@ class OfflineSyncQueue {
     try {
       final decoded = jsonDecode(raw) as List<dynamic>;
       return decoded
-          .map((item) => OfflineSyncQueueItem.fromMap(Map<String, dynamic>.from(item)))
+          .map(
+            (item) =>
+                OfflineSyncQueueItem.fromMap(Map<String, dynamic>.from(item)),
+          )
           .toList();
     } catch (_) {
       return <OfflineSyncQueueItem>[];
@@ -286,7 +310,9 @@ class OfflineSyncQueue {
     final items = queued
         .where((item) => item.type == 'cliente')
         .where((item) {
-          final entity = Cliente.fromMap(Map<String, Object?>.from(item.payload));
+          final entity = Cliente.fromMap(
+            Map<String, Object?>.from(item.payload),
+          );
           if (entity.id.isEmpty) {
             return false;
           }
@@ -295,7 +321,8 @@ class OfflineSyncQueue {
 
           if (normalizedTenantId.isEmpty) {
             return normalizedEntityTenant.isEmpty ||
-                (includePersonalWorkspace && normalizedEntityTenant.startsWith('personal_'));
+                (includePersonalWorkspace &&
+                    normalizedEntityTenant.startsWith('personal_'));
           }
 
           if (normalizedEntityTenant == normalizedTenantId) {
@@ -305,10 +332,57 @@ class OfflineSyncQueue {
           return includePersonalWorkspace &&
               normalizedEntityTenant.startsWith('personal_');
         })
-        .map((item) => LocalClienteRecord(
-              entity: Cliente.fromMap(Map<String, Object?>.from(item.payload)),
-              synced: item.synced,
-            ))
+        .map(
+          (item) => LocalClienteRecord(
+            entity: Cliente.fromMap(Map<String, Object?>.from(item.payload)),
+            synced: item.synced,
+          ),
+        )
+        .toList();
+
+    return items;
+  }
+
+  /// Local-first read of pedidos persisted on this device. Unsynced entries
+  /// remain available so mobile users can keep operating fully offline.
+  static Future<List<LocalPedidoRecord>> readLocalPedidos({
+    String? tenantId,
+    bool includePersonalWorkspace = false,
+  }) async {
+    final queued = await readAll();
+    final normalizedTenantId = (tenantId ?? '').trim();
+
+    final items = queued
+        .where((item) => item.type == 'pedido')
+        .where((item) {
+          final entity = Pedido.fromMap(
+            Map<String, Object?>.from(item.payload),
+          );
+          if (entity.id.isEmpty) {
+            return false;
+          }
+
+          final normalizedEntityTenant = entity.tenantId.trim();
+
+          if (normalizedTenantId.isEmpty) {
+            return normalizedEntityTenant.isEmpty ||
+                (includePersonalWorkspace &&
+                    normalizedEntityTenant.startsWith('personal_'));
+          }
+
+          if (normalizedEntityTenant == normalizedTenantId) {
+            return true;
+          }
+
+          return includePersonalWorkspace &&
+              normalizedEntityTenant.startsWith('personal_');
+        })
+        .map(
+          (item) => LocalPedidoRecord(
+            entity: Pedido.fromMap(Map<String, Object?>.from(item.payload)),
+            synced: item.synced,
+          ),
+        )
         .toList();
 
     return items;
@@ -327,8 +401,9 @@ class OfflineSyncQueue {
     final items = queued
         .where((item) => item.type == 'cliente_pre_cadastro')
         .where((item) {
-          final entity =
-              ClientePreCadastro.fromMap(Map<String, Object?>.from(item.payload));
+          final entity = ClientePreCadastro.fromMap(
+            Map<String, Object?>.from(item.payload),
+          );
           if (entity.id.isEmpty) {
             return false;
           }
@@ -339,7 +414,8 @@ class OfflineSyncQueue {
 
           if (normalizedTenantId.isEmpty && normalizedRequestedBy.isEmpty) {
             return entity.tenantId.trim().isEmpty ||
-                (includePersonalWorkspace && entity.tenantId.startsWith('personal_'));
+                (includePersonalWorkspace &&
+                    entity.tenantId.startsWith('personal_'));
           }
 
           if (normalizedEntityTenant == normalizedTenantId) {
@@ -359,12 +435,14 @@ class OfflineSyncQueue {
 
           return false;
         })
-        .map((item) => LocalPreCadastroRecord(
-              entity: ClientePreCadastro.fromMap(
-                Map<String, Object?>.from(item.payload),
-              ),
-              synced: item.synced,
-            ))
+        .map(
+          (item) => LocalPreCadastroRecord(
+            entity: ClientePreCadastro.fromMap(
+              Map<String, Object?>.from(item.payload),
+            ),
+            synced: item.synced,
+          ),
+        )
         .toList();
 
     return items;
@@ -381,10 +459,7 @@ class OfflineSyncQueue {
         return item;
       }
 
-      final payload = <String, Object?>{
-        ...item.payload,
-        ...updated.toMap(),
-      };
+      final payload = <String, Object?>{...item.payload, ...updated.toMap()};
 
       // This changes the record's payload (e.g. pending -> merged after an
       // approval), so any previous `synced: true` flag no longer reflects

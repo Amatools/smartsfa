@@ -54,8 +54,11 @@ class AppShellNavigationFactory {
       AppShellItem(
         label: 'Pedidos',
         icon: Icons.receipt_long_outlined,
-        builder: (context, identity) =>
-            PedidosPage(identity: identity, repository: pedidoRepository),
+        builder: (context, identity) => PedidosPage(
+          identity: identity,
+          repository: pedidoRepository,
+          produtoRepository: produtoRepository,
+        ),
       ),
       AppShellItem(
         label: 'Avisos',

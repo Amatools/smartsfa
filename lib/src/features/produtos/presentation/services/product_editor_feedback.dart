@@ -3,9 +3,8 @@ import 'package:flutter/material.dart';
 
 class ProductEditorFeedback {
   static void showMessage(BuildContext context, String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 
   static String productSavedMessage({required bool isNew}) {
@@ -38,7 +37,8 @@ class ProductEditorFeedback {
     final code = error.code.trim().toLowerCase();
     final message = (error.message ?? '').toLowerCase();
     final storageNotConfigured =
-        code == 'object-not-found' || message.contains('storage has not been set up');
+        code == 'object-not-found' ||
+        message.contains('storage has not been set up');
     if (storageNotConfigured) {
       return 'Falha ao enviar imagem: Firebase Storage ainda nao foi iniciado no projeto. Abra Firebase Console > Storage > Get started.';
     }
@@ -57,6 +57,12 @@ class ProductEditorFeedback {
 
   static const String requiredTablePriceMessage =
       'Preencha o campo obrigatorio: preco de tabela.';
+
+  static const String requiredCategoryMessage =
+      'Preencha o campo obrigatorio: categoria.';
+
+  static const String requiredSubcategoryMessage =
+      'Preencha o campo obrigatorio: subcategoria.';
 
   static const String deletePermissionFallbackMessage =
       'Sem permissao para excluir definitivamente. Produto inativado com sucesso.';

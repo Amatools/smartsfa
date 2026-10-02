@@ -36,10 +36,8 @@ class ProductEditorFormResetCoordinator {
     controllers.bitola.clear();
     controllers.unidade.text = unidadePadrao;
     controllers.ncm.clear();
-    controllers.cfop.clear();
-    controllers.icms.clear();
-    controllers.pis.clear();
-    controllers.cofins.clear();
+    controllers.cest.clear();
+    controllers.ipiBase.clear();
     controllers.peso.clear();
     controllers.comprimentoMm.clear();
     controllers.larguraMm.clear();
@@ -48,8 +46,6 @@ class ProductEditorFormResetCoordinator {
     controllers.multiploVenda.clear();
     controllers.erpProductId.clear();
     controllers.erpSyncId.clear();
-    controllers.tabelaVersao.text = ProductEditorDefaults.defaultManualVersion;
-    controllers.estoqueVersao.text = ProductEditorDefaults.defaultManualVersion;
 
     return ProductEditorFormResetValues(
       status: ProductStatus.active,

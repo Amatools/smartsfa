@@ -37,15 +37,11 @@ class ProductEditorEntityMapper {
     required String multiploVendaText,
     required String quantidadeMinimaText,
     required String ncmText,
-    required String cfopText,
-    required String icmsText,
-    required String pisText,
-    required String cofinsText,
+    required String cestText,
+    required String ipiBaseText,
     required String pesoText,
     required String erpProductIdText,
     required String erpSyncIdText,
-    required String tabelaVersaoText,
-    required String estoqueVersaoText,
     required String? currentImageStoragePath,
     required String? currentImageThumbBase64,
   }) {
@@ -102,16 +98,16 @@ class ProductEditorEntityMapper {
       valorBruto: tablePrice,
       precoMinimo: ProductFormValueCodec.parseDecimal(precoMinimoText),
       percentualComissao: existing?.percentualComissao,
-      unidade: ProductFormValueCodec.nullableText(unidadeText) ?? 'UN',
+      unidade:
+          ProductFormValueCodec.nullableText(unidadeText) ??
+          ProductEditorDefaults.defaultStandardUnit,
       multiploVenda: ProductFormValueCodec.parseDecimal(multiploVendaText),
       quantidadeMinima: ProductFormValueCodec.parseDecimal(
         quantidadeMinimaText,
       ),
       ncm: ProductFormValueCodec.nullableText(ncmText),
-      cfop: ProductFormValueCodec.nullableText(cfopText),
-      aliquotaIcms: ProductFormValueCodec.parseDecimal(icmsText),
-      aliquotaPis: ProductFormValueCodec.parseDecimal(pisText),
-      aliquotaCofins: ProductFormValueCodec.parseDecimal(cofinsText),
+      cest: ProductFormValueCodec.nullableText(cestText),
+      aliquotaIpiBase: ProductFormValueCodec.parseDecimal(ipiBaseText),
       pesoKg: ProductFormValueCodec.parseDecimal(pesoText),
       erpProductId: isEnterprise
           ? ProductFormValueCodec.nullableText(erpProductIdText)
@@ -119,8 +115,6 @@ class ProductEditorEntityMapper {
       erpSyncId: isEnterprise
           ? ProductFormValueCodec.nullableText(erpSyncIdText)
           : null,
-      tabelaPrecoVersao: ProductFormValueCodec.nullableText(tabelaVersaoText),
-      estoqueVersao: ProductFormValueCodec.nullableText(estoqueVersaoText),
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,
     );

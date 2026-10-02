@@ -103,6 +103,11 @@ Regra de uso: cada item entregue deve ser marcado com [x] e manter evidencias cu
 
 Use esta secao como checklist operacional do dia a dia.
 
+## Guias de regras comerciais
+
+- [x] Documento consolidado de regras de precificacao e tributacao: `docs/pricing_taxation_rules.md`
+- [ ] Revisar periodicamente este documento a cada mudanca em calculo/preco/tributacao
+
 - [x] Validar ferramentas: flutter --version
 - [x] Validar saude do projeto: flutter analyze
 - [x] Validar build debug: flutter build apk --debug
