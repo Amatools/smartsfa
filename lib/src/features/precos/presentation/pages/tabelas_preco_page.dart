@@ -1,13 +1,16 @@
-import 'dart:convert';
-import 'dart:typed_data';
-
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/models/app_identity.dart';
+import '../../../../core/models/product_base_price.dart';
+import '../../../../core/models/produto.dart';
 import '../../../../core/models/tabela_preco.dart';
 import '../../../../core/models/tenant_entry_decision.dart';
+import '../../../../core/repositories/product_base_price_repository.dart';
+import '../../../../core/repositories/produto_repository.dart';
 import '../../../../core/repositories/tabela_preco_repository.dart';
+import '../../../../shared/services/tabular_spreadsheet_service.dart';
+import '../../../../shared/utils/file_download.dart';
 import '../services/default_price_table_guard.dart';
 
 class TabelasPrecoPage extends StatelessWidget {
@@ -16,6 +19,8 @@ class TabelasPrecoPage extends StatelessWidget {
     required this.identity,
     required this.activeTenant,
     required this.repository,
+    required this.productRepository,
+    required this.basePriceRepository,
     this.selectedRepresentedCompanyId,
     this.activeRepresentedCompanyName,
   });
@@ -23,6 +28,8 @@ class TabelasPrecoPage extends StatelessWidget {
   final AppIdentity identity;
   final TenantEntryOption activeTenant;
   final TabelaPrecoRepository repository;
+  final ProdutoRepository productRepository;
+  final ProductBasePriceRepository basePriceRepository;
   final String? selectedRepresentedCompanyId;
   final String? activeRepresentedCompanyName;
 
@@ -113,12 +120,25 @@ class TabelasPrecoPage extends StatelessWidget {
                       spacing: 12,
                       runSpacing: 12,
                       children: [
+                        OutlinedButton.icon(
+                          onPressed: policy.canManage
+                              ? () => _downloadPriceTableTemplate(
+                                    context,
+                                    identity: identity,
+                                    productRepository: productRepository,
+                                  )
+                              : null,
+                          icon: const Icon(Icons.download_outlined),
+                          label: const Text('Baixar modelo XLSX'),
+                        ),
                         FilledButton.icon(
                           onPressed: policy.canManage
                               ? () => _openImportSheet(
                                     context,
                                     identity: identity,
                                     repository: repository,
+                                    productRepository: productRepository,
+                                    basePriceRepository: basePriceRepository,
                                   )
                               : null,
                           icon: const Icon(Icons.upload_file_outlined),
@@ -425,10 +445,13 @@ Future<void> _openImportSheet(
   BuildContext context, {
   required AppIdentity identity,
   required TabelaPrecoRepository repository,
+  required ProdutoRepository productRepository,
+  required ProductBasePriceRepository basePriceRepository,
 }) async {
   PlatformFile? selectedFile;
   _PriceImportValidation? validation;
   var importing = false;
+  final tableNameController = TextEditingController();
 
   await showModalBottomSheet<void>(
     context: context,
@@ -454,6 +477,7 @@ Future<void> _openImportSheet(
             setSheetState(() {
               selectedFile = file;
               validation = null;
+              tableNameController.text = _buildImportedName(file.name);
             });
           }
 
@@ -492,24 +516,134 @@ Future<void> _openImportSheet(
               return;
             }
 
+            final importedName = tableNameController.text.trim();
+            if (importedName.isEmpty) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Informe um nome para a nova tabela.'),
+                ),
+              );
+              return;
+            }
+
+            if (importedName.toLowerCase() == reservedSystemDefaultPriceTableName) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text(
+                    '"Tabela padrao" e reservado. Defina outro nome.',
+                  ),
+                ),
+              );
+              return;
+            }
+
             setSheetState(() {
               importing = true;
             });
 
             try {
               final now = DateTime.now().toUtc();
-              final importedName = _buildImportedName(file.name);
-              if (importedName.trim().toLowerCase() ==
-                  reservedSystemDefaultPriceTableName) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
+              final products = await productRepository.fetchAll(
+                tenantId: identity.tenantId,
+              );
+              final productsByCode = <String, Produto>{};
+              for (final product in products) {
+                final code = product.codigoInterno.trim().toLowerCase();
+                if (code.isEmpty) {
+                  continue;
+                }
+                productsByCode[code] = product;
+              }
+
+              final rowsToImport = <_ImportedPriceRow>[];
+              final unknownCodes = <String>{};
+              for (final row in report.rows) {
+                final code = _readPriceCell(
+                  row,
+                  const [
+                    'codigointerno',
+                    'codigo_interno',
+                    'codigo',
+                    'sku',
+                  ],
+                );
+                if (code.isEmpty) {
+                  continue;
+                }
+
+                final product = productsByCode[code.toLowerCase()];
+                if (product == null) {
+                  unknownCodes.add(code);
+                  continue;
+                }
+
+                final rawPrice = _readPriceCell(
+                  row,
+                  const ['preco', 'valor', 'valor_bruto', 'baseprice'],
+                );
+                final basePrice = TabularSpreadsheetService.parseDecimal(
+                  rawPrice,
+                );
+                if (basePrice == null) {
+                  continue;
+                }
+
+                final regionId = _readPriceCell(
+                  row,
+                  const ['regiao', 'region', 'regionid'],
+                );
+                final statusRaw = _readPriceCell(
+                  row,
+                  const ['status'],
+                );
+                final validFrom = TabularSpreadsheetService.parseDate(
+                  _readPriceCell(row, const ['validfrom', 'vigenciainicial']),
+                );
+                final validUntil = TabularSpreadsheetService.parseDate(
+                  _readPriceCell(row, const ['validuntil', 'vigenciafinal']),
+                );
+
+                rowsToImport.add(
+                  _ImportedPriceRow(
+                    productId: product.id,
+                    basePrice: basePrice,
+                    regionId: regionId.isEmpty ? 'ALL' : regionId,
+                    status: _normalizePriceStatus(statusRaw),
+                    validFrom: validFrom,
+                    validUntil: validUntil,
+                  ),
+                );
+              }
+
+              if (unknownCodes.isNotEmpty) {
+                if (!sheetContext.mounted) {
+                  return;
+                }
+                final sample = unknownCodes.take(10).join(', ');
+                ScaffoldMessenger.of(sheetContext).showSnackBar(
+                  SnackBar(
                     content: Text(
-                      '"Tabela padrao" e reservado. Renomeie o arquivo antes de importar.',
+                      'Codigos nao encontrados no cadastro de produtos: $sample${unknownCodes.length > 10 ? ' ...' : ''}.',
                     ),
                   ),
                 );
                 return;
               }
+
+              if (rowsToImport.isEmpty) {
+                if (!sheetContext.mounted) {
+                  return;
+                }
+                ScaffoldMessenger.of(sheetContext).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      'Nenhum preco valido encontrado para importacao.',
+                    ),
+                  ),
+                );
+                return;
+              }
+
               final tabela = TabelaPreco(
                 id: 'pt_${now.microsecondsSinceEpoch}',
                 tenantId: identity.tenantId,
@@ -521,19 +655,44 @@ Future<void> _openImportSheet(
                 status: 'ativo',
                 linkedEntityId: null,
                 fileName: file.name,
-                rowCount: report.rows,
+                rowCount: rowsToImport.length,
                 createdAt: now,
                 updatedAt: now,
               );
 
               await repository.save(tabela);
+
+              for (var index = 0; index < rowsToImport.length; index++) {
+                final row = rowsToImport[index];
+                await basePriceRepository.save(
+                  ProductBasePrice(
+                    id: 'pbp_${now.microsecondsSinceEpoch}_$index',
+                    tenantId: identity.tenantId,
+                    productId: row.productId,
+                    priceTableId: tabela.id,
+                    regionId: row.regionId,
+                    basePrice: row.basePrice,
+                    status: row.status,
+                    currencyCode: 'BRL',
+                    validFrom: row.validFrom,
+                    validUntil: row.validUntil,
+                    createdAt: now,
+                    updatedAt: now,
+                  ),
+                );
+              }
+
               if (!context.mounted) {
                 return;
               }
 
               Navigator.of(sheetContext).pop();
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Tabela importada: ${tabela.nome}.')),
+              ScaffoldMessenger.of(sheetContext).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    'Tabela importada: ${tabela.nome} (${rowsToImport.length} preco(s)).',
+                  ),
+                ),
               );
             } finally {
               if (context.mounted) {
@@ -561,7 +720,15 @@ Future<void> _openImportSheet(
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    'CSV e validado localmente por cabecalho (codigoInterno, preco). Arquivos XLS/XLSX sao aceitos e registrados para processamento no backend.',
+                    'Importe XLSX/CSV com colunas codigoInterno e preco. Somente produtos existentes sao aceitos.',
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: tableNameController,
+                    decoration: const InputDecoration(
+                      labelText: 'Nome da nova tabela',
+                      hintText: 'Ex.: Tabela Julho 2026',
+                    ),
                   ),
                   const SizedBox(height: 12),
                   if (selectedFile != null)
@@ -626,54 +793,20 @@ class _PriceImportValidation {
 
   final bool ok;
   final String message;
-  final int rows;
+  final List<Map<String, String>> rows;
 }
 
 _PriceImportValidation _validatePriceSheet(PlatformFile file) {
-  final fileName = file.name.trim().toLowerCase();
-  if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
-    return const _PriceImportValidation(
-      ok: true,
-      message: 'Arquivo Excel aceito. Parse detalhado sera feito no backend de importacao.',
-      rows: 0,
-    );
-  }
-
-  if (!fileName.endsWith('.csv')) {
-    return const _PriceImportValidation(
+  final parsed = TabularSpreadsheetService.parseFile(file);
+  if (!parsed.ok) {
+    return _PriceImportValidation(
       ok: false,
-      message: 'Formato invalido. Use CSV, XLS ou XLSX.',
-      rows: 0,
+      message: parsed.message,
+      rows: const <Map<String, String>>[],
     );
   }
 
-  final bytes = file.bytes;
-  if (bytes == null || bytes.isEmpty) {
-    return const _PriceImportValidation(
-      ok: false,
-      message: 'Arquivo CSV sem conteudo.',
-      rows: 0,
-    );
-  }
-
-  final text = _decodeFile(bytes);
-  final lines = const LineSplitter()
-      .convert(text.replaceAll('\r\n', '\n').replaceAll('\r', '\n'))
-      .where((line) => line.trim().isNotEmpty)
-      .toList(growable: false);
-
-  if (lines.length < 2) {
-    return const _PriceImportValidation(
-      ok: false,
-      message: 'CSV precisa de cabecalho e ao menos uma linha de dados.',
-      rows: 0,
-    );
-  }
-
-  final separator = _detectSeparator(lines.first);
-  final header = _splitCsvLine(lines.first, separator)
-      .map((value) => value.trim().toLowerCase())
-      .toList(growable: false);
+  final header = parsed.headers;
 
   final hasCodigo = header.contains('codigointerno') ||
       header.contains('codigo_interno') ||
@@ -687,28 +820,140 @@ _PriceImportValidation _validatePriceSheet(PlatformFile file) {
     return const _PriceImportValidation(
       ok: false,
       message: 'Cabecalho invalido. Campos obrigatorios: codigoInterno e preco.',
-      rows: 0,
+      rows: <Map<String, String>>[],
+    );
+  }
+
+  final missingCodeLines = <int>[];
+  final invalidPriceLines = <int>[];
+  for (var index = 0; index < parsed.rows.length; index++) {
+    final row = parsed.rows[index];
+    final code = _readPriceCell(
+      row,
+      const <String>['codigointerno', 'codigo_interno', 'codigo', 'sku'],
+    );
+    final rawPrice = _readPriceCell(
+      row,
+      const <String>['preco', 'valor', 'valor_bruto', 'baseprice'],
+    );
+    final parsedPrice = TabularSpreadsheetService.parseDecimal(rawPrice);
+
+    if (code.isEmpty) {
+      missingCodeLines.add(index + 2);
+    }
+    if (parsedPrice == null) {
+      invalidPriceLines.add(index + 2);
+    }
+  }
+
+  if (missingCodeLines.isNotEmpty || invalidPriceLines.isNotEmpty) {
+    final parts = <String>[];
+    if (missingCodeLines.isNotEmpty) {
+      final sample = missingCodeLines.take(10).join(', ');
+      parts.add(
+        'linhas sem codigoInterno: $sample${missingCodeLines.length > 10 ? ' ...' : ''}',
+      );
+    }
+    if (invalidPriceLines.isNotEmpty) {
+      final sample = invalidPriceLines.take(10).join(', ');
+      parts.add(
+        'linhas com preco invalido: $sample${invalidPriceLines.length > 10 ? ' ...' : ''}',
+      );
+    }
+
+    return _PriceImportValidation(
+      ok: false,
+      message: 'Inconsistencias na planilha (${parts.join(' | ')}).',
+      rows: parsed.rows,
     );
   }
 
   return _PriceImportValidation(
     ok: true,
-    message: 'CSV valido com ${lines.length - 1} linhas de preco.',
-    rows: lines.length - 1,
+    message: 'Arquivo valido com ${parsed.rows.length} linha(s).',
+    rows: parsed.rows,
   );
 }
 
-String _decodeFile(Uint8List bytes) {
+Future<void> _downloadPriceTableTemplate(
+  BuildContext context, {
+  required AppIdentity identity,
+  required ProdutoRepository productRepository,
+}) async {
   try {
-    return utf8.decode(bytes);
-  } catch (_) {
-    return latin1.decode(bytes);
+    final products = await productRepository.fetchAll(tenantId: identity.tenantId);
+    if (products.isEmpty) {
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Cadastre produtos antes de gerar o modelo de tabela.'),
+        ),
+      );
+      return;
+    }
+
+    final sorted = List<Produto>.from(products)
+      ..sort(
+        (a, b) => a.codigoInterno.toLowerCase().compareTo(
+          b.codigoInterno.toLowerCase(),
+        ),
+      );
+
+    final rows = sorted
+        .map(
+          (item) => <String>[
+            item.codigoInterno,
+            item.descricao,
+            '',
+            'ALL',
+            'active',
+            '',
+            '',
+          ],
+        )
+        .toList(growable: false);
+
+    final bytes = TabularSpreadsheetService.buildXlsx(
+      sheetName: 'TabelaPreco',
+      headers: const <String>[
+        'codigoInterno',
+        'descricao',
+        'preco',
+        'regiao',
+        'status',
+        'validFrom',
+        'validUntil',
+      ],
+      rows: rows,
+    );
+
+    final stamp = DateTime.now().toIso8601String().substring(0, 10);
+    await downloadFileBytes(
+      bytes: bytes,
+      fileName: 'modelo_tabela_preco_$stamp.xlsx',
+      mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+  } catch (error) {
+    if (!context.mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Falha ao baixar modelo da tabela de preco: $error'),
+      ),
+    );
   }
 }
 
 String _buildImportedName(String fileName) {
   final stamp = DateTime.now().toIso8601String().substring(0, 10);
-  return 'Import $stamp - $fileName';
+  final normalized = fileName.trim();
+  final dot = normalized.lastIndexOf('.');
+  final baseName = dot > 0 ? normalized.substring(0, dot) : normalized;
+  final clean = baseName.trim().isEmpty ? 'Tabela importada' : baseName.trim();
+  return 'Import $stamp - $clean';
 }
 
 String _formatDate(DateTime? value) {
@@ -725,41 +970,40 @@ String _formatDate(DateTime? value) {
   return '$day/$month/$year $hour:$minute';
 }
 
-String _detectSeparator(String line) {
-  final semicolon = ';'.allMatches(line).length;
-  final comma = ','.allMatches(line).length;
-  return semicolon > comma ? ';' : ',';
+String _readPriceCell(Map<String, String> row, List<String> aliases) {
+  for (final alias in aliases) {
+    final value = row[TabularSpreadsheetService.normalizeHeader(alias)]?.trim() ?? '';
+    if (value.isNotEmpty) {
+      return value;
+    }
+  }
+  return '';
 }
 
-List<String> _splitCsvLine(String line, String separator) {
-  final result = <String>[];
-  final separatorCode = separator.codeUnitAt(0);
-  final buffer = StringBuffer();
-  var insideQuotes = false;
-
-  for (var i = 0; i < line.length; i++) {
-    final charCode = line.codeUnitAt(i);
-    final char = line[i];
-
-    if (char == '"') {
-      if (insideQuotes && i + 1 < line.length && line[i + 1] == '"') {
-        buffer.write('"');
-        i++;
-        continue;
-      }
-      insideQuotes = !insideQuotes;
-      continue;
-    }
-
-    if (!insideQuotes && charCode == separatorCode) {
-      result.add(buffer.toString());
-      buffer.clear();
-      continue;
-    }
-
-    buffer.writeCharCode(charCode);
+String _normalizePriceStatus(String raw) {
+  final normalized = raw.trim().toLowerCase();
+  if (normalized == 'inactive' ||
+      normalized == 'inativo' ||
+      normalized == 'desativado') {
+    return 'inactive';
   }
+  return 'active';
+}
 
-  result.add(buffer.toString());
-  return result;
+class _ImportedPriceRow {
+  const _ImportedPriceRow({
+    required this.productId,
+    required this.basePrice,
+    required this.regionId,
+    required this.status,
+    required this.validFrom,
+    required this.validUntil,
+  });
+
+  final String productId;
+  final double basePrice;
+  final String regionId;
+  final String status;
+  final DateTime? validFrom;
+  final DateTime? validUntil;
 }

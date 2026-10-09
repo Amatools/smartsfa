@@ -11,6 +11,8 @@ import '../../../../core/data/firestore/firestore_customer_price_table_assignmen
 import '../../../../core/data/firestore/firestore_product_base_price_repository.dart';
 import '../../../../core/data/firestore/firestore_tax_rule_repository.dart';
 import '../../../../core/models/domain_types.dart';
+import '../../../../core/models/cliente.dart';
+import '../../../../core/models/cliente_reference.dart';
 import '../../../../core/models/pedido.dart';
 import '../../../../core/repositories/cliente_repository.dart';
 import '../../../../core/repositories/customer_price_table_assignment_repository.dart';
@@ -19,6 +21,7 @@ import '../../../../core/repositories/produto_repository.dart';
 import '../../../../core/services/offline_sync_queue.dart';
 import '../../../../core/models/produto.dart';
 import '../../../auth/services/tenant_membership_service.dart';
+import '../../../auth/services/workspace_profile_service.dart';
 import '../../../precos/presentation/services/default_price_table_guard.dart';
 import '../../../precos/services/product_tax_engine_service.dart';
 
@@ -173,70 +176,112 @@ class _PedidosPageState extends State<PedidosPage> {
       };
     }
 
+    Map<String, String> fallbackFromRole() {
+      final role = widget.identity.role.trim().toLowerCase();
+      switch (role) {
+        case 'owner':
+        case 'platform_admin':
+          return {
+            'ownerId': uid,
+            'gerenteId': '',
+            'representanteId': '',
+            'vendedorId': '',
+          };
+        case 'gerente':
+          return {
+            'ownerId': uid,
+            'gerenteId': uid,
+            'representanteId': '',
+            'vendedorId': '',
+          };
+        case 'representante':
+          return {
+            'ownerId': uid,
+            'gerenteId': uid,
+            'representanteId': uid,
+            'vendedorId': '',
+          };
+        case 'vendedor':
+        case 'seller':
+        case 'sales':
+          return {
+            'ownerId': uid,
+            'gerenteId': uid,
+            'representanteId': uid,
+            'vendedorId': uid,
+          };
+        default:
+          return {
+            'ownerId': uid,
+            'gerenteId': uid,
+            'representanteId': uid,
+            'vendedorId': uid,
+          };
+      }
+    }
+
+    bool hasUsableMembershipScope(Map<String, String> scope) {
+      final role = widget.identity.role.trim().toLowerCase();
+      final ownerId = (scope['ownerId'] ?? '').trim();
+      final gerenteId = (scope['gerenteId'] ?? '').trim();
+      final representanteId = (scope['representanteId'] ?? '').trim();
+      final vendedorId = (scope['vendedorId'] ?? '').trim();
+
+      if (ownerId.isEmpty) {
+        return false;
+      }
+
+      if (role == 'owner' || role == 'platform_admin') {
+        return ownerId == uid;
+      }
+
+      if (role == 'gerente') {
+        return gerenteId.isNotEmpty;
+      }
+
+      if (role == 'representante') {
+        return gerenteId.isNotEmpty && representanteId.isNotEmpty;
+      }
+
+      if (role == 'vendedor' || role == 'seller' || role == 'sales') {
+        return gerenteId.isNotEmpty &&
+            representanteId.isNotEmpty &&
+            vendedorId.isNotEmpty;
+      }
+
+      return true;
+    }
+
     try {
       final membership = await TenantMembershipService(
         FirebaseFirestore.instance,
-      ).loadById('${tenantId}_$uid');
+      ).loadActiveByTenantAndUid(tenantId: tenantId, uid: uid);
       if (membership != null && membership.isActive) {
-        return {
+        final scope = {
           'ownerId': membership.ownerId,
           'gerenteId': membership.gerenteId,
           'representanteId': membership.representanteId,
           'vendedorId': membership.vendedorId,
         };
+
+        if (hasUsableMembershipScope(scope)) {
+          return scope;
+        }
       }
     } catch (_) {
       // Falls back to role-based defaults when membership lookup is unavailable.
     }
 
-    final role = widget.identity.role.trim().toLowerCase();
-    switch (role) {
-      case 'owner':
-      case 'platform_admin':
-        return {
-          'ownerId': uid,
-          'gerenteId': '',
-          'representanteId': '',
-          'vendedorId': '',
-        };
-      case 'gerente':
-        return {
-          'ownerId': uid,
-          'gerenteId': uid,
-          'representanteId': '',
-          'vendedorId': '',
-        };
-      case 'representante':
-        return {
-          'ownerId': uid,
-          'gerenteId': uid,
-          'representanteId': uid,
-          'vendedorId': '',
-        };
-      case 'vendedor':
-      case 'seller':
-      case 'sales':
-        return {
-          'ownerId': uid,
-          'gerenteId': uid,
-          'representanteId': uid,
-          'vendedorId': uid,
-        };
-      default:
-        return {
-          'ownerId': uid,
-          'gerenteId': uid,
-          'representanteId': uid,
-          'vendedorId': uid,
-        };
-    }
+    return fallbackFromRole();
   }
 
-  Future<List<LocalPedidoRecord>> _readLocalPedidos() {
-    return OfflineSyncQueue.readLocalPedidos(
+  Future<_PedidoLocalState> _readLocalPedidos() async {
+    final records = await OfflineSyncQueue.readLocalPedidos(
       tenantId: widget.identity.tenantId,
       includePersonalWorkspace: widget.identity.isPersonalWorkspace,
     );
+    final deletedIds = await OfflineSyncQueue.readDeletedIds(type: 'pedido');
+    return _PedidoLocalState(records: records, deletedIds: deletedIds);
   }
 
   List<_PedidoListEntry> _mergePedidos({
@@ -372,6 +417,7 @@ class _PedidosPageState extends State<PedidosPage> {
   Future<void> _saveEditedItems(
     Pedido pedido,
     List<PedidoItem> editedItems,
+    ClienteReference? editedClienteReferencia,
   ) async {
     setState(() {
       _savingDraftEdition = true;
@@ -380,6 +426,8 @@ class _PedidosPageState extends State<PedidosPage> {
     try {
       final now = DateTime.now().toUtc();
       final updatedOrder = pedido.copyWith(
+        clienteReferencia: editedClienteReferencia,
+        clearClienteReferencia: editedClienteReferencia == null,
         itens: editedItems,
         totalItens: _roundCurrency(_totalQuantity(editedItems)),
         totalBruto: _roundCurrency(_totalGross(editedItems)),
@@ -487,6 +535,91 @@ class _PedidosPageState extends State<PedidosPage> {
     }
   }
 
+  Future<void> _deleteOrderLocalFirst(Pedido order) async {
+    if (!mounted) {
+      return;
+    }
+
+    final confirmed =
+        await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text('Excluir pedido'),
+            content: Text(
+              'Deseja excluir o pedido ${_pedidoDisplayNumber(order.id)}? Esta ação remove o pedido localmente imediatamente.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('Cancelar'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: const Text('Excluir'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+
+    if (!confirmed) {
+      return;
+    }
+
+    await OfflineSyncQueue.markDeleted(
+      type: 'pedido',
+      tenantId: order.tenantId,
+      id: order.id,
+    );
+
+    if ((_editingOrderId ?? '').trim() == order.id) {
+      _closeInlineEditor();
+    }
+
+    var deletedRemotely = false;
+    Object? remoteError;
+    try {
+      await widget.repository.delete(tenantId: order.tenantId, id: order.id);
+      await OfflineSyncQueue.clearTombstone(order.id);
+      deletedRemotely = true;
+    } catch (error) {
+      remoteError = error;
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      // Refreshes merged local/remote list after local-first delete.
+    });
+
+    if (deletedRemotely) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Pedido ${_pedidoDisplayNumber(order.id)} excluído e sincronizado.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    final firebaseError = remoteError is FirebaseException
+        ? remoteError.code
+        : null;
+    final reason = firebaseError == 'permission-denied'
+        ? 'sem permissao para excluir no Firestore agora'
+        : 'aguardando sincronizacao com o servidor';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Pedido ${_pedidoDisplayNumber(order.id)} excluído localmente ($reason). O app tentará confirmar a exclusão remota quando possível.',
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<List<Pedido>>(
@@ -495,13 +628,17 @@ class _PedidosPageState extends State<PedidosPage> {
       builder: (context, snapshot) {
         final remotePedidos = snapshot.data ?? const [];
 
-        return FutureBuilder<List<LocalPedidoRecord>>(
+        return FutureBuilder<_PedidoLocalState>(
           future: _readLocalPedidos(),
-          initialData: const [],
+          initialData: _PedidoLocalState.empty,
           builder: (context, localSnapshot) {
-            final localPedidos = localSnapshot.data ?? const [];
+            final localState = localSnapshot.data ?? _PedidoLocalState.empty;
+            final localPedidos = localState.records;
+            final filteredRemote = remotePedidos
+                .where((pedido) => !localState.deletedIds.contains(pedido.id))
+                .toList();
             final pedidos = _mergePedidos(
-              remote: remotePedidos,
+              remote: filteredRemote,
               local: localPedidos,
             );
             final editingEntry = _findEditingEntry(pedidos);
@@ -565,6 +702,7 @@ class _PedidosPageState extends State<PedidosPage> {
                               syncedRemotely: entry.syncedRemotely,
                               selected: false,
                               onTap: () => _selectOrderForEditing(entry.pedido),
+                              onDelete: () => _deleteOrderLocalFirst(entry.pedido),
                             ),
                           ),
                       ],
@@ -585,6 +723,18 @@ class _PedidoListEntry {
 
   final Pedido pedido;
   final bool syncedRemotely;
+}
+
+class _PedidoLocalState {
+  const _PedidoLocalState({required this.records, required this.deletedIds});
+
+  static const _PedidoLocalState empty = _PedidoLocalState(
+    records: <LocalPedidoRecord>[],
+    deletedIds: <String>{},
+  );
+
+  final List<LocalPedidoRecord> records;
+  final Set<String> deletedIds;
 }
 
 class _HeaderCard extends StatelessWidget {
@@ -638,12 +788,14 @@ class _PedidoCard extends StatelessWidget {
     required this.syncedRemotely,
     required this.selected,
     required this.onTap,
+    required this.onDelete,
   });
 
   final Pedido pedido;
   final bool syncedRemotely;
   final bool selected;
   final VoidCallback onTap;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -668,7 +820,17 @@ class _PedidoCard extends StatelessWidget {
           'Origem empresa: ${pedido.originCompanyUnitLabel ?? '-'}${(pedido.originCompanyUf ?? '').trim().isEmpty ? '' : ' (${pedido.originCompanyUf})'}\n'
           'Sync: ${syncedRemotely ? 'sincronizado' : 'pendente'}',
         ),
-        trailing: const Icon(Icons.chevron_right),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              tooltip: 'Excluir pedido',
+              icon: const Icon(Icons.delete_outline),
+              onPressed: onDelete,
+            ),
+            const Icon(Icons.chevron_right),
+          ],
+        ),
       ),
     );
   }
@@ -728,7 +890,12 @@ class _PedidoInlineEditor extends StatefulWidget {
   final bool saving;
   final double maxBodyHeight;
   final VoidCallback onClose;
-  final Future<void> Function(Pedido pedido, List<PedidoItem> items) onSave;
+  final Future<void> Function(
+    Pedido pedido,
+    List<PedidoItem> items,
+    ClienteReference? clienteReferencia,
+  )
+  onSave;
 
   @override
   State<_PedidoInlineEditor> createState() => _PedidoInlineEditorState();
@@ -745,28 +912,254 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
     text: '1',
   );
   final FocusNode _searchFocusNode = FocusNode();
+  final TextEditingController _customerController = TextEditingController();
+  final FocusNode _customerFocusNode = FocusNode();
+  final Map<String, List<TextEditingController>>
+  _discountControllersByItemId = <String, List<TextEditingController>>{};
   List<PedidoItem> _items = const [];
+  List<Cliente> _clientes = const [];
+  bool _loadingClientes = false;
+  bool _customerReadDenied = false;
+  bool _commercialRulesLoaded = false;
+  Future<void>? _commercialRulesLoader;
+  List<CommercialAdjustmentRule> _commercialRules =
+      const <CommercialAdjustmentRule>[];
+  bool _orderDiscountPolicyLoaded = false;
+  Future<void>? _orderDiscountPolicyLoader;
+  OrderDiscountPolicy _orderDiscountPolicy = const OrderDiscountPolicy();
+  ClienteReference? _clienteReferenciaSelecionada;
+  String? _customerInputError;
   String? _boundOrderId;
   String _searchQuery = '';
+  final WorkspaceProfileService _workspaceProfileService =
+      WorkspaceProfileService(FirebaseFirestore.instance);
+
+  String? _effectiveRepresentedCompanyIdForWidget(_PedidoInlineEditor source) {
+    final fromOrder = (source.pedido?.representedCompanyId ?? '').trim();
+    if (fromOrder.isNotEmpty) {
+      return fromOrder;
+    }
+
+    final fromSelection = (source.representedCompanyId ?? '').trim();
+    if (fromSelection.isNotEmpty) {
+      return fromSelection;
+    }
+
+    return null;
+  }
+
+  String? get _effectiveRepresentedCompanyId =>
+      _effectiveRepresentedCompanyIdForWidget(widget);
+
+  void _resetScopedPoliciesState() {
+    _commercialRulesLoaded = false;
+    _commercialRulesLoader = null;
+    _commercialRules = const <CommercialAdjustmentRule>[];
+    _orderDiscountPolicyLoaded = false;
+    _orderDiscountPolicyLoader = null;
+    _orderDiscountPolicy = const OrderDiscountPolicy();
+  }
 
   @override
   void initState() {
     super.initState();
     _syncFromPedidoIfNeeded();
+    _loadClientes();
+    _loadCommercialRules();
+    _loadOrderDiscountPolicy();
   }
 
   @override
   void didUpdateWidget(covariant _PedidoInlineEditor oldWidget) {
     super.didUpdateWidget(oldWidget);
+    final oldScope = _effectiveRepresentedCompanyIdForWidget(oldWidget);
+    final newScope = _effectiveRepresentedCompanyId;
+
+    if (oldWidget.tenantId != widget.tenantId) {
+      _loadClientes();
+      _resetScopedPoliciesState();
+      _loadCommercialRules();
+      _loadOrderDiscountPolicy();
+    }
+    if (oldScope != newScope) {
+      _resetScopedPoliciesState();
+      _loadCommercialRules();
+      _loadOrderDiscountPolicy();
+    }
     _syncFromPedidoIfNeeded();
+  }
+
+  Future<void> _loadCommercialRules() async {
+    final tenantId = widget.tenantId.trim();
+    if (tenantId.isEmpty) {
+      _commercialRules = const <CommercialAdjustmentRule>[];
+      _commercialRulesLoaded = true;
+      return;
+    }
+
+    try {
+      final rules = await _workspaceProfileService
+          .watchCommercialAdjustmentRules(
+            tenantId: tenantId,
+            representedCompanyId: _effectiveRepresentedCompanyId,
+          )
+          .first;
+      _commercialRules = rules;
+      _commercialRulesLoaded = true;
+    } catch (_) {
+      _commercialRules = const <CommercialAdjustmentRule>[];
+      _commercialRulesLoaded = true;
+    }
+  }
+
+  Future<void> _ensureCommercialRulesLoaded() async {
+    if (_commercialRulesLoaded) {
+      return;
+    }
+
+    final inFlight = _commercialRulesLoader;
+    if (inFlight != null) {
+      await inFlight;
+      return;
+    }
+
+    final future = _loadCommercialRules();
+    _commercialRulesLoader = future;
+    await future;
+    if (identical(_commercialRulesLoader, future)) {
+      _commercialRulesLoader = null;
+    }
+  }
+
+  Future<void> _loadOrderDiscountPolicy() async {
+    final tenantId = widget.tenantId.trim();
+    if (tenantId.isEmpty) {
+      _orderDiscountPolicy = const OrderDiscountPolicy();
+      _orderDiscountPolicyLoaded = true;
+      return;
+    }
+
+    try {
+      final policy = await _workspaceProfileService
+          .watchOrderDiscountPolicy(
+            tenantId: tenantId,
+            representedCompanyId: _effectiveRepresentedCompanyId,
+          )
+          .first;
+      _orderDiscountPolicy = policy;
+      _orderDiscountPolicyLoaded = true;
+    } catch (_) {
+      _orderDiscountPolicy = const OrderDiscountPolicy();
+      _orderDiscountPolicyLoaded = true;
+    }
+  }
+
+  Future<void> _ensureOrderDiscountPolicyLoaded() async {
+    if (_orderDiscountPolicyLoaded) {
+      return;
+    }
+
+    final inFlight = _orderDiscountPolicyLoader;
+    if (inFlight != null) {
+      await inFlight;
+      return;
+    }
+
+    final future = _loadOrderDiscountPolicy();
+    _orderDiscountPolicyLoader = future;
+    await future;
+    if (identical(_orderDiscountPolicyLoader, future)) {
+      _orderDiscountPolicyLoader = null;
+    }
+  }
+
+  Future<void> _loadClientes() async {
+    final tenantId = widget.tenantId.trim();
+    if (tenantId.isEmpty) {
+      if (mounted) {
+        setState(() {
+          _clientes = const [];
+          _loadingClientes = false;
+        });
+      }
+      return;
+    }
+
+    if (mounted) {
+      setState(() {
+        _loadingClientes = true;
+      });
+    }
+
+    try {
+      final clientes = await widget.clienteRepository.fetchAll(
+        tenantId: tenantId,
+      );
+      final approved =
+          clientes
+              .where((item) => item.status == CustomerStatus.approved)
+              .toList()
+            ..sort(
+              (a, b) => a.nome.toLowerCase().compareTo(b.nome.toLowerCase()),
+            );
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _clientes = approved;
+        _customerController.text = _selectedCustomerDisplayLabel();
+        _customerReadDenied = false;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      if (error is FirebaseException && error.code == 'permission-denied') {
+        final localRecords = await OfflineSyncQueue.readLocalClientes(
+          tenantId: tenantId,
+          includePersonalWorkspace: tenantId.startsWith('personal_'),
+        );
+        final localApproved =
+            localRecords
+                .map((record) => record.entity)
+                .where((item) => item.status == CustomerStatus.approved)
+                .toList()
+              ..sort(
+                (a, b) => a.nome.toLowerCase().compareTo(b.nome.toLowerCase()),
+              );
+
+        setState(() {
+          _clientes = localApproved;
+          _customerReadDenied = localApproved.isEmpty;
+          _customerController.text = _selectedCustomerDisplayLabel();
+        });
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Falha ao carregar clientes: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loadingClientes = false;
+        });
+      }
+    }
   }
 
   void _syncFromPedidoIfNeeded() {
     final currentId = widget.pedido?.id;
     if (currentId == null || currentId.isEmpty) {
       if (_boundOrderId != null) {
+        _disposeAllDiscountControllers();
         _boundOrderId = null;
         _items = const [];
+        _clienteReferenciaSelecionada = null;
+        _customerController.clear();
         _searchController.clear();
         _searchQuery = '';
         _quantityController.text = '1';
@@ -778,15 +1171,161 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
       return;
     }
 
+    _disposeAllDiscountControllers();
     _boundOrderId = currentId;
     _items = List<PedidoItem>.from(widget.pedido?.itens ?? const []);
+    _clienteReferenciaSelecionada = widget.pedido?.clienteReferencia;
+    _customerController.text = _selectedCustomerDisplayLabel();
+    _customerInputError = null;
     _searchController.clear();
     _searchQuery = '';
     _quantityController.text = '1';
   }
 
+  Cliente? _findClienteById(String customerId) {
+    final normalizedId = customerId.trim();
+    if (normalizedId.isEmpty) {
+      return null;
+    }
+    for (final cliente in _clientes) {
+      if (cliente.id == normalizedId) {
+        return cliente;
+      }
+    }
+    return null;
+  }
+
+  String _selectedCustomerDisplayLabel() {
+    final selected = _findClienteById(_clienteReferenciaSelecionada?.id ?? '');
+    if (selected != null) {
+      return _formatClienteLabel(selected);
+    }
+
+    final snapshotName = (_clienteReferenciaSelecionada?.nomeSnapshot ?? '')
+        .trim();
+    if (snapshotName.isNotEmpty) {
+      return snapshotName;
+    }
+    return '';
+  }
+
+  Cliente? _findClienteByTypedText(String raw) {
+    final normalizedInput = _normalizeSearch(raw);
+    if (normalizedInput.isEmpty) {
+      return null;
+    }
+
+    for (final cliente in _clientes) {
+      final normalizedLabel = _normalizeSearch(_formatClienteLabel(cliente));
+      final normalizedNome = _normalizeSearch(cliente.nome);
+      final normalizedDocumento = _normalizeSearch(cliente.documento);
+      if (normalizedInput == normalizedLabel ||
+          normalizedInput == normalizedNome ||
+          (normalizedDocumento.isNotEmpty &&
+              normalizedInput == normalizedDocumento)) {
+        return cliente;
+      }
+    }
+
+    return null;
+  }
+
+  Future<bool> _validateCustomerSelectionForSave() async {
+    final typed = _customerController.text.trim();
+    if (typed.isEmpty) {
+      if (_clienteReferenciaSelecionada != null) {
+        await _selectCustomerById('');
+      }
+      _customerInputError = null;
+      return true;
+    }
+
+    final selected = _findClienteById(_clienteReferenciaSelecionada?.id ?? '');
+    if (selected != null) {
+      final selectedLabel = _normalizeSearch(_formatClienteLabel(selected));
+      final typedLabel = _normalizeSearch(typed);
+      if (typedLabel == selectedLabel) {
+        _customerInputError = null;
+        return true;
+      }
+    }
+
+    final matched = _findClienteByTypedText(typed);
+    if (matched != null) {
+      await _selectCustomerById(matched.id);
+      _customerInputError = null;
+      return true;
+    }
+
+    _customerInputError = 'Selecione um cliente existente da lista.';
+    return false;
+  }
+
+  ClienteReference _toClienteReference(Cliente cliente) {
+    return ClienteReference(
+      id: cliente.id,
+      type: CustomerReferenceType.official,
+      documentoSnapshot: cliente.documento,
+      nomeSnapshot: cliente.nome,
+    );
+  }
+
+  String _formatClienteLabel(Cliente cliente) {
+    final nome = cliente.nome.trim().isEmpty ? cliente.id : cliente.nome.trim();
+    final documento = cliente.documento.trim();
+    final estado = cliente.estado.trim().toUpperCase();
+    final suffix = [
+      if (documento.isNotEmpty) documento,
+      if (estado.isNotEmpty) estado,
+    ].join(' · ');
+    if (suffix.isEmpty) {
+      return nome;
+    }
+    return '$nome · $suffix';
+  }
+
+  Future<void> _selectCustomerById(String customerId) async {
+    final normalizedId = customerId.trim();
+    if (normalizedId.isEmpty) {
+      if (mounted) {
+        setState(() {
+          _clienteReferenciaSelecionada = null;
+          _customerController.clear();
+          _customerInputError = null;
+        });
+      }
+      await _recalculateAllItemsForCustomerContext();
+      return;
+    }
+
+    Cliente? selected;
+    for (final cliente in _clientes) {
+      if (cliente.id == normalizedId) {
+        selected = cliente;
+        break;
+      }
+    }
+
+    if (selected == null) {
+      return;
+    }
+
+    if (mounted) {
+      setState(() {
+        _clienteReferenciaSelecionada = _toClienteReference(selected!);
+        _customerController.text = _formatClienteLabel(selected);
+        _customerInputError = null;
+      });
+    }
+
+    await _recalculateAllItemsForCustomerContext();
+  }
+
   @override
   void dispose() {
+    _disposeAllDiscountControllers();
+    _customerFocusNode.dispose();
+    _customerController.dispose();
     try {
       _searchFocusNode.dispose();
     } catch (_) {
@@ -799,6 +1338,65 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
     }
     _quantityController.dispose();
     super.dispose();
+  }
+
+  void _disposeAllDiscountControllers() {
+    for (final controllers in _discountControllersByItemId.values) {
+      for (final controller in controllers) {
+        controller.dispose();
+      }
+    }
+    _discountControllersByItemId.clear();
+  }
+
+  void _disposeDiscountControllersForItem(String itemId) {
+    final controllers = _discountControllersByItemId.remove(itemId);
+    if (controllers == null) {
+      return;
+    }
+    for (final controller in controllers) {
+      controller.dispose();
+    }
+  }
+
+  List<TextEditingController> _ensureDiscountControllersForItem(
+    PedidoItem item,
+    int slotCount,
+  ) {
+    final safeSlots = slotCount < 0 ? 0 : slotCount;
+    final existing =
+        _discountControllersByItemId[item.id] ?? <TextEditingController>[];
+
+    if (safeSlots == 0) {
+      for (final controller in existing) {
+        controller.dispose();
+      }
+      _discountControllersByItemId[item.id] = <TextEditingController>[];
+      return _discountControllersByItemId[item.id]!;
+    }
+
+    while (existing.length < safeSlots) {
+      final index = existing.length;
+      final initial = index < item.appliedDiscountPercents.length
+          ? item.appliedDiscountPercents[index]
+          : 0;
+      existing.add(
+        TextEditingController(
+          text: initial <= 0
+              ? ''
+              : initial
+                    .toStringAsFixed(initial % 1 == 0 ? 0 : 2)
+                    .replaceAll('.', ','),
+        ),
+      );
+    }
+
+    while (existing.length > safeSlots) {
+      existing.removeLast().dispose();
+    }
+
+    _discountControllersByItemId[item.id] = existing;
+    return existing;
   }
 
   InputDecoration _inputDecoration({required String label}) {
@@ -976,6 +1574,151 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
     return (value * 100).roundToDouble() / 100;
   }
 
+  List<String> _splitRuleTargets(String raw) {
+    final targets = <String>[];
+    final seen = <String>{};
+    for (final value in raw.split(RegExp(r'[,;|\n]+'))) {
+      final normalized = _normalizeSearch(value);
+      if (normalized.isEmpty || !seen.add(normalized)) {
+        continue;
+      }
+      targets.add(value.trim());
+    }
+    return targets;
+  }
+
+  List<String> _resolveRuleTargets(CommercialAdjustmentRule rule) {
+    if (rule.scopeTargets.isNotEmpty) {
+      final targets = <String>[];
+      final seen = <String>{};
+      for (final value in rule.scopeTargets) {
+        final normalized = _normalizeSearch(value);
+        if (normalized.isEmpty || !seen.add(normalized)) {
+          continue;
+        }
+        targets.add(value.trim());
+      }
+      return targets;
+    }
+    return _splitRuleTargets(rule.scopeTarget);
+  }
+
+  bool _ruleTargetsContain(
+    CommercialAdjustmentRule rule,
+    Iterable<String> candidates,
+  ) {
+    final normalizedTargets = _resolveRuleTargets(rule)
+        .map(_normalizeSearch)
+        .where((value) => value.isNotEmpty)
+        .toSet();
+    if (normalizedTargets.isEmpty) {
+      return false;
+    }
+
+    for (final candidate in candidates) {
+      final normalizedCandidate = _normalizeSearch(candidate);
+      if (normalizedCandidate.isEmpty) {
+        continue;
+      }
+      if (normalizedTargets.contains(normalizedCandidate)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  bool _ruleMatchesProduct(CommercialAdjustmentRule rule, Produto product) {
+    final scope = rule.scope.trim().toLowerCase();
+    if (scope == 'geral') {
+      return true;
+    }
+
+    if (scope == 'marca') {
+      return _ruleTargetsContain(rule, <String>[
+        product.marca ?? '',
+      ]);
+    }
+
+    if (scope == 'categoria') {
+      return _ruleTargetsContain(rule, <String>[
+        product.categoria ?? '',
+      ]);
+    }
+
+    if (scope == 'produto') {
+      final descricao = product.descricao.trim();
+      final codigoInterno = product.codigoInterno.trim();
+      final comercial = _resolveCommercialCode(product);
+      return _ruleTargetsContain(rule, <String>[
+        product.id,
+        descricao,
+        codigoInterno,
+        comercial,
+        if (codigoInterno.isNotEmpty && descricao.isNotEmpty)
+          '$codigoInterno - $descricao',
+      ]);
+    }
+
+    return false;
+  }
+
+  CommercialAdjustmentRule? _resolvePriorityRuleForProduct(Produto product) {
+    for (final rule in _commercialRules) {
+      if (_ruleMatchesProduct(rule, product)) {
+        return rule;
+      }
+    }
+    return null;
+  }
+
+  _ComputedPedidoItemValues _applyCommercialRule({
+    required _ComputedPedidoItemValues baseValues,
+    required Produto product,
+    required double quantity,
+  }) {
+    final rule = _resolvePriorityRuleForProduct(product);
+    if (rule == null) {
+      return baseValues;
+    }
+
+    final safeQuantity = quantity <= 0 ? 1 : quantity;
+    var unitPrice = baseValues.unitPrice;
+    final valueType = rule.valueType.trim().toLowerCase();
+    final adjustmentType = rule.adjustmentType.trim().toLowerCase();
+    final amount = rule.value;
+
+    if (valueType == 'percent') {
+      final factor = adjustmentType == 'discount'
+          ? (1 - (amount / 100))
+          : (1 + (amount / 100));
+      unitPrice = _roundCurrency(baseValues.unitPrice * factor);
+    } else {
+      final delta = adjustmentType == 'discount' ? -amount : amount;
+      unitPrice = _roundCurrency(baseValues.unitPrice + delta);
+    }
+
+    if (unitPrice < 0) {
+      unitPrice = 0;
+    }
+
+    final unitDiff = unitPrice - baseValues.unitPrice;
+    var totalPrice = _roundCurrency(baseValues.totalPrice + (unitDiff * safeQuantity));
+    if (totalPrice < 0) {
+      totalPrice = 0;
+    }
+
+    final snapshot = baseValues.taxSnapshot.copyWith(
+      valorTotalItem: totalPrice,
+    );
+
+    return _ComputedPedidoItemValues(
+      unitPrice: unitPrice,
+      totalPrice: totalPrice,
+      taxSnapshot: snapshot,
+      usedFallback: baseValues.usedFallback,
+    );
+  }
+
   String _formatMoney(double value) {
     return value.toStringAsFixed(2).replaceAll('.', ',');
   }
@@ -998,6 +1741,281 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
         ? value.toStringAsFixed(2).replaceAll('.', ',')
         : value.toStringAsFixed(0);
     return '$formatted%';
+  }
+
+  double? _parsePercentInput(String raw) {
+    var normalized = raw.trim();
+    if (normalized.isEmpty) {
+      return null;
+    }
+
+    normalized = normalized.replaceAll(' ', '');
+    if (normalized.contains(',') && normalized.contains('.')) {
+      normalized = normalized.replaceAll('.', '').replaceAll(',', '.');
+    } else if (normalized.contains(',')) {
+      normalized = normalized.replaceAll(',', '.');
+    }
+
+    return double.tryParse(normalized);
+  }
+
+  String _formatPointDiscountSummary(List<double> discounts) {
+    final effective = discounts.where((value) => value > 0).toList();
+    if (effective.isEmpty) {
+      return 'Sem descontos pontuais';
+    }
+    final values = effective.map(_formatPercent).join(' + ');
+    return 'Descontos: $values';
+  }
+
+  Future<void> _addPointDiscountField(int index) async {
+    if (index < 0 || index >= _items.length || widget.saving) {
+      return;
+    }
+
+    await _ensureOrderDiscountPolicyLoaded();
+    if (!mounted) {
+      return;
+    }
+    final fields = _orderDiscountPolicy.fields;
+    if (fields.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Nenhum campo de desconto pontual foi configurado para esta representada.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    final item = _items[index];
+    if (item.appliedDiscountPercents.length >= fields.length) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Limite máximo de ${fields.length} campo(s) atingido.'),
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      final refreshed = List<double>.from(item.appliedDiscountPercents)
+        ..add(0);
+      _items[index] = item.copyWith(appliedDiscountPercents: refreshed);
+      _ensureDiscountControllersForItem(item, refreshed.length);
+    });
+  }
+
+  Future<void> _applyInlineItemDiscounts(
+    int index, {
+    bool showErrors = true,
+  }) async {
+    if (index < 0 || index >= _items.length || widget.saving) {
+      return;
+    }
+
+    await _ensureOrderDiscountPolicyLoaded();
+    if (!mounted) {
+      return;
+    }
+
+    final fields = _orderDiscountPolicy.fields;
+    if (fields.isEmpty) {
+      return;
+    }
+
+    final item = _items[index];
+    final activeSlots = item.appliedDiscountPercents.length;
+    if (activeSlots <= 0) {
+      return;
+    }
+
+    final controllers = _ensureDiscountControllersForItem(item, activeSlots);
+    final values = <double>[];
+    for (var i = 0; i < activeSlots; i++) {
+      final raw = controllers[i].text.trim();
+      if (raw.isEmpty) {
+        values.add(0);
+        continue;
+      }
+
+      final parsed = _parsePercentInput(raw);
+      if (parsed == null) {
+        if (showErrors) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Valor inválido em ${fields[i].label}.')),
+          );
+        }
+        return;
+      }
+
+      if (parsed < fields[i].minPercent || parsed > fields[i].maxPercent) {
+        if (showErrors) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                '${fields[i].label} deve estar entre ${_formatPercent(fields[i].minPercent)} e ${_formatPercent(fields[i].maxPercent)}.',
+              ),
+            ),
+          );
+        }
+        return;
+      }
+      values.add(parsed);
+    }
+
+    final product = _findProductById(item.productId);
+    if (product == null) {
+      setState(() {
+        _items[index] = _items[index].copyWith(appliedDiscountPercents: values);
+      });
+      return;
+    }
+
+    final computed = await _resolveItemValues(
+      product: product,
+      quantity: item.quantity,
+      previousSnapshot: item.taxSnapshot,
+      previousQuantity: item.quantity,
+      appliedDiscountPercents: values,
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _items[index] = _items[index].copyWith(
+        unitPrice: computed.unitPrice,
+        totalPrice: computed.totalPrice,
+        taxSnapshot: computed.taxSnapshot,
+        appliedDiscountPercents: values,
+      );
+    });
+  }
+
+  Future<void> _removeInlineItemDiscountField(
+    int itemIndex,
+    int discountIndex,
+  ) async {
+    if (itemIndex < 0 || itemIndex >= _items.length || widget.saving) {
+      return;
+    }
+
+    final item = _items[itemIndex];
+    final activeSlots = item.appliedDiscountPercents.length;
+    if (discountIndex < 0 || discountIndex >= activeSlots) {
+      return;
+    }
+
+    await _ensureOrderDiscountPolicyLoaded();
+    if (!mounted) {
+      return;
+    }
+
+    final fields = _orderDiscountPolicy.fields;
+    final controllers = _ensureDiscountControllersForItem(item, activeSlots);
+    if (discountIndex < controllers.length) {
+      controllers[discountIndex].dispose();
+      controllers.removeAt(discountIndex);
+      _discountControllersByItemId[item.id] = controllers;
+    }
+
+    final values = <double>[];
+    for (var i = 0; i < controllers.length; i++) {
+      final raw = controllers[i].text.trim();
+      if (raw.isEmpty) {
+        values.add(0);
+        continue;
+      }
+
+      final parsed = _parsePercentInput(raw);
+      if (parsed == null) {
+        values.add(0);
+        continue;
+      }
+
+      if (i < fields.length) {
+        final min = fields[i].minPercent;
+        final max = fields[i].maxPercent;
+        if (parsed < min || parsed > max) {
+          values.add(0);
+          continue;
+        }
+      }
+      values.add(parsed);
+    }
+
+    final product = _findProductById(item.productId);
+    if (product == null) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _items[itemIndex] = _items[itemIndex].copyWith(
+          appliedDiscountPercents: values,
+        );
+      });
+      return;
+    }
+
+    final computed = await _resolveItemValues(
+      product: product,
+      quantity: item.quantity,
+      previousSnapshot: item.taxSnapshot,
+      previousQuantity: item.quantity,
+      appliedDiscountPercents: values,
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _items[itemIndex] = _items[itemIndex].copyWith(
+        unitPrice: computed.unitPrice,
+        totalPrice: computed.totalPrice,
+        taxSnapshot: computed.taxSnapshot,
+        appliedDiscountPercents: values,
+      );
+    });
+  }
+
+  _ComputedPedidoItemValues _applyPointDiscounts({
+    required _ComputedPedidoItemValues baseValues,
+    required List<double> discountPercents,
+  }) {
+    if (discountPercents.isEmpty) {
+      return baseValues;
+    }
+
+    var unitPrice = baseValues.unitPrice;
+    var totalPrice = baseValues.totalPrice;
+    for (final discount in discountPercents) {
+      final safeDiscount = discount < 0 ? 0 : discount;
+      if (safeDiscount <= 0) {
+        continue;
+      }
+      final factor = 1 - (safeDiscount / 100);
+      unitPrice = _roundCurrency(unitPrice * factor);
+      totalPrice = _roundCurrency(totalPrice * factor);
+    }
+
+    if (unitPrice < 0) {
+      unitPrice = 0;
+    }
+    if (totalPrice < 0) {
+      totalPrice = 0;
+    }
+
+    final snapshot = baseValues.taxSnapshot.copyWith(valorTotalItem: totalPrice);
+    return _ComputedPedidoItemValues(
+      unitPrice: unitPrice,
+      totalPrice: totalPrice,
+      taxSnapshot: snapshot,
+      usedFallback: baseValues.usedFallback,
+    );
   }
 
   String _resolveCommercialCode(Produto product) {
@@ -1123,8 +2141,11 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
 
   Future<String> _resolveDestinationUf() async {
     final fallback = _normalizedOriginUf();
-    final pedido = widget.pedido;
-    final customerId = (pedido?.clienteReferencia?.id ?? '').trim();
+    final customerId =
+        (_clienteReferenciaSelecionada?.id ??
+                widget.pedido?.clienteReferencia?.id ??
+                '')
+            .trim();
     final tenantId = widget.tenantId.trim();
     if (customerId.isEmpty || tenantId.isEmpty) {
       return fallback;
@@ -1148,8 +2169,11 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
       return '';
     }
 
-    final pedido = widget.pedido;
-    final customerId = (pedido?.clienteReferencia?.id ?? '').trim();
+    final customerId =
+        (_clienteReferenciaSelecionada?.id ??
+                widget.pedido?.clienteReferencia?.id ??
+                '')
+            .trim();
     final now = DateTime.now().toUtc();
 
     if (customerId.isNotEmpty) {
@@ -1195,7 +2219,7 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
 
     return DefaultPriceTableGuard.defaultPriceTableIdForScope(
       tenantId: tenantId,
-      representedCompanyId: widget.representedCompanyId,
+      representedCompanyId: _effectiveRepresentedCompanyId,
     );
   }
 
@@ -1247,7 +2271,11 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
     required double quantity,
     PedidoItemTaxSnapshot? previousSnapshot,
     double? previousQuantity,
+    List<double> appliedDiscountPercents = const <double>[],
   }) async {
+    await _ensureCommercialRulesLoaded();
+    await _ensureOrderDiscountPolicyLoaded();
+
     final fallbackUnitPrice = _roundCurrency(product.valorBruto ?? 0);
     final fallbackSnapshot = _buildFallbackSnapshotFromProduct(
       product: product,
@@ -1266,13 +2294,29 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
 
     final tenantId = widget.tenantId.trim();
     if (tenantId.isEmpty) {
-      return fallback;
+      final adjusted = _applyCommercialRule(
+        baseValues: fallback,
+        product: product,
+        quantity: quantity,
+      );
+      return _applyPointDiscounts(
+        baseValues: adjusted,
+        discountPercents: appliedDiscountPercents,
+      );
     }
 
     final destinationUf = await _resolveDestinationUf();
     final resolvedTableId = await _resolvePriceTableId(destinationUf);
     if (resolvedTableId.isEmpty) {
-      return fallback;
+      final adjusted = _applyCommercialRule(
+        baseValues: fallback,
+        product: product,
+        quantity: quantity,
+      );
+      return _applyPointDiscounts(
+        baseValues: adjusted,
+        discountPercents: appliedDiscountPercents,
+      );
     }
 
     final originUf = _normalizedOriginUf();
@@ -1320,20 +2364,36 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
     try {
       final primary = await tryTable(resolvedTableId);
       if (primary != null) {
-        return primary;
+        final adjusted = _applyCommercialRule(
+          baseValues: primary,
+          product: product,
+          quantity: quantity,
+        );
+        return _applyPointDiscounts(
+          baseValues: adjusted,
+          discountPercents: appliedDiscountPercents,
+        );
       }
     } catch (_) {
       final legacyDefaultTableId =
           DefaultPriceTableGuard.legacyDefaultPriceTableIdForScope(
             tenantId: tenantId,
-            representedCompanyId: widget.representedCompanyId,
+            representedCompanyId: _effectiveRepresentedCompanyId,
           );
 
       if (legacyDefaultTableId != resolvedTableId) {
         try {
           final legacy = await tryTable(legacyDefaultTableId);
           if (legacy != null) {
-            return legacy;
+            final adjusted = _applyCommercialRule(
+              baseValues: legacy,
+              product: product,
+              quantity: quantity,
+            );
+            return _applyPointDiscounts(
+              baseValues: adjusted,
+              discountPercents: appliedDiscountPercents,
+            );
           }
         } catch (_) {
           // Keeps fallback below.
@@ -1341,7 +2401,69 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
       }
     }
 
-    return fallback;
+    final adjusted = _applyCommercialRule(
+      baseValues: fallback,
+      product: product,
+      quantity: quantity,
+    );
+    return _applyPointDiscounts(
+      baseValues: adjusted,
+      discountPercents: appliedDiscountPercents,
+    );
+  }
+
+  Future<void> _recalculateAllItemsForCustomerContext() async {
+    if (_items.isEmpty) {
+      return;
+    }
+
+    final currentItems = List<PedidoItem>.from(_items);
+    final recalculatedItems = <PedidoItem>[];
+    var usedFallback = false;
+
+    for (final item in currentItems) {
+      final product = _findProductById(item.productId);
+      if (product == null) {
+        recalculatedItems.add(item);
+        continue;
+      }
+
+      final computed = await _resolveItemValues(
+        product: product,
+        quantity: item.quantity,
+        previousSnapshot: item.taxSnapshot,
+        previousQuantity: item.quantity,
+        appliedDiscountPercents: item.appliedDiscountPercents,
+      );
+
+      usedFallback = usedFallback || computed.usedFallback;
+      recalculatedItems.add(
+        item.copyWith(
+          unitPrice: computed.unitPrice,
+          totalPrice: computed.totalPrice,
+          taxSnapshot: computed.taxSnapshot,
+          appliedDiscountPercents: item.appliedDiscountPercents,
+        ),
+      );
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _items = recalculatedItems;
+    });
+
+    if (usedFallback) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Alguns itens permaneceram com preço bruto por falta de tabela/regra fiscal aplicável.',
+          ),
+        ),
+      );
+    }
   }
 
   Future<void> _setItemQuantity(int index, int nextQuantity) async {
@@ -1382,6 +2504,7 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
       quantity: nextQuantity.toDouble(),
       previousSnapshot: current.taxSnapshot,
       previousQuantity: current.quantity,
+      appliedDiscountPercents: current.appliedDiscountPercents,
     );
 
     if (!mounted) {
@@ -1399,6 +2522,7 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
         unitPrice: computed.unitPrice,
         totalPrice: computed.totalPrice,
         taxSnapshot: computed.taxSnapshot,
+        appliedDiscountPercents: current.appliedDiscountPercents,
       );
     });
 
@@ -1463,6 +2587,7 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
       quantity: nextQty.toDouble(),
       previousSnapshot: existing?.taxSnapshot,
       previousQuantity: existing?.quantity,
+      appliedDiscountPercents: existing?.appliedDiscountPercents ?? const <double>[],
     );
 
     if (!mounted) {
@@ -1477,6 +2602,7 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
           unitPrice: computed.unitPrice,
           totalPrice: computed.totalPrice,
           taxSnapshot: computed.taxSnapshot,
+          appliedDiscountPercents: existingItem.appliedDiscountPercents,
         );
       } else {
         _items.add(
@@ -1488,6 +2614,7 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
             quantity: quantity.toDouble(),
             unitPrice: computed.unitPrice,
             totalPrice: computed.totalPrice,
+            appliedDiscountPercents: const <double>[],
             unit: product.unidade,
             ncm: product.ncm,
             taxSnapshot: computed.taxSnapshot,
@@ -1580,18 +2707,22 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
                     itemBuilder: (context, index) {
                       final product = limitedResults[index];
                       final displayCode = _resolveCommercialCode(product);
-                      return ListTile(
-                        dense: true,
-                        title: Text(product.descricao),
-                        subtitle: Text(
-                          '${displayCode.isEmpty ? '-' : displayCode} · ${product.marca?.trim().isEmpty ?? true ? '-' : product.marca} · NCM ${product.ncm?.trim().isEmpty ?? true ? '-' : product.ncm} · R\$ ${_formatMoneyBr(product.valorBruto ?? 0)}',
-                        ),
-                        trailing: IconButton.filledTonal(
-                          tooltip: 'Adicionar ao pedido',
-                          onPressed: widget.saving
-                              ? null
-                              : () => _addProduct(product),
-                          icon: const Icon(Icons.add),
+                      return Material(
+                        type: MaterialType.transparency,
+                        child: ListTile(
+                          dense: true,
+                          onTap: widget.saving ? null : () => _addProduct(product),
+                          title: Text(product.descricao),
+                          subtitle: Text(
+                            '${displayCode.isEmpty ? '-' : displayCode} · ${product.marca?.trim().isEmpty ?? true ? '-' : product.marca} · NCM ${product.ncm?.trim().isEmpty ?? true ? '-' : product.ncm} · R\$ ${_formatMoneyBr(product.valorBruto ?? 0)}',
+                          ),
+                          trailing: IconButton.filledTonal(
+                            tooltip: 'Adicionar ao pedido',
+                            onPressed: widget.saving
+                                ? null
+                                : () => _addProduct(product),
+                            icon: const Icon(Icons.add),
+                          ),
                         ),
                       );
                     },
@@ -1610,7 +2741,25 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
     if (pedido == null || widget.saving) {
       return;
     }
-    await widget.onSave(pedido, List<PedidoItem>.from(_items));
+
+    if (!await _validateCustomerSelectionForSave()) {
+      if (mounted) {
+        setState(() {});
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Selecione um cliente válido da lista.'),
+          ),
+        );
+      }
+      _customerFocusNode.requestFocus();
+      return;
+    }
+
+    await widget.onSave(
+      pedido,
+      List<PedidoItem>.from(_items),
+      _clienteReferenciaSelecionada,
+    );
   }
 
   @override
@@ -1675,6 +2824,160 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
                 ],
               ),
             ),
+            if (hasSelection)
+              Container(
+                width: double.infinity,
+                color: Color.alphaBlend(
+                  Theme.of(context).colorScheme.primary.withValues(alpha: 0.06),
+                  Theme.of(context).colorScheme.surfaceContainerHighest,
+                ),
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    RawAutocomplete<Cliente>(
+                      textEditingController: _customerController,
+                      focusNode: _customerFocusNode,
+                      displayStringForOption: _formatClienteLabel,
+                      optionsBuilder: (textEditingValue) {
+                        final query = _normalizeSearch(textEditingValue.text);
+                        if (query.isEmpty) {
+                          return _clientes.take(25);
+                        }
+
+                        final filtered = _clientes.where((cliente) {
+                          final label = _normalizeSearch(
+                            _formatClienteLabel(cliente),
+                          );
+                          final nome = _normalizeSearch(cliente.nome);
+                          final documento = _normalizeSearch(cliente.documento);
+                          return label.contains(query) ||
+                              nome.contains(query) ||
+                              documento.contains(query);
+                        });
+                        return filtered.take(25);
+                      },
+                      onSelected: (cliente) {
+                        _selectCustomerById(cliente.id);
+                      },
+                      fieldViewBuilder:
+                          (
+                            context,
+                            textEditingController,
+                            focusNode,
+                            onFieldSubmitted,
+                          ) {
+                            return TextField(
+                              controller: textEditingController,
+                              focusNode: focusNode,
+                              enabled:
+                                  !widget.saving &&
+                                  !_loadingClientes &&
+                                  !_customerReadDenied,
+                              decoration:
+                                  _inputDecoration(label: 'Cliente').copyWith(
+                                    hintText: 'Digite para buscar e selecione da lista',
+                                    helperText: _customerReadDenied
+                                        ? 'Sem permissão para listar clientes neste perfil.'
+                                        : null,
+                                    errorText: _customerInputError,
+                                    suffixIcon: IconButton(
+                                      tooltip: 'Limpar cliente',
+                                      onPressed:
+                                          widget.saving ||
+                                              _loadingClientes ||
+                                              _customerReadDenied
+                                          ? null
+                                          : () {
+                                              _selectCustomerById('');
+                                            },
+                                      icon: const Icon(Icons.clear),
+                                    ),
+                                  ),
+                              onSubmitted: (_) {
+                                final typed = textEditingController.text.trim();
+                                if (typed.isEmpty) {
+                                  _selectCustomerById('');
+                                  return;
+                                }
+                                final matched = _findClienteByTypedText(typed);
+                                if (matched != null) {
+                                  _selectCustomerById(matched.id);
+                                  return;
+                                }
+                                setState(() {
+                                  _customerInputError = 'Selecione um cliente existente da lista.';
+                                });
+                              },
+                              onChanged: (value) {
+                                if (_customerInputError != null) {
+                                  setState(() {
+                                    _customerInputError = null;
+                                  });
+                                }
+
+                                final selected = _findClienteById(
+                                  _clienteReferenciaSelecionada?.id ?? '',
+                                );
+                                if (selected == null) {
+                                  return;
+                                }
+
+                                final selectedLabel = _normalizeSearch(
+                                  _formatClienteLabel(selected),
+                                );
+                                if (_normalizeSearch(value) != selectedLabel) {
+                                  setState(() {
+                                    _clienteReferenciaSelecionada = null;
+                                  });
+                                }
+                              },
+                            );
+                          },
+                      optionsViewBuilder: (context, onSelected, options) {
+                        final optionList = options.toList(growable: false);
+                        return Align(
+                          alignment: Alignment.topLeft,
+                          child: Material(
+                            elevation: 4,
+                            borderRadius: BorderRadius.circular(8),
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(
+                                maxWidth: 680,
+                                maxHeight: 240,
+                              ),
+                              child: ListView.builder(
+                                padding: EdgeInsets.zero,
+                                itemCount: optionList.length,
+                                itemBuilder: (context, index) {
+                                  final cliente = optionList[index];
+                                  return ListTile(
+                                    dense: true,
+                                    title: Text(cliente.nome),
+                                    subtitle: Text(
+                                      [
+                                        if (cliente.documento.trim().isNotEmpty)
+                                          cliente.documento.trim(),
+                                        if (cliente.estado.trim().isNotEmpty)
+                                          cliente.estado.trim().toUpperCase(),
+                                      ].join(' · '),
+                                    ),
+                                    onTap: () => onSelected(cliente),
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                    if (_loadingClientes) ...[
+                      const SizedBox(height: 8),
+                      const LinearProgressIndicator(minHeight: 2),
+                    ],
+                  ],
+                ),
+              ),
             Container(
               width: double.infinity,
               color: _bodyColor,
@@ -1798,18 +3101,24 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
                                     final displayCode = _resolveCommercialCode(
                                       product,
                                     );
-                                    return ListTile(
-                                      dense: true,
-                                      title: Text(product.descricao),
-                                      subtitle: Text(
-                                        '${displayCode.isEmpty ? '-' : displayCode} · ${product.marca?.trim().isEmpty ?? true ? '-' : product.marca} · NCM ${product.ncm?.trim().isEmpty ?? true ? '-' : product.ncm} · R\$ ${_formatMoneyBr(product.valorBruto ?? 0)}',
-                                      ),
-                                      trailing: IconButton.filledTonal(
-                                        tooltip: 'Adicionar ao pedido',
-                                        onPressed: widget.saving
+                                    return Material(
+                                      type: MaterialType.transparency,
+                                      child: ListTile(
+                                        dense: true,
+                                        onTap: widget.saving
                                             ? null
                                             : () => _addProduct(product),
-                                        icon: const Icon(Icons.add),
+                                        title: Text(product.descricao),
+                                        subtitle: Text(
+                                          '${displayCode.isEmpty ? '-' : displayCode} · ${product.marca?.trim().isEmpty ?? true ? '-' : product.marca} · NCM ${product.ncm?.trim().isEmpty ?? true ? '-' : product.ncm} · R\$ ${_formatMoneyBr(product.valorBruto ?? 0)}',
+                                        ),
+                                        trailing: IconButton.filledTonal(
+                                          tooltip: 'Adicionar ao pedido',
+                                          onPressed: widget.saving
+                                              ? null
+                                              : () => _addProduct(product),
+                                          icon: const Icon(Icons.add),
+                                        ),
                                       ),
                                     );
                                   },
@@ -1955,6 +3264,29 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
                                           if (ncm.isNotEmpty) 'NCM $ncm',
                                           if (cest.isNotEmpty) 'CEST $cest',
                                         ].join(' · ');
+                                        final discountSummary =
+                                            _formatPointDiscountSummary(
+                                              item.appliedDiscountPercents,
+                                            );
+                                        final policyFields =
+                                          _orderDiscountPolicy.fields;
+                                        final maxDiscountSlots =
+                                          policyFields.length;
+                                        final activeDiscountSlots =
+                                          item
+                                            .appliedDiscountPercents
+                                            .length;
+                                        final canAddDiscountSlot =
+                                          maxDiscountSlots > 0 &&
+                                          activeDiscountSlots <
+                                            maxDiscountSlots;
+                                        final inlineDiscountControllers =
+                                          activeDiscountSlots > 0
+                                          ? _ensureDiscountControllersForItem(
+                                            item,
+                                            activeDiscountSlots,
+                                            )
+                                          : const <TextEditingController>[];
 
                                         return Padding(
                                           padding: const EdgeInsets.symmetric(
@@ -2165,23 +3497,281 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
                                                         const SizedBox.shrink(),
                                                       ],
                                                     ),
+                                                    TableRow(
+                                                      children: [
+                                                        Padding(
+                                                          padding:
+                                                              const EdgeInsets.only(
+                                                                top: 2,
+                                                              ),
+                                                          child: Column(
+                                                            crossAxisAlignment:
+                                                                CrossAxisAlignment
+                                                                    .start,
+                                                            children: [
+                                                              Text(
+                                                                discountSummary,
+                                                                maxLines: 1,
+                                                                overflow:
+                                                                    TextOverflow
+                                                                        .ellipsis,
+                                                                style:
+                                                                    Theme.of(
+                                                                          context,
+                                                                        )
+                                                                        .textTheme
+                                                                        .bodySmall,
+                                                              ),
+                                                              const SizedBox(
+                                                                height: 4,
+                                                              ),
+                                                              Wrap(
+                                                                spacing: 8,
+                                                                runSpacing: 6,
+                                                                crossAxisAlignment:
+                                                                    WrapCrossAlignment
+                                                                        .center,
+                                                                children: [
+                                                                  if (activeDiscountSlots ==
+                                                                      0)
+                                                                    TextButton.icon(
+                                                                      onPressed:
+                                                                          widget.saving
+                                                                          ? null
+                                                                          : () =>
+                                                                                _addPointDiscountField(
+                                                                                  index,
+                                                                                ),
+                                                                      icon: const Icon(
+                                                                        Icons
+                                                                            .percent_outlined,
+                                                                        size: 16,
+                                                                      ),
+                                                                      label: const Text(
+                                                                        'Adicionar desconto',
+                                                                      ),
+                                                                      style: TextButton.styleFrom(
+                                                                        padding:
+                                                                            const EdgeInsets.symmetric(
+                                                                              horizontal:
+                                                                                  4,
+                                                                              vertical:
+                                                                                  0,
+                                                                            ),
+                                                                        minimumSize:
+                                                                            const Size(
+                                                                              0,
+                                                                              30,
+                                                                            ),
+                                                                        tapTargetSize:
+                                                                            MaterialTapTargetSize
+                                                                                .shrinkWrap,
+                                                                      ),
+                                                                    ),
+                                                                ],
+                                                              ),
+                                                              if (activeDiscountSlots >
+                                                                  0) ...[
+                                                                const SizedBox(
+                                                                  height: 6,
+                                                                ),
+                                                                Wrap(
+                                                                  spacing: 8,
+                                                                  runSpacing: 8,
+                                                                  crossAxisAlignment:
+                                                                      WrapCrossAlignment
+                                                                          .center,
+                                                                  children: [
+                                                                    for (
+                                                                      var i = 0;
+                                                                      i <
+                                                                          activeDiscountSlots;
+                                                                      i++
+                                                                    )
+                                                                      Container(
+                                                                        padding:
+                                                                            const EdgeInsets.symmetric(
+                                                                              horizontal:
+                                                                                  6,
+                                                                              vertical:
+                                                                                  4,
+                                                                            ),
+                                                                        decoration: BoxDecoration(
+                                                                          borderRadius:
+                                                                              BorderRadius.circular(
+                                                                                10,
+                                                                              ),
+                                                                          color: Theme.of(
+                                                                                context,
+                                                                              )
+                                                                              .colorScheme
+                                                                              .surfaceContainerHighest
+                                                                              .withValues(
+                                                                                alpha:
+                                                                                    0.35,
+                                                                              ),
+                                                                          border: Border.all(
+                                                                            color: Theme.of(context)
+                                                                                .colorScheme
+                                                                                .outlineVariant
+                                                                                .withValues(
+                                                                                  alpha:
+                                                                                      0.55,
+                                                                                ),
+                                                                          ),
+                                                                        ),
+                                                                        child: Row(
+                                                                          mainAxisSize:
+                                                                              MainAxisSize
+                                                                                  .min,
+                                                                          children: [
+                                                                            SizedBox(
+                                                                              width:
+                                                                                  96,
+                                                                              child: TextField(
+                                                                                controller:
+                                                                                    inlineDiscountControllers[i],
+                                                                                enabled:
+                                                                                    !widget.saving,
+                                                                                keyboardType: const TextInputType.numberWithOptions(
+                                                                                  decimal:
+                                                                                      true,
+                                                                                ),
+                                                                                decoration: InputDecoration(
+                                                                                  labelText: i < policyFields.length
+                                                                                      ? policyFields[i].label
+                                                                                      : 'Desc ${i + 1}',
+                                                                                  suffixText:
+                                                                                      '%',
+                                                                                  isDense:
+                                                                                      true,
+                                                                                  contentPadding:
+                                                                                      const EdgeInsets.symmetric(
+                                                                                        horizontal:
+                                                                                            8,
+                                                                                        vertical:
+                                                                                            8,
+                                                                                      ),
+                                                                                  border:
+                                                                                      const OutlineInputBorder(),
+                                                                                ),
+                                                                                onSubmitted:
+                                                                                    (_) =>
+                                                                                        _applyInlineItemDiscounts(
+                                                                                          index,
+                                                                                          showErrors:
+                                                                                              true,
+                                                                                        ),
+                                                                                onChanged:
+                                                                                    (_) =>
+                                                                                        _applyInlineItemDiscounts(
+                                                                                          index,
+                                                                                          showErrors:
+                                                                                              false,
+                                                                                        ),
+                                                                              ),
+                                                                            ),
+                                                                            const SizedBox(
+                                                                              width:
+                                                                                  4,
+                                                                            ),
+                                                                            IconButton(
+                                                                              tooltip:
+                                                                                  'Remover este desconto',
+                                                                              onPressed:
+                                                                                  widget.saving
+                                                                                  ? null
+                                                                                  : () =>
+                                                                                        _removeInlineItemDiscountField(
+                                                                                          index,
+                                                                                          i,
+                                                                                        ),
+                                                                              icon: const Icon(
+                                                                                Icons
+                                                                                    .close,
+                                                                                size:
+                                                                                    16,
+                                                                              ),
+                                                                              visualDensity:
+                                                                                  VisualDensity
+                                                                                      .compact,
+                                                                              constraints:
+                                                                                  const BoxConstraints(
+                                                                                    minWidth:
+                                                                                        24,
+                                                                                    minHeight:
+                                                                                        24,
+                                                                                  ),
+                                                                              padding:
+                                                                                  EdgeInsets
+                                                                                      .zero,
+                                                                            ),
+                                                                          ],
+                                                                        ),
+                                                                      ),
+                                                                    if (canAddDiscountSlot)
+                                                                      Padding(
+                                                                        padding:
+                                                                            const EdgeInsets.only(
+                                                                              top:
+                                                                                  2,
+                                                                            ),
+                                                                        child: FloatingActionButton.small(
+                                                                          heroTag:
+                                                                              'item_discount_fab_${item.id}_$activeDiscountSlots',
+                                                                          tooltip:
+                                                                              'Adicionar próximo campo',
+                                                                          onPressed:
+                                                                              widget.saving
+                                                                              ? null
+                                                                              : () =>
+                                                                                    _addPointDiscountField(
+                                                                                      index,
+                                                                                    ),
+                                                                          child:
+                                                                              const Icon(
+                                                                                Icons
+                                                                                    .add,
+                                                                                size:
+                                                                                    18,
+                                                                              ),
+                                                                        ),
+                                                                      ),
+                                                                  ],
+                                                                ),
+                                                              ],
+                                                            ],
+                                                          ),
+                                                        ),
+                                                        const SizedBox.shrink(),
+                                                        const SizedBox.shrink(),
+                                                        const SizedBox.shrink(),
+                                                      ],
+                                                    ),
                                                   ],
                                                 ),
                                               ),
-                                              IconButton(
-                                                tooltip: 'Remover item',
-                                                onPressed: widget.saving
-                                                    ? null
-                                                    : () {
-                                                        setState(() {
-                                                          _items.removeAt(
-                                                            index,
-                                                          );
-                                                        });
-                                                      },
-                                                icon: const Icon(
-                                                  Icons.delete_outline,
-                                                ),
+                                              Column(
+                                                children: [
+                                                  IconButton(
+                                                    tooltip: 'Remover item',
+                                                    onPressed: widget.saving
+                                                        ? null
+                                                        : () {
+                                                            setState(() {
+                                                              _disposeDiscountControllersForItem(
+                                                                item.id,
+                                                              );
+                                                              _items.removeAt(
+                                                                index,
+                                                              );
+                                                            });
+                                                          },
+                                                    icon: const Icon(
+                                                      Icons.delete_outline,
+                                                    ),
+                                                  ),
+                                                ],
                                               ),
                                             ],
                                           ),

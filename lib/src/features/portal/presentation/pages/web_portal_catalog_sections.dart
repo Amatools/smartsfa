@@ -33,6 +33,10 @@ class _PricingCatalogSection extends StatelessWidget {
       selectedRepresentedCompanyId: selectedRepresentedCompanyId,
       activeRepresentedCompanyName: activeRepresentedCompanyName,
       repository: FirestoreTabelaPrecoRepository(FirebaseFirestore.instance),
+      productRepository: FirestoreProdutoRepository(FirebaseFirestore.instance),
+      basePriceRepository: FirestoreProductBasePriceRepository(
+        FirebaseFirestore.instance,
+      ),
     );
   }
 }

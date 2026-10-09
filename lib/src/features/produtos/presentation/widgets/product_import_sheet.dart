@@ -3,7 +3,38 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/models/app_identity.dart';
 import '../../../../core/repositories/produto_repository.dart';
+import '../../../../shared/utils/file_download.dart';
 import '../services/product_csv_import_service.dart';
+
+Future<void> downloadProductImportTemplate(
+  BuildContext context, {
+  required AppIdentity identity,
+  required ProdutoRepository repository,
+}) async {
+  final importService = ProductCsvImportService(
+    identity: identity,
+    repository: repository,
+  );
+
+  try {
+    final bytes = importService.buildTemplateBytes();
+    final stamp = DateTime.now().toIso8601String().substring(0, 10);
+    await downloadFileBytes(
+      bytes: bytes,
+      fileName: 'modelo_produtos_$stamp.xlsx',
+      mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+  } catch (error) {
+    if (!context.mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Falha ao baixar modelo de produtos: $error'),
+      ),
+    );
+  }
+}
 
 Future<void> openProductImportSheet(
   BuildContext context, {
@@ -29,7 +60,7 @@ Future<void> openProductImportSheet(
           Future<void> pickFile() async {
             final result = await FilePicker.platform.pickFiles(
               type: FileType.custom,
-              allowedExtensions: const ['csv'],
+              allowedExtensions: const ['xlsx', 'xls', 'csv'],
               allowMultiple: false,
               withData: true,
             );
@@ -49,7 +80,7 @@ Future<void> openProductImportSheet(
             final file = selectedFile;
             if (file == null) {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Selecione um CSV primeiro.')),
+                const SnackBar(content: Text('Selecione uma planilha primeiro.')),
               );
               return;
             }
@@ -62,7 +93,7 @@ Future<void> openProductImportSheet(
             final file = selectedFile;
             if (file == null) {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Selecione um CSV para importar.')),
+                const SnackBar(content: Text('Selecione uma planilha para importar.')),
               );
               return;
             }
@@ -114,12 +145,12 @@ Future<void> openProductImportSheet(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    'Importar produtos por CSV',
+                    'Importar produtos por planilha',
                     style: Theme.of(sheetContext).textTheme.headlineSmall,
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    'Cabecalho obrigatorio: descricao. O codigo interno e gerado automaticamente.',
+                    'Formato recomendado: XLSX. Campos obrigatorios: nome e precoTabela.',
                   ),
                   const SizedBox(height: 12),
                   if (selectedFile != null)
@@ -147,7 +178,7 @@ Future<void> openProductImportSheet(
                       FilledButton.icon(
                         onPressed: importing ? null : pickFile,
                         icon: const Icon(Icons.upload_file_outlined),
-                        label: const Text('Selecionar CSV'),
+                        label: const Text('Selecionar planilha'),
                       ),
                       OutlinedButton.icon(
                         onPressed: importing ? null : validate,

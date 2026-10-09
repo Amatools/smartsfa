@@ -267,17 +267,6 @@ service cloud.firestore {
       return isPersonalWorkspaceTenant(data.tenantId);
     }
 
-    function canReadScopedData(data) {
-      return isPlatformAdmin()
-        || canAccessOwnPersonalData(data)
-        || (hasActiveMembership(data.tenantId) && (
-          isTenantOwner(data.tenantId)
-          || (isTenantGerente(data.tenantId) && data.gerenteId == uid())
-          || (isTenantRepresentante(data.tenantId) && data.representanteId == uid())
-          || (isTenantVendedor(data.tenantId) && data.vendedorId == uid())
-        ));
-    }
-
     function canWriteScopedData(data) {
       return isPlatformAdmin()
         || canAccessOwnPersonalData(data)
@@ -1061,8 +1050,7 @@ service cloud.firestore {
     }
 
     match /clientes/{clienteId} {
-      allow read: if hasScopeFields(resource.data)
-        && canReadScopedData(resource.data);
+      allow read: if canReadTenantBoundDocument(resource.data);
 
       allow create: if hasScopeFields(request.resource.data)
         && canWriteScopedData(request.resource.data);
@@ -1249,8 +1237,7 @@ service cloud.firestore {
     }
 
     match /pedidos/{pedidoId} {
-      allow read: if hasScopeFields(resource.data)
-        && canReadScopedData(resource.data);
+      allow read: if canReadTenantBoundDocument(resource.data);
 
       allow create: if hasScopeFields(request.resource.data)
         && canWriteScopedData(request.resource.data);

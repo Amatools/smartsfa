@@ -193,6 +193,45 @@ class TenantMembershipService {
     return TenantMembership.fromMap(doc.data() ?? <String, Object?>{});
   }
 
+  Future<TenantMembership?> loadActiveByTenantAndUid({
+    required String tenantId,
+    required String uid,
+  }) async {
+    final normalizedTenantId = tenantId.trim();
+    final normalizedUid = uid.trim();
+    if (normalizedTenantId.isEmpty || normalizedUid.isEmpty) {
+      return null;
+    }
+
+    final byPatternId = await loadById('${normalizedTenantId}_$normalizedUid');
+    if (byPatternId != null &&
+        byPatternId.tenantId == normalizedTenantId &&
+        byPatternId.uid == normalizedUid &&
+        byPatternId.isActive) {
+      return byPatternId;
+    }
+
+    final snapshot = await _firestore
+        .collection('tenant_memberships')
+        .where('tenantId', isEqualTo: normalizedTenantId)
+        .where('uid', isEqualTo: normalizedUid)
+        .where('ativo', isEqualTo: true)
+        .limit(1)
+        .get();
+
+    if (snapshot.docs.isEmpty) {
+      return null;
+    }
+
+    final data = snapshot.docs.first.data();
+    data.putIfAbsent('membershipId', () => snapshot.docs.first.id);
+    final membership = TenantMembership.fromMap(data);
+    if (!membership.isActive) {
+      return null;
+    }
+    return membership;
+  }
+
   Future<TenantMembership> revokeMembership({
     required String membershipId,
     required String revokedByUid,

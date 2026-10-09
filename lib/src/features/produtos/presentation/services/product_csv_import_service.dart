@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
@@ -7,6 +6,7 @@ import '../../../../core/models/app_identity.dart';
 import '../../../../core/models/domain_types.dart';
 import '../../../../core/models/produto.dart';
 import '../../../../core/repositories/produto_repository.dart';
+import '../../../../shared/services/tabular_spreadsheet_service.dart';
 
 class ProductImportValidation {
   const ProductImportValidation({
@@ -29,221 +29,526 @@ class ProductCsvImportService {
   final AppIdentity identity;
   final ProdutoRepository repository;
 
+  static const List<String> templateHeaders = <String>[
+    'codigoInterno',
+    'nome',
+    'status',
+    'descricaoLonga',
+    'codigoProduto',
+    'ean',
+    'marca',
+    'categoria',
+    'subcategoria',
+    'unidadePadrao',
+    'vendaEmMultiplosDe',
+    'moeda',
+    'precoTabela',
+    'precoMinimo',
+    'bitola',
+    'unidadeMedida',
+    'quantidadeMinima',
+    'ncm',
+    'cest',
+    'aliquotaIpiBase',
+    'pesoKg',
+    'comprimentoMm',
+    'larguraMm',
+    'alturaMm',
+  ];
+
+  Uint8List buildTemplateBytes() {
+    return TabularSpreadsheetService.buildXlsxWithSheets(
+      sheets: <TabularSpreadsheetSheet>[
+        TabularSpreadsheetSheet(
+          sheetName: 'Produtos',
+          headers: templateHeaders,
+          rows: const <List<String>>[
+            <String>[
+              '',
+              'Produto exemplo',
+              'ativo',
+              'Descricao detalhada do produto',
+              'COD-001',
+              '7890000000001',
+              'Marca X',
+              'Ferramentas',
+              'Brocas',
+              'UN',
+              '1',
+              'BRL',
+              '10.90',
+              '9.50',
+              '10',
+              'mm',
+              '1',
+              '0000.00.00',
+              '00.000.00',
+              '0',
+              '0.15',
+              '100',
+              '50',
+              '20',
+            ],
+          ],
+        ),
+        const TabularSpreadsheetSheet(
+          sheetName: 'Instrucoes',
+          headers: <String>['Coluna', 'Obrigatorio', 'Observacao'],
+          rows: <List<String>>[
+            <String>[
+              'codigoInterno',
+              'Nao',
+              'Se vazio, o sistema gera automaticamente. Se preenchido e existir, o produto e atualizado por este codigo.',
+            ],
+            <String>[
+              'nome',
+              'Sim',
+              'Nome do produto (equivalente ao campo Nome na UI).',
+            ],
+            <String>[
+              'status',
+              'Nao',
+              'Use: ativo, inativo, substituido ou descontinuado. Vazio assume ativo.',
+            ],
+            <String>[
+              'descricaoLonga',
+              'Nao',
+              'Descricao detalhada.',
+            ],
+            <String>[
+              'codigoProduto',
+              'Nao',
+              'Equivale ao campo Codigo da UI (armazenado internamente como codigoFabricante).',
+            ],
+            <String>[
+              'ean',
+              'Nao',
+              'EAN/GTIN.',
+            ],
+            <String>[
+              'marca',
+              'Nao',
+              'Texto livre (preferencialmente uma marca ja usada no sistema).',
+            ],
+            <String>[
+              'categoria',
+              'Nao',
+              'Se informada, a categoria deve existir previamente no cadastro de Categorias do sistema.',
+            ],
+            <String>[
+              'subcategoria',
+              'Nao',
+              'Se informada, a subcategoria deve existir para a categoria escolhida.',
+            ],
+            <String>[
+              'unidadePadrao',
+              'Nao',
+              'Unidade padrao de venda (ex.: UN).',
+            ],
+            <String>[
+              'vendaEmMultiplosDe',
+              'Nao',
+              'Numero decimal. Ex.: 1, 2, 5.',
+            ],
+            <String>[
+              'moeda',
+              'Nao',
+              'Codigo da moeda (ex.: BRL).',
+            ],
+            <String>[
+              'precoTabela',
+              'Sim',
+              'Preco de tabela/base. Numero decimal (aceita virgula).',
+            ],
+            <String>[
+              'precoMinimo',
+              'Nao',
+              'Preco minimo. Numero decimal (aceita virgula).',
+            ],
+            <String>[
+              'bitola',
+              'Nao',
+              'Valor da medida/bitola.',
+            ],
+            <String>[
+              'unidadeMedida',
+              'Nao',
+              'Unidade da bitola (ex.: mm, cm, pol).',
+            ],
+            <String>[
+              'quantidadeMinima',
+              'Nao',
+              'Quantidade minima. Numero decimal (aceita virgula).',
+            ],
+            <String>[
+              'ncm',
+              'Nao',
+              'Formato recomendado: 0000.00.00.',
+            ],
+            <String>[
+              'cest',
+              'Nao',
+              'Formato recomendado: 00.000.00.',
+            ],
+            <String>[
+              'aliquotaIpiBase',
+              'Nao',
+              'Aliquota de IPI base. Numero decimal.',
+            ],
+            <String>[
+              'pesoKg',
+              'Nao',
+              'Peso em kg. Numero decimal.',
+            ],
+            <String>[
+              'comprimentoMm',
+              'Nao',
+              'Comprimento em mm. Numero decimal.',
+            ],
+            <String>[
+              'larguraMm',
+              'Nao',
+              'Largura em mm. Numero decimal.',
+            ],
+            <String>[
+              'alturaMm',
+              'Nao',
+              'Altura em mm. Numero decimal.',
+            ],
+          ],
+        ),
+      ],
+    );
+  }
+
   ProductImportValidation validateFile(PlatformFile file) {
-    final fileName = file.name.trim().toLowerCase();
-    if (!fileName.endsWith('.csv')) {
-      return const ProductImportValidation(
+    final parsed = TabularSpreadsheetService.parseFile(file);
+    if (!parsed.ok) {
+      return ProductImportValidation(
         ok: false,
-        message: 'Somente CSV e suportado neste momento para produtos.',
-        rows: [],
+        message: parsed.message,
+        rows: const <Map<String, String>>[],
       );
     }
 
-    final bytes = file.bytes;
-    if (bytes == null || bytes.isEmpty) {
-      return const ProductImportValidation(
-        ok: false,
-        message: 'Arquivo CSV sem conteudo.',
-        rows: [],
-      );
-    }
-
-    final text = _decodeImportFile(bytes);
-    final lines = const LineSplitter()
-        .convert(text.replaceAll('\r\n', '\n').replaceAll('\r', '\n'))
-        .where((line) => line.trim().isNotEmpty)
-        .toList(growable: false);
-
-    if (lines.length < 2) {
-      return const ProductImportValidation(
-        ok: false,
-        message: 'CSV precisa de cabecalho e ao menos uma linha de dados.',
-        rows: [],
-      );
-    }
-
-    final separator = _detectCsvSeparator(lines.first);
-    final headers = _splitCsvLine(
-      lines.first,
-      separator,
-    ).map(_normalizeHeader).toList(growable: false);
-
-    final hasDescricao =
-        headers.contains('descricao') || headers.contains('nome');
-
+    final headers = parsed.headers;
+    final hasDescricao = headers.contains('descricao') || headers.contains('nome');
     if (!hasDescricao) {
       return const ProductImportValidation(
         ok: false,
-        message: 'Cabecalho invalido. Obrigatorio: descricao.',
-        rows: [],
+        message: 'Cabecalho invalido. Obrigatorio: nome.',
+        rows: <Map<String, String>>[],
       );
     }
 
-    final parsedRows = <Map<String, String>>[];
-    for (final line in lines.skip(1)) {
-      final values = _splitCsvLine(line, separator);
-      if (values.every((item) => item.trim().isEmpty)) {
+    final hasPrecoTabela = headers.contains('precotabela') ||
+        headers.contains('preco_tabela') ||
+        headers.contains('valorbruto') ||
+        headers.contains('valor_bruto') ||
+        headers.contains('preco');
+    if (!hasPrecoTabela) {
+      return const ProductImportValidation(
+        ok: false,
+        message: 'Cabecalho invalido. Obrigatorio: precoTabela.',
+        rows: <Map<String, String>>[],
+      );
+    }
+
+    if (parsed.rows.isEmpty) {
+      return const ProductImportValidation(
+        ok: false,
+        message: 'Planilha sem linhas validas para importacao.',
+        rows: <Map<String, String>>[],
+      );
+    }
+
+    final invalidPriceLines = <int>[];
+    for (var index = 0; index < parsed.rows.length; index++) {
+      final row = parsed.rows[index];
+      final hasAnyValue = row.values.any((value) => value.trim().isNotEmpty);
+      if (!hasAnyValue) {
         continue;
       }
 
-      final row = <String, String>{};
-      for (var index = 0; index < headers.length; index++) {
-        row[headers[index]] = index < values.length ? values[index].trim() : '';
+      final hasPrice = _readDoubleFromRow(
+            row,
+            const <String>[
+              'precotabela',
+              'preco_tabela',
+              'valorbruto',
+              'valor_bruto',
+              'preco',
+            ],
+          ) !=
+          null;
+
+      if (!hasPrice) {
+        invalidPriceLines.add(index + 2);
       }
-      parsedRows.add(row);
     }
 
-    if (parsedRows.isEmpty) {
-      return const ProductImportValidation(
+    if (invalidPriceLines.isNotEmpty) {
+      final sample = invalidPriceLines.take(10).join(', ');
+      return ProductImportValidation(
         ok: false,
-        message: 'CSV sem linhas validas para importar.',
-        rows: [],
+        message:
+            'Preco de tabela e obrigatorio. Linhas sem valor: $sample${invalidPriceLines.length > 10 ? ' ...' : ''}.',
+        rows: const <Map<String, String>>[],
       );
     }
 
     return ProductImportValidation(
       ok: true,
-      message: 'CSV valido com ${parsedRows.length} linha(s) para importacao.',
-      rows: parsedRows,
+      message: 'Arquivo valido com ${parsed.rows.length} linha(s).',
+      rows: parsed.rows,
     );
   }
 
   Future<int> importRows(List<Map<String, String>> rows) async {
+    final existingProducts = await repository.fetchAll(tenantId: identity.tenantId);
+    final existingByCode = <String, Produto>{};
+    for (final product in existingProducts) {
+      final normalizedCode = product.codigoInterno.trim().toLowerCase();
+      if (normalizedCode.isEmpty) {
+        continue;
+      }
+      existingByCode[normalizedCode] = product;
+    }
+
     var imported = 0;
-    for (final row in rows) {
+    for (var index = 0; index < rows.length; index++) {
+      final row = rows[index];
       final now = DateTime.now().toUtc();
-      final descricao = _readRowValue(row, const ['descricao', 'nome']);
-      if (descricao.isEmpty) {
+
+      final rawCode = _readRowValue(row, const <String>[
+        'codigointerno',
+        'codigo_interno',
+        'idinterno',
+      ]);
+      final normalizedCode = rawCode.trim().toLowerCase();
+      final existing = normalizedCode.isEmpty ? null : existingByCode[normalizedCode];
+
+      final descricao = _readRowValue(row, const <String>['descricao', 'nome']);
+      final effectiveDescricao = descricao.isEmpty ? (existing?.descricao ?? '') : descricao;
+      if (effectiveDescricao.isEmpty) {
         continue;
       }
 
-      final status = ProductStatus.fromValue(
-        _readRowValue(row, const ['status']),
+      final status = _parseStatus(
+        _readRowValue(row, const <String>['status']),
+        fallback: existing?.status ?? ProductStatus.active,
       );
+
+      final effectiveCode = rawCode.trim().isNotEmpty
+          ? rawCode.trim()
+          : ((existing?.codigoInterno.trim().isNotEmpty ?? false)
+                ? existing!.codigoInterno.trim()
+                : 'AUTO_${now.microsecondsSinceEpoch}_$index');
+
       final produto = Produto(
-        id: 'prd_${now.microsecondsSinceEpoch}_$imported',
+        id: existing?.id ?? 'prd_${now.microsecondsSinceEpoch}_$index',
         tenantId: identity.tenantId,
-        codigoInterno: 'AUTO',
-        descricao: descricao,
+        codigoInterno: effectiveCode,
+        descricao: effectiveDescricao,
         origemCadastro: ProductSource.excel,
         status: status,
-        descricaoResumida: _readRowValue(row, const [
-          'descricaoresumida',
-          'descricao_resumida',
-        ]),
-        descricaoLonga: _readRowValue(row, const [
-          'descricaolonga',
-          'descricao_longa',
-        ]),
-        codigoFabricante: _readRowValue(row, const [
-          'codigofabricante',
-          'codigo_fabricante',
-        ]),
-        sku: _readRowValue(row, const ['sku', 'skucomercial', 'sku_comercial']),
-        ean: _readRowValue(row, const ['ean', 'gtin']),
-        marca: _readRowValue(row, const ['marca']),
-        categoria: _readRowValue(row, const ['categoria']),
-        subcategoria: _readRowValue(row, const [
-          'subcategoria',
-          'sub_categoria',
-        ]),
-        bitola: _readRowValue(row, const ['bitola', 'medida']),
-        bitolaUnidade: _readRowValue(row, const [
-          'bitolaunidade',
-          'bitola_unidade',
-          'unidadebitola',
-          'unidade_bitola',
-        ]),
-        unidade: _readRowValue(row, const ['unidade']),
-        multiploVenda: _readDoubleFromRow(row, const [
-          'multiplovenda',
-          'multiplo_venda',
-        ]),
-        quantidadeMinima: _readDoubleFromRow(row, const [
-          'quantidademinima',
-          'quantidade_minima',
-        ]),
-        ncm: _readRowValue(row, const ['ncm']),
-        cest: _readRowValue(row, const ['cest']),
-        aliquotaIpiBase: _readDoubleFromRow(row, const [
-          'aliquotaipibase',
-          'aliquota_ipi_base',
-          'aliquotaipi',
-          'aliquota_ipi',
-          'ipi',
-        ]),
-        pesoKg: _readDoubleFromRow(row, const ['pesokg', 'peso_kg']),
-        comprimentoMm: _readDoubleFromRow(row, const [
-          'comprimentomm',
-          'comprimento_mm',
-        ]),
-        larguraMm: _readDoubleFromRow(row, const ['larguramm', 'largura_mm']),
-        alturaMm: _readDoubleFromRow(row, const ['alturamm', 'altura_mm']),
-        erpProductId: _readRowValue(row, const [
-          'erpproductid',
-          'erp_product_id',
-        ]),
-        erpSyncId: _readRowValue(row, const ['erpsyncid', 'erp_sync_id']),
-        createdAt: now,
+        descricaoResumida: _pickString(
+          row,
+          const <String>['descricaoresumida', 'descricao_resumida'],
+          existing?.descricaoResumida,
+        ),
+        descricaoLonga: _pickString(
+          row,
+          const <String>['descricaolonga', 'descricao_longa'],
+          existing?.descricaoLonga,
+        ),
+        codigoFabricante: _pickString(
+          row,
+          const <String>[
+            'codigoproduto',
+            'codigo_produto',
+            'codigofabricante',
+            'codigo_fabricante',
+          ],
+          existing?.codigoFabricante,
+        ),
+        sku: _pickString(
+          row,
+          const <String>['sku', 'skucomercial', 'sku_comercial'],
+          existing?.sku,
+        ),
+        ean: _pickString(row, const <String>['ean', 'gtin'], existing?.ean),
+        marca: _pickString(row, const <String>['marca'], existing?.marca),
+        categoria: _pickString(
+          row,
+          const <String>['categoria'],
+          existing?.categoria,
+        ),
+        subcategoria: _pickString(
+          row,
+          const <String>['subcategoria', 'sub_categoria'],
+          existing?.subcategoria,
+        ),
+        colecao: _pickString(row, const <String>['colecao'], existing?.colecao),
+        bitola: _pickString(row, const <String>['bitola', 'medida'], existing?.bitola),
+        bitolaUnidade: _pickString(
+          row,
+          const <String>[
+            'unidadedemedida',
+            'unidade_medida',
+            'bitolaunidade',
+            'bitola_unidade',
+            'unidadebitola',
+            'unidade_bitola',
+          ],
+          existing?.bitolaUnidade,
+        ),
+        unidade: _pickString(row, const <String>['unidade'], existing?.unidade),
+        moeda: _pickString(row, const <String>['moeda'], existing?.moeda),
+        multiploVenda: _pickDouble(
+          row,
+          const <String>[
+            'vendaemmultiplosde',
+            'venda_em_multiplos_de',
+            'multiplovenda',
+            'multiplo_venda',
+          ],
+          existing?.multiploVenda,
+        ),
+        quantidadeMinima: _pickDouble(
+          row,
+          const <String>['quantidademinima', 'quantidade_minima'],
+          existing?.quantidadeMinima,
+        ),
+        ncm: _pickString(row, const <String>['ncm'], existing?.ncm),
+        cest: _pickString(row, const <String>['cest'], existing?.cest),
+        aliquotaIpiBase: _pickDouble(
+          row,
+          const <String>[
+            'aliquotaipibase',
+            'aliquota_ipi_base',
+            'aliquotaipi',
+            'aliquota_ipi',
+            'ipi',
+          ],
+          existing?.aliquotaIpiBase,
+        ),
+        pesoKg: _pickDouble(
+          row,
+          const <String>['pesokg', 'peso_kg'],
+          existing?.pesoKg,
+        ),
+        comprimentoMm: _pickDouble(
+          row,
+          const <String>['comprimentomm', 'comprimento_mm'],
+          existing?.comprimentoMm,
+        ),
+        larguraMm: _pickDouble(
+          row,
+          const <String>['larguramm', 'largura_mm'],
+          existing?.larguraMm,
+        ),
+        alturaMm: _pickDouble(
+          row,
+          const <String>['alturamm', 'altura_mm'],
+          existing?.alturaMm,
+        ),
+        valorBruto: _readDoubleFromRow(
+          row,
+          const <String>[
+            'precotabela',
+            'preco_tabela',
+            'valorbruto',
+            'valor_bruto',
+            'preco',
+          ],
+        ),
+        precoMinimo: _pickDouble(
+          row,
+          const <String>['precominimo', 'preco_minimo'],
+          existing?.precoMinimo,
+        ),
+        percentualComissao: _pickDouble(
+          row,
+          const <String>['percentualcomissao', 'percentual_comissao'],
+          existing?.percentualComissao,
+        ),
+        erpProductId: _pickString(
+          row,
+          const <String>['erpproductid', 'erp_product_id'],
+          existing?.erpProductId,
+        ),
+        erpSyncId: _pickString(
+          row,
+          const <String>['erpsyncid', 'erp_sync_id'],
+          existing?.erpSyncId,
+        ),
+        createdAt: existing?.createdAt ?? now,
         updatedAt: now,
       );
 
       await repository.save(produto);
+      existingByCode[effectiveCode.toLowerCase()] = produto;
       imported++;
     }
 
     return imported;
   }
 
-  String _decodeImportFile(Uint8List bytes) {
-    try {
-      return utf8.decode(bytes);
-    } catch (_) {
-      return latin1.decode(bytes);
+  ProductStatus _parseStatus(String raw, {required ProductStatus fallback}) {
+    final normalized = raw.trim().toLowerCase();
+    if (normalized.isEmpty) {
+      return fallback;
     }
+
+    if (normalized == 'active' || normalized == 'ativo') {
+      return ProductStatus.active;
+    }
+    if (normalized == 'inactive' || normalized == 'inativo') {
+      return ProductStatus.inactive;
+    }
+    if (normalized == 'replaced' || normalized == 'substituido') {
+      return ProductStatus.replaced;
+    }
+    if (normalized == 'discontinued' || normalized == 'descontinuado') {
+      return ProductStatus.discontinued;
+    }
+
+    for (final candidate in ProductStatus.values) {
+      if (candidate.value == normalized ||
+          candidate.label.toLowerCase() == normalized) {
+        return candidate;
+      }
+    }
+
+    return fallback;
+  }
+
+  String? _pickString(
+    Map<String, String> row,
+    List<String> aliases,
+    String? fallback,
+  ) {
+    final incoming = _readRowValue(row, aliases).trim();
+    if (incoming.isNotEmpty) {
+      return incoming;
+    }
+
+    final normalizedFallback = (fallback ?? '').trim();
+    return normalizedFallback.isEmpty ? null : normalizedFallback;
+  }
+
+  double? _pickDouble(
+    Map<String, String> row,
+    List<String> aliases,
+    double? fallback,
+  ) {
+    final incoming = _readDoubleFromRow(row, aliases);
+    return incoming ?? fallback;
   }
 
   String _normalizeHeader(String value) {
-    return value.trim().toLowerCase().replaceAll(' ', '').replaceAll('-', '_');
-  }
-
-  String _detectCsvSeparator(String headerLine) {
-    final semicolon = ';'.allMatches(headerLine).length;
-    final comma = ','.allMatches(headerLine).length;
-    return semicolon > comma ? ';' : ',';
-  }
-
-  List<String> _splitCsvLine(String line, String separator) {
-    final result = <String>[];
-    final separatorCode = separator.codeUnitAt(0);
-    final buffer = StringBuffer();
-    var insideQuotes = false;
-
-    for (var i = 0; i < line.length; i++) {
-      final charCode = line.codeUnitAt(i);
-      final char = line[i];
-
-      if (char == '"') {
-        if (insideQuotes && i + 1 < line.length && line[i + 1] == '"') {
-          buffer.write('"');
-          i++;
-          continue;
-        }
-        insideQuotes = !insideQuotes;
-        continue;
-      }
-
-      if (!insideQuotes && charCode == separatorCode) {
-        result.add(buffer.toString());
-        buffer.clear();
-        continue;
-      }
-
-      buffer.writeCharCode(charCode);
-    }
-
-    result.add(buffer.toString());
-    return result;
+    return TabularSpreadsheetService.normalizeHeader(value);
   }
 
   String _readRowValue(Map<String, String> row, List<String> aliases) {
@@ -262,7 +567,13 @@ class ProductCsvImportService {
     if (value.isEmpty) {
       return null;
     }
-    return double.tryParse(value.replaceAll('.', '').replaceAll(',', '.')) ??
-        double.tryParse(value.replaceAll(',', '.'));
+    return TabularSpreadsheetService.parseDecimal(value);
   }
+}
+
+class ProductSpreadsheetImportService extends ProductCsvImportService {
+  const ProductSpreadsheetImportService({
+    required super.identity,
+    required super.repository,
+  });
 }

@@ -38,6 +38,7 @@ class ProductCatalogContentView extends StatelessWidget {
       erpSyncChangeEnabled: payload.erpSyncChangeEnabled,
       showErpManagedInfoCard: payload.policy.showErpManagedInfoCard,
       onImportExcel: payload.onImportExcel,
+      onDownloadExcelModel: payload.onDownloadExcelModel,
       onCreateProduct: payload.onCreateProduct,
       onBrandFilterChanged: payload.onBrandFilterChanged,
       onErpSyncChanged: payload.onErpSyncChanged,

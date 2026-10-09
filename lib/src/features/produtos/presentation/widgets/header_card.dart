@@ -37,11 +37,14 @@ class HeaderCard extends StatelessWidget {
             ),
             if (actions.isNotEmpty) ...[
               const SizedBox(height: 12),
-              Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                children: actions,
-              ),
+              if (actions.length == 1)
+                actions.first
+              else
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: actions,
+                ),
             ],
           ],
         ),

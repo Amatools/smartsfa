@@ -39,6 +39,34 @@ class _PaymentConditionsSectionState extends State<_PaymentConditionsSection> {
     super.dispose();
   }
 
+  InputDecoration _fieldDecoration({
+    required String label,
+    IconData? icon,
+    String? prefixText,
+  }) {
+    final colors = Theme.of(context).colorScheme;
+    OutlineInputBorder border(Color color, {double width = 1}) {
+      return OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: color, width: width),
+      );
+    }
+
+    return InputDecoration(
+      labelText: label,
+      prefixText: prefixText,
+      isDense: true,
+      filled: true,
+      fillColor: colors.surfaceContainerHighest.withValues(alpha: 0.35),
+      prefixIcon: icon == null ? null : Icon(icon, size: 18),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      enabledBorder: border(colors.outlineVariant.withValues(alpha: 0.45)),
+      focusedBorder: border(colors.primary.withValues(alpha: 0.75), width: 1.4),
+      errorBorder: border(colors.error.withValues(alpha: 0.75)),
+      focusedErrorBorder: border(colors.error, width: 1.4),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
@@ -78,6 +106,13 @@ class _PaymentConditionsSectionState extends State<_PaymentConditionsSection> {
                 }
 
                 return Card(
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    side: BorderSide(
+                      color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.35),
+                    ),
+                  ),
                   child: Padding(
                     padding: const EdgeInsets.all(18),
                     child: Column(
@@ -97,6 +132,12 @@ class _PaymentConditionsSectionState extends State<_PaymentConditionsSection> {
                                   : null,
                               icon: const Icon(Icons.add),
                               label: const Text('Nova condicao de pagamento'),
+                              style: OutlinedButton.styleFrom(
+                                shape: const StadiumBorder(),
+                                side: BorderSide(
+                                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.35),
+                                ),
+                              ),
                             ),
                           ],
                         ),
@@ -152,115 +193,131 @@ class _PaymentConditionsSectionState extends State<_PaymentConditionsSection> {
                                     builder: (context, constraints) {
                                       final compact =
                                           constraints.maxWidth < 760;
+                                      final colors = Theme.of(context).colorScheme;
                                       if (compact) {
-                                        return Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.stretch,
-                                          children: [
-                                            TextField(
-                                              controller: _rows[index]
-                                                  .descriptionController,
-                                              enabled: canEditRules && !_saving,
-                                              decoration: const InputDecoration(
-                                                labelText: 'Descricao *',
-                                                isDense: true,
-                                                border: OutlineInputBorder(),
-                                              ),
+                                        return Container(
+                                          padding: const EdgeInsets.all(12),
+                                          decoration: BoxDecoration(
+                                            borderRadius: BorderRadius.circular(14),
+                                            color: colors.surfaceContainerHighest.withValues(alpha: 0.16),
+                                            border: Border.all(
+                                              color: colors.outlineVariant.withValues(alpha: 0.45),
                                             ),
-                                            const SizedBox(height: 8),
-                                            Row(
-                                              children: [
-                                                Expanded(
-                                                  child: TextField(
-                                                    controller: _rows[index]
-                                                        .minimumValueController,
-                                                    enabled:
-                                                        canEditRules &&
-                                                        !_saving,
-                                                    keyboardType:
-                                                        const TextInputType.numberWithOptions(
-                                                          decimal: true,
-                                                        ),
-                                                    textAlign: TextAlign.right,
-                                                    decoration:
-                                                        const InputDecoration(
-                                                          labelText:
-                                                              'Valor minimo',
-                                                          prefixText: 'R\$ ',
-                                                          isDense: true,
-                                                          border:
-                                                              OutlineInputBorder(),
-                                                        ),
-                                                  ),
+                                          ),
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.stretch,
+                                            children: [
+                                              TextField(
+                                                controller: _rows[index]
+                                                    .descriptionController,
+                                                enabled: canEditRules && !_saving,
+                                                decoration: _fieldDecoration(
+                                                  label: 'Descricao *',
+                                                  icon: Icons.short_text,
                                                 ),
-                                                const SizedBox(width: 8),
-                                                Tooltip(
-                                                  message: 'Remover linha',
-                                                  child: IconButton.outlined(
-                                                    onPressed:
-                                                        canEditRules && !_saving
-                                                        ? () =>
-                                                              _removeRule(index)
-                                                        : null,
-                                                    icon: const Icon(
-                                                      Icons.delete_outline,
+                                              ),
+                                              const SizedBox(height: 8),
+                                              Row(
+                                                children: [
+                                                  Expanded(
+                                                    child: TextField(
+                                                      controller: _rows[index]
+                                                          .minimumValueController,
+                                                      enabled:
+                                                          canEditRules &&
+                                                          !_saving,
+                                                      keyboardType:
+                                                          const TextInputType.numberWithOptions(
+                                                            decimal: true,
+                                                          ),
+                                                      textAlign: TextAlign.right,
+                                                      decoration:
+                                                          _fieldDecoration(
+                                                            label:
+                                                                'Valor minimo',
+                                                            icon: Icons.payments_outlined,
+                                                            prefixText: 'R\$ ',
+                                                          ),
                                                     ),
                                                   ),
-                                                ),
-                                              ],
-                                            ),
-                                          ],
+                                                  const SizedBox(width: 8),
+                                                  Tooltip(
+                                                    message: 'Remover linha',
+                                                    child: IconButton.outlined(
+                                                      onPressed:
+                                                          canEditRules && !_saving
+                                                          ? () =>
+                                                                _removeRule(index)
+                                                          : null,
+                                                      icon: const Icon(
+                                                        Icons.delete_outline,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ],
+                                          ),
                                         );
                                       }
 
-                                      return Row(
-                                        children: [
-                                          Expanded(
-                                            child: TextField(
-                                              controller: _rows[index]
-                                                  .descriptionController,
-                                              enabled: canEditRules && !_saving,
-                                              decoration: const InputDecoration(
-                                                labelText: 'Descricao *',
-                                                isDense: true,
-                                                border: OutlineInputBorder(),
+                                      return Container(
+                                        padding: const EdgeInsets.all(12),
+                                        decoration: BoxDecoration(
+                                          borderRadius: BorderRadius.circular(14),
+                                          color: colors.surfaceContainerHighest.withValues(alpha: 0.16),
+                                          border: Border.all(
+                                            color: colors.outlineVariant.withValues(alpha: 0.45),
+                                          ),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Expanded(
+                                              child: TextField(
+                                                controller: _rows[index]
+                                                    .descriptionController,
+                                                enabled: canEditRules && !_saving,
+                                                decoration: _fieldDecoration(
+                                                  label: 'Descricao *',
+                                                  icon: Icons.short_text,
+                                                ),
                                               ),
                                             ),
-                                          ),
-                                          const SizedBox(width: 12),
-                                          SizedBox(
-                                            width: 150,
-                                            child: TextField(
-                                              controller: _rows[index]
-                                                  .minimumValueController,
-                                              enabled: canEditRules && !_saving,
-                                              keyboardType:
-                                                  const TextInputType.numberWithOptions(
-                                                    decimal: true,
-                                                  ),
-                                              textAlign: TextAlign.right,
-                                              decoration: const InputDecoration(
-                                                labelText: 'Valor minimo',
-                                                prefixText: 'R\$ ',
-                                                isDense: true,
-                                                border: OutlineInputBorder(),
+                                            const SizedBox(width: 12),
+                                            SizedBox(
+                                              width: 180,
+                                              child: TextField(
+                                                controller: _rows[index]
+                                                    .minimumValueController,
+                                                enabled: canEditRules && !_saving,
+                                                keyboardType:
+                                                    const TextInputType.numberWithOptions(
+                                                      decimal: true,
+                                                    ),
+                                                textAlign: TextAlign.right,
+                                                decoration: _fieldDecoration(
+                                                  label: 'Valor minimo',
+                                                  icon: Icons.payments_outlined,
+                                                  prefixText: 'R\$ ',
+                                                ),
                                               ),
                                             ),
-                                          ),
-                                          const SizedBox(width: 8),
-                                          Tooltip(
-                                            message: 'Remover linha',
-                                            child: IconButton.outlined(
-                                              onPressed:
-                                                  canEditRules && !_saving
-                                                  ? () => _removeRule(index)
-                                                  : null,
-                                              icon: const Icon(
-                                                Icons.delete_outline,
+                                            const SizedBox(width: 8),
+                                            Tooltip(
+                                              message: 'Remover linha',
+                                              child: IconButton.outlined(
+                                                onPressed:
+                                                    canEditRules && !_saving
+                                                    ? () => _removeRule(index)
+                                                    : null,
+                                                icon: const Icon(
+                                                  Icons.delete_outline,
+                                                ),
                                               ),
                                             ),
-                                          ),
-                                        ],
+                                          ],
+                                        ),
                                       );
                                     },
                                   ),
@@ -289,6 +346,10 @@ class _PaymentConditionsSectionState extends State<_PaymentConditionsSection> {
                                   : const Icon(Icons.save_outlined),
                               label: Text(
                                 _saving ? 'Salvando...' : 'Salvar condicoes',
+                              ),
+                              style: FilledButton.styleFrom(
+                                shape: const StadiumBorder(),
+                                padding: const EdgeInsets.symmetric(horizontal: 18),
                               ),
                             ),
                           ),

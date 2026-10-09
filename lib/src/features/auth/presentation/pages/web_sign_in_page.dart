@@ -241,9 +241,39 @@ class _LoginPanel extends StatelessWidget {
   final TextTheme textTheme;
   final ColorScheme colorScheme;
 
+  InputDecoration _inputDecoration({
+    required String label,
+    required IconData icon,
+  }) {
+    OutlineInputBorder border(Color color, {double width = 1}) {
+      return OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide(color: color, width: width),
+      );
+    }
+
+    return InputDecoration(
+      labelText: label,
+      filled: true,
+      fillColor: colorScheme.surfaceContainerHighest.withValues(alpha: 0.38),
+      prefixIcon: Icon(icon, size: 18),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      enabledBorder: border(colorScheme.outlineVariant.withValues(alpha: 0.38)),
+      focusedBorder: border(colorScheme.primary.withValues(alpha: 0.75), width: 1.4),
+      errorBorder: border(colorScheme.error.withValues(alpha: 0.8)),
+      focusedErrorBorder: border(colorScheme.error, width: 1.4),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Card(
+      elevation: 0,
+      color: colorScheme.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: BorderSide(color: colorScheme.outlineVariant.withValues(alpha: 0.35)),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
@@ -290,6 +320,11 @@ class _LoginPanel extends StatelessWidget {
               label: Text(
                 loading ? 'Entrando...' : 'Continuar com Google',
               ),
+              style: FilledButton.styleFrom(
+                minimumSize: const Size.fromHeight(44),
+                shape: const StadiumBorder(),
+                padding: const EdgeInsets.symmetric(horizontal: 18),
+              ),
             ),
             const SizedBox(height: 16),
             Text(
@@ -302,18 +337,18 @@ class _LoginPanel extends StatelessWidget {
             TextField(
               controller: emailController,
               keyboardType: TextInputType.emailAddress,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                labelText: 'E-mail',
+              decoration: _inputDecoration(
+                label: 'E-mail',
+                icon: Icons.alternate_email,
               ),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: passwordController,
               obscureText: true,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                labelText: 'Senha',
+              decoration: _inputDecoration(
+                label: 'Senha',
+                icon: Icons.lock_outline,
               ),
               onSubmitted: (_) => onEmailPassword(),
             ),
@@ -322,6 +357,11 @@ class _LoginPanel extends StatelessWidget {
               onPressed: loading ? null : onEmailPassword,
               icon: const Icon(Icons.alternate_email),
               label: const Text('Entrar com e-mail/senha'),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size.fromHeight(42),
+                shape: const StadiumBorder(),
+                side: BorderSide(color: colorScheme.primary.withValues(alpha: 0.35)),
+              ),
             ),
           ],
         ),

@@ -69,6 +69,7 @@ class ProductCatalogWorkspaceSection extends StatelessWidget {
               produtos: produtos,
               updatingStatusProductIds: payload.updatingStatusProductIds,
               onImportExcel: payload.onImportExcel,
+              onDownloadExcelModel: payload.onDownloadExcelModel,
               onCreateProduct: payload.onCreateProduct,
               onBrandFilterChanged: payload.onBrandFilterChanged,
               onErpSyncChanged: payload.onErpSyncChanged,

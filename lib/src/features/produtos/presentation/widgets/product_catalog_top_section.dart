@@ -14,6 +14,7 @@ class ProductCatalogTopSection extends StatelessWidget {
     required this.erpSyncChangeEnabled,
     required this.showErpManagedInfoCard,
     required this.onImportExcel,
+    required this.onDownloadExcelModel,
     required this.onCreateProduct,
     required this.onBrandFilterChanged,
     required this.onErpSyncChanged,
@@ -28,9 +29,63 @@ class ProductCatalogTopSection extends StatelessWidget {
   final bool erpSyncChangeEnabled;
   final bool showErpManagedInfoCard;
   final VoidCallback onImportExcel;
+  final VoidCallback onDownloadExcelModel;
   final VoidCallback onCreateProduct;
   final ValueChanged<String> onBrandFilterChanged;
   final ValueChanged<bool> onErpSyncChanged;
+
+  Widget _buildHeaderActions() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 720;
+
+        final rightActions = Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          alignment: WrapAlignment.end,
+          children: [
+            OutlinedButton.icon(
+              onPressed: onDownloadExcelModel,
+              icon: const Icon(Icons.download_outlined),
+              label: const Text('Baixar modelo XLSX'),
+            ),
+            OutlinedButton.icon(
+              onPressed: onImportExcel,
+              icon: const Icon(Icons.upload_file_outlined),
+              label: const Text('Importar Excel'),
+            ),
+          ],
+        );
+
+        if (compact) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              FilledButton.icon(
+                onPressed: onCreateProduct,
+                icon: const Icon(Icons.add),
+                label: const Text('Novo produto'),
+              ),
+              const SizedBox(height: 8),
+              Align(alignment: Alignment.centerRight, child: rightActions),
+            ],
+          );
+        }
+
+        return Row(
+          children: [
+            FilledButton.icon(
+              onPressed: onCreateProduct,
+              icon: const Icon(Icons.add),
+              label: const Text('Novo produto'),
+            ),
+            const Spacer(),
+            rightActions,
+          ],
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -43,16 +98,7 @@ class ProductCatalogTopSection extends StatelessWidget {
             subtitle: 'Cadastro de atributos fisicos e tributarios do produto. Precos e politicas comerciais ficam em modulos dedicados.',
             actions: [
               if (canCreateOrImportProducts) ...[
-                OutlinedButton.icon(
-                  onPressed: onImportExcel,
-                  icon: const Icon(Icons.upload_file_outlined),
-                  label: const Text('Importar Excel'),
-                ),
-                FilledButton.icon(
-                  onPressed: onCreateProduct,
-                  icon: const Icon(Icons.add),
-                  label: const Text('Novo produto'),
-                ),
+                _buildHeaderActions(),
               ],
             ],
           ),

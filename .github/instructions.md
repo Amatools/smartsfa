@@ -17,6 +17,12 @@
   - análise do projeto quando necessário e dos arquivos md de documentação de projeto;
   - atualizar arquivos .MD do desenvolvimento do projeto conforme implementação;
 
+## Execução Flutter no ambiente do usuário
+
+- O usuário sempre executa o app com o comando:
+  - `flutter run -d chrome --web-port 43177 --target lib/main.dart`
+- Em tarefas de recarga/reconexão, assumir esse padrão de execução e porta.
+
 ## Arquitetura esperada
 
 - telas focadas em apresentação e interação;

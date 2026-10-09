@@ -6,6 +6,8 @@ class _WebPortalShellState extends State<_WebPortalShell> {
   bool _showWorkspaceSelection = true;
   bool _upgradingWorkspace = false;
   bool _settingFavoriteRepresented = false;
+  String? _accountContractLockUid;
+  Future<AccountContractLock>? _accountContractLockFuture;
   final Map<String, String?> _activeRepresentedCompanyByTenant = {};
   final Map<String, String?> _activeRepresentedCompanyNameByTenant = {};
 
@@ -47,10 +49,17 @@ class _WebPortalShellState extends State<_WebPortalShell> {
           );
         }
 
+        if (_accountContractLockUid != user.uid ||
+            _accountContractLockFuture == null) {
+          _accountContractLockUid = user.uid;
+          _accountContractLockFuture = _loadAccountContractLock(user.uid);
+        }
+
         return FutureBuilder<AccountContractLock>(
-          future: _loadAccountContractLock(user.uid),
+          future: _accountContractLockFuture,
           builder: (context, lockSnapshot) {
-            if (lockSnapshot.connectionState == ConnectionState.waiting) {
+            if (lockSnapshot.connectionState == ConnectionState.waiting &&
+                !lockSnapshot.hasData) {
               return const Scaffold(
                 body: Center(child: CircularProgressIndicator()),
               );

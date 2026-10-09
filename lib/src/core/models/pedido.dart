@@ -82,6 +82,7 @@ class Pedido implements TenantScopedEntity {
     OrderOrigin? origemPedido,
     OrderStatus? statusFila,
     ClienteReference? clienteReferencia,
+    bool clearClienteReferencia = false,
     String? ownerId,
     String? gerenteId,
     String? representanteId,
@@ -101,7 +102,9 @@ class Pedido implements TenantScopedEntity {
       tenantId: tenantId ?? this.tenantId,
       origemPedido: origemPedido ?? this.origemPedido,
       statusFila: statusFila ?? this.statusFila,
-      clienteReferencia: clienteReferencia ?? this.clienteReferencia,
+      clienteReferencia: clearClienteReferencia
+          ? null
+          : (clienteReferencia ?? this.clienteReferencia),
       ownerId: ownerId ?? this.ownerId,
       gerenteId: gerenteId ?? this.gerenteId,
       representanteId: representanteId ?? this.representanteId,
@@ -152,6 +155,7 @@ class PedidoItem {
     required this.quantity,
     required this.unitPrice,
     required this.totalPrice,
+    this.appliedDiscountPercents = const <double>[],
     this.unit,
     this.ncm,
     this.taxSnapshot,
@@ -166,6 +170,9 @@ class PedidoItem {
       quantity: _readDouble(map['quantity']) ?? 0,
       unitPrice: _readDouble(map['unitPrice']) ?? 0,
       totalPrice: _readDouble(map['totalPrice']) ?? 0,
+      appliedDiscountPercents: _readDoubleList(
+        map['appliedDiscountPercents'],
+      ),
       unit: map['unit'] as String?,
       ncm: map['ncm'] as String?,
       taxSnapshot: map['taxSnapshot'] is Map
@@ -183,6 +190,7 @@ class PedidoItem {
   final double quantity;
   final double unitPrice;
   final double totalPrice;
+  final List<double> appliedDiscountPercents;
   final String? unit;
   final String? ncm;
   final PedidoItemTaxSnapshot? taxSnapshot;
@@ -195,6 +203,7 @@ class PedidoItem {
     double? quantity,
     double? unitPrice,
     double? totalPrice,
+    List<double>? appliedDiscountPercents,
     String? unit,
     String? ncm,
     PedidoItemTaxSnapshot? taxSnapshot,
@@ -207,6 +216,8 @@ class PedidoItem {
       quantity: quantity ?? this.quantity,
       unitPrice: unitPrice ?? this.unitPrice,
       totalPrice: totalPrice ?? this.totalPrice,
+      appliedDiscountPercents:
+          appliedDiscountPercents ?? this.appliedDiscountPercents,
       unit: unit ?? this.unit,
       ncm: ncm ?? this.ncm,
       taxSnapshot: taxSnapshot ?? this.taxSnapshot,
@@ -222,6 +233,7 @@ class PedidoItem {
       'quantity': quantity,
       'unitPrice': unitPrice,
       'totalPrice': totalPrice,
+      'appliedDiscountPercents': appliedDiscountPercents,
       'unit': unit,
       'ncm': ncm,
       'taxSnapshot': taxSnapshot?.toMap(),
@@ -350,6 +362,22 @@ double? _readDouble(Object? value) {
     return double.tryParse(value.replaceAll(',', '.'));
   }
   return null;
+}
+
+List<double> _readDoubleList(Object? value) {
+  if (value is! List) {
+    return const <double>[];
+  }
+
+  final result = <double>[];
+  for (final item in value) {
+    final parsed = _readDouble(item);
+    if (parsed == null) {
+      continue;
+    }
+    result.add(parsed);
+  }
+  return result;
 }
 
 DateTime? _readDateTime(Object? value) {

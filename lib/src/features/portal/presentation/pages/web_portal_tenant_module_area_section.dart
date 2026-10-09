@@ -117,6 +117,12 @@ class _TenantWorkspaceModuleAreaState
             selectedRepresentedCompanyId: widget.selectedRepresentedCompanyId,
             activeRepresentedCompanyName: widget.activeRepresentedCompanyName,
           );
+        } else if (activeSubmenu.key == 'descontos_pontuais') {
+          content = _OrderDiscountPoliciesSection(
+            activeTenant: widget.activeTenant,
+            selectedRepresentedCompanyId: widget.selectedRepresentedCompanyId,
+            activeRepresentedCompanyName: widget.activeRepresentedCompanyName,
+          );
         } else if (activeSubmenu.key == 'parametros_workspace') {
           content = _WorkspaceParametersSection(
             activeTenant: widget.activeTenant,
@@ -447,6 +453,10 @@ List<_TenantCommercialModule> _buildTenantCommercialModules(
         const _TenantCommercialSubmenu(
           key: 'acrescimos_descontos',
           label: 'Acréscimos ou descontos',
+        ),
+        const _TenantCommercialSubmenu(
+          key: 'descontos_pontuais',
+          label: 'Descontos pontuais',
         ),
         const _TenantCommercialSubmenu(
           key: 'rentabilidade',

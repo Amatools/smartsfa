@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 
 import '../../../../core/models/cliente.dart';
@@ -64,12 +65,155 @@ class _ClientePreCadastroPageState extends State<ClientePreCadastroPage> {
     return brazilStateOrNull(rawValue);
   }
 
+  String _digitsOnly(String value) {
+    return value.replaceAll(RegExp(r'[^0-9]'), '');
+  }
+
   String _normalizeDocumento(String value) {
-    final onlyDigits = value.replaceAll(RegExp(r'\D'), '');
+    final onlyDigits = _digitsOnly(value);
     if (onlyDigits.isNotEmpty) {
       return onlyDigits;
     }
     return value.trim().toLowerCase();
+  }
+
+  bool _isValidEmailBasic(String value) {
+    final normalized = value.trim();
+    if (normalized.isEmpty) {
+      return true;
+    }
+    return RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(normalized);
+  }
+
+  bool _isValidCpfDigits(String value) {
+    if (value.length != 11) {
+      return false;
+    }
+    if (RegExp(r'^(\d)\1{10}$').hasMatch(value)) {
+      return false;
+    }
+
+    var sum = 0;
+    for (var i = 0; i < 9; i++) {
+      sum += int.parse(value[i]) * (10 - i);
+    }
+    var remainder = sum % 11;
+    final digit1 = remainder < 2 ? 0 : 11 - remainder;
+    if (digit1 != int.parse(value[9])) {
+      return false;
+    }
+
+    sum = 0;
+    for (var i = 0; i < 10; i++) {
+      sum += int.parse(value[i]) * (11 - i);
+    }
+    remainder = sum % 11;
+    final digit2 = remainder < 2 ? 0 : 11 - remainder;
+    return digit2 == int.parse(value[10]);
+  }
+
+  bool _isValidCnpjDigits(String value) {
+    if (value.length != 14) {
+      return false;
+    }
+    if (RegExp(r'^(\d)\1{13}$').hasMatch(value)) {
+      return false;
+    }
+
+    const weightsFirst = <int>[5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+    const weightsSecond = <int>[6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+
+    var sum = 0;
+    for (var i = 0; i < 12; i++) {
+      sum += int.parse(value[i]) * weightsFirst[i];
+    }
+    var remainder = sum % 11;
+    final digit1 = remainder < 2 ? 0 : 11 - remainder;
+    if (digit1 != int.parse(value[12])) {
+      return false;
+    }
+
+    sum = 0;
+    for (var i = 0; i < 13; i++) {
+      sum += int.parse(value[i]) * weightsSecond[i];
+    }
+    remainder = sum % 11;
+    final digit2 = remainder < 2 ? 0 : 11 - remainder;
+    return digit2 == int.parse(value[13]);
+  }
+
+  String _formatCpfCnpjMasked(String? rawValue) {
+    final digits = _digitsOnly(rawValue ?? '');
+    final limited = digits.length > 14 ? digits.substring(0, 14) : digits;
+
+    if (limited.length <= 11) {
+      final buffer = StringBuffer();
+      for (var i = 0; i < limited.length; i++) {
+        if (i == 3 || i == 6) {
+          buffer.write('.');
+        }
+        if (i == 9) {
+          buffer.write('-');
+        }
+        buffer.write(limited[i]);
+      }
+      return buffer.toString();
+    }
+
+    final buffer = StringBuffer();
+    for (var i = 0; i < limited.length; i++) {
+      if (i == 2 || i == 5) {
+        buffer.write('.');
+      }
+      if (i == 8) {
+        buffer.write('/');
+      }
+      if (i == 12) {
+        buffer.write('-');
+      }
+      buffer.write(limited[i]);
+    }
+    return buffer.toString();
+  }
+
+  String _formatCepMasked(String? rawValue) {
+    final digits = _digitsOnly(rawValue ?? '');
+    final limited = digits.length > 8 ? digits.substring(0, 8) : digits;
+    if (limited.length <= 5) {
+      return limited;
+    }
+    return '${limited.substring(0, 5)}-${limited.substring(5)}';
+  }
+
+  String _formatPhoneMasked(String? rawValue) {
+    final digits = _digitsOnly(rawValue ?? '');
+    final limited = digits.length > 11 ? digits.substring(0, 11) : digits;
+
+    if (limited.isEmpty) {
+      return '';
+    }
+
+    if (limited.length <= 2) {
+      return '(${limited.substring(0, limited.length)}';
+    }
+
+    final ddd = limited.substring(0, 2);
+    final rest = limited.substring(2);
+    if (rest.isEmpty) {
+      return '($ddd) ';
+    }
+
+    if (limited.length <= 10) {
+      if (rest.length <= 4) {
+        return '($ddd) $rest';
+      }
+      return '($ddd) ${rest.substring(0, 4)}-${rest.substring(4)}';
+    }
+
+    if (rest.length <= 5) {
+      return '($ddd) $rest';
+    }
+    return '($ddd) ${rest.substring(0, 5)}-${rest.substring(5)}';
   }
 
   Future<bool> _hasDocumentoDuplicado(String documento) async {
@@ -430,6 +574,7 @@ class _ClientePreCadastroPageState extends State<ClientePreCadastroPage> {
       required String label,
       TextInputType? keyboardType,
       FormFieldValidator<String>? validator,
+      List<TextInputFormatter>? inputFormatters,
       int maxLines = 1,
       bool alignLabelWithHint = false,
     }) {
@@ -439,6 +584,7 @@ class _ClientePreCadastroPageState extends State<ClientePreCadastroPage> {
           controller: controller,
           keyboardType: keyboardType,
           validator: validator,
+          inputFormatters: inputFormatters,
           maxLines: maxLines,
           decoration: formInputDecoration().copyWith(
             alignLabelWithHint: alignLabelWithHint,
@@ -558,10 +704,27 @@ class _ClientePreCadastroPageState extends State<ClientePreCadastroPage> {
                             textField(
                               controller: _documentoController,
                               label: 'CPF / CNPJ *',
+                              keyboardType: TextInputType.number,
+                              inputFormatters: <TextInputFormatter>[
+                                FilteringTextInputFormatter.digitsOnly,
+                                _CpfCnpjInputFormatter(_formatCpfCnpjMasked),
+                              ],
                               validator: (value) {
-                                if ((value ?? '').trim().isEmpty) {
+                                final digits = _digitsOnly(value ?? '');
+                                if (digits.isEmpty) {
                                   return 'Informe o documento.';
                                 }
+
+                                if (_tipoPessoa == 'pf') {
+                                  if (!_isValidCpfDigits(digits)) {
+                                    return 'CPF inválido.';
+                                  }
+                                } else {
+                                  if (!_isValidCnpjDigits(digits)) {
+                                    return 'CNPJ inválido.';
+                                  }
+                                }
+
                                 return null;
                               },
                             ),
@@ -572,24 +735,64 @@ class _ClientePreCadastroPageState extends State<ClientePreCadastroPage> {
                               controller: _emailController,
                               label: 'E-mail',
                               keyboardType: TextInputType.emailAddress,
+                              validator: (value) {
+                                if (_isValidEmailBasic(value ?? '')) {
+                                  return null;
+                                }
+                                return 'E-mail inválido.';
+                              },
                             ),
                             const SizedBox(height: 12),
                             textField(
                               controller: _emailFinanceiroController,
                               label: 'E-mail financeiro',
                               keyboardType: TextInputType.emailAddress,
+                              validator: (value) {
+                                if (_isValidEmailBasic(value ?? '')) {
+                                  return null;
+                                }
+                                return 'E-mail financeiro inválido.';
+                              },
                             ),
                             const SizedBox(height: 12),
                             textField(
                               controller: _celularController,
                               label: 'Celular',
                               keyboardType: TextInputType.phone,
+                              inputFormatters: <TextInputFormatter>[
+                                FilteringTextInputFormatter.digitsOnly,
+                                _PhoneInputFormatter(_formatPhoneMasked),
+                              ],
+                              validator: (value) {
+                                final digits = _digitsOnly(value ?? '');
+                                if (digits.isEmpty) {
+                                  return null;
+                                }
+                                if (digits.length < 10 || digits.length > 11) {
+                                  return 'Celular deve ter DDD + número.';
+                                }
+                                return null;
+                              },
                             ),
                             const SizedBox(height: 12),
                             textField(
                               controller: _telefoneController,
                               label: 'Telefone',
                               keyboardType: TextInputType.phone,
+                              inputFormatters: <TextInputFormatter>[
+                                FilteringTextInputFormatter.digitsOnly,
+                                _PhoneInputFormatter(_formatPhoneMasked),
+                              ],
+                              validator: (value) {
+                                final digits = _digitsOnly(value ?? '');
+                                if (digits.isEmpty) {
+                                  return null;
+                                }
+                                if (digits.length < 10 || digits.length > 11) {
+                                  return 'Telefone deve ter DDD + número.';
+                                }
+                                return null;
+                              },
                             ),
                             const SizedBox(height: 18),
                             sectionTitle('Endereco'),
@@ -602,6 +805,20 @@ class _ClientePreCadastroPageState extends State<ClientePreCadastroPage> {
                                     controller: _cepController,
                                     label: 'CEP',
                                     keyboardType: TextInputType.number,
+                                    inputFormatters: <TextInputFormatter>[
+                                      FilteringTextInputFormatter.digitsOnly,
+                                      _CepInputFormatter(_formatCepMasked),
+                                    ],
+                                    validator: (value) {
+                                      final digits = _digitsOnly(value ?? '');
+                                      if (digits.isEmpty) {
+                                        return null;
+                                      }
+                                      if (digits.length != 8) {
+                                        return 'CEP deve ter 8 dígitos.';
+                                      }
+                                      return null;
+                                    },
                                   ),
                                 ),
                                 const SizedBox(width: 12),
@@ -769,6 +986,60 @@ class _ClientePreCadastroPageState extends State<ClientePreCadastroPage> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _CpfCnpjInputFormatter extends TextInputFormatter {
+  _CpfCnpjInputFormatter(this._mask);
+
+  final String Function(String?) _mask;
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final masked = _mask(newValue.text);
+    return TextEditingValue(
+      text: masked,
+      selection: TextSelection.collapsed(offset: masked.length),
+    );
+  }
+}
+
+class _CepInputFormatter extends TextInputFormatter {
+  _CepInputFormatter(this._mask);
+
+  final String Function(String?) _mask;
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final masked = _mask(newValue.text);
+    return TextEditingValue(
+      text: masked,
+      selection: TextSelection.collapsed(offset: masked.length),
+    );
+  }
+}
+
+class _PhoneInputFormatter extends TextInputFormatter {
+  _PhoneInputFormatter(this._mask);
+
+  final String Function(String?) _mask;
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final masked = _mask(newValue.text);
+    return TextEditingValue(
+      text: masked,
+      selection: TextSelection.collapsed(offset: masked.length),
     );
   }
 }

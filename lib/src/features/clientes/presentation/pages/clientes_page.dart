@@ -611,59 +611,99 @@ class _PreCadastroSectionState extends State<_PreCadastroSection> {
       };
     }
 
+    Map<String, String> fallbackFromRole() {
+      final role = widget.identity.role.trim().toLowerCase();
+      switch (role) {
+        case 'owner':
+          return {
+            'ownerId': uid,
+            'gerenteId': '',
+            'representanteId': '',
+            'vendedorId': '',
+          };
+        case 'gerente':
+          return {
+            'ownerId': uid,
+            'gerenteId': uid,
+            'representanteId': '',
+            'vendedorId': '',
+          };
+        case 'representante':
+          return {
+            'ownerId': uid,
+            'gerenteId': uid,
+            'representanteId': uid,
+            'vendedorId': '',
+          };
+        case 'vendedor':
+          return {
+            'ownerId': uid,
+            'gerenteId': uid,
+            'representanteId': uid,
+            'vendedorId': uid,
+          };
+        default:
+          return {
+            'ownerId': uid,
+            'gerenteId': uid,
+            'representanteId': uid,
+            'vendedorId': uid,
+          };
+      }
+    }
+
+    bool hasUsableMembershipScope(Map<String, String> scope) {
+      final role = widget.identity.role.trim().toLowerCase();
+      final ownerId = (scope['ownerId'] ?? '').trim();
+      final gerenteId = (scope['gerenteId'] ?? '').trim();
+      final representanteId = (scope['representanteId'] ?? '').trim();
+      final vendedorId = (scope['vendedorId'] ?? '').trim();
+
+      if (ownerId.isEmpty) {
+        return false;
+      }
+
+      if (role == 'owner' || role == 'platform_admin') {
+        return ownerId == uid;
+      }
+
+      if (role == 'gerente') {
+        return gerenteId.isNotEmpty;
+      }
+
+      if (role == 'representante') {
+        return gerenteId.isNotEmpty && representanteId.isNotEmpty;
+      }
+
+      if (role == 'vendedor') {
+        return gerenteId.isNotEmpty &&
+            representanteId.isNotEmpty &&
+            vendedorId.isNotEmpty;
+      }
+
+      return true;
+    }
+
     try {
       final membership = await TenantMembershipService(FirebaseFirestore.instance)
-          .loadById('${tenantId}_$uid');
+          .loadActiveByTenantAndUid(tenantId: tenantId, uid: uid);
       if (membership != null) {
-        return {
+        final scope = {
           'ownerId': membership.ownerId,
           'gerenteId': membership.gerenteId,
           'representanteId': membership.representanteId,
           'vendedorId': membership.vendedorId,
         };
+
+        if (hasUsableMembershipScope(scope)) {
+          return scope;
+        }
       }
     } catch (_) {
       // Fall back to the current user role-based defaults below.
     }
 
-    final role = widget.identity.role.trim().toLowerCase();
-    switch (role) {
-      case 'owner':
-        return {
-          'ownerId': uid,
-          'gerenteId': '',
-          'representanteId': '',
-          'vendedorId': '',
-        };
-      case 'gerente':
-        return {
-          'ownerId': uid,
-          'gerenteId': uid,
-          'representanteId': '',
-          'vendedorId': '',
-        };
-      case 'representante':
-        return {
-          'ownerId': uid,
-          'gerenteId': uid,
-          'representanteId': uid,
-          'vendedorId': '',
-        };
-      case 'vendedor':
-        return {
-          'ownerId': uid,
-          'gerenteId': uid,
-          'representanteId': uid,
-          'vendedorId': uid,
-        };
-      default:
-        return {
-          'ownerId': uid,
-          'gerenteId': uid,
-          'representanteId': uid,
-          'vendedorId': uid,
-        };
-    }
+    return fallbackFromRole();
   }
 
   /// Converts a pre-cadastro into an official cliente: writes the cliente

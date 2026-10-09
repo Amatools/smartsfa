@@ -61,6 +61,7 @@ class AppShellOfflineSyncCoordinator {
         identity: identity,
         clienteRepository: clienteRepository,
         preCadastroRepository: preCadastroRepository,
+        pedidoRepository: pedidoRepository,
       );
     }
   }
@@ -139,6 +140,7 @@ class AppShellOfflineSyncCoordinator {
     required AppIdentity identity,
     required ClienteRepository clienteRepository,
     required ClientePreCadastroRepository preCadastroRepository,
+    required PedidoRepository pedidoRepository,
   }) async {
     final type = tombstone['type']?.toString();
     final id = tombstone['id']?.toString() ?? '';
@@ -156,6 +158,9 @@ class AppShellOfflineSyncCoordinator {
         await OfflineSyncQueue.clearTombstone(id);
       } else if (type == 'cliente') {
         await clienteRepository.delete(tenantId: tenantId, id: id);
+        await OfflineSyncQueue.clearTombstone(id);
+      } else if (type == 'pedido') {
+        await pedidoRepository.delete(tenantId: tenantId, id: id);
         await OfflineSyncQueue.clearTombstone(id);
       }
     } catch (error, stackTrace) {

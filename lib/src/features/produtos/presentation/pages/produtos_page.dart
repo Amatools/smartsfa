@@ -118,6 +118,14 @@ class _ProdutosPageState extends State<ProdutosPage>
     );
   }
 
+  void _downloadImportModel() {
+    downloadProductImportTemplate(
+      context,
+      identity: widget.identity,
+      repository: widget.repository,
+    );
+  }
+
   void _setErpSyncUpdating(bool isLoading) {
     _updateCatalogStateIfMounted(
       (state) => _pageStateCoordinator.applyErpSyncLoading(
@@ -304,6 +312,7 @@ class _ProdutosPageState extends State<ProdutosPage>
       representedCompanyId: widget.selectedRepresentedCompanyId,
       updatingStatusProductIds: _updatingStatusProductIds,
       onImportExcel: _openImportSheet,
+      onDownloadExcelModel: _downloadImportModel,
       onCreateProduct: _openProductEditor,
       onBrandFilterChanged: _setCatalogBrandFilter,
       onErpSyncChanged: _setErpSyncEnabled,

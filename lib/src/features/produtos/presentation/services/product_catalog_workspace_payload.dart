@@ -24,6 +24,7 @@ class ProductCatalogWorkspacePayload {
     required this.representedCompanyId,
     required this.updatingStatusProductIds,
     required this.onImportExcel,
+    required this.onDownloadExcelModel,
     required this.onCreateProduct,
     required this.onBrandFilterChanged,
     required this.onErpSyncChanged,
@@ -50,6 +51,7 @@ class ProductCatalogWorkspacePayload {
   final String? representedCompanyId;
   final Set<String> updatingStatusProductIds;
   final VoidCallback onImportExcel;
+  final VoidCallback onDownloadExcelModel;
   final VoidCallback onCreateProduct;
   final ValueChanged<String> onBrandFilterChanged;
   final ValueChanged<bool> onErpSyncChanged;

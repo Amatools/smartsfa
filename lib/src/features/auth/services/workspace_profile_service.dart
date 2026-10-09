@@ -25,6 +25,7 @@ class CommercialAdjustmentRule {
     required this.value,
     required this.scope,
     required this.scopeTarget,
+    this.scopeTargets = const <String>[],
   });
 
   final String name;
@@ -33,17 +34,78 @@ class CommercialAdjustmentRule {
   final double value;
   final String scope;
   final String scopeTarget;
+  final List<String> scopeTargets;
 
   Map<String, Object> toMap() {
-    return <String, Object>{
+    final normalizedScopeTargets = <String>[];
+    final seen = <String>{};
+    for (final value in scopeTargets) {
+      final clean = value.trim();
+      if (clean.isEmpty) {
+        continue;
+      }
+      final key = clean.toLowerCase();
+      if (!seen.add(key)) {
+        continue;
+      }
+      normalizedScopeTargets.add(clean);
+    }
+    final normalizedScopeTarget = scopeTarget.trim();
+    final effectiveScopeTarget = normalizedScopeTarget.isNotEmpty
+        ? normalizedScopeTarget
+        : normalizedScopeTargets.join(' | ');
+
+    final map = <String, Object>{
       'name': name,
       'adjustmentType': adjustmentType,
       'valueType': valueType,
       'value': value,
       'scope': scope,
-      'scopeTarget': scopeTarget,
+      'scopeTarget': effectiveScopeTarget,
+    };
+
+    if (normalizedScopeTargets.isNotEmpty) {
+      map['scopeTargets'] = normalizedScopeTargets;
+    }
+
+    return map;
+  }
+}
+
+class CommercialAdjustmentTargetCatalog {
+  const CommercialAdjustmentTargetCatalog({
+    this.brands = const <String>[],
+    this.products = const <String>[],
+  });
+
+  final List<String> brands;
+  final List<String> products;
+}
+
+class OrderDiscountFieldRule {
+  const OrderDiscountFieldRule({
+    required this.label,
+    required this.minPercent,
+    required this.maxPercent,
+  });
+
+  final String label;
+  final double minPercent;
+  final double maxPercent;
+
+  Map<String, Object> toMap() {
+    return <String, Object>{
+      'label': label,
+      'minPercent': minPercent,
+      'maxPercent': maxPercent,
     };
   }
+}
+
+class OrderDiscountPolicy {
+  const OrderDiscountPolicy({this.fields = const <OrderDiscountFieldRule>[]});
+
+  final List<OrderDiscountFieldRule> fields;
 }
 
 class ProductCategoryTaxonomyItem {
@@ -256,6 +318,59 @@ class WorkspaceProfileService {
         });
   }
 
+  Stream<CommercialAdjustmentTargetCatalog>
+  watchCommercialAdjustmentTargetCatalog({
+    required String tenantId,
+    required String? representedCompanyId,
+  }) {
+    final normalizedTenantId = tenantId.trim();
+    if (normalizedTenantId.isEmpty) {
+      return Stream.value(const CommercialAdjustmentTargetCatalog());
+    }
+
+    return _firestore
+        .collection('produtos')
+        .where('tenantId', isEqualTo: normalizedTenantId)
+        .snapshots()
+        .map((snapshot) {
+          final brandsByKey = <String, String>{};
+          final productsByKey = <String, String>{};
+
+          for (final doc in snapshot.docs) {
+            final data = doc.data();
+            if (!_productBelongsToRepresentedScope(
+              data: data,
+              representedCompanyId: representedCompanyId,
+            )) {
+              continue;
+            }
+
+            final brand = (data['marca'] ?? '').toString().trim();
+            if (brand.isNotEmpty) {
+              brandsByKey.putIfAbsent(brand.toLowerCase(), () => brand);
+            }
+
+            final product = _resolveProductTargetLabel(
+              data: data,
+              fallbackId: doc.id,
+            );
+            if (product.isNotEmpty) {
+              productsByKey.putIfAbsent(product.toLowerCase(), () => product);
+            }
+          }
+
+          final brands = brandsByKey.values.toList(growable: false)
+            ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+          final products = productsByKey.values.toList(growable: false)
+            ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+
+          return CommercialAdjustmentTargetCatalog(
+            brands: brands,
+            products: products,
+          );
+        });
+  }
+
   Stream<List<CommercialAdjustmentRule>> watchCommercialAdjustmentRules({
     required String tenantId,
     required String? representedCompanyId,
@@ -291,6 +406,11 @@ class WorkspaceProfileService {
             if (name.isEmpty) {
               continue;
             }
+            final rawScopeTarget = (map['scopeTarget'] ?? '').toString();
+            final scopeTargets = _readScopeTargets(
+              raw: map['scopeTargets'],
+              fallbackScopeTarget: rawScopeTarget,
+            );
             rules.add(
               CommercialAdjustmentRule(
                 name: name,
@@ -299,11 +419,37 @@ class WorkspaceProfileService {
                 valueType: (map['valueType'] ?? 'percent').toString(),
                 value: _toDouble(map['value']),
                 scope: (map['scope'] ?? 'geral').toString(),
-                scopeTarget: (map['scopeTarget'] ?? '').toString(),
+                scopeTarget: rawScopeTarget.trim().isEmpty
+                    ? scopeTargets.join(' | ')
+                    : rawScopeTarget,
+                scopeTargets: scopeTargets,
               ),
             );
           }
           return rules;
+        });
+  }
+
+  Stream<OrderDiscountPolicy> watchOrderDiscountPolicy({
+    required String tenantId,
+    required String? representedCompanyId,
+  }) {
+    final normalizedTenantId = tenantId.trim();
+    if (normalizedTenantId.isEmpty) {
+      return Stream.value(const OrderDiscountPolicy());
+    }
+
+    final scopeKey = _scopeKey(representedCompanyId);
+    return _firestore
+        .collection('tenants')
+        .doc(normalizedTenantId)
+        .snapshots()
+        .map((doc) {
+          final data = doc.data() ?? const <String, dynamic>{};
+          return _readOrderDiscountPolicyForScope(
+            data: data,
+            scopeKey: scopeKey,
+          );
         });
   }
 
@@ -443,7 +589,20 @@ class WorkspaceProfileService {
             valueType: rule.valueType,
             value: rule.value,
             scope: rule.scope,
-            scopeTarget: rule.scopeTarget.trim(),
+            scopeTarget: rule.scope == 'geral'
+                ? ''
+                : _normalizeScopeTargets(
+                    rule.scopeTargets.isEmpty
+                        ? _splitScopeTargets(rule.scopeTarget)
+                        : rule.scopeTargets,
+                  ).join(' | '),
+            scopeTargets: rule.scope == 'geral'
+                ? const <String>[]
+                : _normalizeScopeTargets(
+                    rule.scopeTargets.isEmpty
+                        ? _splitScopeTargets(rule.scopeTarget)
+                        : rule.scopeTargets,
+                  ),
           ),
         )
         .map((rule) => rule.toMap())
@@ -452,6 +611,51 @@ class WorkspaceProfileService {
 
     await _firestore.collection('tenants').doc(normalizedTenantId).set({
       'representedCommercialAdjustments': {scopeKey: normalizedRules},
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
+  Future<void> updateOrderDiscountPolicy({
+    required String tenantId,
+    required String? representedCompanyId,
+    required OrderDiscountPolicy policy,
+  }) async {
+    final normalizedTenantId = tenantId.trim();
+    if (normalizedTenantId.isEmpty) {
+      throw StateError('Dados invalidos para salvar politica de descontos.');
+    }
+
+    final scopeKey = _scopeKey(representedCompanyId);
+    final normalizedFields = <OrderDiscountFieldRule>[];
+    for (var index = 0; index < policy.fields.length; index++) {
+      final field = policy.fields[index];
+      final label = field.label.trim().isEmpty
+          ? 'Desconto ${index + 1}'
+          : field.label.trim();
+      var minPercent = field.minPercent;
+      var maxPercent = field.maxPercent;
+      if (minPercent > maxPercent) {
+        final swap = minPercent;
+        minPercent = maxPercent;
+        maxPercent = swap;
+      }
+      normalizedFields.add(
+        OrderDiscountFieldRule(
+          label: label,
+          minPercent: minPercent,
+          maxPercent: maxPercent,
+        ),
+      );
+    }
+
+    await _firestore.collection('tenants').doc(normalizedTenantId).set({
+      'representedOrderDiscountPolicy': {
+        scopeKey: {
+          'fields': normalizedFields
+              .map((item) => item.toMap())
+              .toList(growable: false),
+        },
+      },
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
   }
@@ -1077,6 +1281,135 @@ class WorkspaceProfileService {
     }
 
     return 0;
+  }
+
+  List<String> _readScopeTargets({
+    required Object? raw,
+    required String fallbackScopeTarget,
+  }) {
+    if (raw is List) {
+      return _normalizeScopeTargets(
+        raw.map((value) => value?.toString() ?? ''),
+      );
+    }
+    return _splitScopeTargets(fallbackScopeTarget);
+  }
+
+  List<String> _splitScopeTargets(String raw) {
+    return _normalizeScopeTargets(raw.split(RegExp(r'[,;|\n]+')));
+  }
+
+  bool _productBelongsToRepresentedScope({
+    required Map<String, dynamic> data,
+    required String? representedCompanyId,
+  }) {
+    final selectedScope = _normalizeScopeValue(representedCompanyId);
+    if (selectedScope.isEmpty) {
+      return true;
+    }
+
+    final mappedScope = _normalizeScopeValue(
+      data['representedCompanyId'] ?? data['representadaId'] ?? data['companyId'],
+    );
+
+    if (mappedScope.isEmpty) {
+      return true;
+    }
+
+    return mappedScope == selectedScope;
+  }
+
+  String _normalizeScopeValue(Object? value) {
+    return value?.toString().trim().toLowerCase() ?? '';
+  }
+
+  String _resolveProductTargetLabel({
+    required Map<String, dynamic> data,
+    required String fallbackId,
+  }) {
+    final description = (data['descricao'] ?? data['nome'] ?? '')
+        .toString()
+        .trim();
+    final code = (data['codigoInterno'] ?? data['codigo'] ?? '')
+        .toString()
+        .trim();
+
+    if (description.isNotEmpty && code.isNotEmpty) {
+      return '$code - $description';
+    }
+    if (description.isNotEmpty) {
+      return description;
+    }
+    if (code.isNotEmpty) {
+      return code;
+    }
+
+    return fallbackId.trim();
+  }
+
+  List<String> _normalizeScopeTargets(Iterable<String> values) {
+    final normalized = <String>[];
+    final seen = <String>{};
+    for (final value in values) {
+      final clean = value.trim();
+      if (clean.isEmpty) {
+        continue;
+      }
+      final key = clean.toLowerCase();
+      if (!seen.add(key)) {
+        continue;
+      }
+      normalized.add(clean);
+    }
+    return normalized;
+  }
+
+  OrderDiscountPolicy _readOrderDiscountPolicyForScope({
+    required Map<String, dynamic> data,
+    required String scopeKey,
+  }) {
+    final root = data['representedOrderDiscountPolicy'];
+    if (root is! Map) {
+      return const OrderDiscountPolicy();
+    }
+
+    final scoped = root[scopeKey] ?? root['__tenant__'];
+    if (scoped is! Map) {
+      return const OrderDiscountPolicy();
+    }
+
+    final rawFields = scoped['fields'];
+    if (rawFields is! List) {
+      return const OrderDiscountPolicy();
+    }
+
+    final fields = <OrderDiscountFieldRule>[];
+    for (var index = 0; index < rawFields.length; index++) {
+      final item = rawFields[index];
+      if (item is! Map) {
+        continue;
+      }
+      final map = item.cast<Object?, Object?>();
+      final label = (map['label'] ?? '').toString().trim().isEmpty
+          ? 'Desconto ${index + 1}'
+          : (map['label'] ?? '').toString().trim();
+      var minPercent = _toDouble(map['minPercent']);
+      var maxPercent = _toDouble(map['maxPercent']);
+      if (minPercent > maxPercent) {
+        final swap = minPercent;
+        minPercent = maxPercent;
+        maxPercent = swap;
+      }
+      fields.add(
+        OrderDiscountFieldRule(
+          label: label,
+          minPercent: minPercent,
+          maxPercent: maxPercent,
+        ),
+      );
+    }
+
+    return OrderDiscountPolicy(fields: fields);
   }
 
   String _scopeKey(String? representedCompanyId) {

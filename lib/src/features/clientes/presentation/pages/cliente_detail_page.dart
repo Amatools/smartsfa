@@ -26,6 +26,11 @@ class ClienteDetailPage extends StatefulWidget {
 }
 
 class _ClienteDetailPageState extends State<ClienteDetailPage> {
+  static const Color _formChromeColor = Color(0xFFF5F6F8);
+  static const Color _formBodyColor = Colors.white;
+  static const Color _formBorderColor = Color(0xFFE3E6EA);
+  static const Color _formFocusedBorderColor = Color(0xFFD0D6DE);
+
   late final TextEditingController _nomeController;
   late final TextEditingController _nomeFantasiaController;
   late final TextEditingController _documentoController;
@@ -46,7 +51,6 @@ class _ClienteDetailPageState extends State<ClienteDetailPage> {
   late final TextEditingController _observacoesController;
 
   late String _tipoPessoa;
-  late String _canal;
   late Cliente _cliente;
   bool _isEditing = false;
   bool _saving = false;
@@ -102,7 +106,6 @@ class _ClienteDetailPageState extends State<ClienteDetailPage> {
     );
     _observacoesController = TextEditingController(text: cliente.observacoes);
     _tipoPessoa = cliente.tipoPessoa;
-    _canal = cliente.canal;
   }
 
   @override
@@ -149,7 +152,7 @@ class _ClienteDetailPageState extends State<ClienteDetailPage> {
         nomeFantasia: _nomeFantasiaController.text.trim(),
         email: _emailController.text.trim(),
         emailFinanceiro: _emailFinanceiroController.text.trim(),
-        canal: _canal,
+        canal: _cliente.canal,
         celular: _celularController.text.trim(),
         telefone: _telefoneController.text.trim(),
         cep: _cepController.text.trim(),
@@ -322,35 +325,67 @@ class _ClienteDetailPageState extends State<ClienteDetailPage> {
     Navigator.of(context).pop();
   }
 
-  Widget _buildReadOnlySection(String title, Map<String, String> fields) {
+  InputDecoration _formInputDecoration() {
+    return InputDecoration(
+      isDense: true,
+      filled: true,
+      fillColor: _formBodyColor,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: _formBorderColor, width: 1),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: _formBorderColor, width: 1),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: _formFocusedBorderColor, width: 1),
+      ),
+    );
+  }
+
+  Widget _buildLabeledField({
+    required BuildContext context,
+    required String label,
+    required Widget child,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: Theme.of(context).textTheme.bodySmall),
+        const SizedBox(height: 6),
+        child,
+      ],
+    );
+  }
+
+  Widget _buildSectionContainer({
+    required BuildContext context,
+    required String title,
+    required Widget child,
+  }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
-      child: Card(
+      child: Container(
+        decoration: BoxDecoration(
+          color: _formBodyColor,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: _formBorderColor, width: 1),
+        ),
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(title, style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 12),
-              ...fields.entries.map(
-                (entry) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        entry.key,
-                        style: Theme.of(context).textTheme.labelSmall,
-                      ),
-                      Text(
-                        entry.value.isEmpty ? '—' : entry.value,
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                    ],
-                  ),
-                ),
+              Text(
+                title,
+                style: Theme.of(context).textTheme.titleSmall
+                    ?.copyWith(fontWeight: FontWeight.w600),
               ),
+              const SizedBox(height: 12),
+              child,
             ],
           ),
         ),
@@ -358,21 +393,77 @@ class _ClienteDetailPageState extends State<ClienteDetailPage> {
     );
   }
 
-  Widget _buildFormSection(String title, List<Widget> fields) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 12),
-              ...fields,
-            ],
+  Widget _buildResponsiveFieldGrid(List<Widget> fields) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const spacing = 14.0;
+        final hasTwoColumns = constraints.maxWidth >= 920;
+        final itemWidth = hasTwoColumns
+            ? (constraints.maxWidth - spacing) / 2
+            : constraints.maxWidth;
+
+        return Wrap(
+          spacing: spacing,
+          runSpacing: spacing,
+          children: [
+            for (final field in fields)
+              SizedBox(width: itemWidth, child: field),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildReadOnlyField(BuildContext context, String label, String value) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF9FAFB),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: _formBorderColor, width: 1),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: Theme.of(context).textTheme.labelSmall),
+          const SizedBox(height: 4),
+          Text(
+            value.isEmpty ? '—' : value,
+            style: Theme.of(context).textTheme.bodyMedium,
           ),
-        ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReadOnlySection(
+    BuildContext context,
+    String title,
+    Map<String, String> fields,
+  ) {
+    return _buildSectionContainer(
+      context: context,
+      title: title,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          const spacing = 12.0;
+          final hasTwoColumns = constraints.maxWidth >= 900;
+          final itemWidth = hasTwoColumns
+              ? (constraints.maxWidth - spacing) / 2
+              : constraints.maxWidth;
+
+          return Wrap(
+            spacing: spacing,
+            runSpacing: spacing,
+            children: [
+              for (final entry in fields.entries)
+                SizedBox(
+                  width: itemWidth,
+                  child: _buildReadOnlyField(context, entry.key, entry.value),
+                ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -423,283 +514,444 @@ class _ClienteDetailPageState extends State<ClienteDetailPage> {
                 ),
               ],
             ),
-          if (!_isEditing && _isErpManaged)
-            const Padding(
-              padding: EdgeInsets.only(right: 16),
-              child: Tooltip(
-                message: 'Gerenciado pelo ERP: exclusão/inativação devem ser feitas no sistema de origem.',
-                child: Icon(Icons.lock_outline),
-              ),
-            ),
         ],
       ),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: _isEditing
-              ? Form(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildFormSection('Identificação', [
-                        TextFormField(
-                          controller: _nomeController,
-                          decoration: const InputDecoration(
-                            labelText: 'Nome / razão social',
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          controller: _nomeFantasiaController,
-                          decoration: const InputDecoration(
-                            labelText: 'Nome fantasia',
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        DropdownButtonFormField<String>(
-                          initialValue: _tipoPessoa,
-                          items: const [
-                            DropdownMenuItem(
-                              value: 'pj',
-                              child: Text('Pessoa jurídica'),
-                            ),
-                            DropdownMenuItem(
-                              value: 'pf',
-                              child: Text('Pessoa física'),
-                            ),
-                          ],
-                          onChanged: (value) {
-                            if (value != null) {
-                              setState(() => _tipoPessoa = value);
-                            }
-                          },
-                          decoration: const InputDecoration(
-                            labelText: 'Tipo de pessoa',
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          controller: _documentoController,
-                          decoration: const InputDecoration(
-                            labelText: 'CPF / CNPJ',
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          controller: _inscricaoEstadualController,
-                          decoration: const InputDecoration(
-                            labelText: 'Inscrição estadual',
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          controller: _inscricaoMunicipalController,
-                          decoration: const InputDecoration(
-                            labelText: 'Inscrição municipal',
-                          ),
-                        ),
-                      ]),
-                      _buildFormSection('Contato', [
-                        TextFormField(
-                          controller: _emailController,
-                          decoration: const InputDecoration(
-                            labelText: 'E-mail',
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          controller: _emailFinanceiroController,
-                          decoration: const InputDecoration(
-                            labelText: 'E-mail financeiro',
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          controller: _celularController,
-                          decoration: const InputDecoration(
-                            labelText: 'Celular',
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          controller: _telefoneController,
-                          decoration: const InputDecoration(
-                            labelText: 'Telefone',
-                          ),
-                        ),
-                      ]),
-                      _buildFormSection('Endereço', [
-                        TextFormField(
-                          controller: _cepController,
-                          decoration: const InputDecoration(labelText: 'CEP'),
-                        ),
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          controller: _logradouroController,
-                          decoration: const InputDecoration(
-                            labelText: 'Logradouro',
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          controller: _numeroController,
-                          decoration: const InputDecoration(
-                            labelText: 'Número',
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          controller: _complementoController,
-                          decoration: const InputDecoration(
-                            labelText: 'Complemento',
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          controller: _bairroController,
-                          decoration: const InputDecoration(
-                            labelText: 'Bairro',
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          controller: _cidadeController,
-                          decoration: const InputDecoration(
-                            labelText: 'Cidade',
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        DropdownButtonFormField<String>(
-                          key: ValueKey<String>(_estadoController.text),
-                          initialValue: brazilStateOrNull(
-                            _estadoController.text,
-                          ),
-                          items: brazilStates
-                              .map(
-                                (uf) => DropdownMenuItem<String>(
-                                  value: uf,
-                                  child: Text(uf),
-                                ),
-                              )
-                              .toList(growable: false),
-                          onChanged: (value) {
-                            _estadoController.text = (value ?? '').trim();
-                          },
-                          decoration: const InputDecoration(labelText: 'UF'),
-                        ),
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          controller: _paisController,
-                          decoration: const InputDecoration(labelText: 'País'),
-                        ),
-                      ]),
-                      _buildFormSection('Cadastro', [
-                        DropdownButtonFormField<String>(
-                          initialValue: _canal,
-                          items: const [
-                            DropdownMenuItem(
-                              value: 'vendedor',
-                              child: Text('Vendedor'),
-                            ),
-                            DropdownMenuItem(
-                              value: 'representante',
-                              child: Text('Representante'),
-                            ),
-                            DropdownMenuItem(value: 'erp', child: Text('ERP')),
-                          ],
-                          onChanged: (value) {
-                            if (value != null) {
-                              setState(() => _canal = value);
-                            }
-                          },
-                          decoration: const InputDecoration(labelText: 'Canal'),
-                        ),
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          controller: _observacoesController,
-                          minLines: 3,
-                          maxLines: 5,
-                          decoration: const InputDecoration(
-                            labelText: 'Observações',
-                          ),
-                        ),
-                      ]),
-                      const SizedBox(height: 12),
-                      SizedBox(
-                        width: double.infinity,
-                        child: FilledButton.icon(
-                          onPressed: _saving ? null : _save,
-                          icon: _saving
-                              ? const SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : const Icon(Icons.save_outlined),
-                          label: Text(
-                            _saving ? 'Salvando...' : 'Salvar alterações',
-                          ),
-                        ),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final maxContentWidth = constraints.maxWidth >= 1460
+                ? 1280.0
+                : 1160.0;
+
+            return SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: maxContentWidth),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: _formBodyColor,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: _formBorderColor, width: 1),
                       ),
-                    ],
-                  ),
-                )
-              : Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        _StatusChip(
-                          label: cliente.status.label,
-                          color: Colors.blueGrey.shade100,
-                        ),
-                        _StatusChip(
-                          label: cliente.origemCadastro.label,
-                          color: Colors.green.shade100,
-                        ),
-                      ],
+                      clipBehavior: Clip.antiAlias,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Container(
+                            color: _formChromeColor,
+                            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  _isEditing
+                                      ? 'Editar cadastro do cliente'
+                                      : 'Dados do cliente',
+                                  style: Theme.of(context).textTheme.titleMedium
+                                      ?.copyWith(fontWeight: FontWeight.w600),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Visualização e manutenção do cadastro comercial.',
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                              ],
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+                            child: _isEditing
+                                ? Form(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.stretch,
+                                      children: [
+                                        _buildSectionContainer(
+                                          context: context,
+                                          title: 'Identificação',
+                                          child: _buildResponsiveFieldGrid([
+                                            _buildLabeledField(
+                                              context: context,
+                                              label: 'Nome / razão social',
+                                              child: TextFormField(
+                                                controller: _nomeController,
+                                                decoration:
+                                                    _formInputDecoration(),
+                                              ),
+                                            ),
+                                            _buildLabeledField(
+                                              context: context,
+                                              label: 'Nome fantasia',
+                                              child: TextFormField(
+                                                controller:
+                                                    _nomeFantasiaController,
+                                                decoration:
+                                                    _formInputDecoration(),
+                                              ),
+                                            ),
+                                            _buildLabeledField(
+                                              context: context,
+                                              label: 'Tipo de pessoa',
+                                              child:
+                                                  DropdownButtonFormField<
+                                                    String
+                                                  >(
+                                                    initialValue: _tipoPessoa,
+                                                    items: const [
+                                                      DropdownMenuItem(
+                                                        value: 'pj',
+                                                        child: Text(
+                                                          'Pessoa jurídica',
+                                                        ),
+                                                      ),
+                                                      DropdownMenuItem(
+                                                        value: 'pf',
+                                                        child: Text(
+                                                          'Pessoa física',
+                                                        ),
+                                                      ),
+                                                    ],
+                                                    onChanged: (value) {
+                                                      if (value != null) {
+                                                        setState(
+                                                          () => _tipoPessoa =
+                                                              value,
+                                                        );
+                                                      }
+                                                    },
+                                                    decoration:
+                                                        _formInputDecoration(),
+                                                  ),
+                                            ),
+                                            _buildLabeledField(
+                                              context: context,
+                                              label: 'CPF / CNPJ',
+                                              child: TextFormField(
+                                                controller:
+                                                    _documentoController,
+                                                decoration:
+                                                    _formInputDecoration(),
+                                              ),
+                                            ),
+                                            _buildLabeledField(
+                                              context: context,
+                                              label: 'Inscrição estadual',
+                                              child: TextFormField(
+                                                controller:
+                                                    _inscricaoEstadualController,
+                                                decoration:
+                                                    _formInputDecoration(),
+                                              ),
+                                            ),
+                                            _buildLabeledField(
+                                              context: context,
+                                              label: 'Inscrição municipal',
+                                              child: TextFormField(
+                                                controller:
+                                                    _inscricaoMunicipalController,
+                                                decoration:
+                                                    _formInputDecoration(),
+                                              ),
+                                            ),
+                                          ]),
+                                        ),
+                                        _buildSectionContainer(
+                                          context: context,
+                                          title: 'Contato',
+                                          child: _buildResponsiveFieldGrid([
+                                            _buildLabeledField(
+                                              context: context,
+                                              label: 'E-mail',
+                                              child: TextFormField(
+                                                controller: _emailController,
+                                                decoration:
+                                                    _formInputDecoration(),
+                                              ),
+                                            ),
+                                            _buildLabeledField(
+                                              context: context,
+                                              label: 'E-mail financeiro',
+                                              child: TextFormField(
+                                                controller:
+                                                    _emailFinanceiroController,
+                                                decoration:
+                                                    _formInputDecoration(),
+                                              ),
+                                            ),
+                                            _buildLabeledField(
+                                              context: context,
+                                              label: 'Celular',
+                                              child: TextFormField(
+                                                controller: _celularController,
+                                                decoration:
+                                                    _formInputDecoration(),
+                                              ),
+                                            ),
+                                            _buildLabeledField(
+                                              context: context,
+                                              label: 'Telefone',
+                                              child: TextFormField(
+                                                controller: _telefoneController,
+                                                decoration:
+                                                    _formInputDecoration(),
+                                              ),
+                                            ),
+                                          ]),
+                                        ),
+                                        _buildSectionContainer(
+                                          context: context,
+                                          title: 'Endereço',
+                                          child: _buildResponsiveFieldGrid([
+                                            _buildLabeledField(
+                                              context: context,
+                                              label: 'CEP',
+                                              child: TextFormField(
+                                                controller: _cepController,
+                                                decoration:
+                                                    _formInputDecoration(),
+                                              ),
+                                            ),
+                                            _buildLabeledField(
+                                              context: context,
+                                              label: 'Logradouro',
+                                              child: TextFormField(
+                                                controller:
+                                                    _logradouroController,
+                                                decoration:
+                                                    _formInputDecoration(),
+                                              ),
+                                            ),
+                                            _buildLabeledField(
+                                              context: context,
+                                              label: 'Número',
+                                              child: TextFormField(
+                                                controller: _numeroController,
+                                                decoration:
+                                                    _formInputDecoration(),
+                                              ),
+                                            ),
+                                            _buildLabeledField(
+                                              context: context,
+                                              label: 'Complemento',
+                                              child: TextFormField(
+                                                controller:
+                                                    _complementoController,
+                                                decoration:
+                                                    _formInputDecoration(),
+                                              ),
+                                            ),
+                                            _buildLabeledField(
+                                              context: context,
+                                              label: 'Bairro',
+                                              child: TextFormField(
+                                                controller: _bairroController,
+                                                decoration:
+                                                    _formInputDecoration(),
+                                              ),
+                                            ),
+                                            _buildLabeledField(
+                                              context: context,
+                                              label: 'Cidade',
+                                              child: TextFormField(
+                                                controller: _cidadeController,
+                                                decoration:
+                                                    _formInputDecoration(),
+                                              ),
+                                            ),
+                                            _buildLabeledField(
+                                              context: context,
+                                              label: 'UF',
+                                              child:
+                                                  DropdownButtonFormField<
+                                                    String
+                                                  >(
+                                                    key: ValueKey<String>(
+                                                      _estadoController.text,
+                                                    ),
+                                                    initialValue:
+                                                        brazilStateOrNull(
+                                                          _estadoController
+                                                              .text,
+                                                        ),
+                                                    items: brazilStates
+                                                        .map(
+                                                          (uf) =>
+                                                              DropdownMenuItem<
+                                                                String
+                                                              >(
+                                                                value: uf,
+                                                                child: Text(uf),
+                                                              ),
+                                                        )
+                                                        .toList(
+                                                          growable: false,
+                                                        ),
+                                                    onChanged: (value) {
+                                                      _estadoController.text =
+                                                          (value ?? '').trim();
+                                                    },
+                                                    decoration:
+                                                        _formInputDecoration(),
+                                                  ),
+                                            ),
+                                            _buildLabeledField(
+                                              context: context,
+                                              label: 'País',
+                                              child: TextFormField(
+                                                controller: _paisController,
+                                                decoration:
+                                                    _formInputDecoration(),
+                                              ),
+                                            ),
+                                          ]),
+                                        ),
+                                        _buildSectionContainer(
+                                          context: context,
+                                          title: 'Cadastro',
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.stretch,
+                                            children: [
+                                              _buildReadOnlyField(
+                                                context,
+                                                'Canal (origem do cadastro)',
+                                                _cliente.canal,
+                                              ),
+                                              const SizedBox(height: 14),
+                                              _buildLabeledField(
+                                                context: context,
+                                                label: 'Observações',
+                                                child: TextFormField(
+                                                  controller:
+                                                      _observacoesController,
+                                                  minLines: 3,
+                                                  maxLines: 5,
+                                                  decoration:
+                                                      _formInputDecoration(),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        const SizedBox(height: 12),
+                                        SizedBox(
+                                          width: double.infinity,
+                                          child: FilledButton.icon(
+                                            onPressed: _saving ? null : _save,
+                                            icon: _saving
+                                                ? const SizedBox(
+                                                    width: 16,
+                                                    height: 16,
+                                                    child:
+                                                        CircularProgressIndicator(
+                                                          strokeWidth: 2,
+                                                        ),
+                                                  )
+                                                : const Icon(
+                                                    Icons.save_outlined,
+                                                  ),
+                                            label: Text(
+                                              _saving
+                                                  ? 'Salvando...'
+                                                  : 'Salvar alterações',
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  )
+                                : Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      Wrap(
+                                        spacing: 8,
+                                        runSpacing: 8,
+                                        children: [
+                                          _StatusChip(
+                                            label: cliente.status.label,
+                                            color: Colors.blueGrey.shade100,
+                                          ),
+                                          _StatusChip(
+                                            label: cliente.origemCadastro.label,
+                                            color: Colors.green.shade100,
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 18),
+                                      _buildReadOnlySection(
+                                        context,
+                                        'Identificação',
+                                        {
+                                          'Nome / razão social': cliente.nome,
+                                          'Nome fantasia': cliente.nomeFantasia,
+                                          'Tipo de pessoa':
+                                              cliente.tipoPessoa == 'pf'
+                                              ? 'Pessoa física'
+                                              : 'Pessoa jurídica',
+                                          'CPF / CNPJ': cliente.documento,
+                                          'Inscrição estadual':
+                                              cliente.inscricaoEstadual,
+                                          'Inscrição municipal':
+                                              cliente.inscricaoMunicipal,
+                                        },
+                                      ),
+                                      _buildReadOnlySection(
+                                        context,
+                                        'Contato',
+                                        {
+                                          'E-mail': cliente.email,
+                                          'E-mail financeiro':
+                                              cliente.emailFinanceiro,
+                                          'Celular': cliente.celular,
+                                          'Telefone': cliente.telefone,
+                                        },
+                                      ),
+                                      _buildReadOnlySection(
+                                        context,
+                                        'Endereço',
+                                        {
+                                          'CEP': cliente.cep,
+                                          'Logradouro': cliente.logradouro,
+                                          'Número': cliente.numero,
+                                          'Complemento': cliente.complemento,
+                                          'Bairro': cliente.bairro,
+                                          'Cidade': cliente.cidade,
+                                          'Estado': cliente.estado,
+                                          'País': cliente.pais,
+                                        },
+                                      ),
+                                      _buildReadOnlySection(
+                                        context,
+                                        'Cadastro',
+                                        {
+                                          'Canal': cliente.canal,
+                                          'Origem do cadastro':
+                                              cliente.origemCadastro.label,
+                                          'Status': cliente.status.label,
+                                          'Observações': cliente.observacoes,
+                                          'Criado em': _formatDate(
+                                            cliente.createdAt,
+                                          ),
+                                          'Atualizado em': _formatDate(
+                                            cliente.updatedAt,
+                                          ),
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                          ),
+                        ],
+                      ),
                     ),
-                    const SizedBox(height: 20),
-                    _buildReadOnlySection('Identificação', {
-                      'Nome / razão social': cliente.nome,
-                      'Nome fantasia': cliente.nomeFantasia,
-                      'Tipo de pessoa': cliente.tipoPessoa == 'pf'
-                          ? 'Pessoa física'
-                          : 'Pessoa jurídica',
-                      'CPF / CNPJ': cliente.documento,
-                      'Inscrição estadual': cliente.inscricaoEstadual,
-                      'Inscrição municipal': cliente.inscricaoMunicipal,
-                    }),
-                    _buildReadOnlySection('Contato', {
-                      'E-mail': cliente.email,
-                      'E-mail financeiro': cliente.emailFinanceiro,
-                      'Celular': cliente.celular,
-                      'Telefone': cliente.telefone,
-                    }),
-                    _buildReadOnlySection('Endereço', {
-                      'CEP': cliente.cep,
-                      'Logradouro': cliente.logradouro,
-                      'Número': cliente.numero,
-                      'Complemento': cliente.complemento,
-                      'Bairro': cliente.bairro,
-                      'Cidade': cliente.cidade,
-                      'Estado': cliente.estado,
-                      'País': cliente.pais,
-                    }),
-                    _buildReadOnlySection('Cadastro', {
-                      'Canal': cliente.canal,
-                      'Origem do cadastro': cliente.origemCadastro.label,
-                      'Status': cliente.status.label,
-                      'Observações': cliente.observacoes,
-                      'Criado em': _formatDate(cliente.createdAt),
-                      'Atualizado em': _formatDate(cliente.updatedAt),
-                    }),
-                  ],
+                  ),
                 ),
+              ),
+            );
+          },
         ),
       ),
     );
