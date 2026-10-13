@@ -169,8 +169,10 @@ class _ClientesPageState extends State<ClientesPage> {
       try {
         if (type == 'cliente_pre_cadastro' &&
             widget.preCadastroRepository != null) {
-          await widget.preCadastroRepository!
-              .delete(tenantId: tenantId, id: id);
+          await widget.preCadastroRepository!.delete(
+            tenantId: tenantId,
+            id: id,
+          );
           await OfflineSyncQueue.clearTombstone(id);
         } else if (type == 'cliente') {
           await widget.repository.delete(tenantId: tenantId, id: id);
@@ -217,7 +219,7 @@ class _ClientesPageState extends State<ClientesPage> {
         content: Text(
           syncedCount > 0
               ? '$syncedCount registro(s) sincronizado(s) com o Firebase.'
-                  '${failedCount > 0 ? ' $failedCount continuam pendentes.' : ''}'
+                    '${failedCount > 0 ? ' $failedCount continuam pendentes.' : ''}'
               : 'Tudo já está sincronizado.',
         ),
       ),
@@ -236,7 +238,9 @@ class _ClientesPageState extends State<ClientesPage> {
         continue;
       }
       seen.add(record.entity.id);
-      merged.add(_ClienteEntry(item: record.entity, isSyncedRemotely: record.synced));
+      merged.add(
+        _ClienteEntry(item: record.entity, isSyncedRemotely: record.synced),
+      );
     }
 
     for (final item in remote) {
@@ -259,7 +263,9 @@ class _ClientesPageState extends State<ClientesPage> {
         final localState = localSnapshot.data ?? _ClienteLocalState.empty;
 
         return StreamBuilder<List<Cliente>>(
-          stream: widget.repository.watchAll(tenantId: widget.identity.tenantId),
+          stream: widget.repository.watchAll(
+            tenantId: widget.identity.tenantId,
+          ),
           initialData: const [],
           builder: (context, snapshot) {
             // The live stream re-emits immediately whenever the backend
@@ -278,8 +284,7 @@ class _ClientesPageState extends State<ClientesPage> {
                   children: [
                     _HeaderCard(
                       title: 'Clientes',
-                      subtitle:
-                          'Base visivel do tenant ${widget.identity.tenantName} com carga local-first.',
+                      subtitle: '',
                       actionLabel: 'Novo pré-cadastro',
                       onAction: () {
                         _openPreCadastro(context);
@@ -287,10 +292,13 @@ class _ClientesPageState extends State<ClientesPage> {
                       pendingSyncCount: _pendingSyncCount,
                       syncing: _syncingAll,
                       onSync: () => _syncAllNow(context),
+                      showSyncAction: false,
                     ),
                     const SizedBox(height: 16),
                     _PreCadastroSection(
-                      key: ValueKey('pre-cadastro-${widget.identity.tenantId}-$_preCadastroRefreshTick'),
+                      key: ValueKey(
+                        'pre-cadastro-${widget.identity.tenantId}-$_preCadastroRefreshTick',
+                      ),
                       identity: widget.identity,
                       repository: widget.preCadastroRepository,
                       clienteRepository: widget.repository,
@@ -305,8 +313,7 @@ class _ClientesPageState extends State<ClientesPage> {
                     if (clientes.isEmpty)
                       const _EmptyState(
                         title: 'Nenhum cliente carregado',
-                        subtitle:
-                            'Os primeiros clientes aparecem aqui quando a base for sincronizada.',
+                        subtitle: 'Os primeiros clientes aparecem aqui quando a base for sincronizada.',
                       )
                     else
                       ...clientes.map(
@@ -333,8 +340,8 @@ class _ClientesPageState extends State<ClientesPage> {
   }
 
   Future<void> _openPreCadastro(BuildContext context) async {
-    final repository = widget.preCadastroRepository ??
-        InMemoryClientePreCadastroRepository();
+    final repository =
+        widget.preCadastroRepository ?? InMemoryClientePreCadastroRepository();
 
     String actorUid = widget.identity.userLabel;
     try {
@@ -377,6 +384,7 @@ class _HeaderCard extends StatelessWidget {
     this.pendingSyncCount = 0,
     this.syncing = false,
     this.onSync,
+    this.showSyncAction = true,
   });
 
   final String title;
@@ -386,6 +394,7 @@ class _HeaderCard extends StatelessWidget {
   final int pendingSyncCount;
   final bool syncing;
   final VoidCallback? onSync;
+  final bool showSyncAction;
 
   @override
   Widget build(BuildContext context) {
@@ -395,24 +404,14 @@ class _HeaderCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(title, style: Theme.of(context).textTheme.headlineSmall),
-                      const SizedBox(height: 8),
-                      Text(subtitle),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 12),
-                FilledButton(onPressed: onAction, child: Text(actionLabel)),
-              ],
-            ),
-            if (onSync != null) ...[
+            Text(title, style: Theme.of(context).textTheme.headlineSmall),
+            if (subtitle.trim().isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(subtitle),
+            ],
+            const SizedBox(height: 10),
+            FilledButton(onPressed: onAction, child: Text(actionLabel)),
+            if (onSync != null && showSyncAction) ...[
               const SizedBox(height: 12),
               Align(
                 alignment: Alignment.centerLeft,
@@ -431,6 +430,12 @@ class _HeaderCard extends StatelessWidget {
                         : 'Sincronizar agora',
                   ),
                 ),
+              ),
+            ] else ...[
+              const SizedBox(height: 12),
+              Text(
+                'Use a sincronizacao geral na tela Inicio para enviar e baixar dados.',
+                style: Theme.of(context).textTheme.bodySmall,
               ),
             ],
           ],
@@ -517,8 +522,9 @@ class _PreCadastroSectionState extends State<_PreCadastroSection> {
     var remote = <ClientePreCadastro>[];
     if (widget.repository != null) {
       try {
-        remote = await widget.repository!
-            .fetchAll(tenantId: widget.identity.tenantId);
+        remote = await widget.repository!.fetchAll(
+          tenantId: widget.identity.tenantId,
+        );
       } catch (_) {
         remote = const [];
       }
@@ -533,18 +539,21 @@ class _PreCadastroSectionState extends State<_PreCadastroSection> {
     // because their best-effort remote delete hasn't completed yet (offline,
     // transient error, or a permission mismatch) — the remote fetch above is
     // filtered against this tombstone set before being merged in below.
-    final deletedIds =
-        await OfflineSyncQueue.readDeletedIds(type: 'cliente_pre_cadastro');
+    final deletedIds = await OfflineSyncQueue.readDeletedIds(
+      type: 'cliente_pre_cadastro',
+    );
     remote = remote.where((item) => !deletedIds.contains(item.id)).toList();
 
     // Self-heal: earlier versions of this screen marked a pre-cadastro as
     // "aprovado" without ever creating the corresponding cliente record. These
     // orphaned records block a clean re-use of the same data, so remove them
     // locally instead of leaving them stuck in limbo.
-    final legacyApproved = localRecords.where((record) =>
-        record.entity.status == PreRegistrationStatus.approved &&
-        (record.entity.mergedClienteId == null ||
-            record.entity.mergedClienteId!.isEmpty));
+    final legacyApproved = localRecords.where(
+      (record) =>
+          record.entity.status == PreRegistrationStatus.approved &&
+          (record.entity.mergedClienteId == null ||
+              record.entity.mergedClienteId!.isEmpty),
+    );
     if (legacyApproved.isNotEmpty) {
       await OfflineSyncQueue.removeOrphanApprovedPreCadastros(
         tenantId: widget.identity.tenantId,
@@ -587,20 +596,25 @@ class _PreCadastroSectionState extends State<_PreCadastroSection> {
     }
 
     for (final item in remote) {
-      if (seen.contains(item.id) || item.status != PreRegistrationStatus.pending) {
+      if (seen.contains(item.id) ||
+          item.status != PreRegistrationStatus.pending) {
         continue;
       }
       seen.add(item.id);
       merged.add(_PreCadastroEntry(item: item, isSyncedRemotely: true));
     }
 
-    merged.sort((a, b) => (b.item.updatedAt ?? b.item.createdAt ?? DateTime.now())
-        .compareTo(a.item.updatedAt ?? a.item.createdAt ?? DateTime.now()));
+    merged.sort(
+      (a, b) => (b.item.updatedAt ?? b.item.createdAt ?? DateTime.now())
+          .compareTo(a.item.updatedAt ?? a.item.createdAt ?? DateTime.now()),
+    );
 
     return merged;
   }
 
-  Future<Map<String, String>> _resolveScopeIdsForCurrentUser(String tenantId) async {
+  Future<Map<String, String>> _resolveScopeIdsForCurrentUser(
+    String tenantId,
+  ) async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null || uid.isEmpty) {
       return {
@@ -685,8 +699,9 @@ class _PreCadastroSectionState extends State<_PreCadastroSection> {
     }
 
     try {
-      final membership = await TenantMembershipService(FirebaseFirestore.instance)
-          .loadActiveByTenantAndUid(tenantId: tenantId, uid: uid);
+      final membership = await TenantMembershipService(
+        FirebaseFirestore.instance,
+      ).loadActiveByTenantAndUid(tenantId: tenantId, uid: uid);
       if (membership != null) {
         final scope = {
           'ownerId': membership.ownerId,
@@ -713,7 +728,7 @@ class _PreCadastroSectionState extends State<_PreCadastroSection> {
   /// fresh approval and by the self-heal pass in [_loadEntries] for legacy
   /// "aprovado" records that never got converted.
   Future<({ClientePreCadastro merged, bool clienteSyncedRemotely})>
-      _convertToOfficialCliente(ClientePreCadastro item) async {
+  _convertToOfficialCliente(ClientePreCadastro item) async {
     final now = DateTime.now();
     final scopeIds = await _resolveScopeIdsForCurrentUser(item.tenantId);
 
@@ -790,7 +805,8 @@ class _PreCadastroSectionState extends State<_PreCadastroSection> {
       } catch (error, stackTrace) {
         AppDiagnostics.log(
           tag: 'pre_cadastro.save',
-          message: 'Falha ao sincronizar pr\u00e9-cadastro ${merged.nome} com o Firebase.',
+          message:
+              'Falha ao sincronizar pr\u00e9-cadastro ${merged.nome} com o Firebase.',
           error: error,
           stackTrace: stackTrace,
         );
@@ -851,7 +867,8 @@ class _PreCadastroSectionState extends State<_PreCadastroSection> {
     BuildContext context,
     ClientePreCadastro item,
   ) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed =
+        await showDialog<bool>(
           context: context,
           builder: (dialogContext) => AlertDialog(
             title: const Text('Cancelar pré-cadastro'),
@@ -934,7 +951,7 @@ class _PreCadastroSectionState extends State<_PreCadastroSection> {
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                   const SizedBox(height: 8),
-                  const Text('Nenhum pré-cadastro pendente neste tenant.'),
+                  const Text('Nenhum pré-cadastro pendente.'),
                 ],
               ),
             ),
@@ -1014,7 +1031,8 @@ class _PreCadastroSectionState extends State<_PreCadastroSection> {
                           if (_canCancelPreCadastro(item))
                             IconButton(
                               tooltip: 'Cancelar',
-                              onPressed: () => _cancelPreCadastro(context, item),
+                              onPressed: () =>
+                                  _cancelPreCadastro(context, item),
                               icon: const Icon(Icons.delete_outline),
                             ),
                         ],
@@ -1032,10 +1050,7 @@ class _PreCadastroSectionState extends State<_PreCadastroSection> {
 }
 
 class _PreCadastroEntry {
-  const _PreCadastroEntry({
-    required this.item,
-    required this.isSyncedRemotely,
-  });
+  const _PreCadastroEntry({required this.item, required this.isSyncedRemotely});
 
   final ClientePreCadastro item;
   final bool isSyncedRemotely;

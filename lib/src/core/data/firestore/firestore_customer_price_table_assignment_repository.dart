@@ -9,6 +9,8 @@ class FirestoreCustomerPriceTableAssignmentRepository
   FirestoreCustomerPriceTableAssignmentRepository(this._firestore);
 
   final FirebaseFirestore _firestore;
+  final Map<String, List<CustomerPriceTableAssignment>> _tenantCache =
+      <String, List<CustomerPriceTableAssignment>>{};
 
   CollectionReference<Map<String, dynamic>> get _collection =>
       _firestore.collection('customer_price_table_assignments');
@@ -30,6 +32,8 @@ class FirestoreCustomerPriceTableAssignmentRepository
         return CustomerPriceTableAssignment.fromMap(data);
       }).toList();
       items.sort((a, b) => b.priority.compareTo(a.priority));
+      _tenantCache[normalizedTenantId] =
+          List<CustomerPriceTableAssignment>.unmodifiable(items);
       return items;
     });
   }
@@ -41,6 +45,11 @@ class FirestoreCustomerPriceTableAssignmentRepository
       return const [];
     }
 
+    final cached = _tenantCache[normalizedTenantId];
+    if (cached != null) {
+      return List<CustomerPriceTableAssignment>.from(cached);
+    }
+
     final snapshot =
         await _collection.where('tenantId', isEqualTo: normalizedTenantId).get();
     final items = snapshot.docs.map((doc) {
@@ -49,6 +58,8 @@ class FirestoreCustomerPriceTableAssignmentRepository
       return CustomerPriceTableAssignment.fromMap(data);
     }).toList();
     items.sort((a, b) => b.priority.compareTo(a.priority));
+    _tenantCache[normalizedTenantId] =
+      List<CustomerPriceTableAssignment>.unmodifiable(items);
     return items;
   }
 
@@ -61,6 +72,15 @@ class FirestoreCustomerPriceTableAssignmentRepository
     final normalizedId = id.trim();
     if (normalizedTenantId.isEmpty || normalizedId.isEmpty) {
       return null;
+    }
+
+    final cached = _tenantCache[normalizedTenantId];
+    if (cached != null) {
+      for (final item in cached) {
+        if (item.id == normalizedId) {
+          return item;
+        }
+      }
     }
 
     final doc = await _collection.doc(normalizedId).get();
@@ -79,6 +99,7 @@ class FirestoreCustomerPriceTableAssignmentRepository
 
   @override
   Future<void> save(CustomerPriceTableAssignment entity) {
+    _tenantCache.remove(entity.tenantId.trim());
     return _collection.doc(entity.id).set(entity.toMap());
   }
 
@@ -89,5 +110,6 @@ class FirestoreCustomerPriceTableAssignmentRepository
       return;
     }
     await _collection.doc(id).delete();
+    _tenantCache.remove(tenantId.trim());
   }
 }

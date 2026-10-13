@@ -15,6 +15,8 @@ class TabelaPreco implements TenantScopedEntity {
     this.rowCount,
     this.validFrom,
     this.validUntil,
+    this.syncVersion = 0,
+    this.deletedAt,
     this.createdAt,
     this.updatedAt,
   });
@@ -34,6 +36,8 @@ class TabelaPreco implements TenantScopedEntity {
       rowCount: _readInt(map['rowCount']),
       validFrom: _readDateTime(map['validFrom']),
       validUntil: _readDateTime(map['validUntil']),
+      syncVersion: _readInt(map['syncVersion']) ?? 0,
+      deletedAt: _readDateTime(map['deletedAt']),
       createdAt: _readDateTime(map['createdAt']),
       updatedAt: _readDateTime(map['updatedAt']),
     );
@@ -54,6 +58,8 @@ class TabelaPreco implements TenantScopedEntity {
   final int? rowCount;
   final DateTime? validFrom;
   final DateTime? validUntil;
+  final int syncVersion;
+  final DateTime? deletedAt;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -71,6 +77,8 @@ class TabelaPreco implements TenantScopedEntity {
     int? rowCount,
     DateTime? validFrom,
     DateTime? validUntil,
+    int? syncVersion,
+    DateTime? deletedAt,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -88,6 +96,8 @@ class TabelaPreco implements TenantScopedEntity {
       rowCount: rowCount ?? this.rowCount,
       validFrom: validFrom ?? this.validFrom,
       validUntil: validUntil ?? this.validUntil,
+      syncVersion: syncVersion ?? this.syncVersion,
+      deletedAt: deletedAt ?? this.deletedAt,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -108,6 +118,8 @@ class TabelaPreco implements TenantScopedEntity {
       'rowCount': rowCount,
       'validFrom': validFrom?.toIso8601String(),
       'validUntil': validUntil?.toIso8601String(),
+      'syncVersion': syncVersion,
+      'deletedAt': deletedAt?.toIso8601String(),
       'createdAt': createdAt?.toIso8601String(),
       'updatedAt': updatedAt?.toIso8601String(),
     };

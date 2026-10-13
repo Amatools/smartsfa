@@ -78,6 +78,7 @@ class _WebPortalShellState extends State<_WebPortalShell> {
                     selectedTenantId:
                         _activeTenantId ?? preferredTenant.tenantId,
                     onSelectTenant: _enterWorkspace,
+                    onAddWorkspace: () => _openAddWorkspaceFlow(user),
                     onSignOut: widget.onSignOut,
                   ),
                 ),
@@ -312,6 +313,12 @@ class _WebPortalShellState extends State<_WebPortalShell> {
       _showWorkspaceSelection = true;
       _selectedIndex = 0;
     });
+  }
+
+  Future<void> _openAddWorkspaceFlow(User user) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => PendingAccessPage(user: user)),
+    );
   }
 
   void _setActiveRepresentedCompany({

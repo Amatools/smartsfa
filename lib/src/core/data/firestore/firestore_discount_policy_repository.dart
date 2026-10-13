@@ -8,6 +8,8 @@ class FirestoreDiscountPolicyRepository implements DiscountPolicyRepository {
   FirestoreDiscountPolicyRepository(this._firestore);
 
   final FirebaseFirestore _firestore;
+  final Map<String, List<DiscountPolicy>> _tenantCache =
+      <String, List<DiscountPolicy>>{};
 
   CollectionReference<Map<String, dynamic>> get _collection =>
       _firestore.collection('discount_policies');
@@ -23,14 +25,17 @@ class FirestoreDiscountPolicyRepository implements DiscountPolicyRepository {
         .where('tenantId', isEqualTo: normalizedTenantId)
         .snapshots()
         .map((snapshot) {
-      final items = snapshot.docs.map((doc) {
-        final data = normalizeFirestoreMap(doc.data());
-        data.putIfAbsent('id', () => doc.id);
-        return DiscountPolicy.fromMap(data);
-      }).toList();
-      items.sort((a, b) => a.name.compareTo(b.name));
-      return items;
-    });
+          final items = snapshot.docs.map((doc) {
+            final data = normalizeFirestoreMap(doc.data());
+            data.putIfAbsent('id', () => doc.id);
+            return DiscountPolicy.fromMap(data);
+          }).toList();
+          items.sort((a, b) => a.name.compareTo(b.name));
+          _tenantCache[normalizedTenantId] = List<DiscountPolicy>.unmodifiable(
+            items,
+          );
+          return items;
+        });
   }
 
   @override
@@ -40,14 +45,21 @@ class FirestoreDiscountPolicyRepository implements DiscountPolicyRepository {
       return const [];
     }
 
-    final snapshot =
-        await _collection.where('tenantId', isEqualTo: normalizedTenantId).get();
+    final cached = _tenantCache[normalizedTenantId];
+    if (cached != null) {
+      return List<DiscountPolicy>.from(cached);
+    }
+
+    final snapshot = await _collection
+        .where('tenantId', isEqualTo: normalizedTenantId)
+        .get();
     final items = snapshot.docs.map((doc) {
       final data = normalizeFirestoreMap(doc.data());
       data.putIfAbsent('id', () => doc.id);
       return DiscountPolicy.fromMap(data);
     }).toList();
     items.sort((a, b) => a.name.compareTo(b.name));
+    _tenantCache[normalizedTenantId] = List<DiscountPolicy>.unmodifiable(items);
     return items;
   }
 
@@ -60,6 +72,15 @@ class FirestoreDiscountPolicyRepository implements DiscountPolicyRepository {
     final normalizedId = id.trim();
     if (normalizedTenantId.isEmpty || normalizedId.isEmpty) {
       return null;
+    }
+
+    final cached = _tenantCache[normalizedTenantId];
+    if (cached != null) {
+      for (final item in cached) {
+        if (item.id == normalizedId) {
+          return item;
+        }
+      }
     }
 
     final doc = await _collection.doc(normalizedId).get();
@@ -78,6 +99,7 @@ class FirestoreDiscountPolicyRepository implements DiscountPolicyRepository {
 
   @override
   Future<void> save(DiscountPolicy entity) {
+    _tenantCache.remove(entity.tenantId.trim());
     return _collection.doc(entity.id).set(entity.toMap());
   }
 
@@ -88,5 +110,6 @@ class FirestoreDiscountPolicyRepository implements DiscountPolicyRepository {
       return;
     }
     await _collection.doc(id).delete();
+    _tenantCache.remove(tenantId.trim());
   }
 }

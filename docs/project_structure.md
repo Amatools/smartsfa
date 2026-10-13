@@ -3,6 +3,7 @@
 ## Objetivo
 
 Estabelecer uma base evolutiva para o app Flutter com separacao clara entre composicao, navegacao, modelos compartilhados e modulos de negocio.
+Tambem definir governanca de documentacao para reduzir redundancia.
 
 ## Estrutura atual
 
@@ -30,6 +31,8 @@ lib/
       clientes/
       produtos/
       pedidos/
+      precos/
+      portal/
       notificacoes/
       tenant/
 ```
@@ -45,10 +48,38 @@ lib/
 - src/shared: utilitarios e widgets compartilhados
 - src/features: modulos funcionais por contexto de negocio
 
+## Estado de persistencia e offline
+
+- Repositorios principais ja estao em Firestore tenant-scoped (clientes, produtos, pedidos, precos e tributacao).
+- Cache offline nativo do Firestore esta habilitado no mobile.
+- Operacao offline de escrita usa fila local para sincronizacao posterior.
+- Ainda falta sincronizacao incremental formal para catalogos grandes.
+
+## Mapa de documentacao canonica (reduzir docs)
+
+Arquivos canonicos tecnicos:
+
+1. guia_implementacao_saas.md
+2. auth_access_model.md
+3. pricing_taxation_rules.md
+4. web_portal_architecture.md
+
+Arquivos que devem virar resumo/ponteiro (sem apagar agora):
+
+1. architecture_transition.md
+2. saas_model_v2.md
+3. proposta_operacao_b2b.md
+4. status_checkpoint_2026-09-09.md
+
+Arquivos operacionais e legais (manter separados):
+
+1. firebase/*
+2. legal/*
+
 ## Proxima evolucao
 
-1. Conectar Clientes/Produtos/Pedidos a provider real tenant-aware (Firestore inicial)
-2. Introduzir selecao clara de data source (mock vs real) por ambiente
-3. Evoluir armazenamento local para offline-first com Isar
-4. Manter regras de acesso apenas em services/domain e evitar regra de negocio na UI
-5. Expandir cobertura de testes de repositorios e fluxos de entrada multi-tenant
+1. Implementar sincronizacao incremental para catalogos grandes (delta por updatedAt/version + tombstones).
+2. Adicionar paginação nas listagens que hoje usam leitura completa por tenant.
+3. Introduzir pre-download de catalogos antes de saida para campo, com feedback por modulo.
+4. Consolidar documentos redundantes no conjunto canonico e reduzir manutencao paralela.
+5. Expandir cobertura de testes para custo de leitura, fallback offline e conflitos de sync.

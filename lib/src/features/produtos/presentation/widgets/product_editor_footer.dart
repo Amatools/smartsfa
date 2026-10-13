@@ -26,9 +26,9 @@ class ProductEditorFooter extends StatelessWidget {
       return const Card(
         child: ListTile(
           leading: Icon(Icons.lock_outline),
-          title: Text('Cadastro de produto em modo somente leitura'),
+          title: Text('Somente Leitura'),
           subtitle: Text(
-            'Apenas owner pode cadastrar/editar/excluir produtos (ou quando o ERP estiver como fonte de verdade).',
+            'O cadastro ou edicao de produtos deve ser feito pelo painel Web.',
           ),
         ),
       );

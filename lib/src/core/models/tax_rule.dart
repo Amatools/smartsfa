@@ -4,6 +4,7 @@ class TaxRule implements TenantScopedEntity {
   const TaxRule({
     required this.id,
     required this.tenantId,
+    this.representedCompanyId,
     required this.status,
     required this.ufOrigem,
     required this.ufDestino,
@@ -25,6 +26,8 @@ class TaxRule implements TenantScopedEntity {
     this.priority = 0,
     this.validFrom,
     this.validUntil,
+    this.syncVersion = 0,
+    this.deletedAt,
     this.createdAt,
     this.updatedAt,
   });
@@ -33,6 +36,7 @@ class TaxRule implements TenantScopedEntity {
     return TaxRule(
       id: map['id'] as String? ?? '',
       tenantId: map['tenantId'] as String? ?? '',
+      representedCompanyId: (map['representedCompanyId'] as String?)?.trim(),
       status: (map['status'] as String? ?? 'active').trim().toLowerCase(),
       ncm: (map['ncm'] as String?)?.trim(),
       cest: (map['cest'] as String?)?.trim(),
@@ -62,6 +66,8 @@ class TaxRule implements TenantScopedEntity {
       priority: _readInt(map['priority']) ?? 0,
       validFrom: _readDateTime(map['validFrom']),
       validUntil: _readDateTime(map['validUntil']),
+      syncVersion: _readInt(map['syncVersion']) ?? 0,
+      deletedAt: _readDateTime(map['deletedAt']),
       createdAt: _readDateTime(map['createdAt']),
       updatedAt: _readDateTime(map['updatedAt']),
     );
@@ -71,6 +77,7 @@ class TaxRule implements TenantScopedEntity {
   final String id;
   @override
   final String tenantId;
+  final String? representedCompanyId;
 
   final String status;
   final String? ncm;
@@ -93,6 +100,8 @@ class TaxRule implements TenantScopedEntity {
   final int priority;
   final DateTime? validFrom;
   final DateTime? validUntil;
+  final int syncVersion;
+  final DateTime? deletedAt;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -102,6 +111,7 @@ class TaxRule implements TenantScopedEntity {
     return <String, Object?>{
       'id': id,
       'tenantId': tenantId,
+      'representedCompanyId': representedCompanyId,
       'status': status,
       'ncm': ncm,
       'cest': cest,
@@ -124,6 +134,8 @@ class TaxRule implements TenantScopedEntity {
       'priority': priority,
       'validFrom': validFrom?.toIso8601String(),
       'validUntil': validUntil?.toIso8601String(),
+      'syncVersion': syncVersion,
+      'deletedAt': deletedAt?.toIso8601String(),
       'createdAt': createdAt?.toIso8601String(),
       'updatedAt': updatedAt?.toIso8601String(),
     };

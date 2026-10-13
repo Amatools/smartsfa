@@ -11,6 +11,7 @@ class FirestorePedidoRepository implements PedidoRepository {
   FirestorePedidoRepository(this._firestore);
 
   final FirebaseFirestore _firestore;
+  final Map<String, List<Pedido>> _tenantCache = <String, List<Pedido>>{};
 
   CollectionReference<Map<String, dynamic>> get _collection =>
       _firestore.collection('pedidos');
@@ -25,6 +26,10 @@ class FirestorePedidoRepository implements PedidoRepository {
     }).toList();
     items.sort((a, b) => a.id.compareTo(b.id));
     return items;
+  }
+
+  void _setTenantCache(String tenantId, List<Pedido> items) {
+    _tenantCache[tenantId] = List<Pedido>.unmodifiable(items);
   }
 
   Query<Map<String, dynamic>> _queryByScope({
@@ -159,6 +164,7 @@ class FirestorePedidoRepository implements PedidoRepository {
     if (byId.isNotEmpty) {
       final items = byId.values.toList();
       items.sort((a, b) => a.id.compareTo(b.id));
+      _setTenantCache(tenantId, items);
       return items;
     }
 
@@ -194,6 +200,7 @@ class FirestorePedidoRepository implements PedidoRepository {
         }
         final merged = byId.values.toList()
           ..sort((a, b) => a.id.compareTo(b.id));
+        _setTenantCache(tenantId, merged);
         controller.add(merged);
       }
 
@@ -254,7 +261,10 @@ class FirestorePedidoRepository implements PedidoRepository {
           .snapshots()
           .map(_mapAndSortPedidos)
           .listen(
-            controller.add,
+            (items) {
+              _setTenantCache(normalizedTenantId, items);
+              controller.add(items);
+            },
             onError: (Object error, StackTrace stackTrace) {
               final isPermissionDenied =
                   error is FirebaseException && error.code == 'permission-denied';
@@ -262,7 +272,10 @@ class FirestorePedidoRepository implements PedidoRepository {
                 fallbackSubscription = _watchScopedFallbackPedidos(
                   tenantId: normalizedTenantId,
                 ).listen(
-                  controller.add,
+                  (items) {
+                    _setTenantCache(normalizedTenantId, items);
+                    controller.add(items);
+                  },
                   onError: controller.addError,
                 );
                 return;
@@ -286,11 +299,18 @@ class FirestorePedidoRepository implements PedidoRepository {
       return const [];
     }
 
+    final cached = _tenantCache[normalizedTenantId];
+    if (cached != null) {
+      return List<Pedido>.from(cached);
+    }
+
     try {
       final snapshot = await _collection
           .where('tenantId', isEqualTo: normalizedTenantId)
           .get();
-      return _mapAndSortPedidos(snapshot);
+      final items = _mapAndSortPedidos(snapshot);
+      _setTenantCache(normalizedTenantId, items);
+      return items;
     } on FirebaseException catch (error) {
       if (error.code != 'permission-denied') {
         rethrow;
@@ -319,6 +339,15 @@ class FirestorePedidoRepository implements PedidoRepository {
       return null;
     }
 
+    final cached = _tenantCache[normalizedTenantId];
+    if (cached != null) {
+      for (final item in cached) {
+        if (item.id == normalizedId) {
+          return item;
+        }
+      }
+    }
+
     final doc = await _collection.doc(normalizedId).get();
     if (!doc.exists) {
       return null;
@@ -335,6 +364,7 @@ class FirestorePedidoRepository implements PedidoRepository {
 
   @override
   Future<void> save(Pedido entity) {
+    _tenantCache.remove(entity.tenantId.trim());
     return _collection.doc(entity.id).set(entity.toMap());
   }
 
@@ -346,5 +376,6 @@ class FirestorePedidoRepository implements PedidoRepository {
     }
 
     await _collection.doc(id).delete();
+    _tenantCache.remove(tenantId.trim());
   }
 }

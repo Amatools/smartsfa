@@ -34,10 +34,7 @@ class _WebSignInPageState extends State<WebSignInPage> {
       await FirebaseAuth.instance.signInWithPopup(provider);
     } on FirebaseAuthException catch (e) {
       setState(() {
-        _error = AuthErrorInfo.fromFirebaseException(
-          e,
-          provider: 'google',
-        );
+        _error = AuthErrorInfo.fromFirebaseException(e, provider: 'google');
       });
     } catch (_) {
       setState(() {
@@ -78,10 +75,7 @@ class _WebSignInPageState extends State<WebSignInPage> {
       );
     } on FirebaseAuthException catch (e) {
       setState(() {
-        _error = AuthErrorInfo.fromFirebaseException(
-          e,
-          provider: 'password',
-        );
+        _error = AuthErrorInfo.fromFirebaseException(e, provider: 'password');
       });
     } catch (_) {
       setState(() {
@@ -180,7 +174,11 @@ class _HeroPanel extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(Icons.storefront_outlined, size: 42, color: colorScheme.primary),
+            Icon(
+              Icons.storefront_outlined,
+              size: 42,
+              color: colorScheme.primary,
+            ),
             const SizedBox(height: 20),
             Text('Smart SFA', style: textTheme.headlineMedium),
             const SizedBox(height: 8),
@@ -247,7 +245,7 @@ class _LoginPanel extends StatelessWidget {
   }) {
     OutlineInputBorder border(Color color, {double width = 1}) {
       return OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(999),
         borderSide: BorderSide(color: color, width: width),
       );
     }
@@ -255,13 +253,16 @@ class _LoginPanel extends StatelessWidget {
     return InputDecoration(
       labelText: label,
       filled: true,
-      fillColor: colorScheme.surfaceContainerHighest.withValues(alpha: 0.38),
+      fillColor: colorScheme.surfaceContainerHighest.withValues(alpha: 0.28),
       prefixIcon: Icon(icon, size: 18),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      enabledBorder: border(colorScheme.outlineVariant.withValues(alpha: 0.38)),
-      focusedBorder: border(colorScheme.primary.withValues(alpha: 0.75), width: 1.4),
-      errorBorder: border(colorScheme.error.withValues(alpha: 0.8)),
-      focusedErrorBorder: border(colorScheme.error, width: 1.4),
+      enabledBorder: border(colorScheme.outlineVariant.withValues(alpha: 0.32)),
+      focusedBorder: border(
+        colorScheme.primary.withValues(alpha: 0.48),
+        width: 1.25,
+      ),
+      errorBorder: border(colorScheme.error.withValues(alpha: 0.72)),
+      focusedErrorBorder: border(colorScheme.error, width: 1.25),
     );
   }
 
@@ -272,7 +273,9 @@ class _LoginPanel extends StatelessWidget {
       color: colorScheme.surface,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
-        side: BorderSide(color: colorScheme.outlineVariant.withValues(alpha: 0.35)),
+        side: BorderSide(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.35),
+        ),
       ),
       child: Padding(
         padding: const EdgeInsets.all(24),
@@ -317,9 +320,7 @@ class _LoginPanel extends StatelessWidget {
             FilledButton.icon(
               onPressed: loading ? null : onGoogle,
               icon: const Icon(Icons.login),
-              label: Text(
-                loading ? 'Entrando...' : 'Continuar com Google',
-              ),
+              label: Text(loading ? 'Entrando...' : 'Continuar com Google'),
               style: FilledButton.styleFrom(
                 minimumSize: const Size.fromHeight(44),
                 shape: const StadiumBorder(),
@@ -360,7 +361,9 @@ class _LoginPanel extends StatelessWidget {
               style: OutlinedButton.styleFrom(
                 minimumSize: const Size.fromHeight(42),
                 shape: const StadiumBorder(),
-                side: BorderSide(color: colorScheme.primary.withValues(alpha: 0.35)),
+                side: BorderSide(
+                  color: colorScheme.primary.withValues(alpha: 0.35),
+                ),
               ),
             ),
           ],

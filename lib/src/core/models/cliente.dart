@@ -31,6 +31,8 @@ class Cliente implements TenantScopedEntity {
     this.inscricaoEstadual = '',
     this.inscricaoMunicipal = '',
     this.observacoes = '',
+    this.syncVersion = 0,
+    this.deletedAt,
     this.createdAt,
     this.updatedAt,
   });
@@ -69,6 +71,8 @@ class Cliente implements TenantScopedEntity {
       inscricaoEstadual: map['inscricaoEstadual'] as String? ?? '',
       inscricaoMunicipal: map['inscricaoMunicipal'] as String? ?? '',
       observacoes: map['observacoes'] as String? ?? '',
+      syncVersion: _readInt(map['syncVersion']) ?? 0,
+      deletedAt: _readDateTime(map['deletedAt']),
       createdAt: _readDateTime(map['createdAt']),
       updatedAt: _readDateTime(map['updatedAt']),
     );
@@ -104,6 +108,8 @@ class Cliente implements TenantScopedEntity {
   final String inscricaoEstadual;
   final String inscricaoMunicipal;
   final String observacoes;
+  final int syncVersion;
+  final DateTime? deletedAt;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -136,6 +142,8 @@ class Cliente implements TenantScopedEntity {
     String? inscricaoEstadual,
     String? inscricaoMunicipal,
     String? observacoes,
+    int? syncVersion,
+    DateTime? deletedAt,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -168,6 +176,8 @@ class Cliente implements TenantScopedEntity {
       inscricaoEstadual: inscricaoEstadual ?? this.inscricaoEstadual,
       inscricaoMunicipal: inscricaoMunicipal ?? this.inscricaoMunicipal,
       observacoes: observacoes ?? this.observacoes,
+      syncVersion: syncVersion ?? this.syncVersion,
+      deletedAt: deletedAt ?? this.deletedAt,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -203,6 +213,8 @@ class Cliente implements TenantScopedEntity {
       'inscricaoEstadual': inscricaoEstadual,
       'inscricaoMunicipal': inscricaoMunicipal,
       'observacoes': observacoes,
+      'syncVersion': syncVersion,
+      'deletedAt': deletedAt?.toIso8601String(),
       'createdAt': createdAt?.toIso8601String(),
       'updatedAt': updatedAt?.toIso8601String(),
     };
@@ -220,6 +232,22 @@ DateTime? _readDateTime(Object? value) {
 
   if (value is int) {
     return DateTime.fromMillisecondsSinceEpoch(value);
+  }
+
+  return null;
+}
+
+int? _readInt(Object? value) {
+  if (value is int) {
+    return value;
+  }
+
+  if (value is double) {
+    return value.round();
+  }
+
+  if (value is String) {
+    return int.tryParse(value.trim());
   }
 
   return null;

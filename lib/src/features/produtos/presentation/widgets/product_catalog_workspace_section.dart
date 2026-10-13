@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/models/produto.dart';
@@ -24,6 +25,21 @@ class ProductCatalogWorkspaceSection extends StatelessWidget {
   final ProductCatalogBrandFilterSyncCoordinator brandFilterSyncCoordinator;
   final ProductCatalogContentProjectionCoordinator projectionCoordinator;
 
+  List<Produto> _filterByRepresentedScope(List<Produto> produtos) {
+    final selectedRepresentedCompanyId = (payload.representedCompanyId ?? '')
+        .trim();
+    if (selectedRepresentedCompanyId.isEmpty) {
+      return const <Produto>[];
+    }
+
+    return produtos
+        .where((produto) {
+          final productScope = (produto.representedCompanyId ?? '').trim();
+          return productScope == selectedRepresentedCompanyId;
+        })
+        .toList(growable: false);
+  }
+
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<Map<String, dynamic>?>(
@@ -33,6 +49,7 @@ class ProductCatalogWorkspaceSection extends StatelessWidget {
           tenantData: tenantSnapshot.data,
           role: payload.identity.role,
           isPersonalWorkspace: payload.identity.isPersonalWorkspace,
+          isWebPlatform: kIsWeb,
         );
 
         return StreamBuilder<List<Produto>>(
@@ -41,9 +58,11 @@ class ProductCatalogWorkspaceSection extends StatelessWidget {
           ),
           initialData: const [],
           builder: (context, productsSnapshot) {
-            final produtos = productsSnapshot.data ?? const [];
+            final scopedProdutos = _filterByRepresentedScope(
+              productsSnapshot.data ?? const <Produto>[],
+            );
             final projection = projectionCoordinator.resolve(
-              produtos: produtos,
+              produtos: scopedProdutos,
               selectedBrandFilter: payload.selectedBrandFilter,
               editorOpen: payload.editorOpen,
               editingProduct: payload.editingProduct,
@@ -66,7 +85,7 @@ class ProductCatalogWorkspaceSection extends StatelessWidget {
               representedCompanyId: payload.representedCompanyId,
               projection: projection,
               policy: policy,
-              produtos: produtos,
+              produtos: scopedProdutos,
               updatingStatusProductIds: payload.updatingStatusProductIds,
               onImportExcel: payload.onImportExcel,
               onDownloadExcelModel: payload.onDownloadExcelModel,

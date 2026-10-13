@@ -3,10 +3,12 @@ part of 'web_portal_page.dart';
 class _TaxRulesSection extends StatefulWidget {
   const _TaxRulesSection({
     required this.activeTenant,
+    this.selectedRepresentedCompanyId,
     this.activeRepresentedCompanyName,
   });
 
   final TenantEntryOption activeTenant;
+  final String? selectedRepresentedCompanyId;
   final String? activeRepresentedCompanyName;
 
   @override
@@ -32,6 +34,18 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
 
   bool _working = false;
 
+  String get _selectedRepresentedCompanyId {
+    return (widget.selectedRepresentedCompanyId ?? '').trim();
+  }
+
+  bool _matchesSelectedRepresentedScope(TaxRule rule) {
+    final selected = _selectedRepresentedCompanyId;
+    if (selected.isEmpty) {
+      return false;
+    }
+    return (rule.representedCompanyId ?? '').trim() == selected;
+  }
+
   @override
   Widget build(BuildContext context) {
     final canEditSettings = _canEditRepresentedModuleSettings(
@@ -42,6 +56,18 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
     final scopeLabel = representedName.isEmpty
         ? widget.activeTenant.tenantName
         : representedName;
+    final selectedRepresentedCompanyId = _selectedRepresentedCompanyId;
+
+    if (selectedRepresentedCompanyId.isEmpty) {
+      return const Card(
+        child: Padding(
+          padding: EdgeInsets.all(20),
+          child: Text(
+            'Selecione uma representada ativa para gerenciar as regras de tributação deste escopo.',
+          ),
+        ),
+      );
+    }
 
     return Card(
       child: Padding(
@@ -121,15 +147,18 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
                 }
 
                 final rules = snapshot.data ?? const <TaxRule>[];
+                final scopedRules = rules
+                    .where(_matchesSelectedRepresentedScope)
+                    .toList(growable: false);
                 if (snapshot.connectionState == ConnectionState.waiting &&
-                    rules.isEmpty) {
+                    scopedRules.isEmpty) {
                   return const Padding(
                     padding: EdgeInsets.symmetric(vertical: 18),
                     child: Center(child: CircularProgressIndicator()),
                   );
                 }
 
-                if (rules.isEmpty) {
+                if (scopedRules.isEmpty) {
                   return const Text(
                     'Nenhuma regra fiscal cadastrada ainda. Crie a primeira para começar a política tributária.',
                   );
@@ -138,10 +167,10 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
                 return ListView.separated(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
-                  itemCount: rules.length,
+                  itemCount: scopedRules.length,
                   separatorBuilder: (_, _) => const SizedBox(height: 10),
                   itemBuilder: (context, index) {
-                    final rule = rules[index];
+                    final rule = scopedRules[index];
                     return Container(
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(10),
@@ -195,7 +224,7 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
                               onPressed:
                                   canEditSettings && !_working && index > 0
                                   ? () => _moveRule(
-                                      rules: rules,
+                                      rules: scopedRules,
                                       index: index,
                                       direction: -1,
                                     )
@@ -207,9 +236,9 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
                               onPressed:
                                   canEditSettings &&
                                       !_working &&
-                                      index < rules.length - 1
+                                      index < scopedRules.length - 1
                                   ? () => _moveRule(
-                                      rules: rules,
+                                      rules: scopedRules,
                                       index: index,
                                       direction: 1,
                                     )
@@ -430,16 +459,8 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
                 'Opcional',
                 'Use sigla UF (SP, RJ, MG...) ou ANY. Vazio usa ANY.',
               ],
-              <String>[
-                'UF destino',
-                'Sim',
-                'Use sigla UF (SP, RJ, MG...).',
-              ],
-              <String>[
-                'Tipo ST',
-                'Sim',
-                'Aceito apenas MVA ou PMC.',
-              ],
+              <String>['UF destino', 'Sim', 'Use sigla UF (SP, RJ, MG...).'],
+              <String>['Tipo ST', 'Sim', 'Aceito apenas MVA ou PMC.'],
               <String>[
                 'Preco para calculo ST',
                 'Opcional',
@@ -475,11 +496,7 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
                 'Opcional',
                 'Percentual numerico. Ex.: 2 ou 2,5',
               ],
-              <String>[
-                'CST/CSOSN',
-                'Opcional',
-                'Codigo fiscal da regra.',
-              ],
+              <String>['CST/CSOSN', 'Opcional', 'Codigo fiscal da regra.'],
               <String>[
                 'Excecao fiscal',
                 'Opcional',
@@ -509,7 +526,8 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
       await downloadFileBytes(
         bytes: bytes,
         fileName: 'modelo_tributacao_$stamp.xlsx',
-        mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        mimeType:
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       );
     } catch (error) {
       _showMessage(
@@ -525,6 +543,13 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
   }
 
   Future<void> _openTaxImportSheet() async {
+    if (_selectedRepresentedCompanyId.isEmpty) {
+      _showMessage(
+        'Selecione uma representada ativa antes de importar regras fiscais.',
+      );
+      return;
+    }
+
     PlatformFile? selectedFile;
     _TaxImportValidation? validation;
     var importing = false;
@@ -590,9 +615,8 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
                 setSheetState(() {
                   validation = report;
                 });
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(report.message)),
-                );
+                ScaffoldMessenger.of(context)
+                    .showSnackBar(SnackBar(content: Text(report.message)));
                 return;
               }
 
@@ -717,10 +741,9 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
                           ),
                         ),
                         TextButton(
-                          onPressed:
-                              importing
-                                  ? null
-                                  : () => Navigator.of(sheetContext).pop(),
+                          onPressed: importing
+                              ? null
+                              : () => Navigator.of(sheetContext).pop(),
                           child: const Text('Fechar'),
                         ),
                       ],
@@ -774,24 +797,22 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
       final line = index + 2;
 
       final ufDestino = _normalizeUfForStorage(
-        _readTaxCell(
-          row,
-          const <String>['ufdestino', 'uf_destino', 'uf destino'],
-        ),
+        _readTaxCell(row, const <String>[
+          'ufdestino',
+          'uf_destino',
+          'uf destino',
+        ]),
       );
       if (ufDestino.isEmpty) {
         missingUfDestinoLines.add(line);
       }
 
-      final stTypeRaw = _readTaxCell(
-        row,
-        const <String>[
-          'stcalculationtype',
-          'st_calculation_type',
-          'tipost',
-          'tipo st',
-        ],
-      );
+      final stTypeRaw = _readTaxCell(row, const <String>[
+        'stcalculationtype',
+        'st_calculation_type',
+        'tipost',
+        'tipo st',
+      ]);
       final stType = _parseStTypeForImport(stTypeRaw);
       if (stType == null) {
         invalidTypeLines.add(line);
@@ -799,48 +820,41 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
       }
 
       final aliquotaDestino = TabularSpreadsheetService.parseDecimal(
-        _readTaxCell(
-          row,
-          const <String>['aliquotadestino', 'aliquota_destino', 'aliquotast'],
-        ),
+        _readTaxCell(row, const <String>[
+          'aliquotadestino',
+          'aliquota_destino',
+          'aliquotast',
+        ]),
       );
       final aliquotaCredito = TabularSpreadsheetService.parseDecimal(
-        _readTaxCell(
-          row,
-          const <String>['aliquotacredito', 'aliquota_credito', 'aliquotaicms'],
-        ),
+        _readTaxCell(row, const <String>[
+          'aliquotacredito',
+          'aliquota_credito',
+          'aliquotaicms',
+        ]),
       );
       if (aliquotaDestino == null || aliquotaCredito == null) {
         missingAliquotasLines.add(line);
       }
 
       final stBaseReductionPercent = TabularSpreadsheetService.parseDecimal(
-        _readTaxCell(
-          row,
-          const <String>[
-            'stbasereductionpercent',
-            'st_base_reduction_percent',
-            'reducaobaseicmsst',
-            'reducao base icms st',
-          ],
-        ),
+        _readTaxCell(row, const <String>[
+          'stbasereductionpercent',
+          'st_base_reduction_percent',
+          'reducaobaseicmsst',
+          'reducao base icms st',
+        ]),
       );
       final stBaseAmount = TabularSpreadsheetService.parseDecimal(
-        _readTaxCell(
-          row,
-          const <String>[
-            'stbaseamount',
-            'st_base_amount',
-            'basecalculoicmsst',
-            'base calculo icms st',
-          ],
-        ),
+        _readTaxCell(row, const <String>[
+          'stbaseamount',
+          'st_base_amount',
+          'basecalculoicmsst',
+          'base calculo icms st',
+        ]),
       );
       final mvaIva = TabularSpreadsheetService.parseDecimal(
-        _readTaxCell(
-          row,
-          const <String>['mvaiva', 'stmvapercent', 'mva'],
-        ),
+        _readTaxCell(row, const <String>['mvaiva', 'stmvapercent', 'mva']),
       );
 
       final hasRequiredByType = stType == 'mva'
@@ -873,7 +887,9 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
         );
       }
       if (invalidByTypeLines.isNotEmpty) {
-        parts.add('Campos condicionais MVA/PMC invalidos: ${sample(invalidByTypeLines)}');
+        parts.add(
+          'Campos condicionais MVA/PMC invalidos: ${sample(invalidByTypeLines)}',
+        );
       }
 
       return _TaxImportValidation(
@@ -890,15 +906,24 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
     );
   }
 
-  Future<_TaxImportResult> _importTaxRows(List<Map<String, String>> rows) async {
+  Future<_TaxImportResult> _importTaxRows(
+    List<Map<String, String>> rows,
+  ) async {
+    final selectedRepresentedCompanyId = _selectedRepresentedCompanyId;
     final existingRules = await _repository.fetchAll(
       tenantId: widget.activeTenant.tenantId,
     );
+    final scopedExistingRules = existingRules
+        .where((rule) {
+          return (rule.representedCompanyId ?? '').trim() ==
+              selectedRepresentedCompanyId;
+        })
+        .toList(growable: false);
     final existingById = <String, TaxRule>{
-      for (final item in existingRules) item.id: item,
+      for (final item in scopedExistingRules) item.id: item,
     };
     var maxPriority = 0;
-    for (final rule in existingRules) {
+    for (final rule in scopedExistingRules) {
       if (rule.priority > maxPriority) {
         maxPriority = rule.priority;
       }
@@ -915,14 +940,15 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
         _readTaxCell(row, const <String>['cest']),
       );
       final ufDestino = _normalizeUfForStorage(
-        _readTaxCell(
-          row,
-          const <String>['ufdestino', 'uf_destino', 'uf destino'],
-        ),
+        _readTaxCell(row, const <String>[
+          'ufdestino',
+          'uf_destino',
+          'uf destino',
+        ]),
       );
 
-      final hasUfDestinoHeader = row.containsKey('ufdestino') ||
-          row.containsKey('uf_destino');
+      final hasUfDestinoHeader =
+          row.containsKey('ufdestino') || row.containsKey('uf_destino');
       if (hasUfDestinoHeader && ufDestino.isEmpty) {
         skipped++;
         continue;
@@ -937,44 +963,40 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
       }
 
       final now = DateTime.now().toUtc();
-      final sourceId = _readTaxCell(
-        row,
-        const <String>[
-          'id',
-          'ruleid',
-          'rule_id',
-          'id regra',
-          'regraid',
-          'codigo regra',
-        ],
-      );
+      final sourceId = _readTaxCell(row, const <String>[
+        'id',
+        'ruleid',
+        'rule_id',
+        'id regra',
+        'regraid',
+        'codigo regra',
+      ]);
       final id = sourceId.isEmpty
           ? FirebaseFirestore.instance.collection('tax_rules').doc().id
           : sourceId;
       final existing = existingById[id];
 
       final aliquotaDestino = TabularSpreadsheetService.parseDecimal(
-        _readTaxCell(
-          row,
-          const <String>['aliquotadestino', 'aliquota_destino', 'aliquotast'],
-        ),
+        _readTaxCell(row, const <String>[
+          'aliquotadestino',
+          'aliquota_destino',
+          'aliquotast',
+        ]),
       );
       final aliquotaCredito = TabularSpreadsheetService.parseDecimal(
-        _readTaxCell(
-          row,
-          const <String>['aliquotacredito', 'aliquota_credito', 'aliquotaicms'],
-        ),
+        _readTaxCell(row, const <String>[
+          'aliquotacredito',
+          'aliquota_credito',
+          'aliquotaicms',
+        ]),
       );
 
-      final stTypeRaw = _readTaxCell(
-        row,
-        const <String>[
-          'stcalculationtype',
-          'st_calculation_type',
-          'tipost',
-          'tipo st',
-        ],
-      );
+      final stTypeRaw = _readTaxCell(row, const <String>[
+        'stcalculationtype',
+        'st_calculation_type',
+        'tipost',
+        'tipo st',
+      ]);
       final stType = _parseStTypeForImport(stTypeRaw);
       if (stType == null) {
         skipped++;
@@ -982,43 +1004,31 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
       }
 
       final stPriceForCalculation = TabularSpreadsheetService.parseDecimal(
-        _readTaxCell(
-          row,
-          const <String>[
-            'stpriceforcalculation',
-            'st_price_for_calculation',
-            'precoparacalculost',
-            'preco para calculo st',
-          ],
-        ),
+        _readTaxCell(row, const <String>[
+          'stpriceforcalculation',
+          'st_price_for_calculation',
+          'precoparacalculost',
+          'preco para calculo st',
+        ]),
       );
       final stBaseReductionPercent = TabularSpreadsheetService.parseDecimal(
-        _readTaxCell(
-          row,
-          const <String>[
-            'stbasereductionpercent',
-            'st_base_reduction_percent',
-            'reducaobaseicmsst',
-            'reducao base icms st',
-          ],
-        ),
+        _readTaxCell(row, const <String>[
+          'stbasereductionpercent',
+          'st_base_reduction_percent',
+          'reducaobaseicmsst',
+          'reducao base icms st',
+        ]),
       );
       final stBaseAmount = TabularSpreadsheetService.parseDecimal(
-        _readTaxCell(
-          row,
-          const <String>[
-            'stbaseamount',
-            'st_base_amount',
-            'basecalculoicmsst',
-            'base calculo icms st',
-          ],
-        ),
+        _readTaxCell(row, const <String>[
+          'stbaseamount',
+          'st_base_amount',
+          'basecalculoicmsst',
+          'base calculo icms st',
+        ]),
       );
       final mvaIva = TabularSpreadsheetService.parseDecimal(
-        _readTaxCell(
-          row,
-          const <String>['mvaiva', 'stmvapercent', 'mva'],
-        ),
+        _readTaxCell(row, const <String>['mvaiva', 'stmvapercent', 'mva']),
       );
 
       final hasRequiredByType = stType == 'mva'
@@ -1034,26 +1044,27 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
       final importedPriority = int.tryParse(
         _readTaxCell(row, const <String>['priority', 'prioridade']).trim(),
       );
-      final priority = importedPriority ?? existing?.priority ?? (maxPriority + imported + 1);
+      final priority =
+          importedPriority ??
+          existing?.priority ??
+          (maxPriority + imported + 1);
 
       final entity = TaxRule(
         id: id,
         tenantId: widget.activeTenant.tenantId,
+        representedCompanyId: selectedRepresentedCompanyId,
         status: _normalizeTaxStatus(
           _readTaxCell(row, const <String>['status']),
         ),
         ncm: rawNcm.isEmpty ? null : _formatNcmMasked(rawNcm),
         cest: rawCest.isEmpty ? null : _formatCestMasked(rawCest),
         fiscalException: _nullable(
-          _readTaxCell(
-            row,
-            const <String>[
-              'fiscalexception',
-              'fiscal_exception',
-              'excecaofiscal',
-              'excecao fiscal',
-            ],
-          ),
+          _readTaxCell(row, const <String>[
+            'fiscalexception',
+            'fiscal_exception',
+            'excecaofiscal',
+            'excecao fiscal',
+          ]),
         ),
         stCalculationType: stType,
         stPriceForCalculation: stPriceForCalculation,
@@ -1065,32 +1076,32 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
           _readTaxCell(row, const <String>['grupofiscalid', 'grupo_fiscal_id']),
         ),
         ufOrigem: _normalizeUfOrigem(
-          _readTaxCell(
-            row,
-            const <String>['uforigem', 'uf_origem', 'uf origem'],
-          ),
+          _readTaxCell(row, const <String>[
+            'uforigem',
+            'uf_origem',
+            'uf origem',
+          ]),
           fallback: existing?.ufOrigem,
         ),
         ufDestino: _normalizeUfForStorage(
-          _readTaxCell(
-            row,
-            const <String>['ufdestino', 'uf_destino', 'uf destino'],
-          ),
+          _readTaxCell(row, const <String>[
+            'ufdestino',
+            'uf_destino',
+            'uf destino',
+          ]),
         ),
         cstCsosn: _nullable(
-          _readTaxCell(
-            row,
-            const <String>['cstcsosn', 'cst/csosn'],
-          ),
+          _readTaxCell(row, const <String>['cstcsosn', 'cst/csosn']),
         ),
         aliquotaIcms: aliquotaCredito,
         mvaIva: mvaIva,
         aliquotaSt: aliquotaDestino,
         aliquotaDifal: TabularSpreadsheetService.parseDecimal(
-          _readTaxCell(
-            row,
-            const <String>['aliquotadifal', 'aliquota_difal', 'aliquota difal'],
-          ),
+          _readTaxCell(row, const <String>[
+            'aliquotadifal',
+            'aliquota_difal',
+            'aliquota difal',
+          ]),
         ),
         priority: priority,
         validFrom: _toUtcStartOfDay(
@@ -1186,6 +1197,7 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
       final entity = TaxRule(
         id: id,
         tenantId: widget.activeTenant.tenantId,
+        representedCompanyId: _selectedRepresentedCompanyId,
         status: draft.active ? 'active' : 'inactive',
         ncm: _formatNcmMasked(_normalizeNcmDigits(draft.ncm)),
         cest: _nullable(_formatCestMasked(_normalizeCestDigits(draft.cest))),
@@ -1281,8 +1293,13 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
       final existing = await _repository.fetchAll(
         tenantId: widget.activeTenant.tenantId,
       );
+      final selectedRepresentedCompanyId = _selectedRepresentedCompanyId;
       var maxPriority = 0;
       for (final item in existing) {
+        if ((item.representedCompanyId ?? '').trim() !=
+            selectedRepresentedCompanyId) {
+          continue;
+        }
         if (item.priority > maxPriority) {
           maxPriority = item.priority;
         }
@@ -1301,6 +1318,7 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
     return TaxRule(
       id: source.id,
       tenantId: source.tenantId,
+      representedCompanyId: source.representedCompanyId,
       status: source.status,
       ncm: source.ncm,
       cest: source.cest,

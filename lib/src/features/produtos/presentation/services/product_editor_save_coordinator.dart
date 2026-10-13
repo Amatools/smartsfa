@@ -91,6 +91,7 @@ class ProductEditorSaveCommand {
   const ProductEditorSaveCommand({
     required this.repository,
     required this.identity,
+    required this.representedCompanyId,
     required this.existing,
     required this.createAnother,
     required this.isEnterprise,
@@ -103,6 +104,7 @@ class ProductEditorSaveCommand {
 
   final ProdutoRepository repository;
   final AppIdentity identity;
+  final String? representedCompanyId;
   final Produto? existing;
   final bool createAnother;
   final bool isEnterprise;
@@ -154,6 +156,7 @@ class ProductEditorSaveCoordinator {
     return ProductEditorEntityMapper.buildFromForm(
       identity: command.identity,
       existing: command.existing,
+      representedCompanyId: command.representedCompanyId,
       now: now,
       codigo: formData.codigoText,
       descricao: formData.descricaoText,

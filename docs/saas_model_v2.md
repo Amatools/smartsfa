@@ -1,126 +1,29 @@
-# SmartSFA - SaaS Multi-tenant V2
+# SmartSFA - SaaS Multi-tenant V2 (resumo)
 
 ## Objetivo
 
-Consolidar a arquitetura do produto como plataforma SaaS multi-tenant, com uso manual ou integrado a ERP.
+Este arquivo foi reduzido para evitar duplicacao de manutencao.
 
-## Entidades principais
+Ele permanece como referencia rapida da decisao de produto:
 
-### tenants/{tenantId}
+- SmartSFA opera como SaaS multi-tenant.
+- Isolamento por tenantId e obrigatorio em todos os dados de negocio.
+- Membership define acesso, nunca inferencia por email/CNPJ.
+- O produto suporta modo manual e modo com ERP.
 
-- tenantId
-- slug
-- nomeFantasia
-- razaoSocial
-- ativo
-- onboardingStatus
-- operationMode: manual | sankhya | custom
-- erpProvider: none | sankhya | custom
-- workspaceType: seller_solo_workspace | rep_workspace | brand_owner_workspace
-- hierarchyModel: seller_only | rep_to_seller | full_chain
-- allowInvitations: bool
-- cnpjBinding: informational_only | owner_legal_entity
-- createdAt
-- updatedAt
+## Fontes canonicas atuais
 
-### usuarios/{uid}
+Para implementacao e regras completas, usar:
 
-- uid
-- email
-- displayName
-- platformRole: platform_admin | none
-- accountContractLock: flexible | enterprise_only
-- ativoGlobal
-- createdAt
-- updatedAt
+1. guia_implementacao_saas.md
+2. auth_access_model.md
+3. pricing_taxation_rules.md
+4. web_portal_architecture.md
 
-### tenant_memberships/{membershipId}
-
-Sugestao de chave: {tenantId}_{uid}
-
-- membershipId
-- tenantId
-- uid
-- role: owner | gerente | representante | vendedor
-- ativo
-- defaultTenant
-- ownerId
-- gerenteId
-- representanteId
-- vendedorId
-- createdAt
-- updatedAt
-
-### clientes/{clienteId}
-
-- tenantId
-- ownerId
-- gerenteId
-- representanteId
-- vendedorId
-- nome
-- documento
-- origemCadastro: manual | erp
-- createdAt
-- updatedAt
-
-### produtos/{produtoId}
-
-- tenantId
-- codigoInterno
-- descricao
-- origemCadastro: manual | erp
-- tabelaPrecoVersao
-- estoqueVersao
-- createdAt
-- updatedAt
-
-### pedidos/{pedidoId}
-
-- tenantId
-- ownerId
-- gerenteId
-- representanteId
-- vendedorId
-- origemPedido: manual | sync
-- statusFila: pendente_envio | enviado | erro
-- createdAt
-- updatedAt
-
-## Regras de isolamento
+## Regras que continuam validas
 
 1. Todo documento de negocio deve possuir tenantId.
-2. Nenhuma leitura ou escrita deve ocorrer fora do tenant selecionado.
-3. Hierarquia comercial sempre e avaliada dentro do tenant.
-4. platform_admin fica fora da hierarquia comercial.
-5. nome/CNPJ nao criam vinculo automatico entre tenants distintos.
-6. apenas brand_owner_workspace representa contratacao oficial vinculada ao CNPJ da marca.
-7. a conta que cria um brand_owner_workspace fica travada em modo enterprise_only.
-8. seller_solo_workspace e rep_workspace podem coexistir com outros contexts no mesmo login, desde que a conta nao esteja travada como enterprise_only.
-9. apenas um membership por usuario deve ficar marcado como defaultTenant = true.
-
-## Modo sem ERP
-
-O tenant pode operar apenas com:
-
-- importacao CSV de clientes
-- importacao CSV de produtos
-- definicao manual de tabelas
-- cadastro manual de usuarios
-- pedidos offline-first
-
-## Modo com ERP
-
-A mesma estrutura suporta adaptadores como:
-
-- Sankhya
-- Tiny
-- Bling
-- Provider customizado
-
-## Fases tecnicas
-
-1. Refatorar Firestore Rules para tenantId e memberships.
-2. Refatorar bootstrap para criar tenant e owner.
-3. Ajustar app para selecionar tenant e perfil a partir da membership.
-4. Implementar modo manual primeiro e integracao ERP depois.
+2. Leitura/escrita fora do tenant selecionado deve ser bloqueada.
+3. Workspace types oficiais: seller_solo_workspace, rep_workspace, brand_owner_workspace.
+4. Modo sem ERP nao e fallback fraco; e parte oficial do produto.
+5. Para catalogos grandes, evoluir para sincronizacao incremental (delta) e paginação de leitura.

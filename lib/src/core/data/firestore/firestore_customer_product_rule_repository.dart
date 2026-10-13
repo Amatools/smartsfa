@@ -9,6 +9,8 @@ class FirestoreCustomerProductRuleRepository
   FirestoreCustomerProductRuleRepository(this._firestore);
 
   final FirebaseFirestore _firestore;
+  final Map<String, List<CustomerProductRule>> _tenantCache =
+      <String, List<CustomerProductRule>>{};
 
   CollectionReference<Map<String, dynamic>> get _collection =>
       _firestore.collection('customer_product_rules');
@@ -24,14 +26,16 @@ class FirestoreCustomerProductRuleRepository
         .where('tenantId', isEqualTo: normalizedTenantId)
         .snapshots()
         .map((snapshot) {
-      final items = snapshot.docs.map((doc) {
-        final data = normalizeFirestoreMap(doc.data());
-        data.putIfAbsent('id', () => doc.id);
-        return CustomerProductRule.fromMap(data);
-      }).toList();
-      items.sort((a, b) => b.priority.compareTo(a.priority));
-      return items;
-    });
+          final items = snapshot.docs.map((doc) {
+            final data = normalizeFirestoreMap(doc.data());
+            data.putIfAbsent('id', () => doc.id);
+            return CustomerProductRule.fromMap(data);
+          }).toList();
+          items.sort((a, b) => b.priority.compareTo(a.priority));
+          _tenantCache[normalizedTenantId] =
+              List<CustomerProductRule>.unmodifiable(items);
+          return items;
+        });
   }
 
   @override
@@ -41,14 +45,23 @@ class FirestoreCustomerProductRuleRepository
       return const [];
     }
 
-    final snapshot =
-        await _collection.where('tenantId', isEqualTo: normalizedTenantId).get();
+    final cached = _tenantCache[normalizedTenantId];
+    if (cached != null) {
+      return List<CustomerProductRule>.from(cached);
+    }
+
+    final snapshot = await _collection
+        .where('tenantId', isEqualTo: normalizedTenantId)
+        .get();
     final items = snapshot.docs.map((doc) {
       final data = normalizeFirestoreMap(doc.data());
       data.putIfAbsent('id', () => doc.id);
       return CustomerProductRule.fromMap(data);
     }).toList();
     items.sort((a, b) => b.priority.compareTo(a.priority));
+    _tenantCache[normalizedTenantId] = List<CustomerProductRule>.unmodifiable(
+      items,
+    );
     return items;
   }
 
@@ -61,6 +74,15 @@ class FirestoreCustomerProductRuleRepository
     final normalizedId = id.trim();
     if (normalizedTenantId.isEmpty || normalizedId.isEmpty) {
       return null;
+    }
+
+    final cached = _tenantCache[normalizedTenantId];
+    if (cached != null) {
+      for (final item in cached) {
+        if (item.id == normalizedId) {
+          return item;
+        }
+      }
     }
 
     final doc = await _collection.doc(normalizedId).get();
@@ -79,6 +101,7 @@ class FirestoreCustomerProductRuleRepository
 
   @override
   Future<void> save(CustomerProductRule entity) {
+    _tenantCache.remove(entity.tenantId.trim());
     return _collection.doc(entity.id).set(entity.toMap());
   }
 
@@ -89,5 +112,6 @@ class FirestoreCustomerProductRuleRepository
       return;
     }
     await _collection.doc(id).delete();
+    _tenantCache.remove(tenantId.trim());
   }
 }

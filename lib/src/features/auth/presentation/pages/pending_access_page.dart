@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/models/access_request.dart';
@@ -26,7 +27,8 @@ class _PendingAccessPageState extends State<PendingAccessPage> {
   String? _message;
   AccessRequest? _currentRequest;
   final TextEditingController _inviteTokenController = TextEditingController();
-  final TextEditingController _workspaceNameController = TextEditingController();
+  final TextEditingController _workspaceNameController =
+      TextEditingController();
   final TextEditingController _cnpjController = TextEditingController();
   _OnboardingChoice _choice = _OnboardingChoice.sellerSolo;
 
@@ -71,6 +73,25 @@ class _PendingAccessPageState extends State<PendingAccessPage> {
         );
   }
 
+  Stream<bool> get _hasAnyActiveWorkspaceStream {
+    return FirebaseFirestore.instance
+        .collection('tenant_memberships')
+        .where('uid', isEqualTo: widget.user.uid)
+        .snapshots()
+        .map((snapshot) {
+          return snapshot.docs.any((doc) {
+            final data = doc.data();
+            final state = (data['state'] ?? 'active')
+                .toString()
+                .trim()
+                .toLowerCase();
+            final ativo = data['ativo'];
+            final isAtivo = ativo is bool ? ativo : true;
+            return state == 'active' && isAtivo;
+          });
+        });
+  }
+
   Future<void> _loadCurrentRequest() async {
     final request = await AccessRequestService(FirebaseFirestore.instance)
         .load(widget.user);
@@ -95,7 +116,8 @@ class _PendingAccessPageState extends State<PendingAccessPage> {
 
       setState(() {
         _currentRequest = request;
-        _message = 'Solicitacao enviada. Aguarde a liberacao de acesso interno.';
+        _message =
+            'Solicitacao enviada. Aguarde a liberacao de acesso interno.';
       });
     } catch (_) {
       setState(() {
@@ -122,10 +144,8 @@ class _PendingAccessPageState extends State<PendingAccessPage> {
         throw StateError('Informe um token de convite valido.');
       }
 
-      await TenantInvitationService(FirebaseFirestore.instance).acceptInvitation(
-        user: widget.user,
-        token: token,
-      );
+      await TenantInvitationService(FirebaseFirestore.instance)
+          .acceptInvitation(user: widget.user, token: token);
 
       setState(() {
         _message =
@@ -166,14 +186,14 @@ class _PendingAccessPageState extends State<PendingAccessPage> {
           );
 
       setState(() {
-        _message =
-        'Workspace vendedor solo criado com sucesso. Entrando no contexto privado...';
+        _message = 'Workspace vendedor solo criado com sucesso. Entrando no contexto privado...';
       });
 
       widget.onAccessUpdated?.call();
     } on FirebaseException catch (error) {
       setState(() {
-        _message = 'Erro Firebase (${error.code}): ${error.message ?? 'falha ao criar workspace solo.'}';
+        _message =
+            'Erro Firebase (${error.code}): ${error.message ?? 'falha ao criar workspace solo.'}';
       });
     } catch (error) {
       setState(() {
@@ -201,14 +221,15 @@ class _PendingAccessPageState extends State<PendingAccessPage> {
 
     try {
       final shouldClearPendingRequest = _currentRequest != null;
-      await SoloWorkspaceService(FirebaseFirestore.instance).createOwnerWorkspace(
-        user: widget.user,
-        plan: plan,
-        workspaceType: workspaceType,
-        workspaceName: _workspaceNameController.text,
-        cnpj: _cnpjController.text,
-        clearPendingRequest: shouldClearPendingRequest,
-      );
+      await SoloWorkspaceService(FirebaseFirestore.instance)
+          .createOwnerWorkspace(
+            user: widget.user,
+            plan: plan,
+            workspaceType: workspaceType,
+            workspaceName: _workspaceNameController.text,
+            cnpj: _cnpjController.text,
+            clearPendingRequest: shouldClearPendingRequest,
+          );
 
       setState(() {
         _message = 'Workspace criado com sucesso. Entrando no tenant...';
@@ -221,7 +242,8 @@ class _PendingAccessPageState extends State<PendingAccessPage> {
       });
     } on FirebaseException catch (error) {
       setState(() {
-        _message = 'Erro Firebase (${error.code}): ${error.message ?? 'falha ao criar workspace.'}';
+        _message =
+            'Erro Firebase (${error.code}): ${error.message ?? 'falha ao criar workspace.'}';
       });
     } catch (error) {
       setState(() {
@@ -281,55 +303,89 @@ class _PendingAccessPageState extends State<PendingAccessPage> {
     );
   }
 
-  Widget _buildChoiceSection() {
+  Widget _buildChoiceSection({required bool centerOnWeb}) {
     return StreamBuilder<AccountContractLock>(
       stream: _accountContractLockStream,
       builder: (context, snapshot) {
-        final accountContractLock =
-            snapshot.data ?? AccountContractLock.flexible;
-        final canCreateFlexibleWorkspaces =
-            accountContractLock != AccountContractLock.enterpriseOnly;
+        return StreamBuilder<bool>(
+          stream: _hasAnyActiveWorkspaceStream,
+          builder: (context, membershipsSnapshot) {
+            final accountContractLock =
+                snapshot.data ?? AccountContractLock.flexible;
+            final membershipsLoaded =
+                membershipsSnapshot.hasData ||
+                membershipsSnapshot.connectionState == ConnectionState.done;
+            final hasAnyActiveWorkspace = membershipsSnapshot.data ?? true;
+            final canCreateFlexibleWorkspaces =
+                accountContractLock != AccountContractLock.enterpriseOnly;
+            final canCreateEnterpriseWorkspace =
+                membershipsLoaded && !hasAnyActiveWorkspace;
+            final allowedChoices = <_OnboardingChoice>[
+              if (canCreateFlexibleWorkspaces) _OnboardingChoice.sellerSolo,
+              if (canCreateFlexibleWorkspaces) _OnboardingChoice.repWorkspace,
+              if (canCreateEnterpriseWorkspace) _OnboardingChoice.brandOwner,
+              _OnboardingChoice.invite,
+            ];
 
-        if (!canCreateFlexibleWorkspaces &&
-            (_choice == _OnboardingChoice.sellerSolo ||
-                _choice == _OnboardingChoice.repWorkspace)) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (!mounted) {
-              return;
+            if (!allowedChoices.contains(_choice)) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (!mounted || allowedChoices.isEmpty) {
+                  return;
+                }
+                setState(() {
+                  _choice = allowedChoices.first;
+                });
+              });
             }
-            setState(() {
-              _choice = _OnboardingChoice.brandOwner;
-            });
-          });
-        }
 
-        return Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          children: [
-            if (canCreateFlexibleWorkspaces)
-              _buildChoiceCard(
-                value: _OnboardingChoice.sellerSolo,
-                title: 'Individual',
-                subtitle: 'Base privada sem equipe e sem interligacao com outros usuarios.',
-              ),
-            if (canCreateFlexibleWorkspaces)
-              _buildChoiceCard(
-                value: _OnboardingChoice.repWorkspace,
-                title: 'Representacoes',
-                subtitle: 'Representante opera base propria e pode convidar vendedores.',
-              ),
-            _buildChoiceCard(
-              value: _OnboardingChoice.brandOwner,
-              title: 'Empresa',
-              subtitle: 'Tenant oficial da marca com CNPJ e cadeia completa de acesso.',
-            ),
-            _buildChoiceCard(
-              value: _OnboardingChoice.invite,
-              title: 'Entrar com convite',
-              subtitle: 'Use o token recebido para entrar em um tenant existente.',
-            ),
-          ],
+            return Column(
+              crossAxisAlignment: centerOnWeb
+                  ? CrossAxisAlignment.center
+                  : CrossAxisAlignment.start,
+              children: [
+                Wrap(
+                  alignment: centerOnWeb
+                      ? WrapAlignment.center
+                      : WrapAlignment.start,
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: [
+                    if (canCreateFlexibleWorkspaces)
+                      _buildChoiceCard(
+                        value: _OnboardingChoice.sellerSolo,
+                        title: 'Individual',
+                        subtitle: 'Base privada sem equipe e sem interligacao com outros usuarios.',
+                      ),
+                    if (canCreateFlexibleWorkspaces)
+                      _buildChoiceCard(
+                        value: _OnboardingChoice.repWorkspace,
+                        title: 'Representacoes',
+                        subtitle: 'Representante opera base propria e pode convidar vendedores.',
+                      ),
+                    if (canCreateEnterpriseWorkspace)
+                      _buildChoiceCard(
+                        value: _OnboardingChoice.brandOwner,
+                        title: 'Empresa',
+                        subtitle: 'Tenant oficial da marca com CNPJ e cadeia completa de acesso.',
+                      ),
+                    _buildChoiceCard(
+                      value: _OnboardingChoice.invite,
+                      title: 'Entrar com convite',
+                      subtitle: 'Use o token recebido para entrar em um tenant existente.',
+                    ),
+                  ],
+                ),
+                if (!canCreateEnterpriseWorkspace) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    'Criacao de workspace Empresa so aparece no primeiro workspace do login. Para entrar em um workspace enterprise existente, use convite.',
+                    style: Theme.of(context).textTheme.bodySmall,
+                    textAlign: centerOnWeb ? TextAlign.center : TextAlign.start,
+                  ),
+                ],
+              ],
+            );
+          },
         );
       },
     );
@@ -361,15 +417,15 @@ class _PendingAccessPageState extends State<PendingAccessPage> {
     final isSellerSolo = _choice == _OnboardingChoice.sellerSolo;
     final isBrandOwner = _choice == _OnboardingChoice.brandOwner;
     final plan = isBrandOwner
-      ? OnboardingPlan.enterprise
-      : isSellerSolo
-      ? OnboardingPlan.solo
-      : OnboardingPlan.team;
+        ? OnboardingPlan.enterprise
+        : isSellerSolo
+        ? OnboardingPlan.solo
+        : OnboardingPlan.team;
     final workspaceType = isBrandOwner
-      ? WorkspaceType.brandOwnerWorkspace
-      : isSellerSolo
-      ? WorkspaceType.sellerSoloWorkspace
-      : WorkspaceType.repWorkspace;
+        ? WorkspaceType.brandOwnerWorkspace
+        : isSellerSolo
+        ? WorkspaceType.sellerSoloWorkspace
+        : WorkspaceType.repWorkspace;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -433,76 +489,100 @@ class _PendingAccessPageState extends State<PendingAccessPage> {
 
   @override
   Widget build(BuildContext context) {
+    final isWebLayout = kIsWeb;
+
+    final content = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (isWebLayout && Navigator.of(context).canPop()) ...[
+          Align(
+            alignment: Alignment.centerLeft,
+            child: OutlinedButton.icon(
+              onPressed: () => Navigator.of(context).maybePop(),
+              icon: const Icon(Icons.arrow_back_outlined),
+              label: const Text('Voltar'),
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
+        Text(
+          'Acesso e workspaces do Smart SFA',
+          style: Theme.of(context).textTheme.headlineSmall,
+        ),
+        const SizedBox(height: 12),
+        Text('Usuario: ${widget.user.email ?? widget.user.uid}'),
+        const SizedBox(height: 8),
+        Text(
+          'Escolha como deseja entrar ou ampliar seus acessos de workspace.',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        StreamBuilder<AccountContractLock>(
+          stream: _accountContractLockStream,
+          builder: (context, snapshot) {
+            final accountContractLock =
+                snapshot.data ?? AccountContractLock.flexible;
+            return Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                accountContractLock == AccountContractLock.enterpriseOnly
+                    ? 'Tipo de conta: Conta BrandOp. Este login so pode operar no contexto oficial da empresa contratante.'
+                    : 'Tipo de conta: Conta MultiOp. Este login pode reunir workspace Individual, Representacoes e acessos convidados.',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            );
+          },
+        ),
+        if (_currentRequest != null) ...[
+          const SizedBox(height: 12),
+          Text('Status atual: ${_currentRequest!.status.label}'),
+          if (_currentRequest!.tenantSlugOuConvite != null) ...[
+            const SizedBox(height: 4),
+            Text('Vinculo solicitado: ${_currentRequest!.tenantSlugOuConvite}'),
+          ],
+        ],
+        const SizedBox(height: 16),
+        _buildChoiceSection(centerOnWeb: isWebLayout),
+        const SizedBox(height: 8),
+        if (_choice == _OnboardingChoice.invite)
+          _buildInvitePanel()
+        else
+          _buildWorkspacePanel(),
+        const SizedBox(height: 16),
+        OutlinedButton(
+          onPressed: _sending ? null : _requestAccess,
+          child: Text(
+            _sending
+                ? 'Enviando solicitacao...'
+                : 'Solicitar liberacao interna (suporte)',
+          ),
+        ),
+        const SizedBox(height: 12),
+        OutlinedButton(
+          onPressed: () => FirebaseAuth.instance.signOut(),
+          child: const Text('Sair'),
+        ),
+        if (_message != null) ...[const SizedBox(height: 16), Text(_message!)],
+      ],
+    );
+
     return Scaffold(
       body: SafeArea(
         child: SingleChildScrollView(
           child: Padding(
             padding: const EdgeInsets.all(24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Primeiro acesso ao Smart SFA',
-                  style: Theme.of(context).textTheme.headlineSmall,
-                ),
-                const SizedBox(height: 12),
-                Text('Usuario: ${widget.user.email ?? widget.user.uid}'),
-                const SizedBox(height: 8),
-                Text(
-                  'Escolha como deseja entrar: workspace Individual, Representacoes, Empresa ou convite.',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-                StreamBuilder<AccountContractLock>(
-                  stream: _accountContractLockStream,
-                  builder: (context, snapshot) {
-                    final accountContractLock =
-                        snapshot.data ?? AccountContractLock.flexible;
-                    return Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: Text(
-                        accountContractLock == AccountContractLock.enterpriseOnly
-                          ? 'Tipo de conta: Conta BrandOp. Este login so pode operar no contexto oficial da empresa contratante.'
-                          : 'Tipo de conta: Conta MultiOp. Este login pode reunir workspace Individual, Representacoes e acessos convidados.',
-                        style: Theme.of(context).textTheme.bodySmall,
+            child: isWebLayout
+                ? Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 760),
+                      child: Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: content,
+                        ),
                       ),
-                    );
-                  },
-                ),
-                if (_currentRequest != null) ...[
-                  const SizedBox(height: 12),
-                  Text('Status atual: ${_currentRequest!.status.label}'),
-                  if (_currentRequest!.tenantSlugOuConvite != null) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      'Vinculo solicitado: ${_currentRequest!.tenantSlugOuConvite}',
                     ),
-                  ],
-                ],
-                const SizedBox(height: 16),
-                _buildChoiceSection(),
-                const SizedBox(height: 8),
-                if (_choice == _OnboardingChoice.invite)
-                  _buildInvitePanel()
-                else
-                  _buildWorkspacePanel(),
-                const SizedBox(height: 16),
-                OutlinedButton(
-                  onPressed: _sending ? null : _requestAccess,
-                  child: Text(_sending
-                      ? 'Enviando solicitacao...'
-                      : 'Solicitar liberacao interna (suporte)'),
-                ),
-                const SizedBox(height: 12),
-                OutlinedButton(
-                  onPressed: () => FirebaseAuth.instance.signOut(),
-                  child: const Text('Sair'),
-                ),
-                if (_message != null) ...[
-                  const SizedBox(height: 16),
-                  Text(_message!),
-                ],
-              ],
-            ),
+                  )
+                : content,
           ),
         ),
       ),
@@ -510,9 +590,4 @@ class _PendingAccessPageState extends State<PendingAccessPage> {
   }
 }
 
-enum _OnboardingChoice {
-  sellerSolo,
-  repWorkspace,
-  brandOwner,
-  invite,
-}
+enum _OnboardingChoice { sellerSolo, repWorkspace, brandOwner, invite }

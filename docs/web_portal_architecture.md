@@ -81,13 +81,9 @@ Ambos compartilham o mesmo nucleo de dominio:
 
 ## Contextos de workspace
 
-O portal deve respeitar 3 contextos de tenant:
+As regras oficiais de tipos de workspace, criacao por login e lock enterprise_only estao centralizadas em:
 
-- seller_solo_workspace: base privada sem interligacao de equipe.
-- rep_workspace: base de representacao com relacao representante -> vendedores.
-- brand_owner_workspace: base oficial da marca com cadeia completa owner > gerente > representante > vendedor.
-
-Mesmo quando a empresa representada tiver o mesmo nome (ex.: Amatools), cada contexto acima permanece em base separada quando o tenantId for diferente.
+- [workspace_access_billing_policy.md](workspace_access_billing_policy.md)
 
 ## Estrutura recomendada
 
@@ -178,7 +174,7 @@ Deve suportar, no minimo:
 
 As regras de negocio atualmente implementadas para tabelas de preco, fallback por regiao, politicas de desconto e tributacao por NCM/UF estao consolidadas em:
 
-- `docs/pricing_taxation_rules.md`
+- [pricing_taxation_rules.md](pricing_taxation_rules.md)
 
 Este arquivo deve ser atualizado sempre que houver alteracao nas regras de calculo ou no contrato das colecoes relacionadas.
 

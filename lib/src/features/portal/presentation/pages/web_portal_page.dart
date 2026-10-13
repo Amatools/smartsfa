@@ -25,6 +25,7 @@ import '../../../../shared/utils/file_download.dart';
 import '../../../auth/services/solo_workspace_service.dart';
 import '../../../auth/services/tenant_membership_service.dart';
 import '../../../auth/services/workspace_profile_service.dart';
+import '../../../auth/presentation/pages/pending_access_page.dart';
 import '../../../clientes/presentation/pages/clientes_page.dart';
 import '../../../pedidos/presentation/pages/pedidos_page.dart';
 import '../../../precos/presentation/pages/tabelas_preco_page.dart';

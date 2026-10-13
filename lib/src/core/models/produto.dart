@@ -5,6 +5,7 @@ class Produto implements TenantScopedEntity {
   const Produto({
     required this.id,
     required this.tenantId,
+    this.representedCompanyId,
     required this.codigoInterno,
     required this.descricao,
     required this.origemCadastro,
@@ -39,6 +40,8 @@ class Produto implements TenantScopedEntity {
     this.pesoKg,
     this.erpProductId,
     this.erpSyncId,
+    this.syncVersion = 0,
+    this.deletedAt,
     this.createdAt,
     this.updatedAt,
   });
@@ -47,6 +50,7 @@ class Produto implements TenantScopedEntity {
     return Produto(
       id: map['id'] as String? ?? '',
       tenantId: map['tenantId'] as String? ?? '',
+      representedCompanyId: map['representedCompanyId'] as String?,
       codigoInterno: map['codigoInterno'] as String? ?? '',
       descricao: map['descricao'] as String? ?? '',
       origemCadastro: ProductSource.fromValue(
@@ -87,6 +91,8 @@ class Produto implements TenantScopedEntity {
       pesoKg: _readDouble(map['pesoKg']),
       erpProductId: map['erpProductId'] as String?,
       erpSyncId: map['erpSyncId'] as String?,
+      syncVersion: _readInt(map['syncVersion']) ?? 0,
+      deletedAt: _readDateTime(map['deletedAt']),
       createdAt: _readDateTime(map['createdAt']),
       updatedAt: _readDateTime(map['updatedAt']),
     );
@@ -96,6 +102,7 @@ class Produto implements TenantScopedEntity {
   final String id;
   @override
   final String tenantId;
+  final String? representedCompanyId;
   final String codigoInterno;
   final String descricao;
   final ProductSource origemCadastro;
@@ -130,12 +137,15 @@ class Produto implements TenantScopedEntity {
   final double? pesoKg;
   final String? erpProductId;
   final String? erpSyncId;
+  final int syncVersion;
+  final DateTime? deletedAt;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
   Produto copyWith({
     String? id,
     String? tenantId,
+    String? representedCompanyId,
     String? codigoInterno,
     String? descricao,
     ProductSource? origemCadastro,
@@ -170,12 +180,15 @@ class Produto implements TenantScopedEntity {
     double? pesoKg,
     String? erpProductId,
     String? erpSyncId,
+    int? syncVersion,
+    DateTime? deletedAt,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
     return Produto(
       id: id ?? this.id,
       tenantId: tenantId ?? this.tenantId,
+      representedCompanyId: representedCompanyId ?? this.representedCompanyId,
       codigoInterno: codigoInterno ?? this.codigoInterno,
       descricao: descricao ?? this.descricao,
       origemCadastro: origemCadastro ?? this.origemCadastro,
@@ -210,6 +223,8 @@ class Produto implements TenantScopedEntity {
       pesoKg: pesoKg ?? this.pesoKg,
       erpProductId: erpProductId ?? this.erpProductId,
       erpSyncId: erpSyncId ?? this.erpSyncId,
+      syncVersion: syncVersion ?? this.syncVersion,
+      deletedAt: deletedAt ?? this.deletedAt,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -219,6 +234,7 @@ class Produto implements TenantScopedEntity {
     return {
       'id': id,
       'tenantId': tenantId,
+      'representedCompanyId': representedCompanyId,
       'codigoInterno': codigoInterno,
       'descricao': descricao,
       'origemCadastro': origemCadastro.value,
@@ -253,6 +269,8 @@ class Produto implements TenantScopedEntity {
       'pesoKg': pesoKg,
       'erpProductId': erpProductId,
       'erpSyncId': erpSyncId,
+      'syncVersion': syncVersion,
+      'deletedAt': deletedAt?.toIso8601String(),
       'createdAt': createdAt?.toIso8601String(),
       'updatedAt': updatedAt?.toIso8601String(),
     };
@@ -270,6 +288,22 @@ DateTime? _readDateTime(Object? value) {
 
   if (value is int) {
     return DateTime.fromMillisecondsSinceEpoch(value);
+  }
+
+  return null;
+}
+
+int? _readInt(Object? value) {
+  if (value is int) {
+    return value;
+  }
+
+  if (value is double) {
+    return value.round();
+  }
+
+  if (value is String) {
+    return int.tryParse(value.trim());
   }
 
   return null;

@@ -29,6 +29,7 @@ class ProductEditorActionFlowCoordinator {
   Future<ProductEditorSaveOutcomeUiAction> executeSave({
     required ProdutoRepository repository,
     required AppIdentity identity,
+    required String? representedCompanyId,
     required Produto? existingProduct,
     required bool createAnother,
     required bool isEnterprise,
@@ -54,6 +55,7 @@ class ProductEditorActionFlowCoordinator {
     final outcome = await saveFlowCoordinator.execute(
       repository: repository,
       identity: identity,
+      representedCompanyId: representedCompanyId,
       existingProduct: existingProduct,
       createAnother: createAnother,
       isEnterprise: isEnterprise,

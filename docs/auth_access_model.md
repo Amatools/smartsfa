@@ -19,19 +19,9 @@ Esse modelo permite:
 
 ## Tipos oficiais de workspace (v2)
 
-O produto passa a operar com 3 tipos oficiais de tenant/workspace:
+As regras de tipos de workspace, limites de criacao por login e lock de conta foram centralizadas em:
 
-- seller_solo_workspace: uso individual de vendedor, base privada, sem interligacao com outros usuarios.
-- rep_workspace: uso de representacao comercial, com interligacao entre representante e vendedores convidados.
-- brand_owner_workspace: tenant oficial da marca contratante, com hierarquia completa owner > gerente > representante > vendedor.
-
-Regra estrutural:
-
-- mesmo nome de empresa representada pode existir em workspaces diferentes sem qualquer vinculo automatico;
-- CNPJ informado em seller_solo_workspace e rep_workspace e apenas informativo interno;
-- vinculo legal de CNPJ existe apenas em brand_owner_workspace.
-- a conta que cria um brand_owner_workspace passa a ficar travada em modo enterprise_only;
-- conta enterprise_only nao pode criar workspace seller_solo_workspace nem rep_workspace.
+- [workspace_access_billing_policy.md](workspace_access_billing_policy.md)
 
 ## Fluxo de acesso
 
@@ -70,7 +60,7 @@ Regra de uso recomendada:
 - marca contratante: criar brand_owner_workspace para operacao corporativa completa.
 - solicitacao de acesso: manter para fluxo assistido quando nao houver convite imediato.
 
-Para diagnosticar falhas de login no web, consulte [docs/firebase/auth_error_codes.md](docs/firebase/auth_error_codes.md).
+Para diagnosticar falhas de login no web, consulte [firebase/auth_error_codes.md](firebase/auth_error_codes.md).
 
 ### Sobre tenant A e tenant B
 
@@ -136,27 +126,9 @@ Melhor pratica:
 
 ## Modelos de conta e monetizacao (direcao)
 
-### Plano Solo
+As diretrizes de lock de conta, criacao de enterprise e status do billing estao centralizadas em:
 
-- usuario individual sem equipe;
-- tenant solo com membership inicial vendedor;
-- sem integracao ERP obrigatoria;
-- sincronizacao essencial e foco em baixo custo.
-
-### Plano Team (sem ERP)
-
-- escritorio de representacao/equipe comercial;
-- owner paga a assinatura e convidados nao pagam individualmente;
-- convites obrigatorios para entrada de gerente/representante/vendedor;
-- dependencia maior de sincronizacao para visao de equipe.
-
-### Plano Enterprise (com ERP)
-
-- empresa cliente com integracao Sankhya (ou outro ERP);
-- owner paga a assinatura corporativa;
-- convidados entram por convite no tenant;
-- Firestore segue como camada de colaboracao, acesso, offline e estado operacional.
-- a conta que cria o tenant oficial da marca deve ser dedicada a esse contexto enterprise.
+- [workspace_access_billing_policy.md](workspace_access_billing_policy.md)
 
 ## Estrutura recomendada (Firestore)
 

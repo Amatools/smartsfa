@@ -8,6 +8,7 @@ import '../../../../core/models/domain_types.dart';
 import '../../../../core/models/tenant_entry_decision.dart';
 import '../../../../navigation/app_shell.dart';
 import '../../models/tenant_access.dart';
+import '../../services/tenant_membership_service.dart';
 import '../../services/tenant_entry_resolver.dart';
 import 'loading_page.dart';
 import 'pending_access_page.dart';
@@ -21,11 +22,12 @@ _WebUiMode _resolveWebUiMode() {
     return _WebUiMode.auto;
   }
 
-  final rawMode = (Uri.base.queryParameters['mode'] ??
-          Uri.base.queryParameters['view'] ??
-          '')
-      .trim()
-      .toLowerCase();
+  final rawMode =
+      (Uri.base.queryParameters['mode'] ??
+              Uri.base.queryParameters['view'] ??
+              '')
+          .trim()
+          .toLowerCase();
   if (rawMode == 'mobile' || rawMode == 'app') {
     return _WebUiMode.mobile;
   }
@@ -63,15 +65,12 @@ class FirebaseAuthGatePage extends StatelessWidget {
           }
 
           final screenWidth = MediaQuery.sizeOf(context).width;
-          return screenWidth < 840
-              ? const SignInPage()
-              : const WebSignInPage();
+          return screenWidth < 840 ? const SignInPage() : const WebSignInPage();
         }
 
         return _UserAccessResolver(
           user: user,
-          forceMobilePreviewOnWeb:
-              kIsWeb && webUiMode == _WebUiMode.mobile,
+          forceMobilePreviewOnWeb: kIsWeb && webUiMode == _WebUiMode.mobile,
         );
       },
     );
@@ -207,67 +206,95 @@ class _TenantAccessResolverState extends State<_TenantAccessResolver> {
 
   @override
   Widget build(BuildContext context) {
-    final selectedSeed = widget.decision.options.firstWhere(
-      (item) => item.membershipId == _selectedMembershipId,
-      orElse: () => widget.decision.options.first,
-    );
+    return StreamBuilder<List<TenantEntryOption>>(
+      stream: TenantMembershipService(FirebaseFirestore.instance)
+          .watchTenantChoicesForUser(widget.user.uid),
+      builder: (context, accessSnapshot) {
+        final liveOptions = accessSnapshot.data ?? const <TenantEntryOption>[];
+        final options = liveOptions.isNotEmpty
+            ? liveOptions
+            : widget.decision.options;
 
-    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance
-          .collection('tenants')
-          .doc(selectedSeed.tenantId)
-          .snapshots(),
-      builder: (context, tenantSnapshot) {
-        if (tenantSnapshot.connectionState == ConnectionState.waiting) {
-          return const LoadingPage(label: 'Carregando tenant...');
-        }
-
-        final tenantDoc = tenantSnapshot.data;
-        if (tenantDoc == null || !tenantDoc.exists) {
-          return const AccessDeniedScaffold(
-            title: 'Tenant indisponivel',
-            message:
-                'A conta possui membership, mas o tenant nao foi encontrado.',
+        if (options.isEmpty) {
+          return PendingAccessPage(
+            user: widget.user,
+            onAccessUpdated: widget.onAccessUpdated,
           );
         }
 
-        final tenantData = tenantDoc.data() ?? <String, dynamic>{};
-        if (tenantData['ativo'] != true) {
-          return const AccessDeniedScaffold(
-            title: 'Tenant inativo',
-            message: 'O tenant selecionado nao esta ativo no momento.',
-          );
-        }
-
-        final access = TenantAccess(
-          membershipId: selectedSeed.membershipId,
-          tenantId: selectedSeed.tenantId,
-          tenantName: selectedSeed.tenantName,
-          role: selectedSeed.role,
-          defaultTenant: selectedSeed.defaultTenant,
+        final selectedSeed = options.firstWhere(
+          (item) => item.membershipId == _selectedMembershipId,
+          orElse: () => options.first,
         );
 
-        final effectiveRole = _devRoleOverride ?? access.role;
-        final hasRoleOverride = _devRoleOverride != null;
+        if (selectedSeed.membershipId != _selectedMembershipId) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) {
+              return;
+            }
+            setState(() {
+              _selectedMembershipId = selectedSeed.membershipId;
+            });
+          });
+        }
 
-        return AppShellPage(
-          identity: AppIdentity(
-            tenantId: access.tenantId,
-            tenantName: access.tenantName,
-            userLabel: widget.user.email ?? widget.user.uid,
-            role: effectiveRole,
-            isMock: false,
-            membershipId: access.membershipId,
-            isPersonalWorkspace: false,
-          ),
-          onAccessUpdated: widget.onAccessUpdated,
-          forceMobilePreviewOnWeb: widget.forceMobilePreviewOnWeb,
-          onSignOut: () => FirebaseAuth.instance.signOut(),
-          onSwitchProfile: () {
-            _showAccessPicker(
-              context,
-              realRole: access.role,
-              hasRoleOverride: hasRoleOverride,
+        return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+          stream: FirebaseFirestore.instance
+              .collection('tenants')
+              .doc(selectedSeed.tenantId)
+              .snapshots(),
+          builder: (context, tenantSnapshot) {
+            if (tenantSnapshot.connectionState == ConnectionState.waiting) {
+              return const LoadingPage(label: 'Carregando tenant...');
+            }
+
+            final tenantDoc = tenantSnapshot.data;
+            if (tenantDoc == null || !tenantDoc.exists) {
+              return const AccessDeniedScaffold(
+                title: 'Tenant indisponivel',
+                message: 'A conta possui membership, mas o tenant nao foi encontrado.',
+              );
+            }
+
+            final tenantData = tenantDoc.data() ?? <String, dynamic>{};
+            if (tenantData['ativo'] != true) {
+              return const AccessDeniedScaffold(
+                title: 'Tenant inativo',
+                message: 'O tenant selecionado nao esta ativo no momento.',
+              );
+            }
+
+            final access = TenantAccess(
+              membershipId: selectedSeed.membershipId,
+              tenantId: selectedSeed.tenantId,
+              tenantName: selectedSeed.tenantName,
+              role: selectedSeed.role,
+              defaultTenant: selectedSeed.defaultTenant,
+            );
+            final effectiveRole = _devRoleOverride ?? access.role;
+            final hasRoleOverride = _devRoleOverride != null;
+
+            return AppShellPage(
+              identity: AppIdentity(
+                tenantId: access.tenantId,
+                tenantName: access.tenantName,
+                userLabel: widget.user.email ?? widget.user.uid,
+                role: effectiveRole,
+                isMock: false,
+                membershipId: access.membershipId,
+                isPersonalWorkspace: false,
+              ),
+              onAccessUpdated: widget.onAccessUpdated,
+              forceMobilePreviewOnWeb: widget.forceMobilePreviewOnWeb,
+              onSignOut: () => FirebaseAuth.instance.signOut(),
+              onSwitchProfile: () {
+                _showAccessPicker(
+                  context,
+                  options: options,
+                  realRole: access.role,
+                  hasRoleOverride: hasRoleOverride,
+                );
+              },
             );
           },
         );
@@ -277,47 +304,79 @@ class _TenantAccessResolverState extends State<_TenantAccessResolver> {
 
   void _showAccessPicker(
     BuildContext context, {
+    required List<TenantEntryOption> options,
     required String realRole,
     required bool hasRoleOverride,
   }) {
+    final parentContext = context;
+
     showModalBottomSheet<void>(
       context: context,
       builder: (context) {
-        final canSwitchMembership = widget.decision.options.length > 1;
+        final canSwitchMembership = options.length > 1;
 
         return SafeArea(
           child: ListView(
             shrinkWrap: true,
             children: [
               const ListTile(
-                title: Text('Trocar acesso'),
-                subtitle: Text('Selecione tenant/perfil para esta sessao.'),
+                title: Text('Trocar workspace'),
+                subtitle: Text('Selecione o workspace ativo desta sessao.'),
               ),
-              if (canSwitchMembership)
-                ...widget.decision.options.map(
-                  (item) => ListTile(
-                    title: Text(item.tenantName),
-                    subtitle: Text('Role real: ${item.role}'),
-                    trailing: item.membershipId == _selectedMembershipId
-                        ? const Icon(Icons.check)
-                        : null,
-                    onTap: () {
-                      setState(() {
-                        _selectedMembershipId = item.membershipId;
-                        _devRoleOverride = null;
-                      });
-                      Navigator.of(context).pop();
-                    },
+              ...options.map(
+                (item) => ListTile(
+                  title: Text(item.tenantName),
+                  subtitle: Text('Perfil no workspace: ${item.role}'),
+                  trailing: item.membershipId == _selectedMembershipId
+                      ? const Icon(Icons.check)
+                      : null,
+                  onTap: () {
+                    setState(() {
+                      _selectedMembershipId = item.membershipId;
+                      _devRoleOverride = null;
+                    });
+                    Navigator.of(context).pop();
+                  },
+                ),
+              ),
+              if (!canSwitchMembership) ...[
+                const Divider(height: 1),
+                const ListTile(
+                  leading: Icon(Icons.info_outline),
+                  title: Text('Apenas um workspace disponível'),
+                  subtitle: Text(
+                    'Sua conta possui somente um workspace ativo no momento.',
                   ),
                 ),
+              ],
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.add_business_outlined),
+                title: const Text('Adicionar workspace'),
+                subtitle: const Text(
+                  'Crie Individual/Representacoes ou entre com convite.',
+                ),
+                onTap: () async {
+                  Navigator.of(context).pop();
+                  await Navigator.of(parentContext).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => PendingAccessPage(
+                        user: widget.user,
+                        onAccessUpdated: widget.onAccessUpdated,
+                      ),
+                    ),
+                  );
+                },
+              ),
               if (kDebugMode) ...[
                 const Divider(height: 1),
                 ListTile(
-                  title: const Text('Perfil de interface (dev)'),
+                  leading: const Icon(Icons.science_outlined),
+                  title: const Text('Troca rapida de hierarquia (dev)'),
                   subtitle: Text(
                     hasRoleOverride
                         ? 'Override ativo: $_devRoleOverride (real: $realRole)'
-                        : 'Role real atual: $realRole',
+                        : 'Hierarquia real atual: $realRole',
                   ),
                 ),
                 ..._devRoles.map(
@@ -335,8 +394,8 @@ class _TenantAccessResolverState extends State<_TenantAccessResolver> {
                   ),
                 ),
                 ListTile(
-                  title: const Text('Usar role real do Firebase'),
-                  subtitle: const Text('Remove override de interface.'),
+                  title: const Text('Usar hierarquia real do workspace'),
+                  subtitle: const Text('Remove o override de teste.'),
                   trailing: !hasRoleOverride ? const Icon(Icons.check) : null,
                   onTap: () {
                     setState(() {

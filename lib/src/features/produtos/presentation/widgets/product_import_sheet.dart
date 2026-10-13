@@ -10,10 +10,12 @@ Future<void> downloadProductImportTemplate(
   BuildContext context, {
   required AppIdentity identity,
   required ProdutoRepository repository,
+  String? representedCompanyId,
 }) async {
   final importService = ProductCsvImportService(
     identity: identity,
     repository: repository,
+    representedCompanyId: representedCompanyId,
   );
 
   try {
@@ -22,16 +24,15 @@ Future<void> downloadProductImportTemplate(
     await downloadFileBytes(
       bytes: bytes,
       fileName: 'modelo_produtos_$stamp.xlsx',
-      mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      mimeType:
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     );
   } catch (error) {
     if (!context.mounted) {
       return;
     }
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Falha ao baixar modelo de produtos: $error'),
-      ),
+      SnackBar(content: Text('Falha ao baixar modelo de produtos: $error')),
     );
   }
 }
@@ -40,10 +41,12 @@ Future<void> openProductImportSheet(
   BuildContext context, {
   required AppIdentity identity,
   required ProdutoRepository repository,
+  String? representedCompanyId,
 }) async {
   final importService = ProductCsvImportService(
     identity: identity,
     repository: repository,
+    representedCompanyId: representedCompanyId,
   );
   PlatformFile? selectedFile;
   ProductImportValidation? validation;
@@ -65,7 +68,9 @@ Future<void> openProductImportSheet(
               withData: true,
             );
 
-            final file = result?.files.isNotEmpty == true ? result!.files.first : null;
+            final file = result?.files.isNotEmpty == true
+                ? result!.files.first
+                : null;
             if (file == null) {
               return;
             }
@@ -80,7 +85,9 @@ Future<void> openProductImportSheet(
             final file = selectedFile;
             if (file == null) {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Selecione uma planilha primeiro.')),
+                const SnackBar(
+                  content: Text('Selecione uma planilha primeiro.'),
+                ),
               );
               return;
             }
@@ -93,7 +100,9 @@ Future<void> openProductImportSheet(
             final file = selectedFile;
             if (file == null) {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Selecione uma planilha para importar.')),
+                const SnackBar(
+                  content: Text('Selecione uma planilha para importar.'),
+                ),
               );
               return;
             }
@@ -103,9 +112,8 @@ Future<void> openProductImportSheet(
               setSheetState(() {
                 validation = report;
               });
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(report.message)),
-              );
+              ScaffoldMessenger.of(context)
+                  .showSnackBar(SnackBar(content: Text(report.message)));
               return;
             }
 
@@ -122,7 +130,11 @@ Future<void> openProductImportSheet(
 
               Navigator.of(sheetContext).pop();
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('$imported produto(s) importado(s) com sucesso.')),
+                SnackBar(
+                  content: Text(
+                    '$imported produto(s) importado(s) com sucesso.',
+                  ),
+                ),
               );
             } finally {
               if (context.mounted) {
@@ -158,16 +170,24 @@ Future<void> openProductImportSheet(
                       contentPadding: EdgeInsets.zero,
                       leading: const Icon(Icons.description_outlined),
                       title: Text(selectedFile!.name),
-                      subtitle: Text('${(selectedFile!.size / 1024).toStringAsFixed(1)} KB'),
+                      subtitle: Text(
+                        '${(selectedFile!.size / 1024).toStringAsFixed(1)} KB',
+                      ),
                     ),
                   if (validation != null)
                     ListTile(
                       contentPadding: EdgeInsets.zero,
                       leading: Icon(
-                        validation!.ok ? Icons.verified_outlined : Icons.error_outline,
+                        validation!.ok
+                            ? Icons.verified_outlined
+                            : Icons.error_outline,
                         color: validation!.ok ? Colors.green : Colors.red,
                       ),
-                      title: Text(validation!.ok ? 'Validacao concluida' : 'Validacao com erro'),
+                      title: Text(
+                        validation!.ok
+                            ? 'Validacao concluida'
+                            : 'Validacao com erro',
+                      ),
                       subtitle: Text(validation!.message),
                     ),
                   const SizedBox(height: 12),
@@ -187,11 +207,17 @@ Future<void> openProductImportSheet(
                       ),
                       FilledButton.icon(
                         onPressed: importing ? null : importProducts,
-                        icon: const Icon(Icons.playlist_add_check_circle_outlined),
-                        label: Text(importing ? 'Importando...' : 'Importar agora'),
+                        icon: const Icon(
+                          Icons.playlist_add_check_circle_outlined,
+                        ),
+                        label: Text(
+                          importing ? 'Importando...' : 'Importar agora',
+                        ),
                       ),
                       TextButton(
-                        onPressed: importing ? null : () => Navigator.of(sheetContext).pop(),
+                        onPressed: importing
+                            ? null
+                            : () => Navigator.of(sheetContext).pop(),
                         child: const Text('Fechar'),
                       ),
                     ],

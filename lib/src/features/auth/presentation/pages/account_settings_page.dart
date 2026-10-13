@@ -78,8 +78,151 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
   }
 
   void _showMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  String _workspaceTypeLabel(String workspaceType) {
+    switch (workspaceType.trim()) {
+      case 'seller_solo_workspace':
+        return 'Individual';
+      case 'rep_workspace':
+        return 'Representacoes';
+      case 'brand_owner_workspace':
+        return 'Enterprise';
+      default:
+        return workspaceType.trim().isEmpty ? '-' : workspaceType.trim();
+    }
+  }
+
+  String _accountContractLockLabel(String rawValue) {
+    switch (rawValue.trim()) {
+      case 'enterprise_only':
+        return 'Conta BrandOp';
+      case 'flexible':
+        return 'Conta MultiOp';
+      default:
+        return 'Conta MultiOp';
+    }
+  }
+
+  String _billingTierLabel(Map<String, dynamic> tenantData) {
+    final planTier = (tenantData['planTier'] ?? '').toString().trim();
+    if (planTier.toLowerCase() == 'upgrade') {
+      return 'Upgrade';
+    }
+
+    final explicitPlan = (tenantData['plan'] ?? '').toString().trim();
+    if (explicitPlan.isNotEmpty) {
+      return explicitPlan;
+    }
+
+    return 'Base';
+  }
+
+  Widget _buildWorkspaceAndBillingCard() {
+    final tenantId = widget.identity.tenantId.trim();
+    final uid = (FirebaseAuth.instance.currentUser?.uid ?? '').trim();
+
+    if (tenantId.isEmpty) {
+      return const Card(
+        child: Padding(
+          padding: EdgeInsets.all(16),
+          child: Text('Sem tenant ativo para exibir dados de workspace.'),
+        ),
+      );
+    }
+
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('tenants')
+          .doc(tenantId)
+          .snapshots(),
+      builder: (context, tenantSnapshot) {
+        final tenantData =
+            tenantSnapshot.data?.data() ?? const <String, dynamic>{};
+        final workspaceType = (tenantData['workspaceType'] ?? '')
+            .toString()
+            .trim();
+        final workspaceName =
+            (tenantData['nomeFantasia'] ?? widget.identity.tenantName)
+                .toString()
+                .trim();
+        final contact = (tenantData['contatoResponsavel'] ?? '')
+            .toString()
+            .trim();
+        final email = (tenantData['emailComercial'] ?? '').toString().trim();
+        final city = (tenantData['cidade'] ?? '').toString().trim();
+        final uf = (tenantData['uf'] ?? '').toString().trim().toUpperCase();
+
+        return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+          stream: uid.isEmpty
+              ? null
+              : FirebaseFirestore.instance
+                    .collection('usuarios')
+                    .doc(uid)
+                    .snapshots(),
+          builder: (context, userSnapshot) {
+            final userData =
+                userSnapshot.data?.data() ?? const <String, dynamic>{};
+            final accountContractLock = _accountContractLockLabel(
+              (userData['accountContractLock'] ?? '').toString(),
+            );
+
+            return Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Dados do workspace',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Nome: ${workspaceName.isEmpty ? '-' : workspaceName}',
+                    ),
+                    const SizedBox(height: 4),
+                    Text('Identificador: $tenantId'),
+                    const SizedBox(height: 4),
+                    Text('Tipo: ${_workspaceTypeLabel(workspaceType)}'),
+                    const SizedBox(height: 4),
+                    Text('Perfil atual: ${widget.identity.role}'),
+                    if (contact.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text('Responsavel: $contact'),
+                    ],
+                    if (email.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text('E-mail comercial: $email'),
+                    ],
+                    if (city.isNotEmpty || uf.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        'Cidade/UF: ${city.isEmpty ? '-' : city}${uf.isEmpty ? '' : '/$uf'}',
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    Text(
+                      'Billing e conta',
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Tipo de conta: ${_workspaceTypeLabel(workspaceType)}',
+                    ),
+                    const SizedBox(height: 4),
+                    Text('Modelo contratual: $accountContractLock'),
+                    const SizedBox(height: 4),
+                    Text('Billing (plano): ${_billingTierLabel(tenantData)}'),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -123,6 +266,8 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                 ),
               ),
             ),
+            const SizedBox(height: 12),
+            _buildWorkspaceAndBillingCard(),
             const SizedBox(height: 12),
             Card(
               child: Padding(

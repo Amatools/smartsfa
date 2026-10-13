@@ -6,11 +6,13 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../models/cliente.dart';
 import '../../repositories/cliente_repository.dart';
 import 'firestore_map_normalizer.dart';
+import 'firestore_sync_metadata.dart';
 
 class FirestoreClienteRepository implements ClienteRepository {
   FirestoreClienteRepository(this._firestore);
 
   final FirebaseFirestore _firestore;
+  final Map<String, List<Cliente>> _tenantCache = <String, List<Cliente>>{};
 
   CollectionReference<Map<String, dynamic>> get _collection =>
       _firestore.collection('clientes');
@@ -25,6 +27,10 @@ class FirestoreClienteRepository implements ClienteRepository {
     }).toList();
     items.sort((a, b) => a.nome.compareTo(b.nome));
     return items;
+  }
+
+  void _setTenantCache(String tenantId, List<Cliente> items) {
+    _tenantCache[tenantId] = List<Cliente>.unmodifiable(items);
   }
 
   Query<Map<String, dynamic>> _queryByScope({
@@ -160,6 +166,7 @@ class FirestoreClienteRepository implements ClienteRepository {
     if (byId.isNotEmpty) {
       final items = byId.values.toList();
       items.sort((a, b) => a.nome.compareTo(b.nome));
+      _setTenantCache(tenantId, items);
       return items;
     }
 
@@ -196,6 +203,7 @@ class FirestoreClienteRepository implements ClienteRepository {
 
         final merged = byId.values.toList()
           ..sort((a, b) => a.nome.compareTo(b.nome));
+        _setTenantCache(tenantId, merged);
         controller.add(merged);
       }
 
@@ -256,7 +264,10 @@ class FirestoreClienteRepository implements ClienteRepository {
           .snapshots()
           .map(_mapAndSortClientes)
           .listen(
-            controller.add,
+            (items) {
+              _setTenantCache(normalizedTenantId, items);
+              controller.add(items);
+            },
             onError: (Object error, StackTrace stackTrace) {
               final isPermissionDenied =
                   error is FirebaseException && error.code == 'permission-denied';
@@ -264,7 +275,10 @@ class FirestoreClienteRepository implements ClienteRepository {
                 fallbackSubscription = _watchScopedFallbackClientes(
                   tenantId: normalizedTenantId,
                 ).listen(
-                  controller.add,
+                  (items) {
+                    _setTenantCache(normalizedTenantId, items);
+                    controller.add(items);
+                  },
                   onError: controller.addError,
                 );
                 return;
@@ -288,11 +302,18 @@ class FirestoreClienteRepository implements ClienteRepository {
       return const [];
     }
 
+    final cached = _tenantCache[normalizedTenantId];
+    if (cached != null) {
+      return List<Cliente>.from(cached);
+    }
+
     try {
       final snapshot = await _collection
           .where('tenantId', isEqualTo: normalizedTenantId)
           .get();
-      return _mapAndSortClientes(snapshot);
+      final items = _mapAndSortClientes(snapshot);
+      _setTenantCache(normalizedTenantId, items);
+      return items;
     } on FirebaseException catch (error) {
       if (error.code != 'permission-denied') {
         rethrow;
@@ -323,6 +344,15 @@ class FirestoreClienteRepository implements ClienteRepository {
       return null;
     }
 
+    final cached = _tenantCache[normalizedTenantId];
+    if (cached != null) {
+      for (final item in cached) {
+        if (item.id == normalizedId) {
+          return item;
+        }
+      }
+    }
+
     final doc = await _collection.doc(normalizedId).get();
     if (!doc.exists) {
       return null;
@@ -339,7 +369,9 @@ class FirestoreClienteRepository implements ClienteRepository {
 
   @override
   Future<void> save(Cliente entity) {
-    return _collection.doc(entity.id).set(entity.toMap());
+    final payload = buildSyncUpsertPayload(source: entity.toMap());
+    _tenantCache.remove(entity.tenantId.trim());
+    return _collection.doc(entity.id).set(payload);
   }
 
   @override
@@ -350,5 +382,6 @@ class FirestoreClienteRepository implements ClienteRepository {
     }
 
     await _collection.doc(id).delete();
+    _tenantCache.remove(tenantId.trim());
   }
 }

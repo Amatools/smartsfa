@@ -14,14 +14,19 @@ class ProductCatalogContentView extends StatelessWidget {
   Widget build(BuildContext context) {
     return SingleChildScrollView(
       child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildTopSection(),
-            const SizedBox(height: 16),
-            _buildMainSection(),
-          ],
+        padding: const EdgeInsets.fromLTRB(10, 12, 10, 12),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1260),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildTopSection(),
+                const SizedBox(height: 14),
+                _buildMainSection(),
+              ],
+            ),
+          ),
         ),
       ),
     );

@@ -24,10 +24,12 @@ class ProductCsvImportService {
   const ProductCsvImportService({
     required this.identity,
     required this.repository,
+    this.representedCompanyId,
   });
 
   final AppIdentity identity;
   final ProdutoRepository repository;
+  final String? representedCompanyId;
 
   static const List<String> templateHeaders = <String>[
     'codigoInterno',
@@ -110,21 +112,13 @@ class ProductCsvImportService {
               'Nao',
               'Use: ativo, inativo, substituido ou descontinuado. Vazio assume ativo.',
             ],
-            <String>[
-              'descricaoLonga',
-              'Nao',
-              'Descricao detalhada.',
-            ],
+            <String>['descricaoLonga', 'Nao', 'Descricao detalhada.'],
             <String>[
               'codigoProduto',
               'Nao',
               'Equivale ao campo Codigo da UI (armazenado internamente como codigoFabricante).',
             ],
-            <String>[
-              'ean',
-              'Nao',
-              'EAN/GTIN.',
-            ],
+            <String>['ean', 'Nao', 'EAN/GTIN.'],
             <String>[
               'marca',
               'Nao',
@@ -150,11 +144,7 @@ class ProductCsvImportService {
               'Nao',
               'Numero decimal. Ex.: 1, 2, 5.',
             ],
-            <String>[
-              'moeda',
-              'Nao',
-              'Codigo da moeda (ex.: BRL).',
-            ],
+            <String>['moeda', 'Nao', 'Codigo da moeda (ex.: BRL).'],
             <String>[
               'precoTabela',
               'Sim',
@@ -165,11 +155,7 @@ class ProductCsvImportService {
               'Nao',
               'Preco minimo. Numero decimal (aceita virgula).',
             ],
-            <String>[
-              'bitola',
-              'Nao',
-              'Valor da medida/bitola.',
-            ],
+            <String>['bitola', 'Nao', 'Valor da medida/bitola.'],
             <String>[
               'unidadeMedida',
               'Nao',
@@ -180,41 +166,21 @@ class ProductCsvImportService {
               'Nao',
               'Quantidade minima. Numero decimal (aceita virgula).',
             ],
-            <String>[
-              'ncm',
-              'Nao',
-              'Formato recomendado: 0000.00.00.',
-            ],
-            <String>[
-              'cest',
-              'Nao',
-              'Formato recomendado: 00.000.00.',
-            ],
+            <String>['ncm', 'Nao', 'Formato recomendado: 0000.00.00.'],
+            <String>['cest', 'Nao', 'Formato recomendado: 00.000.00.'],
             <String>[
               'aliquotaIpiBase',
               'Nao',
               'Aliquota de IPI base. Numero decimal.',
             ],
-            <String>[
-              'pesoKg',
-              'Nao',
-              'Peso em kg. Numero decimal.',
-            ],
+            <String>['pesoKg', 'Nao', 'Peso em kg. Numero decimal.'],
             <String>[
               'comprimentoMm',
               'Nao',
               'Comprimento em mm. Numero decimal.',
             ],
-            <String>[
-              'larguraMm',
-              'Nao',
-              'Largura em mm. Numero decimal.',
-            ],
-            <String>[
-              'alturaMm',
-              'Nao',
-              'Altura em mm. Numero decimal.',
-            ],
+            <String>['larguraMm', 'Nao', 'Largura em mm. Numero decimal.'],
+            <String>['alturaMm', 'Nao', 'Altura em mm. Numero decimal.'],
           ],
         ),
       ],
@@ -232,7 +198,8 @@ class ProductCsvImportService {
     }
 
     final headers = parsed.headers;
-    final hasDescricao = headers.contains('descricao') || headers.contains('nome');
+    final hasDescricao =
+        headers.contains('descricao') || headers.contains('nome');
     if (!hasDescricao) {
       return const ProductImportValidation(
         ok: false,
@@ -241,7 +208,8 @@ class ProductCsvImportService {
       );
     }
 
-    final hasPrecoTabela = headers.contains('precotabela') ||
+    final hasPrecoTabela =
+        headers.contains('precotabela') ||
         headers.contains('preco_tabela') ||
         headers.contains('valorbruto') ||
         headers.contains('valor_bruto') ||
@@ -270,16 +238,14 @@ class ProductCsvImportService {
         continue;
       }
 
-      final hasPrice = _readDoubleFromRow(
-            row,
-            const <String>[
-              'precotabela',
-              'preco_tabela',
-              'valorbruto',
-              'valor_bruto',
-              'preco',
-            ],
-          ) !=
+      final hasPrice =
+          _readDoubleFromRow(row, const <String>[
+            'precotabela',
+            'preco_tabela',
+            'valorbruto',
+            'valor_bruto',
+            'preco',
+          ]) !=
           null;
 
       if (!hasPrice) {
@@ -305,9 +271,16 @@ class ProductCsvImportService {
   }
 
   Future<int> importRows(List<Map<String, String>> rows) async {
-    final existingProducts = await repository.fetchAll(tenantId: identity.tenantId);
+    final selectedRepresentedCompanyId = (representedCompanyId ?? '').trim();
+    final existingProducts = await repository.fetchAll(
+      tenantId: identity.tenantId,
+    );
     final existingByCode = <String, Produto>{};
     for (final product in existingProducts) {
+      final productScope = (product.representedCompanyId ?? '').trim();
+      if (productScope != selectedRepresentedCompanyId) {
+        continue;
+      }
       final normalizedCode = product.codigoInterno.trim().toLowerCase();
       if (normalizedCode.isEmpty) {
         continue;
@@ -326,10 +299,14 @@ class ProductCsvImportService {
         'idinterno',
       ]);
       final normalizedCode = rawCode.trim().toLowerCase();
-      final existing = normalizedCode.isEmpty ? null : existingByCode[normalizedCode];
+      final existing = normalizedCode.isEmpty
+          ? null
+          : existingByCode[normalizedCode];
 
       final descricao = _readRowValue(row, const <String>['descricao', 'nome']);
-      final effectiveDescricao = descricao.isEmpty ? (existing?.descricao ?? '') : descricao;
+      final effectiveDescricao = descricao.isEmpty
+          ? (existing?.descricao ?? '')
+          : descricao;
       if (effectiveDescricao.isEmpty) {
         continue;
       }
@@ -348,141 +325,112 @@ class ProductCsvImportService {
       final produto = Produto(
         id: existing?.id ?? 'prd_${now.microsecondsSinceEpoch}_$index',
         tenantId: identity.tenantId,
+        representedCompanyId: selectedRepresentedCompanyId,
         codigoInterno: effectiveCode,
         descricao: effectiveDescricao,
         origemCadastro: ProductSource.excel,
         status: status,
-        descricaoResumida: _pickString(
-          row,
-          const <String>['descricaoresumida', 'descricao_resumida'],
-          existing?.descricaoResumida,
-        ),
-        descricaoLonga: _pickString(
-          row,
-          const <String>['descricaolonga', 'descricao_longa'],
-          existing?.descricaoLonga,
-        ),
-        codigoFabricante: _pickString(
-          row,
-          const <String>[
-            'codigoproduto',
-            'codigo_produto',
-            'codigofabricante',
-            'codigo_fabricante',
-          ],
-          existing?.codigoFabricante,
-        ),
-        sku: _pickString(
-          row,
-          const <String>['sku', 'skucomercial', 'sku_comercial'],
-          existing?.sku,
-        ),
+        descricaoResumida: _pickString(row, const <String>[
+          'descricaoresumida',
+          'descricao_resumida',
+        ], existing?.descricaoResumida),
+        descricaoLonga: _pickString(row, const <String>[
+          'descricaolonga',
+          'descricao_longa',
+        ], existing?.descricaoLonga),
+        codigoFabricante: _pickString(row, const <String>[
+          'codigoproduto',
+          'codigo_produto',
+          'codigofabricante',
+          'codigo_fabricante',
+        ], existing?.codigoFabricante),
+        sku: _pickString(row, const <String>[
+          'sku',
+          'skucomercial',
+          'sku_comercial',
+        ], existing?.sku),
         ean: _pickString(row, const <String>['ean', 'gtin'], existing?.ean),
         marca: _pickString(row, const <String>['marca'], existing?.marca),
-        categoria: _pickString(
-          row,
-          const <String>['categoria'],
-          existing?.categoria,
-        ),
-        subcategoria: _pickString(
-          row,
-          const <String>['subcategoria', 'sub_categoria'],
-          existing?.subcategoria,
-        ),
+        categoria: _pickString(row, const <String>[
+          'categoria',
+        ], existing?.categoria),
+        subcategoria: _pickString(row, const <String>[
+          'subcategoria',
+          'sub_categoria',
+        ], existing?.subcategoria),
         colecao: _pickString(row, const <String>['colecao'], existing?.colecao),
-        bitola: _pickString(row, const <String>['bitola', 'medida'], existing?.bitola),
-        bitolaUnidade: _pickString(
-          row,
-          const <String>[
-            'unidadedemedida',
-            'unidade_medida',
-            'bitolaunidade',
-            'bitola_unidade',
-            'unidadebitola',
-            'unidade_bitola',
-          ],
-          existing?.bitolaUnidade,
-        ),
+        bitola: _pickString(row, const <String>[
+          'bitola',
+          'medida',
+        ], existing?.bitola),
+        bitolaUnidade: _pickString(row, const <String>[
+          'unidadedemedida',
+          'unidade_medida',
+          'bitolaunidade',
+          'bitola_unidade',
+          'unidadebitola',
+          'unidade_bitola',
+        ], existing?.bitolaUnidade),
         unidade: _pickString(row, const <String>['unidade'], existing?.unidade),
         moeda: _pickString(row, const <String>['moeda'], existing?.moeda),
-        multiploVenda: _pickDouble(
-          row,
-          const <String>[
-            'vendaemmultiplosde',
-            'venda_em_multiplos_de',
-            'multiplovenda',
-            'multiplo_venda',
-          ],
-          existing?.multiploVenda,
-        ),
-        quantidadeMinima: _pickDouble(
-          row,
-          const <String>['quantidademinima', 'quantidade_minima'],
-          existing?.quantidadeMinima,
-        ),
+        multiploVenda: _pickDouble(row, const <String>[
+          'vendaemmultiplosde',
+          'venda_em_multiplos_de',
+          'multiplovenda',
+          'multiplo_venda',
+        ], existing?.multiploVenda),
+        quantidadeMinima: _pickDouble(row, const <String>[
+          'quantidademinima',
+          'quantidade_minima',
+        ], existing?.quantidadeMinima),
         ncm: _pickString(row, const <String>['ncm'], existing?.ncm),
         cest: _pickString(row, const <String>['cest'], existing?.cest),
-        aliquotaIpiBase: _pickDouble(
-          row,
-          const <String>[
-            'aliquotaipibase',
-            'aliquota_ipi_base',
-            'aliquotaipi',
-            'aliquota_ipi',
-            'ipi',
-          ],
-          existing?.aliquotaIpiBase,
-        ),
-        pesoKg: _pickDouble(
-          row,
-          const <String>['pesokg', 'peso_kg'],
-          existing?.pesoKg,
-        ),
-        comprimentoMm: _pickDouble(
-          row,
-          const <String>['comprimentomm', 'comprimento_mm'],
-          existing?.comprimentoMm,
-        ),
-        larguraMm: _pickDouble(
-          row,
-          const <String>['larguramm', 'largura_mm'],
-          existing?.larguraMm,
-        ),
-        alturaMm: _pickDouble(
-          row,
-          const <String>['alturamm', 'altura_mm'],
-          existing?.alturaMm,
-        ),
-        valorBruto: _readDoubleFromRow(
-          row,
-          const <String>[
-            'precotabela',
-            'preco_tabela',
-            'valorbruto',
-            'valor_bruto',
-            'preco',
-          ],
-        ),
-        precoMinimo: _pickDouble(
-          row,
-          const <String>['precominimo', 'preco_minimo'],
-          existing?.precoMinimo,
-        ),
-        percentualComissao: _pickDouble(
-          row,
-          const <String>['percentualcomissao', 'percentual_comissao'],
-          existing?.percentualComissao,
-        ),
-        erpProductId: _pickString(
-          row,
-          const <String>['erpproductid', 'erp_product_id'],
-          existing?.erpProductId,
-        ),
-        erpSyncId: _pickString(
-          row,
-          const <String>['erpsyncid', 'erp_sync_id'],
-          existing?.erpSyncId,
-        ),
+        aliquotaIpiBase: _pickDouble(row, const <String>[
+          'aliquotaipibase',
+          'aliquota_ipi_base',
+          'aliquotaipi',
+          'aliquota_ipi',
+          'ipi',
+        ], existing?.aliquotaIpiBase),
+        pesoKg: _pickDouble(row, const <String>[
+          'pesokg',
+          'peso_kg',
+        ], existing?.pesoKg),
+        comprimentoMm: _pickDouble(row, const <String>[
+          'comprimentomm',
+          'comprimento_mm',
+        ], existing?.comprimentoMm),
+        larguraMm: _pickDouble(row, const <String>[
+          'larguramm',
+          'largura_mm',
+        ], existing?.larguraMm),
+        alturaMm: _pickDouble(row, const <String>[
+          'alturamm',
+          'altura_mm',
+        ], existing?.alturaMm),
+        valorBruto: _readDoubleFromRow(row, const <String>[
+          'precotabela',
+          'preco_tabela',
+          'valorbruto',
+          'valor_bruto',
+          'preco',
+        ]),
+        precoMinimo: _pickDouble(row, const <String>[
+          'precominimo',
+          'preco_minimo',
+        ], existing?.precoMinimo),
+        percentualComissao: _pickDouble(row, const <String>[
+          'percentualcomissao',
+          'percentual_comissao',
+        ], existing?.percentualComissao),
+        erpProductId: _pickString(row, const <String>[
+          'erpproductid',
+          'erp_product_id',
+        ], existing?.erpProductId),
+        erpSyncId: _pickString(row, const <String>[
+          'erpsyncid',
+          'erp_sync_id',
+        ], existing?.erpSyncId),
         createdAt: existing?.createdAt ?? now,
         updatedAt: now,
       );
@@ -575,5 +523,6 @@ class ProductSpreadsheetImportService extends ProductCsvImportService {
   const ProductSpreadsheetImportService({
     required super.identity,
     required super.repository,
+    super.representedCompanyId,
   });
 }

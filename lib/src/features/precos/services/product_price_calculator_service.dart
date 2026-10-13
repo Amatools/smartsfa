@@ -38,6 +38,14 @@ class ProductPriceCalculatorService {
   final DiscountPolicyRepository discountPolicyRepository;
   final CustomerProductRuleRepository customerProductRuleRepository;
   final CustomerPriceTableAssignmentRepository customerPriceTableAssignmentRepository;
+    final Map<String, List<CustomerPriceTableAssignment>> _assignmentsCache =
+      <String, List<CustomerPriceTableAssignment>>{};
+    final Map<String, List<ProductBasePrice>> _basePricesCache =
+      <String, List<ProductBasePrice>>{};
+    final Map<String, List<CustomerProductRule>> _customerRulesCache =
+      <String, List<CustomerProductRule>>{};
+    final Map<String, Map<String, double>> _discountPoliciesCache =
+      <String, Map<String, double>>{};
 
   Future<ProductPriceCalculationResult> calculateFinalPrice({
     required String tenantId,
@@ -49,10 +57,9 @@ class ProductPriceCalculatorService {
   }) async {
     final now = DateTime.now().toUtc();
     final normalizedRegion = regionId.trim().toUpperCase();
+    final normalizedTenantId = tenantId.trim();
 
-    final assignments = await customerPriceTableAssignmentRepository.fetchAll(
-      tenantId: tenantId,
-    );
+    final assignments = await _loadAssignments(normalizedTenantId);
     final activeAssignments = assignments
         .where((item) =>
             item.customerId == customerId &&
@@ -71,7 +78,7 @@ class ProductPriceCalculatorService {
       throw StateError('Nenhuma tabela de preco encontrada para o cliente.');
     }
 
-    final basePrices = await basePriceRepository.fetchAll(tenantId: tenantId);
+    final basePrices = await _loadBasePrices(normalizedTenantId);
     final selectedBasePrice = _pickBasePrice(
       basePrices,
       productId: productId,
@@ -84,7 +91,7 @@ class ProductPriceCalculatorService {
       throw StateError('Preco base nao encontrado para produto/regiao/tabela.');
     }
 
-    final customerRules = await customerProductRuleRepository.fetchAll(tenantId: tenantId);
+    final customerRules = await _loadCustomerRules(normalizedTenantId);
     final matchingRule = _pickCustomerRule(
       customerRules,
       customerId: customerId,
@@ -97,13 +104,10 @@ class ProductPriceCalculatorService {
 
     var discountPercentage = 0.0;
     if (discountPolicyId.isNotEmpty) {
-      final policy = await discountPolicyRepository.fetchById(
-        tenantId: tenantId,
-        id: discountPolicyId,
+      discountPercentage = await _resolveDiscountPercentage(
+        tenantId: normalizedTenantId,
+        discountPolicyId: discountPolicyId,
       );
-      if (policy != null && policy.isActive) {
-        discountPercentage = policy.discountPercentage;
-      }
     }
 
     final netPrice = selectedBasePrice.basePrice * (1 - (discountPercentage / 100));
@@ -196,5 +200,71 @@ class ProductPriceCalculatorService {
       return false;
     }
     return true;
+  }
+
+  Future<List<CustomerPriceTableAssignment>> _loadAssignments(
+    String tenantId,
+  ) async {
+    final cached = _assignmentsCache[tenantId];
+    if (cached != null) {
+      return cached;
+    }
+
+    final loaded = await customerPriceTableAssignmentRepository.fetchAll(
+      tenantId: tenantId,
+    );
+    _assignmentsCache[tenantId] = List<CustomerPriceTableAssignment>.unmodifiable(
+      loaded,
+    );
+    return loaded;
+  }
+
+  Future<List<ProductBasePrice>> _loadBasePrices(String tenantId) async {
+    final cached = _basePricesCache[tenantId];
+    if (cached != null) {
+      return cached;
+    }
+
+    final loaded = await basePriceRepository.fetchAll(tenantId: tenantId);
+    _basePricesCache[tenantId] = List<ProductBasePrice>.unmodifiable(loaded);
+    return loaded;
+  }
+
+  Future<List<CustomerProductRule>> _loadCustomerRules(String tenantId) async {
+    final cached = _customerRulesCache[tenantId];
+    if (cached != null) {
+      return cached;
+    }
+
+    final loaded = await customerProductRuleRepository.fetchAll(
+      tenantId: tenantId,
+    );
+    _customerRulesCache[tenantId] = List<CustomerProductRule>.unmodifiable(
+      loaded,
+    );
+    return loaded;
+  }
+
+  Future<double> _resolveDiscountPercentage({
+    required String tenantId,
+    required String discountPolicyId,
+  }) async {
+    final policyCache = _discountPoliciesCache.putIfAbsent(
+      tenantId,
+      () => <String, double>{},
+    );
+    final cachedValue = policyCache[discountPolicyId];
+    if (cachedValue != null) {
+      return cachedValue;
+    }
+
+    final policy = await discountPolicyRepository.fetchById(
+      tenantId: tenantId,
+      id: discountPolicyId,
+    );
+    final resolved =
+        policy != null && policy.isActive ? policy.discountPercentage : 0.0;
+    policyCache[discountPolicyId] = resolved;
+    return resolved;
   }
 }

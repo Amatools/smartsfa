@@ -49,6 +49,9 @@ class ProductTaxEngineService {
   final ProdutoRepository produtoRepository;
   final ProductBasePriceRepository basePriceRepository;
   final TaxRuleRepository taxRuleRepository;
+  final Map<String, List<ProductBasePrice>> _basePricesCache =
+      <String, List<ProductBasePrice>>{};
+  final Map<String, List<TaxRule>> _taxRulesCache = <String, List<TaxRule>>{};
 
   Future<ProductTaxCalculationResult> calcularTotaisItem({
     required String tenantId,
@@ -56,6 +59,7 @@ class ProductTaxEngineService {
     required String tabelaId,
     required String clienteUf,
     required double quantidade,
+    String? representedCompanyId,
     String ufOrigem = 'SP',
   }) async {
     final normalizedTenantId = tenantId.trim();
@@ -63,6 +67,7 @@ class ProductTaxEngineService {
     final normalizedTabelaId = tabelaId.trim();
     final normalizedUfDestino = clienteUf.trim().toUpperCase();
     final normalizedUfOrigem = ufOrigem.trim().toUpperCase();
+    final normalizedRepresentedCompanyId = (representedCompanyId ?? '').trim();
 
     if (normalizedTenantId.isEmpty ||
         normalizedProdutoId.isEmpty ||
@@ -95,11 +100,15 @@ class ProductTaxEngineService {
       );
     }
 
-    final regras = await taxRuleRepository.fetchAll(
-      tenantId: normalizedTenantId,
-    );
+    final regras = await _loadTaxRules(normalizedTenantId);
+    final scopedRules = regras
+        .where((rule) {
+          final scope = (rule.representedCompanyId ?? '').trim();
+          return scope == normalizedRepresentedCompanyId;
+        })
+        .toList(growable: false);
     final regra = _resolveTaxRule(
-      regras: regras,
+      regras: scopedRules,
       ncm: produto.ncm,
       cest: produto.cest,
       ufOrigem: normalizedUfOrigem,
@@ -161,7 +170,7 @@ class ProductTaxEngineService {
     required String tabelaId,
     required String ufDestino,
   }) async {
-    final all = await basePriceRepository.fetchAll(tenantId: tenantId);
+    final all = await _loadBasePrices(tenantId);
     final filtered = all
         .where((item) {
           return item.isActive &&
@@ -307,5 +316,27 @@ class ProductTaxEngineService {
       return '';
     }
     return source.replaceAll(RegExp(r'[^0-9]'), '');
+  }
+
+  Future<List<ProductBasePrice>> _loadBasePrices(String tenantId) async {
+    final cached = _basePricesCache[tenantId];
+    if (cached != null) {
+      return cached;
+    }
+
+    final loaded = await basePriceRepository.fetchAll(tenantId: tenantId);
+    _basePricesCache[tenantId] = List<ProductBasePrice>.unmodifiable(loaded);
+    return loaded;
+  }
+
+  Future<List<TaxRule>> _loadTaxRules(String tenantId) async {
+    final cached = _taxRulesCache[tenantId];
+    if (cached != null) {
+      return cached;
+    }
+
+    final loaded = await taxRuleRepository.fetchAll(tenantId: tenantId);
+    _taxRulesCache[tenantId] = List<TaxRule>.unmodifiable(loaded);
+    return loaded;
   }
 }

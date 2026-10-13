@@ -16,9 +16,15 @@ Future<void> main() async {
 
 Future<void> _configureFirestoreOffline() async {
   final firestore = FirebaseFirestore.instance;
+  const enableWebPersistenceForTests = bool.fromEnvironment(
+    'ENABLE_WEB_FIRESTORE_PERSISTENCE',
+    defaultValue: false,
+  );
 
   try {
-    firestore.settings = Settings(persistenceEnabled: !kIsWeb);
+    firestore.settings = Settings(
+      persistenceEnabled: !kIsWeb || enableWebPersistenceForTests,
+    );
   } catch (_) {
     // Best effort: if persistence configuration fails, app still runs online.
   }
@@ -30,31 +36,36 @@ class SmartSfaApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final baseTheme = ThemeData(useMaterial3: true);
-    final sharpTextTheme = baseTheme.textTheme.apply(
-      fontFamily: 'Segoe UI',
-    ).copyWith(
-      bodyLarge: baseTheme.textTheme.bodyLarge?.copyWith(letterSpacing: -0.1),
-      bodyMedium: baseTheme.textTheme.bodyMedium?.copyWith(letterSpacing: -0.1),
-      bodySmall: baseTheme.textTheme.bodySmall?.copyWith(letterSpacing: -0.1),
-      titleMedium: baseTheme.textTheme.titleMedium?.copyWith(
-        letterSpacing: -0.1,
-        fontWeight: FontWeight.w600,
-      ),
-      labelLarge: baseTheme.textTheme.labelLarge?.copyWith(
-        letterSpacing: -0.05,
-        fontWeight: FontWeight.w600,
-      ),
-    );
+    final sharpTextTheme = baseTheme.textTheme
+        .apply(fontFamily: 'Segoe UI')
+        .copyWith(
+          bodyLarge: baseTheme.textTheme.bodyLarge?.copyWith(
+            letterSpacing: -0.1,
+          ),
+          bodyMedium: baseTheme.textTheme.bodyMedium?.copyWith(
+            letterSpacing: -0.1,
+          ),
+          bodySmall: baseTheme.textTheme.bodySmall?.copyWith(
+            letterSpacing: -0.1,
+          ),
+          titleMedium: baseTheme.textTheme.titleMedium?.copyWith(
+            letterSpacing: -0.1,
+            fontWeight: FontWeight.w600,
+          ),
+          labelLarge: baseTheme.textTheme.labelLarge?.copyWith(
+            letterSpacing: -0.05,
+            fontWeight: FontWeight.w600,
+          ),
+        );
 
     return MaterialApp(
       title: 'SmartSFA',
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF0175C2),
-        ).copyWith(
-          primary: const Color(0xFF0175C2),
-          secondary: const Color(0xFF13B9FD),
-        ),
+        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF0175C2))
+            .copyWith(
+              primary: const Color(0xFF0175C2),
+              secondary: const Color(0xFF13B9FD),
+            ),
         useMaterial3: true,
         fontFamily: 'Segoe UI',
         textTheme: sharpTextTheme,
@@ -103,46 +114,37 @@ class _SplashFlowPageState extends State<SplashFlowPage> {
     final textTheme = Theme.of(context).textTheme;
 
     return Scaffold(
-      body: SafeArea(
+      body: Center(
         child: Padding(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              const SizedBox(height: 40),
-              Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.android,
-                      size: 88,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                    const SizedBox(height: 20),
-                    Text(
-                      'Smart SFA',
-                      style: textTheme.headlineMedium,
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Forca de Vendas Smart',
-                      style: textTheme.bodyMedium,
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'Inicializando autenticacao segura',
-                      style: textTheme.bodySmall,
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
-                ),
+              Icon(
+                Icons.storefront_outlined,
+                size: 88,
+                color: Theme.of(context).colorScheme.primary,
               ),
-              const Padding(
-                padding: EdgeInsets.only(bottom: 12),
-                child: CircularProgressIndicator(),
+              const SizedBox(height: 20),
+              Text(
+                'Smart SFA',
+                style: textTheme.headlineMedium,
+                textAlign: TextAlign.center,
               ),
+              const SizedBox(height: 8),
+              Text(
+                'Forca de Vendas Smart',
+                style: textTheme.bodyMedium,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Inicializando autenticacao segura',
+                style: textTheme.bodySmall,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 18),
+              const CircularProgressIndicator(),
             ],
           ),
         ),

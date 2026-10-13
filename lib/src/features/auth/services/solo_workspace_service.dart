@@ -40,10 +40,13 @@ class SoloWorkspaceService {
       throw StateError('Informe um nome para o workspace.');
     }
 
-    final effectiveWorkspaceType = workspaceType ?? WorkspaceType.fromPlan(plan);
+    final effectiveWorkspaceType =
+        workspaceType ?? WorkspaceType.fromPlan(plan);
     final userRef = _firestore.collection('usuarios').doc(user.uid);
     final existingUserDoc = await userRef.get();
-    final accountContractLock = _readAccountContractLock(existingUserDoc.data());
+    final accountContractLock = _readAccountContractLock(
+      existingUserDoc.data(),
+    );
 
     await _assertWorkspaceCreationAllowed(
       user: user,
@@ -63,77 +66,70 @@ class SoloWorkspaceService {
     final membershipId = '${tenantId}_${user.uid}';
 
     final tenantRef = _firestore.collection('tenants').doc(tenantId);
-    final membershipRef = _firestore.collection('tenant_memberships').doc(membershipId);
-    final requestRef = _firestore.collection('solicitacoes_acesso').doc(user.uid);
+    final membershipRef = _firestore
+        .collection('tenant_memberships')
+        .doc(membershipId);
+    final requestRef = _firestore
+        .collection('solicitacoes_acesso')
+        .doc(user.uid);
 
     await _firestore.runTransaction((tx) async {
-      tx.set(
-        tenantRef,
-        {
-          'tenantId': tenantId,
-          'slug': tenantId,
-          'nomeFantasia': tenantName,
-          'ativo': true,
-          'operationMode': 'manual',
-          'erpProvider': 'none',
-          'plan': plan.value,
-          'workspaceType': effectiveWorkspaceType.value,
-          'hierarchyModel': effectiveWorkspaceType.hierarchyModel,
-          'allowInvitations': effectiveWorkspaceType.allowsInvitations,
-          'ownerUid': user.uid,
-          if (cnpj != null && cnpj.trim().isNotEmpty)
-            if (effectiveWorkspaceType == WorkspaceType.brandOwnerWorkspace)
-              'cnpj': cnpj.trim()
-            else
-              'representedCompanyDocument': cnpj.trim(),
-          'cnpjBinding': effectiveWorkspaceType == WorkspaceType.brandOwnerWorkspace
-              ? 'owner_legal_entity'
-              : 'informational_only',
-          'createdAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
-        },
-        SetOptions(merge: true),
-      );
+      tx.set(tenantRef, {
+        'tenantId': tenantId,
+        'slug': tenantId,
+        'nomeFantasia': tenantName,
+        'ativo': true,
+        'operationMode': 'manual',
+        'erpProvider': 'none',
+        'plan': plan.value,
+        'workspaceType': effectiveWorkspaceType.value,
+        'hierarchyModel': effectiveWorkspaceType.hierarchyModel,
+        'allowInvitations': effectiveWorkspaceType.allowsInvitations,
+        'ownerUid': user.uid,
+        if (cnpj != null && cnpj.trim().isNotEmpty)
+          if (effectiveWorkspaceType == WorkspaceType.brandOwnerWorkspace)
+            'cnpj': cnpj.trim()
+          else
+            'representedCompanyDocument': cnpj.trim(),
+        'cnpjBinding':
+            effectiveWorkspaceType == WorkspaceType.brandOwnerWorkspace
+            ? 'owner_legal_entity'
+            : 'informational_only',
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
 
-      tx.set(
-        userRef,
-        {
-          'uid': user.uid,
-          'email': user.email ?? '',
-          'displayName': user.displayName ?? (user.email ?? user.uid),
-          'platformRole': 'none',
-          'ativoGlobal': true,
-          'accountContractLock': effectiveWorkspaceType ==
-                  WorkspaceType.brandOwnerWorkspace
-              ? AccountContractLock.enterpriseOnly.value
-              : accountContractLock.value,
-          'defaultTenantId': tenantId,
-          'lastSelectedTenantId': tenantId,
-          'createdAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
-        },
-        SetOptions(merge: true),
-      );
+      tx.set(userRef, {
+        'uid': user.uid,
+        'email': user.email ?? '',
+        'displayName': user.displayName ?? (user.email ?? user.uid),
+        'platformRole': 'none',
+        'ativoGlobal': true,
+        'accountContractLock':
+            effectiveWorkspaceType == WorkspaceType.brandOwnerWorkspace
+            ? AccountContractLock.enterpriseOnly.value
+            : accountContractLock.value,
+        'defaultTenantId': tenantId,
+        'lastSelectedTenantId': tenantId,
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
 
-      tx.set(
-        membershipRef,
-        {
-          'membershipId': membershipId,
-          'tenantId': tenantId,
-          'uid': user.uid,
-          'role': initialRole,
-          'ativo': true,
-          'defaultTenant': true,
-          'state': 'active',
-          'ownerId': scope.ownerId,
-          'gerenteId': scope.gerenteId,
-          'representanteId': scope.representanteId,
-          'vendedorId': scope.vendedorId,
-          'createdAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
-        },
-        SetOptions(merge: true),
-      );
+      tx.set(membershipRef, {
+        'membershipId': membershipId,
+        'tenantId': tenantId,
+        'uid': user.uid,
+        'role': initialRole,
+        'ativo': true,
+        'defaultTenant': true,
+        'state': 'active',
+        'ownerId': scope.ownerId,
+        'gerenteId': scope.gerenteId,
+        'representanteId': scope.representanteId,
+        'vendedorId': scope.vendedorId,
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
 
       if (clearPendingRequest) {
         // Only remove an existing request doc; deleting a missing doc can
@@ -181,7 +177,9 @@ class SoloWorkspaceService {
       final tenantId = (data['tenantId'] ?? '').toString();
       final role = (data['role'] ?? '').toString().trim().toLowerCase();
       final state = (data['state'] ?? 'active').toString().trim().toLowerCase();
-      if (tenantId.startsWith('solo_') && role == 'vendedor' && state == 'active') {
+      if (tenantId.startsWith('solo_') &&
+          role == 'vendedor' &&
+          state == 'active') {
         sourceMembership = membership;
         break;
       }
@@ -193,9 +191,13 @@ class SoloWorkspaceService {
       );
     }
 
-    final sourceTenantId = (sourceMembership.data()?['tenantId'] ?? '').toString().trim();
+    final sourceTenantId = (sourceMembership.data()?['tenantId'] ?? '')
+        .toString()
+        .trim();
     if (sourceTenantId.isEmpty) {
-      throw StateError('Nao foi possivel identificar o tenant Individual de origem.');
+      throw StateError(
+        'Nao foi possivel identificar o tenant Individual de origem.',
+      );
     }
 
     final targetTenantId = _tenantIdForPlan(
@@ -205,91 +207,75 @@ class SoloWorkspaceService {
     );
     final targetMembershipId = '${targetTenantId}_${user.uid}';
 
-    final targetTenantRef = _firestore.collection('tenants').doc(targetTenantId);
+    final targetTenantRef = _firestore
+        .collection('tenants')
+        .doc(targetTenantId);
     final targetMembershipRef = _firestore
         .collection('tenant_memberships')
         .doc(targetMembershipId);
     final userRef = _firestore.collection('usuarios').doc(user.uid);
-    final sourceTenantRef = _firestore.collection('tenants').doc(sourceTenantId);
+    final sourceTenantRef = _firestore
+        .collection('tenants')
+        .doc(sourceTenantId);
     final sourceMembershipRef = _firestore
         .collection('tenant_memberships')
         .doc(sourceMembership.id);
 
     await _firestore.runTransaction((tx) async {
-      tx.set(
-        targetTenantRef,
-        {
-          'tenantId': targetTenantId,
-          'slug': targetTenantId,
-          'nomeFantasia': normalizedName,
-          'ativo': true,
-          'operationMode': 'manual',
-          'erpProvider': 'none',
-          'plan': OnboardingPlan.team.value,
-          'workspaceType': WorkspaceType.repWorkspace.value,
-          'hierarchyModel': WorkspaceType.repWorkspace.hierarchyModel,
-          'allowInvitations': WorkspaceType.repWorkspace.allowsInvitations,
-          'ownerUid': user.uid,
-          if (representedCompanyDocument != null &&
-              representedCompanyDocument.trim().isNotEmpty)
-            'representedCompanyDocument': representedCompanyDocument.trim(),
-          'cnpjBinding': 'informational_only',
-          'createdAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
-        },
-        SetOptions(merge: true),
-      );
+      tx.set(targetTenantRef, {
+        'tenantId': targetTenantId,
+        'slug': targetTenantId,
+        'nomeFantasia': normalizedName,
+        'ativo': true,
+        'operationMode': 'manual',
+        'erpProvider': 'none',
+        'plan': OnboardingPlan.team.value,
+        'workspaceType': WorkspaceType.repWorkspace.value,
+        'hierarchyModel': WorkspaceType.repWorkspace.hierarchyModel,
+        'allowInvitations': WorkspaceType.repWorkspace.allowsInvitations,
+        'ownerUid': user.uid,
+        if (representedCompanyDocument != null &&
+            representedCompanyDocument.trim().isNotEmpty)
+          'representedCompanyDocument': representedCompanyDocument.trim(),
+        'cnpjBinding': 'informational_only',
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
 
-      tx.set(
-        targetMembershipRef,
-        {
-          'membershipId': targetMembershipId,
-          'tenantId': targetTenantId,
-          'uid': user.uid,
-          'role': 'owner',
-          'ativo': true,
-          'defaultTenant': true,
-          'state': 'active',
-          'ownerId': user.uid,
-          'gerenteId': '',
-          'representanteId': '',
-          'vendedorId': '',
-          'createdAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
-        },
-        SetOptions(merge: true),
-      );
+      tx.set(targetMembershipRef, {
+        'membershipId': targetMembershipId,
+        'tenantId': targetTenantId,
+        'uid': user.uid,
+        'role': 'owner',
+        'ativo': true,
+        'defaultTenant': true,
+        'state': 'active',
+        'ownerId': user.uid,
+        'gerenteId': '',
+        'representanteId': '',
+        'vendedorId': '',
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
 
-      tx.set(
-        sourceMembershipRef,
-        {
-          'defaultTenant': false,
-          'updatedAt': FieldValue.serverTimestamp(),
-        },
-        SetOptions(merge: true),
-      );
+      tx.set(sourceMembershipRef, {
+        'defaultTenant': false,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
 
-      tx.set(
-        sourceTenantRef,
-        {
-          'supersededByTenantId': targetTenantId,
-          'upgradedAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
-        },
-        SetOptions(merge: true),
-      );
+      tx.set(sourceTenantRef, {
+        'supersededByTenantId': targetTenantId,
+        'upgradedAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
 
-      tx.set(
-        userRef,
-        {
-          'accountContractLock': AccountContractLock.flexible.value,
-          'defaultTenantId': targetTenantId,
-          'lastSelectedTenantId': targetTenantId,
-          'upgradedFromTenantId': sourceTenantId,
-          'updatedAt': FieldValue.serverTimestamp(),
-        },
-        SetOptions(merge: true),
-      );
+      tx.set(userRef, {
+        'accountContractLock': AccountContractLock.flexible.value,
+        'defaultTenantId': targetTenantId,
+        'lastSelectedTenantId': targetTenantId,
+        'upgradedFromTenantId': sourceTenantId,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
     });
 
     var migratedScopedDocs = 0;
@@ -343,39 +329,33 @@ class SoloWorkspaceService {
     const scopeKey = 'tenant_default';
     final now = DateTime.now().toUtc().toIso8601String();
 
-    await _firestore.collection('tabelas_preco').doc(defaultPriceTableId).set(
-      {
-        'id': defaultPriceTableId,
-        'tenantId': normalizedTenantId,
-        'nome': _defaultPriceTableName,
-        'scopeType': 'general',
-        'scopeLabel': 'Tabela principal da conta',
-        'scopeIndex': const <String>['general', _defaultPriceRegionId],
-        'origem': 'system',
-        'status': 'ativo',
-        'linkedEntityId': null,
-        'rowCount': 0,
-        'createdAt': now,
-        'updatedAt': now,
-      },
-      SetOptions(merge: true),
-    );
+    await _firestore.collection('tabelas_preco').doc(defaultPriceTableId).set({
+      'id': defaultPriceTableId,
+      'tenantId': normalizedTenantId,
+      'nome': _defaultPriceTableName,
+      'scopeType': 'general',
+      'scopeLabel': 'Tabela principal da conta',
+      'scopeIndex': const <String>['general', _defaultPriceRegionId],
+      'origem': 'system',
+      'status': 'ativo',
+      'linkedEntityId': null,
+      'rowCount': 0,
+      'createdAt': now,
+      'updatedAt': now,
+    }, SetOptions(merge: true));
 
-    await _firestore.collection('tenants').doc(normalizedTenantId).set(
-      {
-        'defaultPriceTableIds': {scopeKey: defaultPriceTableId},
-        'defaultPriceRegionIds': {scopeKey: _defaultPriceRegionId},
-        'defaultProductCatalogIds': {
-          scopeKey: 'products_default_${normalizedTenantId}_$scopeKey',
-        },
-        // Backward compatibility for legacy readers.
-        'defaultPriceTableId': defaultPriceTableId,
-        'defaultPriceRegionId': _defaultPriceRegionId,
-        'defaultProductCatalogId': 'products_default',
-        'updatedAt': FieldValue.serverTimestamp(),
+    await _firestore.collection('tenants').doc(normalizedTenantId).set({
+      'defaultPriceTableIds': {scopeKey: defaultPriceTableId},
+      'defaultPriceRegionIds': {scopeKey: _defaultPriceRegionId},
+      'defaultProductCatalogIds': {
+        scopeKey: 'products_default_${normalizedTenantId}_$scopeKey',
       },
-      SetOptions(merge: true),
-    );
+      // Backward compatibility for legacy readers.
+      'defaultPriceTableId': defaultPriceTableId,
+      'defaultPriceRegionId': _defaultPriceRegionId,
+      'defaultProductCatalogId': 'products_default',
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
   }
 
   Future<int> _migrateScopedCollection({
@@ -526,17 +506,28 @@ class SoloWorkspaceService {
       return state == 'active';
     }).toList();
 
-    if (activeMemberships.isNotEmpty) {
-      throw StateError(
-        'Sua conta ja esta vinculada a um workspace ativo. Mudanca de tipo/plano deve ser feita por upgrade, sem criar novo workspace paralelo.',
-      );
-    }
-
     if (accountContractLock == AccountContractLock.enterpriseOnly &&
         workspaceType != WorkspaceType.brandOwnerWorkspace) {
       throw StateError(
         'Conta enterprise e exclusiva. Use outro login para criar workspace vendedor solo ou de representacao.',
       );
+    }
+
+    if (workspaceType == WorkspaceType.brandOwnerWorkspace &&
+        activeMemberships.isNotEmpty) {
+      throw StateError(
+        'Workspace Empresa so pode ser criado como primeiro workspace do login. Para acessar outro enterprise, use convite.',
+      );
+    }
+
+    if (workspaceType == WorkspaceType.sellerSoloWorkspace) {
+      final hasSoloWorkspace = activeMemberships.any((doc) {
+        final tenantId = (doc.data()['tenantId'] ?? '').toString().trim();
+        return tenantId.startsWith('solo_');
+      });
+      if (hasSoloWorkspace) {
+        throw StateError('Sua conta ja possui um workspace Individual ativo.');
+      }
     }
   }
 
@@ -552,22 +543,16 @@ class SoloWorkspaceService {
 
     final batch = _firestore.batch();
     for (final doc in memberships.docs) {
-      batch.set(
-        doc.reference,
-        {'defaultTenant': doc.id == selectedMembershipId},
-        SetOptions(merge: true),
-      );
+      batch.set(doc.reference, {
+        'defaultTenant': doc.id == selectedMembershipId,
+      }, SetOptions(merge: true));
     }
 
-    batch.set(
-      _firestore.collection('usuarios').doc(uid),
-      {
-        'defaultTenantId': selectedTenantId,
-        'lastSelectedTenantId': selectedTenantId,
-        'updatedAt': FieldValue.serverTimestamp(),
-      },
-      SetOptions(merge: true),
-    );
+    batch.set(_firestore.collection('usuarios').doc(uid), {
+      'defaultTenantId': selectedTenantId,
+      'lastSelectedTenantId': selectedTenantId,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
 
     await batch.commit();
   }
@@ -583,10 +568,7 @@ class SoloWorkspaceService {
     }
   }
 
-  _RoleScope _roleScope({
-    required String role,
-    required String uid,
-  }) {
+  _RoleScope _roleScope({required String role, required String uid}) {
     final normalized = role.trim().toLowerCase();
     if (normalized == 'owner') {
       return const _RoleScope(

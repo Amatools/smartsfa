@@ -159,3 +159,39 @@ Recomendacao:
 2. Criar modo dev/mock auth no app
 3. Continuar UI, offline-first e regra comercial sem depender de Google login
 4. Reativar login real quando o dominio/branding definitivo estiver pronto
+
+## 11. Catálogos grandes, offline e custo Firebase
+
+Para listas extensas (produtos, clientes, tabelas de preco, tributacao), a direcao correta nao e consolidar tudo em um unico documento gigante no Firestore.
+
+Direcao recomendada:
+
+- manter modelagem por documento por entidade (escalavel e segura);
+- usar sync incremental por tenant (delta por updatedAt/version);
+- registrar exclusoes por tombstone (deletedAt) para reconciliacao offline;
+- usar cache local para uso em campo;
+- usar pre-download explicito por modulo antes da saida para campo.
+
+Evitar como padrao:
+
+- leitura completa recorrente de colecoes grandes em toda abertura de tela;
+- documento unico com todo o catalogo (limite de tamanho, alto acoplamento e regrava inteira a cada alteracao).
+
+## 12. Plano de implementacao por fase (custo minimo)
+
+Fase 1 (curto prazo):
+
+1. Padronizar campos de sync em catalogos: updatedAt, version, deletedAt.
+2. Criar estado local de ultimo cursor de sync por modulo/tenant.
+3. Implementar endpoint/servico de pull incremental por lote.
+
+Fase 2 (evolucao):
+
+1. Paginacao para UI nas listagens mais extensas.
+2. Warmup guiado de catalogos (download antes do campo).
+3. Telemetria de custo (leituras por sincronizacao e por usuario).
+
+Fase 3 (escala):
+
+1. Snapshot de carga inicial pesada via arquivo (Cloud Storage) opcional.
+2. Firestore mantido para deltas e colaboracao near-real-time.

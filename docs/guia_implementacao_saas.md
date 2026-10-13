@@ -33,24 +33,16 @@ Ele precisa suportar:
 
 ### Tipos de workspace do produto
 
-Os tenants/workspaces devem ser classificados em 3 tipos:
+Para regras oficiais de tipos de workspace, lock de conta e criacao de enterprise, consulte:
 
-- seller_solo_workspace: contexto privado de vendedor, sem interligacao com outros usuarios.
-- rep_workspace: contexto de representacao, com interligacao representante -> vendedores.
-- brand_owner_workspace: contexto oficial da marca contratante com hierarquia completa.
-
-Regra de separacao:
-
-- Joao e Roberto podem operar "Amatools" em workspaces distintos, cada um com base propria;
-- Amatools oficial pode contratar depois e operar em outro tenant proprio;
-- nao existe vinculo automatico entre esses 3 contextos por nome ou CNPJ.
+- [workspace_access_billing_policy.md](workspace_access_billing_policy.md)
 
 ### Canais de uso
 
 - app mobile: operacao comercial, pedidos, orcamentos e dashboards resumidos;
 - portal web: configuracao pesada, politicas de preco, regras, integracoes e governanca.
 
-Ver tambem: [docs/web_portal_architecture.md](web_portal_architecture.md)
+Ver tambem: [web_portal_architecture.md](web_portal_architecture.md)
 
 ## Regras basicas de arquitetura
 
@@ -193,7 +185,11 @@ O app deve oferecer tres caminhos:
 
 - entrar por convite valido;
 - solicitar acesso a um tenant;
-- criar workspace por tipo de uso (seller_solo, rep, brand_owner).
+- criar workspace conforme matriz oficial de permissoes por login e lock.
+
+Referencia da matriz:
+
+- [workspace_access_billing_policy.md](workspace_access_billing_policy.md)
 
 ### Regra para tenants A e B
 
@@ -421,8 +417,8 @@ Se uma nova IA continuar este projeto, a ordem recomendada e:
 
 1. Ler este guia.
 2. Ler o modelo de acesso.
-3. Ler a proposta B2B.
-4. Ler o modelo SaaS multi-tenant.
+3. Ler regras de precificacao e tributacao.
+4. Ler arquitetura do portal web.
 5. Implementar entidades de dominio com status e origem.
 6. Implementar regras de aprovacao e membership.
 7. Implementar importacao por Excel e sincronizacao ERP.
@@ -518,6 +514,37 @@ Para fechar o ciclo de onboarding de tenant no app:
 - Nao inferir tenant apenas por email.
 - Nao permitir cadastro manual irrestrito por padrao.
 - Nao misturar pre-cadastro com cliente oficial.
+
+## Plano de implementacao para catalogos grandes (offline + custo)
+
+Objetivo: reduzir custo Firebase e manter operacao offline de campo confiavel.
+
+### Fase 1 - Base de sincronizacao incremental
+
+1. Padronizar metadados em colecoes de catalogo: updatedAt, version, deletedAt.
+2. Criar cursor local de sincronizacao por tenant+modulo (ultimo updatedAt/version aplicado).
+3. Substituir cargas completas recorrentes por pull incremental em lotes.
+4. Preservar fallback para carga completa apenas no primeiro bootstrap do dispositivo.
+
+### Fase 2 - UX e desempenho de leitura
+
+1. Introduzir paginação para listagens extensas no portal e no mobile.
+2. Executar pre-download orientado por modulo antes da saida para campo.
+3. Exibir status de sincronizacao por modulo (ok, parcial, pendente, erro).
+
+### Fase 3 - Observabilidade de custo
+
+1. Medir leituras por sincronizacao, por usuario e por tenant.
+2. Definir alertas de regressao de custo apos releases.
+3. Revisar periodicamente consultas sem filtro/paginacao.
+
+## Plano de reducao dos docs (sem criar arquivo novo)
+
+1. Este guia vira a referencia principal de implementacao.
+2. auth_access_model.md vira referencia principal de acesso e membership.
+3. pricing_taxation_rules.md vira referencia principal de regra comercial/fiscal.
+4. web_portal_architecture.md vira referencia principal de fronteira portal x mobile.
+5. architecture_transition.md, saas_model_v2.md, proposta_operacao_b2b.md e status_checkpoint_2026-09-09.md devem ficar resumidos e apontar para os canonicos.
 - Nao deixar regra so na tela.
 - Nao criar produto ou cliente duplicado sem estrategia de merge.
 - Nao colocar Platform Admin dentro da hierarquia comercial do tenant.

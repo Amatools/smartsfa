@@ -12,6 +12,7 @@ import '../../features/pedidos/presentation/pages/pedidos_page.dart';
 import '../../features/produtos/presentation/pages/produtos_page.dart';
 import '../../features/tenant/presentation/pages/tenant_admin_page.dart';
 import '../models/app_shell_item.dart';
+import '../models/app_shell_sync_status.dart';
 import '../widgets/app_shell_pages.dart';
 
 class AppShellNavigationFactory {
@@ -24,16 +25,27 @@ class AppShellNavigationFactory {
     required ClientePreCadastroRepository preCadastroRepository,
     required ProdutoRepository produtoRepository,
     required PedidoRepository pedidoRepository,
+    required String? selectedRepresentedCompanyId,
+    required String? selectedRepresentedCompanyName,
+    required String? selectedOriginCompanyUnitId,
+    required String? selectedOriginCompanyUnitLabel,
+    required String? selectedOriginCompanyUf,
+    required AppShellSyncStatus syncStatus,
+    required VoidCallback? onSyncNow,
+    required VoidCallback? onRefreshSyncStatus,
     required VoidCallback? onAccessUpdated,
   }) {
     final normalizedRole = role.toLowerCase().replaceAll(' ', '_');
     final items = <AppShellItem>[
       AppShellItem(
-        label: 'Dashboard',
+        label: 'Inicio',
         icon: Icons.space_dashboard_outlined,
         builder: (context, identity) => AppShellDashboardPage(
           identity: identity,
           usingLocalFallback: usingLocalFallback,
+          syncStatus: syncStatus,
+          onSyncNow: onSyncNow,
+          onRefreshSyncStatus: onRefreshSyncStatus,
         ),
       ),
       AppShellItem(
@@ -48,8 +60,12 @@ class AppShellNavigationFactory {
       AppShellItem(
         label: 'Produtos',
         icon: Icons.inventory_2_outlined,
-        builder: (context, identity) =>
-            ProdutosPage(identity: identity, repository: produtoRepository),
+        builder: (context, identity) => ProdutosPage(
+          identity: identity,
+          repository: produtoRepository,
+          activeRepresentedCompanyName: selectedRepresentedCompanyName,
+          selectedRepresentedCompanyId: selectedRepresentedCompanyId,
+        ),
       ),
       AppShellItem(
         label: 'Pedidos',
@@ -58,6 +74,10 @@ class AppShellNavigationFactory {
           identity: identity,
           repository: pedidoRepository,
           produtoRepository: produtoRepository,
+          representedCompanyId: selectedRepresentedCompanyId,
+          originCompanyUnitId: selectedOriginCompanyUnitId,
+          originCompanyUnitLabel: selectedOriginCompanyUnitLabel,
+          originCompanyUf: selectedOriginCompanyUf,
         ),
       ),
       AppShellItem(
@@ -80,8 +100,7 @@ class AppShellNavigationFactory {
 
     if (normalizedRole == 'platform_admin' ||
         normalizedRole == 'owner' ||
-        normalizedRole == 'gerente' ||
-        normalizedRole == 'representante') {
+        normalizedRole == 'gerente') {
       items.add(
         AppShellItem(
           label: 'Tenant',

@@ -18,8 +18,11 @@ import '../../../../core/repositories/cliente_repository.dart';
 import '../../../../core/repositories/customer_price_table_assignment_repository.dart';
 import '../../../../core/repositories/pedido_repository.dart';
 import '../../../../core/repositories/produto_repository.dart';
+import '../../../../core/services/catalog_incremental_sync_service.dart';
+import '../../../../core/services/catalog_snapshot_store.dart';
 import '../../../../core/services/offline_sync_queue.dart';
 import '../../../../core/models/produto.dart';
+import '../../../../core/models/customer_price_table_assignment.dart';
 import '../../../auth/services/tenant_membership_service.dart';
 import '../../../auth/services/workspace_profile_service.dart';
 import '../../../precos/presentation/services/default_price_table_guard.dart';
@@ -81,17 +84,27 @@ class _PedidosPageState extends State<PedidosPage> {
   bool _creatingDraft = false;
   bool _loadingProductsForEditor = false;
   bool _savingDraftEdition = false;
+  bool _loadingRepresentedContext = false;
   String? _editingOrderId;
+  String? _selectedRepresentedCompanyId;
+  String? _selectedOriginCompanyUnitId;
+  String? _selectedOriginCompanyUnitLabel;
+  String? _selectedOriginCompanyUf;
+  List<_RepresentedOriginContextOption> _representedOptions =
+      const <_RepresentedOriginContextOption>[];
   List<Produto> _editorProducts = const [];
   late final ClienteRepository _clienteRepository;
+  late final WorkspaceProfileService _workspaceProfileService;
   late final CustomerPriceTableAssignmentRepository
   _customerPriceTableAssignmentRepository;
   late final ProductTaxEngineService _taxEngineService;
+  final CatalogSnapshotStore _catalogSnapshotStore = CatalogSnapshotStore();
 
   @override
   void initState() {
     super.initState();
     final firestore = FirebaseFirestore.instance;
+    _workspaceProfileService = WorkspaceProfileService(firestore);
     _clienteRepository = FirestoreClienteRepository(firestore);
     _customerPriceTableAssignmentRepository =
         FirestoreCustomerPriceTableAssignmentRepository(firestore);
@@ -100,6 +113,20 @@ class _PedidosPageState extends State<PedidosPage> {
       basePriceRepository: FirestoreProductBasePriceRepository(firestore),
       taxRuleRepository: FirestoreTaxRuleRepository(firestore),
     );
+    _loadRepresentedContextIfNeeded();
+  }
+
+  @override
+  void didUpdateWidget(covariant PedidosPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.identity.tenantId.trim() != widget.identity.tenantId.trim()) {
+      _representedOptions = const <_RepresentedOriginContextOption>[];
+      _selectedRepresentedCompanyId = null;
+      _selectedOriginCompanyUnitId = null;
+      _selectedOriginCompanyUnitLabel = null;
+      _selectedOriginCompanyUf = null;
+      _loadRepresentedContextIfNeeded();
+    }
   }
 
   double _roundCurrency(double value) {
@@ -332,19 +359,251 @@ class _PedidosPageState extends State<PedidosPage> {
     return merged;
   }
 
-  String _originSummary() {
-    final label = (widget.originCompanyUnitLabel ?? '').trim();
-    final uf = (widget.originCompanyUf ?? '').trim().toUpperCase();
-    if (label.isEmpty && uf.isEmpty) {
-      return 'Origem operacional pendente de seleção da representada.';
+  bool get _usesExternalRepresentedContext {
+    final widgetRepresentedId = (widget.representedCompanyId ?? '').trim();
+    final widgetOriginUnitId = (widget.originCompanyUnitId ?? '').trim();
+    final widgetOriginLabel = (widget.originCompanyUnitLabel ?? '').trim();
+    final widgetOriginUf = (widget.originCompanyUf ?? '').trim();
+    return widgetRepresentedId.isNotEmpty ||
+        widgetOriginUnitId.isNotEmpty ||
+        widgetOriginLabel.isNotEmpty ||
+        widgetOriginUf.isNotEmpty;
+  }
+
+  String? get _effectiveRepresentedCompanyId {
+    final fromWidget = (widget.representedCompanyId ?? '').trim();
+    if (fromWidget.isNotEmpty) {
+      return fromWidget;
     }
-    if (label.isNotEmpty && uf.isNotEmpty) {
-      return 'Origem operacional atual: $label ($uf).';
+    final fromState = (_selectedRepresentedCompanyId ?? '').trim();
+    return fromState.isEmpty ? null : fromState;
+  }
+
+  String? get _effectiveOriginCompanyUnitId {
+    final fromWidget = (widget.originCompanyUnitId ?? '').trim();
+    if (fromWidget.isNotEmpty) {
+      return fromWidget;
     }
-    if (label.isNotEmpty) {
-      return 'Origem operacional atual: $label.';
+    final fromState = (_selectedOriginCompanyUnitId ?? '').trim();
+    return fromState.isEmpty ? null : fromState;
+  }
+
+  String? get _effectiveOriginCompanyUnitLabel {
+    final fromWidget = (widget.originCompanyUnitLabel ?? '').trim();
+    if (fromWidget.isNotEmpty) {
+      return fromWidget;
     }
-    return 'Origem operacional atual: UF $uf.';
+    final fromState = (_selectedOriginCompanyUnitLabel ?? '').trim();
+    return fromState.isEmpty ? null : fromState;
+  }
+
+  String? get _effectiveOriginCompanyUf {
+    final fromWidget = (widget.originCompanyUf ?? '').trim().toUpperCase();
+    if (fromWidget.isNotEmpty) {
+      return fromWidget;
+    }
+    final fromState = (_selectedOriginCompanyUf ?? '').trim().toUpperCase();
+    return fromState.isEmpty ? null : fromState;
+  }
+
+  Future<void> _loadRepresentedContextIfNeeded() async {
+    if (_usesExternalRepresentedContext || _loadingRepresentedContext) {
+      return;
+    }
+
+    final tenantId = widget.identity.tenantId.trim();
+    if (tenantId.isEmpty) {
+      return;
+    }
+
+    setState(() {
+      _loadingRepresentedContext = true;
+    });
+
+    try {
+      final workspace = await _workspaceProfileService
+          .watchWorkspace(tenantId)
+          .first;
+      final favoriteRepresentedId =
+          (workspace?['favoriteRepresentedCompanyId'] ?? '').toString().trim();
+
+      final companies = await _workspaceProfileService
+          .watchRepresentedCompanies(tenantId)
+          .first;
+
+      final options = <_RepresentedOriginContextOption>[];
+      for (final raw in companies) {
+        final representedId = (raw['companyId'] ?? '').toString().trim();
+        if (representedId.isEmpty) {
+          continue;
+        }
+
+        final isActive = raw['ativo'] != false;
+        if (!isActive) {
+          continue;
+        }
+
+        final companyName = (raw['nomeFantasia'] ?? '').toString().trim();
+        final originLabel = companyName.isEmpty ? representedId : companyName;
+        final originUf = (raw['uf'] ?? '').toString().trim().toUpperCase();
+        options.add(
+          _RepresentedOriginContextOption(
+            representedCompanyId: representedId,
+            originCompanyUnitId: representedId,
+            originCompanyUnitLabel: originLabel,
+            originCompanyUf: originUf,
+          ),
+        );
+      }
+
+      options.sort(
+        (a, b) => a.originCompanyUnitLabel.toLowerCase().compareTo(
+          b.originCompanyUnitLabel.toLowerCase(),
+        ),
+      );
+
+      _RepresentedOriginContextOption? selected;
+      if (favoriteRepresentedId.isNotEmpty) {
+        for (final option in options) {
+          if (option.representedCompanyId == favoriteRepresentedId) {
+            selected = option;
+            break;
+          }
+        }
+      }
+      selected ??= options.isEmpty ? null : options.first;
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _representedOptions =
+            List<_RepresentedOriginContextOption>.unmodifiable(options);
+        _selectedRepresentedCompanyId = selected?.representedCompanyId;
+        _selectedOriginCompanyUnitId = selected?.originCompanyUnitId;
+        _selectedOriginCompanyUnitLabel = selected?.originCompanyUnitLabel;
+        _selectedOriginCompanyUf = selected?.originCompanyUf;
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _representedOptions = const <_RepresentedOriginContextOption>[];
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loadingRepresentedContext = false;
+        });
+      }
+    }
+  }
+
+  void _onRepresentedSelectionChanged(String? representedCompanyId) {
+    final selectedId = (representedCompanyId ?? '').trim();
+    if (selectedId.isEmpty) {
+      return;
+    }
+
+    for (final option in _representedOptions) {
+      if (option.representedCompanyId == selectedId) {
+        setState(() {
+          _selectedRepresentedCompanyId = option.representedCompanyId;
+          _selectedOriginCompanyUnitId = option.originCompanyUnitId;
+          _selectedOriginCompanyUnitLabel = option.originCompanyUnitLabel;
+          _selectedOriginCompanyUf = option.originCompanyUf;
+        });
+        return;
+      }
+    }
+  }
+
+  Widget _buildRepresentedSelectorCard() {
+    if (_usesExternalRepresentedContext) {
+      return const SizedBox.shrink();
+    }
+
+    if (_loadingRepresentedContext) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: const [
+              SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Carregando representadas para definir origem do pedido...',
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (_representedOptions.isEmpty) {
+      return const Card(
+        child: Padding(
+          padding: EdgeInsets.all(12),
+          child: Text(
+            'Nenhuma representada ativa encontrada. Cadastre/ative uma representada para habilitar a criação de pedidos.',
+          ),
+        ),
+      );
+    }
+
+    final selectedId = _effectiveRepresentedCompanyId;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Representada ativa do pedido',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            DropdownButtonFormField<String>(
+              initialValue: selectedId,
+              decoration: const InputDecoration(
+                labelText: 'Representada',
+                border: OutlineInputBorder(),
+                isDense: true,
+              ),
+              items: _representedOptions
+                  .map(
+                    (option) => DropdownMenuItem<String>(
+                      value: option.representedCompanyId,
+                      child: Text(option.displayLabel),
+                    ),
+                  )
+                  .toList(growable: false),
+              onChanged: _onRepresentedSelectionChanged,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  bool _isProductInRepresentedScope(Produto product) {
+    final selectedRepresentedCompanyId = (_effectiveRepresentedCompanyId ?? '')
+        .trim();
+    if (selectedRepresentedCompanyId.isEmpty) {
+      return false;
+    }
+
+    final productScope = (product.representedCompanyId ?? '').trim();
+    return productScope == selectedRepresentedCompanyId;
   }
 
   Future<void> _selectOrderForEditing(Pedido pedido) async {
@@ -359,16 +618,7 @@ class _PedidosPageState extends State<PedidosPage> {
     });
 
     try {
-      final products = await widget.produtoRepository.fetchAll(
-        tenantId: tenantId,
-      );
-      final activeProducts =
-          products.where((item) => item.status == ProductStatus.active).toList()
-            ..sort(
-              (a, b) => a.descricao.toLowerCase().compareTo(
-                b.descricao.toLowerCase(),
-              ),
-            );
+      final activeProducts = await _resolveProductsForEditor(tenantId);
 
       if (!mounted) {
         return;
@@ -391,6 +641,62 @@ class _PedidosPageState extends State<PedidosPage> {
         });
       }
     }
+  }
+
+  Future<List<Produto>> _resolveProductsForEditor(String tenantId) async {
+    if (_editorProducts.isNotEmpty) {
+      return _editorProducts;
+    }
+
+    final cachedPayloads = await _catalogSnapshotStore.readAll(
+      tenantId: tenantId,
+      module: CatalogSyncModule.produtos,
+    );
+    if (cachedPayloads.isNotEmpty) {
+      final cachedProducts = <Produto>[];
+      for (final payload in cachedPayloads) {
+        try {
+          cachedProducts.add(Produto.fromMap(payload));
+        } catch (_) {
+          // Skip invalid cached payloads and fall back to repository when empty.
+        }
+      }
+
+      final activeCached =
+          cachedProducts
+              .where(
+                (item) =>
+                    item.status == ProductStatus.active &&
+                    item.deletedAt == null &&
+                    _isProductInRepresentedScope(item),
+              )
+              .toList()
+            ..sort(
+              (a, b) => a.descricao.toLowerCase().compareTo(
+                b.descricao.toLowerCase(),
+              ),
+            );
+      if (activeCached.isNotEmpty) {
+        return activeCached;
+      }
+    }
+
+    final products = await widget.produtoRepository.fetchAll(
+      tenantId: tenantId,
+    );
+    final activeProducts =
+        products
+            .where(
+              (item) =>
+                  item.status == ProductStatus.active &&
+                  _isProductInRepresentedScope(item),
+            )
+            .toList()
+          ..sort(
+            (a, b) =>
+                a.descricao.toLowerCase().compareTo(b.descricao.toLowerCase()),
+          );
+    return activeProducts;
   }
 
   void _closeInlineEditor() {
@@ -465,8 +771,10 @@ class _PedidosPageState extends State<PedidosPage> {
       return;
     }
 
-    final originLabel = (widget.originCompanyUnitLabel ?? '').trim();
-    final originUf = (widget.originCompanyUf ?? '').trim().toUpperCase();
+    final representedCompanyId = _effectiveRepresentedCompanyId;
+    final originCompanyUnitId = _effectiveOriginCompanyUnitId;
+    final originLabel = (_effectiveOriginCompanyUnitLabel ?? '').trim();
+    final originUf = (_effectiveOriginCompanyUf ?? '').trim().toUpperCase();
     if (originLabel.isEmpty || originUf.isEmpty) {
       if (!mounted) {
         return;
@@ -498,12 +806,8 @@ class _PedidosPageState extends State<PedidosPage> {
         gerenteId: scopeIds['gerenteId'] ?? '',
         representanteId: scopeIds['representanteId'] ?? '',
         vendedorId: scopeIds['vendedorId'] ?? '',
-        representedCompanyId: (widget.representedCompanyId ?? '').trim().isEmpty
-            ? null
-            : widget.representedCompanyId!.trim(),
-        originCompanyUnitId: (widget.originCompanyUnitId ?? '').trim().isEmpty
-            ? null
-            : widget.originCompanyUnitId!.trim(),
+        representedCompanyId: representedCompanyId,
+        originCompanyUnitId: originCompanyUnitId,
         originCompanyUnitLabel: originLabel,
         originCompanyUf: originUf,
         itens: const [],
@@ -650,16 +954,21 @@ class _PedidosPageState extends State<PedidosPage> {
                   1000.0,
                 );
                 final isEditing = (_editingOrderId ?? '').trim().isNotEmpty;
+                final representedNameForNewOrder =
+                    (_effectiveOriginCompanyUnitLabel ?? '').trim();
+                final newOrderActionLabel = representedNameForNewOrder.isEmpty
+                    ? 'Novo pedido'
+                    : 'Novo pedido para $representedNameForNewOrder';
 
                 if (isEditing) {
                   return Padding(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.fromLTRB(0, 6, 0, 0),
                     child: _PedidoInlineEditor(
                       pedido: editingEntry?.pedido,
                       products: _editorProducts,
                       tenantId: widget.identity.tenantId,
-                      representedCompanyId: widget.representedCompanyId,
-                      originCompanyUf: widget.originCompanyUf,
+                      representedCompanyId: _effectiveRepresentedCompanyId,
+                      originCompanyUf: _effectiveOriginCompanyUf,
                       clienteRepository: _clienteRepository,
                       customerPriceTableAssignmentRepository:
                           _customerPriceTableAssignmentRepository,
@@ -681,14 +990,17 @@ class _PedidosPageState extends State<PedidosPage> {
                       children: [
                         _HeaderCard(
                           title: 'Pedidos',
-                          subtitle:
-                              'Fila offline-first com status de envio e visao por responsavel. ${_originSummary()}',
+                          subtitle: 'Lista de Pedidos.',
                           actionLabel: _creatingDraft
                               ? 'Criando...'
-                              : 'Novo pedido',
+                              : newOrderActionLabel,
                           onAction: _createDraftOrder,
                           actionEnabled: !_creatingDraft,
                         ),
+                        if (!_usesExternalRepresentedContext) ...[
+                          const SizedBox(height: 12),
+                          _buildRepresentedSelectorCard(),
+                        ],
                         const SizedBox(height: 16),
                         if (pedidos.isEmpty)
                           const _EmptyState(
@@ -702,7 +1014,8 @@ class _PedidosPageState extends State<PedidosPage> {
                               syncedRemotely: entry.syncedRemotely,
                               selected: false,
                               onTap: () => _selectOrderForEditing(entry.pedido),
-                              onDelete: () => _deleteOrderLocalFirst(entry.pedido),
+                              onDelete: () =>
+                                  _deleteOrderLocalFirst(entry.pedido),
                             ),
                           ),
                       ],
@@ -737,6 +1050,28 @@ class _PedidoLocalState {
   final Set<String> deletedIds;
 }
 
+class _RepresentedOriginContextOption {
+  const _RepresentedOriginContextOption({
+    required this.representedCompanyId,
+    required this.originCompanyUnitId,
+    required this.originCompanyUnitLabel,
+    required this.originCompanyUf,
+  });
+
+  final String representedCompanyId;
+  final String originCompanyUnitId;
+  final String originCompanyUnitLabel;
+  final String originCompanyUf;
+
+  String get displayLabel {
+    final uf = originCompanyUf.trim().toUpperCase();
+    if (uf.isEmpty) {
+      return originCompanyUnitLabel;
+    }
+    return '$originCompanyUnitLabel ($uf)';
+  }
+}
+
 class _HeaderCard extends StatelessWidget {
   const _HeaderCard({
     required this.title,
@@ -757,20 +1092,13 @@ class _HeaderCard extends StatelessWidget {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: Row(
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, style: Theme.of(context).textTheme.headlineSmall),
-                  const SizedBox(height: 8),
-                  Text(subtitle),
-                ],
-              ),
-            ),
-            const SizedBox(width: 12),
+            Text(title, style: Theme.of(context).textTheme.headlineSmall),
+            const SizedBox(height: 8),
+            Text(subtitle),
+            const SizedBox(height: 10),
             FilledButton(
               onPressed: actionEnabled ? onAction : null,
               child: Text(actionLabel),
@@ -914,8 +1242,9 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
   final FocusNode _searchFocusNode = FocusNode();
   final TextEditingController _customerController = TextEditingController();
   final FocusNode _customerFocusNode = FocusNode();
-  final Map<String, List<TextEditingController>>
-  _discountControllersByItemId = <String, List<TextEditingController>>{};
+  final Map<String, List<TextEditingController>> _discountControllersByItemId =
+      <String, List<TextEditingController>>{};
+  final Map<String, int> _discountApplyRevisionByItemId = <String, int>{};
   List<PedidoItem> _items = const [];
   List<Cliente> _clientes = const [];
   bool _loadingClientes = false;
@@ -933,6 +1262,8 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
   String _searchQuery = '';
   final WorkspaceProfileService _workspaceProfileService =
       WorkspaceProfileService(FirebaseFirestore.instance);
+  final CatalogSnapshotStore _catalogSnapshotStore = CatalogSnapshotStore();
+  List<CustomerPriceTableAssignment>? _cachedAssignments;
 
   String? _effectiveRepresentedCompanyIdForWidget(_PedidoInlineEditor source) {
     final fromOrder = (source.pedido?.representedCompanyId ?? '').trim();
@@ -976,6 +1307,7 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
     final newScope = _effectiveRepresentedCompanyId;
 
     if (oldWidget.tenantId != widget.tenantId) {
+      _cachedAssignments = null;
       _loadClientes();
       _resetScopedPoliciesState();
       _loadCommercialRules();
@@ -1092,16 +1424,7 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
     }
 
     try {
-      final clientes = await widget.clienteRepository.fetchAll(
-        tenantId: tenantId,
-      );
-      final approved =
-          clientes
-              .where((item) => item.status == CustomerStatus.approved)
-              .toList()
-            ..sort(
-              (a, b) => a.nome.toLowerCase().compareTo(b.nome.toLowerCase()),
-            );
+      final approved = await _resolveApprovedClientes(tenantId);
 
       if (!mounted) {
         return;
@@ -1149,6 +1472,50 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
         });
       }
     }
+  }
+
+  Future<List<Cliente>> _resolveApprovedClientes(String tenantId) async {
+    final cachedPayloads = await _catalogSnapshotStore.readAll(
+      tenantId: tenantId,
+      module: CatalogSyncModule.clientes,
+    );
+    if (cachedPayloads.isNotEmpty) {
+      final cachedClientes = <Cliente>[];
+      for (final payload in cachedPayloads) {
+        try {
+          cachedClientes.add(Cliente.fromMap(payload));
+        } catch (_) {
+          // Skip invalid cached payloads and fallback to repository when needed.
+        }
+      }
+
+      final approvedCached =
+          cachedClientes
+              .where(
+                (item) =>
+                    item.status == CustomerStatus.approved &&
+                    item.deletedAt == null,
+              )
+              .toList()
+            ..sort(
+              (a, b) => a.nome.toLowerCase().compareTo(b.nome.toLowerCase()),
+            );
+      if (approvedCached.isNotEmpty) {
+        return approvedCached;
+      }
+    }
+
+    final clientes = await widget.clienteRepository.fetchAll(
+      tenantId: tenantId,
+    );
+    final approved =
+        clientes
+            .where((item) => item.status == CustomerStatus.approved)
+            .toList()
+          ..sort(
+            (a, b) => a.nome.toLowerCase().compareTo(b.nome.toLowerCase()),
+          );
+    return approved;
   }
 
   void _syncFromPedidoIfNeeded() {
@@ -1347,10 +1714,12 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
       }
     }
     _discountControllersByItemId.clear();
+    _discountApplyRevisionByItemId.clear();
   }
 
   void _disposeDiscountControllersForItem(String itemId) {
     final controllers = _discountControllersByItemId.remove(itemId);
+    _discountApplyRevisionByItemId.remove(itemId);
     if (controllers == null) {
       return;
     }
@@ -1634,15 +2003,11 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
     }
 
     if (scope == 'marca') {
-      return _ruleTargetsContain(rule, <String>[
-        product.marca ?? '',
-      ]);
+      return _ruleTargetsContain(rule, <String>[product.marca ?? '']);
     }
 
     if (scope == 'categoria') {
-      return _ruleTargetsContain(rule, <String>[
-        product.categoria ?? '',
-      ]);
+      return _ruleTargetsContain(rule, <String>[product.categoria ?? '']);
     }
 
     if (scope == 'produto') {
@@ -1702,7 +2067,9 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
     }
 
     final unitDiff = unitPrice - baseValues.unitPrice;
-    var totalPrice = _roundCurrency(baseValues.totalPrice + (unitDiff * safeQuantity));
+    var totalPrice = _roundCurrency(
+      baseValues.totalPrice + (unitDiff * safeQuantity),
+    );
     if (totalPrice < 0) {
       totalPrice = 0;
     }
@@ -1762,7 +2129,7 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
   String _formatPointDiscountSummary(List<double> discounts) {
     final effective = discounts.where((value) => value > 0).toList();
     if (effective.isEmpty) {
-      return 'Sem descontos pontuais';
+      return 'Sem descontos';
     }
     final values = effective.map(_formatPercent).join(' + ');
     return 'Descontos: $values';
@@ -1782,7 +2149,7 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Nenhum campo de desconto pontual foi configurado para esta representada.',
+            'Nenhum campo de desconto foi configurado para esta representada.',
           ),
         ),
       );
@@ -1800,8 +2167,7 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
     }
 
     setState(() {
-      final refreshed = List<double>.from(item.appliedDiscountPercents)
-        ..add(0);
+      final refreshed = List<double>.from(item.appliedDiscountPercents)..add(0);
       _items[index] = item.copyWith(appliedDiscountPercents: refreshed);
       _ensureDiscountControllersForItem(item, refreshed.length);
     });
@@ -1834,6 +2200,9 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
     final controllers = _ensureDiscountControllersForItem(item, activeSlots);
     final values = <double>[];
     for (var i = 0; i < activeSlots; i++) {
+      final fieldLabel = i < fields.length
+          ? fields[i].label
+          : 'Desconto ${i + 1}';
       final raw = controllers[i].text.trim();
       if (raw.isEmpty) {
         values.add(0);
@@ -1844,24 +2213,29 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
       if (parsed == null) {
         if (showErrors) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Valor inválido em ${fields[i].label}.')),
+            SnackBar(content: Text('Valor inválido em $fieldLabel.')),
           );
         }
         return;
       }
 
-      if (parsed < fields[i].minPercent || parsed > fields[i].maxPercent) {
-        if (showErrors) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                '${fields[i].label} deve estar entre ${_formatPercent(fields[i].minPercent)} e ${_formatPercent(fields[i].maxPercent)}.',
+      if (i < fields.length) {
+        final min = fields[i].minPercent;
+        final max = fields[i].maxPercent;
+        if (parsed < min || parsed > max) {
+          if (showErrors) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  '$fieldLabel deve estar entre ${_formatPercent(min)} e ${_formatPercent(max)}.',
+                ),
               ),
-            ),
-          );
+            );
+            return;
+          }
         }
-        return;
       }
+
       values.add(parsed);
     }
 
@@ -1872,6 +2246,10 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
       });
       return;
     }
+
+    final itemId = item.id;
+    final applyRevision = (_discountApplyRevisionByItemId[itemId] ?? 0) + 1;
+    _discountApplyRevisionByItemId[itemId] = applyRevision;
 
     final computed = await _resolveItemValues(
       product: product,
@@ -1885,8 +2263,17 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
       return;
     }
 
+    if ((_discountApplyRevisionByItemId[itemId] ?? 0) != applyRevision) {
+      return;
+    }
+
+    final refreshedIndex = _items.indexWhere((current) => current.id == itemId);
+    if (refreshedIndex < 0) {
+      return;
+    }
+
     setState(() {
-      _items[index] = _items[index].copyWith(
+      _items[refreshedIndex] = _items[refreshedIndex].copyWith(
         unitPrice: computed.unitPrice,
         totalPrice: computed.totalPrice,
         taxSnapshot: computed.taxSnapshot,
@@ -1914,7 +2301,6 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
       return;
     }
 
-    final fields = _orderDiscountPolicy.fields;
     final controllers = _ensureDiscountControllersForItem(item, activeSlots);
     if (discountIndex < controllers.length) {
       controllers[discountIndex].dispose();
@@ -1934,15 +2320,6 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
       if (parsed == null) {
         values.add(0);
         continue;
-      }
-
-      if (i < fields.length) {
-        final min = fields[i].minPercent;
-        final max = fields[i].maxPercent;
-        if (parsed < min || parsed > max) {
-          values.add(0);
-          continue;
-        }
       }
       values.add(parsed);
     }
@@ -2009,7 +2386,9 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
       totalPrice = 0;
     }
 
-    final snapshot = baseValues.taxSnapshot.copyWith(valorTotalItem: totalPrice);
+    final snapshot = baseValues.taxSnapshot.copyWith(
+      valorTotalItem: totalPrice,
+    );
     return _ComputedPedidoItemValues(
       unitPrice: unitPrice,
       totalPrice: totalPrice,
@@ -2178,8 +2557,7 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
 
     if (customerId.isNotEmpty) {
       try {
-        final assignments = await widget.customerPriceTableAssignmentRepository
-            .fetchAll(tenantId: tenantId);
+        final assignments = await _loadAssignmentsOnce(tenantId);
         final eligible = assignments
             .where(
               (item) =>
@@ -2221,6 +2599,21 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
       tenantId: tenantId,
       representedCompanyId: _effectiveRepresentedCompanyId,
     );
+  }
+
+  Future<List<CustomerPriceTableAssignment>> _loadAssignmentsOnce(
+    String tenantId,
+  ) async {
+    final cached = _cachedAssignments;
+    if (cached != null) {
+      return cached;
+    }
+
+    final loaded = await widget.customerPriceTableAssignmentRepository.fetchAll(
+      tenantId: tenantId,
+    );
+    _cachedAssignments = loaded;
+    return loaded;
   }
 
   PedidoItemTaxSnapshot _buildFallbackSnapshotFromProduct({
@@ -2332,6 +2725,7 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
         tabelaId: tableId,
         clienteUf: destinationUf,
         quantidade: quantity,
+        representedCompanyId: _effectiveRepresentedCompanyId,
         ufOrigem: originUf,
       );
 
@@ -2587,7 +2981,8 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
       quantity: nextQty.toDouble(),
       previousSnapshot: existing?.taxSnapshot,
       previousQuantity: existing?.quantity,
-      appliedDiscountPercents: existing?.appliedDiscountPercents ?? const <double>[],
+      appliedDiscountPercents:
+          existing?.appliedDiscountPercents ?? const <double>[],
     );
 
     if (!mounted) {
@@ -2711,7 +3106,9 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
                         type: MaterialType.transparency,
                         child: ListTile(
                           dense: true,
-                          onTap: widget.saving ? null : () => _addProduct(product),
+                          onTap: widget.saving
+                              ? null
+                              : () => _addProduct(product),
                           title: Text(product.descricao),
                           subtitle: Text(
                             '${displayCode.isEmpty ? '-' : displayCode} · ${product.marca?.trim().isEmpty ?? true ? '-' : product.marca} · NCM ${product.ncm?.trim().isEmpty ?? true ? '-' : product.ncm} · R\$ ${_formatMoneyBr(product.valorBruto ?? 0)}',
@@ -2783,274 +3180,295 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
       2: FlexColumnWidth(2),
       3: FlexColumnWidth(2),
     };
+    final isCompactItems = MediaQuery.sizeOf(context).width < 600;
+    final editorHeight = widget.maxBodyHeight.clamp(260.0, 1000.0);
 
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: Container(
-        decoration: const BoxDecoration(color: _bodyColor),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: double.infinity,
-              color: _chromeColor,
-              padding: const EdgeInsets.fromLTRB(16, 14, 12, 12),
-              child: Row(
-                children: [
-                  IconButton(
-                    tooltip: 'Voltar para pedidos',
-                    onPressed: canClose ? widget.onClose : null,
-                    icon: const Icon(Icons.arrow_back_outlined),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          hasSelection
-                              ? 'Pedido ${_pedidoDisplayNumber(pedido.id)}'
-                              : 'Editor de pedido',
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    tooltip: 'Fechar editor',
-                    onPressed: canClose ? widget.onClose : null,
-                    icon: const Icon(Icons.close),
-                  ),
-                ],
-              ),
-            ),
-            if (hasSelection)
+    return SizedBox(
+      height: editorHeight,
+      child: Card(
+        margin: EdgeInsets.zero,
+        clipBehavior: Clip.antiAlias,
+        child: Container(
+          decoration: const BoxDecoration(color: _bodyColor),
+          child: Column(
+            mainAxisSize: MainAxisSize.max,
+            children: [
               Container(
                 width: double.infinity,
-                color: Color.alphaBlend(
-                  Theme.of(context).colorScheme.primary.withValues(alpha: 0.06),
-                  Theme.of(context).colorScheme.surfaceContainerHighest,
-                ),
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                color: _chromeColor,
+                padding: const EdgeInsets.fromLTRB(8, 2, 4, 2),
+                child: Row(
                   children: [
-                    RawAutocomplete<Cliente>(
-                      textEditingController: _customerController,
-                      focusNode: _customerFocusNode,
-                      displayStringForOption: _formatClienteLabel,
-                      optionsBuilder: (textEditingValue) {
-                        final query = _normalizeSearch(textEditingValue.text);
-                        if (query.isEmpty) {
-                          return _clientes.take(25);
-                        }
-
-                        final filtered = _clientes.where((cliente) {
-                          final label = _normalizeSearch(
-                            _formatClienteLabel(cliente),
-                          );
-                          final nome = _normalizeSearch(cliente.nome);
-                          final documento = _normalizeSearch(cliente.documento);
-                          return label.contains(query) ||
-                              nome.contains(query) ||
-                              documento.contains(query);
-                        });
-                        return filtered.take(25);
-                      },
-                      onSelected: (cliente) {
-                        _selectCustomerById(cliente.id);
-                      },
-                      fieldViewBuilder:
-                          (
-                            context,
-                            textEditingController,
-                            focusNode,
-                            onFieldSubmitted,
-                          ) {
-                            return TextField(
-                              controller: textEditingController,
-                              focusNode: focusNode,
-                              enabled:
-                                  !widget.saving &&
-                                  !_loadingClientes &&
-                                  !_customerReadDenied,
-                              decoration:
-                                  _inputDecoration(label: 'Cliente').copyWith(
-                                    hintText: 'Digite para buscar e selecione da lista',
-                                    helperText: _customerReadDenied
-                                        ? 'Sem permissão para listar clientes neste perfil.'
-                                        : null,
-                                    errorText: _customerInputError,
-                                    suffixIcon: IconButton(
-                                      tooltip: 'Limpar cliente',
-                                      onPressed:
-                                          widget.saving ||
-                                              _loadingClientes ||
-                                              _customerReadDenied
-                                          ? null
-                                          : () {
-                                              _selectCustomerById('');
-                                            },
-                                      icon: const Icon(Icons.clear),
-                                    ),
-                                  ),
-                              onSubmitted: (_) {
-                                final typed = textEditingController.text.trim();
-                                if (typed.isEmpty) {
-                                  _selectCustomerById('');
-                                  return;
-                                }
-                                final matched = _findClienteByTypedText(typed);
-                                if (matched != null) {
-                                  _selectCustomerById(matched.id);
-                                  return;
-                                }
-                                setState(() {
-                                  _customerInputError = 'Selecione um cliente existente da lista.';
-                                });
-                              },
-                              onChanged: (value) {
-                                if (_customerInputError != null) {
-                                  setState(() {
-                                    _customerInputError = null;
-                                  });
-                                }
-
-                                final selected = _findClienteById(
-                                  _clienteReferenciaSelecionada?.id ?? '',
-                                );
-                                if (selected == null) {
-                                  return;
-                                }
-
-                                final selectedLabel = _normalizeSearch(
-                                  _formatClienteLabel(selected),
-                                );
-                                if (_normalizeSearch(value) != selectedLabel) {
-                                  setState(() {
-                                    _clienteReferenciaSelecionada = null;
-                                  });
-                                }
-                              },
-                            );
-                          },
-                      optionsViewBuilder: (context, onSelected, options) {
-                        final optionList = options.toList(growable: false);
-                        return Align(
-                          alignment: Alignment.topLeft,
-                          child: Material(
-                            elevation: 4,
-                            borderRadius: BorderRadius.circular(8),
-                            child: ConstrainedBox(
-                              constraints: const BoxConstraints(
-                                maxWidth: 680,
-                                maxHeight: 240,
-                              ),
-                              child: ListView.builder(
-                                padding: EdgeInsets.zero,
-                                itemCount: optionList.length,
-                                itemBuilder: (context, index) {
-                                  final cliente = optionList[index];
-                                  return ListTile(
-                                    dense: true,
-                                    title: Text(cliente.nome),
-                                    subtitle: Text(
-                                      [
-                                        if (cliente.documento.trim().isNotEmpty)
-                                          cliente.documento.trim(),
-                                        if (cliente.estado.trim().isNotEmpty)
-                                          cliente.estado.trim().toUpperCase(),
-                                      ].join(' · '),
-                                    ),
-                                    onTap: () => onSelected(cliente),
-                                  );
-                                },
-                              ),
-                            ),
-                          ),
-                        );
-                      },
+                    IconButton(
+                      tooltip: 'Voltar para pedidos',
+                      onPressed: canClose ? widget.onClose : null,
+                      icon: const Icon(Icons.arrow_back_outlined),
+                      visualDensity: VisualDensity.compact,
+                      constraints: const BoxConstraints(
+                        minWidth: 34,
+                        minHeight: 34,
+                      ),
+                      padding: EdgeInsets.zero,
                     ),
-                    if (_loadingClientes) ...[
-                      const SizedBox(height: 8),
-                      const LinearProgressIndicator(minHeight: 2),
-                    ],
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            hasSelection
+                                ? 'Pedido ${_pedidoDisplayNumber(pedido.id)}'
+                                : 'Editor de pedido',
+                            style: Theme.of(context).textTheme.titleSmall,
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Fechar editor',
+                      onPressed: canClose ? widget.onClose : null,
+                      icon: const Icon(Icons.close),
+                      visualDensity: VisualDensity.compact,
+                      constraints: const BoxConstraints(
+                        minWidth: 34,
+                        minHeight: 34,
+                      ),
+                      padding: EdgeInsets.zero,
+                    ),
                   ],
                 ),
               ),
-            Container(
-              width: double.infinity,
-              color: _bodyColor,
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-              child: widget.loadingProducts
-                  ? const Center(child: CircularProgressIndicator())
-                  : !hasSelection
-                  ? Text(
-                      'Este pedido não está mais disponível. Volte para a lista e selecione outro.',
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    )
-                  : ConstrainedBox(
-                      constraints: BoxConstraints(
-                        maxHeight: widget.maxBodyHeight,
+              if (hasSelection)
+                Container(
+                  width: double.infinity,
+                  color: Color.alphaBlend(
+                    Theme.of(context).colorScheme.primary
+                        .withValues(alpha: 0.06),
+                    Theme.of(context).colorScheme.surfaceContainerHighest,
+                  ),
+                  padding: const EdgeInsets.fromLTRB(8, 4, 8, 6),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      RawAutocomplete<Cliente>(
+                        textEditingController: _customerController,
+                        focusNode: _customerFocusNode,
+                        displayStringForOption: _formatClienteLabel,
+                        optionsBuilder: (textEditingValue) {
+                          final query = _normalizeSearch(textEditingValue.text);
+                          if (query.isEmpty) {
+                            return _clientes.take(25);
+                          }
+
+                          final filtered = _clientes.where((cliente) {
+                            final label = _normalizeSearch(
+                              _formatClienteLabel(cliente),
+                            );
+                            final nome = _normalizeSearch(cliente.nome);
+                            final documento = _normalizeSearch(
+                              cliente.documento,
+                            );
+                            return label.contains(query) ||
+                                nome.contains(query) ||
+                                documento.contains(query);
+                          });
+                          return filtered.take(25);
+                        },
+                        onSelected: (cliente) {
+                          _selectCustomerById(cliente.id);
+                        },
+                        fieldViewBuilder:
+                            (
+                              context,
+                              textEditingController,
+                              focusNode,
+                              onFieldSubmitted,
+                            ) {
+                              return TextField(
+                                controller: textEditingController,
+                                focusNode: focusNode,
+                                enabled:
+                                    !widget.saving &&
+                                    !_loadingClientes &&
+                                    !_customerReadDenied,
+                                decoration:
+                                    _inputDecoration(label: 'Cliente').copyWith(
+                                      hintText: 'Digite para buscar e selecione da lista',
+                                      helperText: _customerReadDenied
+                                          ? 'Sem permissão para listar clientes neste perfil.'
+                                          : null,
+                                      errorText: _customerInputError,
+                                      suffixIcon: IconButton(
+                                        tooltip: 'Limpar cliente',
+                                        onPressed:
+                                            widget.saving ||
+                                                _loadingClientes ||
+                                                _customerReadDenied
+                                            ? null
+                                            : () {
+                                                _selectCustomerById('');
+                                              },
+                                        icon: const Icon(Icons.clear),
+                                      ),
+                                    ),
+                                onSubmitted: (_) {
+                                  final typed = textEditingController.text
+                                      .trim();
+                                  if (typed.isEmpty) {
+                                    _selectCustomerById('');
+                                    return;
+                                  }
+                                  final matched = _findClienteByTypedText(
+                                    typed,
+                                  );
+                                  if (matched != null) {
+                                    _selectCustomerById(matched.id);
+                                    return;
+                                  }
+                                  setState(() {
+                                    _customerInputError = 'Selecione um cliente existente da lista.';
+                                  });
+                                },
+                                onChanged: (value) {
+                                  if (_customerInputError != null) {
+                                    setState(() {
+                                      _customerInputError = null;
+                                    });
+                                  }
+
+                                  final selected = _findClienteById(
+                                    _clienteReferenciaSelecionada?.id ?? '',
+                                  );
+                                  if (selected == null) {
+                                    return;
+                                  }
+
+                                  final selectedLabel = _normalizeSearch(
+                                    _formatClienteLabel(selected),
+                                  );
+                                  if (_normalizeSearch(value) !=
+                                      selectedLabel) {
+                                    setState(() {
+                                      _clienteReferenciaSelecionada = null;
+                                    });
+                                  }
+                                },
+                              );
+                            },
+                        optionsViewBuilder: (context, onSelected, options) {
+                          final optionList = options.toList(growable: false);
+                          return Align(
+                            alignment: Alignment.topLeft,
+                            child: Material(
+                              elevation: 4,
+                              borderRadius: BorderRadius.circular(8),
+                              child: ConstrainedBox(
+                                constraints: const BoxConstraints(
+                                  maxWidth: 680,
+                                  maxHeight: 240,
+                                ),
+                                child: ListView.builder(
+                                  padding: EdgeInsets.zero,
+                                  itemCount: optionList.length,
+                                  itemBuilder: (context, index) {
+                                    final cliente = optionList[index];
+                                    return ListTile(
+                                      dense: true,
+                                      title: Text(cliente.nome),
+                                      subtitle: Text(
+                                        [
+                                          if (cliente.documento
+                                              .trim()
+                                              .isNotEmpty)
+                                            cliente.documento.trim(),
+                                          if (cliente.estado.trim().isNotEmpty)
+                                            cliente.estado.trim().toUpperCase(),
+                                        ].join(' · '),
+                                      ),
+                                      onTap: () => onSelected(cliente),
+                                    );
+                                  },
+                                ),
+                              ),
+                            ),
+                          );
+                        },
                       ),
-                      child: SingleChildScrollView(
-                        child: Column(
+                      if (_loadingClientes) ...[
+                        const SizedBox(height: 8),
+                        const LinearProgressIndicator(minHeight: 2),
+                      ],
+                    ],
+                  ),
+                ),
+              Expanded(
+                child: Container(
+                  width: double.infinity,
+                  color: _bodyColor,
+                  padding: const EdgeInsets.fromLTRB(8, 8, 8, 6),
+                  child: widget.loadingProducts
+                      ? const Center(child: CircularProgressIndicator())
+                      : !hasSelection
+                      ? Align(
+                          alignment: Alignment.topLeft,
+                          child: Text(
+                            'Este pedido não está mais disponível. Volte para a lista e selecione outro.',
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                        )
+                      : Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Expanded(
-                                  child: TextField(
-                                    controller: _searchController,
-                                    focusNode: _searchFocusNode,
-                                    enabled: !widget.saving,
-                                    textInputAction: TextInputAction.search,
-                                    onChanged: (value) {
-                                      setState(() {
-                                        _searchQuery = value;
-                                      });
-                                    },
-                                    onSubmitted: (_) {
-                                      if (!widget.saving) {
-                                        _openSearchResultsModal(searchResults);
-                                      }
-                                    },
-                                    decoration:
-                                        _inputDecoration(
-                                          label: 'Pesquisar produto (descrição, código, marca, NCM)',
-                                        ).copyWith(
-                                          prefixIcon: const Icon(Icons.search),
-                                          suffixIcon: IconButton(
-                                            tooltip: 'Abrir busca completa',
-                                            onPressed: widget.saving
-                                                ? null
-                                                : () => _openSearchResultsModal(
-                                                    searchResults,
-                                                  ),
-                                            icon: const Icon(
-                                              Icons.manage_search_outlined,
-                                            ),
+                            LayoutBuilder(
+                              builder: (context, constraints) {
+                                final isCompact = constraints.maxWidth < 560;
+
+                                final searchField = TextField(
+                                  controller: _searchController,
+                                  focusNode: _searchFocusNode,
+                                  enabled: !widget.saving,
+                                  textInputAction: TextInputAction.search,
+                                  onChanged: (value) {
+                                    setState(() {
+                                      _searchQuery = value;
+                                    });
+                                  },
+                                  onSubmitted: (_) {
+                                    if (!widget.saving) {
+                                      _openSearchResultsModal(searchResults);
+                                    }
+                                  },
+                                  decoration:
+                                      _inputDecoration(
+                                        label: 'Pesquisar produto (descrição, código, marca, NCM)',
+                                      ).copyWith(
+                                        prefixIcon: const Icon(Icons.search),
+                                        suffixIcon: IconButton(
+                                          tooltip: 'Abrir busca completa',
+                                          onPressed: widget.saving
+                                              ? null
+                                              : () => _openSearchResultsModal(
+                                                  searchResults,
+                                                ),
+                                          icon: const Icon(
+                                            Icons.manage_search_outlined,
                                           ),
                                         ),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                SizedBox(
-                                  width: 110,
-                                  child: TextField(
-                                    controller: _quantityController,
-                                    enabled: !widget.saving,
-                                    keyboardType: TextInputType.number,
-                                    inputFormatters: [
-                                      FilteringTextInputFormatter.digitsOnly,
-                                      LengthLimitingTextInputFormatter(5),
-                                    ],
-                                    decoration: _inputDecoration(label: 'Qtd'),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                FilledButton.icon(
+                                      ),
+                                );
+
+                                final quantityField = TextField(
+                                  controller: _quantityController,
+                                  enabled: !widget.saving,
+                                  keyboardType: TextInputType.number,
+                                  inputFormatters: [
+                                    FilteringTextInputFormatter.digitsOnly,
+                                    LengthLimitingTextInputFormatter(5),
+                                  ],
+                                  decoration: _inputDecoration(label: 'Qtd'),
+                                );
+
+                                final addButton = FilledButton.icon(
                                   onPressed:
                                       visibleResults.isEmpty || widget.saving
                                       ? null
@@ -3059,10 +3477,47 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
                                     Icons.add_shopping_cart_outlined,
                                   ),
                                   label: const Text('Adicionar'),
-                                ),
-                              ],
+                                );
+
+                                if (!isCompact) {
+                                  return Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Expanded(child: searchField),
+                                      const SizedBox(width: 12),
+                                      SizedBox(
+                                        width: 110,
+                                        child: quantityField,
+                                      ),
+                                      const SizedBox(width: 12),
+                                      addButton,
+                                    ],
+                                  );
+                                }
+
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    searchField,
+                                    const SizedBox(height: 8),
+                                    Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        SizedBox(
+                                          width: 110,
+                                          child: quantityField,
+                                        ),
+                                        const SizedBox(width: 10),
+                                        Expanded(child: addButton),
+                                      ],
+                                    ),
+                                  ],
+                                );
+                              },
                             ),
-                            const SizedBox(height: 12),
+                            const SizedBox(height: 8),
                             Text(
                               !hasQuery
                                   ? 'Digite na busca para listar produtos.'
@@ -3071,756 +3526,1124 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
                                   : 'Resultados: ${searchResults.length} (exibindo ${visibleResults.length}).',
                               style: Theme.of(context).textTheme.bodySmall,
                             ),
-                            const SizedBox(height: 8),
-                            if (widget.products.isEmpty)
-                              Container(
-                                width: double.infinity,
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(
-                                    color: Theme.of(context).dividerColor,
-                                  ),
-                                ),
-                                child: const Text(
-                                  'Nenhum produto ativo disponível para este tenant.',
-                                ),
-                              )
-                            else if (visibleResults.isNotEmpty)
-                              ConstrainedBox(
-                                constraints: const BoxConstraints(
-                                  maxHeight: 280,
-                                ),
-                                child: ListView.separated(
-                                  shrinkWrap: true,
-                                  itemCount: visibleResults.length,
-                                  separatorBuilder: (_, index) =>
-                                      const Divider(height: 1),
-                                  itemBuilder: (context, index) {
-                                    final product = visibleResults[index];
-                                    final displayCode = _resolveCommercialCode(
-                                      product,
-                                    );
-                                    return Material(
-                                      type: MaterialType.transparency,
-                                      child: ListTile(
-                                        dense: true,
-                                        onTap: widget.saving
-                                            ? null
-                                            : () => _addProduct(product),
-                                        title: Text(product.descricao),
-                                        subtitle: Text(
-                                          '${displayCode.isEmpty ? '-' : displayCode} · ${product.marca?.trim().isEmpty ?? true ? '-' : product.marca} · NCM ${product.ncm?.trim().isEmpty ?? true ? '-' : product.ncm} · R\$ ${_formatMoneyBr(product.valorBruto ?? 0)}',
-                                        ),
-                                        trailing: IconButton.filledTonal(
-                                          tooltip: 'Adicionar ao pedido',
-                                          onPressed: widget.saving
-                                              ? null
-                                              : () => _addProduct(product),
-                                          icon: const Icon(Icons.add),
+                            const SizedBox(height: 6),
+                            Expanded(
+                              child: ListView(
+                                padding: EdgeInsets.zero,
+                                children: [
+                                  if (widget.products.isEmpty)
+                                    Container(
+                                      width: double.infinity,
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(
+                                          color: Theme.of(context).dividerColor,
                                         ),
                                       ),
-                                    );
-                                  },
-                                ),
-                              ),
-                            if (hasMoreResults) ...[
-                              const SizedBox(height: 8),
-                              Align(
-                                alignment: Alignment.centerLeft,
-                                child: TextButton.icon(
-                                  onPressed: widget.saving
-                                      ? null
-                                      : () => _openSearchResultsModal(
-                                          searchResults,
-                                        ),
-                                  icon: const Icon(Icons.open_in_new),
-                                  label: Text(
-                                    'Ver todos os resultados (${searchResults.length})',
-                                  ),
-                                ),
-                              ),
-                            ],
-                            const SizedBox(height: 16),
-                            if (_items.isEmpty)
-                              Container(
-                                width: double.infinity,
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(
-                                    color: Theme.of(context).dividerColor,
-                                  ),
-                                ),
-                                child: const Text('Nenhum item adicionado.'),
-                              )
-                            else
-                              Column(
-                                children: [
-                                  Container(
-                                    width: double.infinity,
-                                    padding: const EdgeInsets.fromLTRB(
-                                      10,
-                                      8,
-                                      10,
-                                      8,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(8),
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .surfaceContainerHighest,
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        const SizedBox(width: 54),
-                                        Expanded(
-                                          child: Table(
-                                            columnWidths: itemTableColumnWidths,
-                                            children: [
-                                              TableRow(
-                                                children: [
-                                                  Align(
-                                                    alignment:
-                                                        Alignment.centerLeft,
-                                                    child: Text(
-                                                      'Produto',
-                                                      style: Theme.of(context)
-                                                          .textTheme
-                                                          .labelMedium,
-                                                    ),
-                                                  ),
-                                                  Align(
-                                                    alignment:
-                                                        Alignment.centerRight,
-                                                    child: Text(
-                                                      'Qtd',
-                                                      style: Theme.of(context)
-                                                          .textTheme
-                                                          .labelMedium,
-                                                    ),
-                                                  ),
-                                                  Align(
-                                                    alignment:
-                                                        Alignment.centerRight,
-                                                    child: Text(
-                                                      'Preco',
-                                                      style: Theme.of(context)
-                                                          .textTheme
-                                                          .labelMedium,
-                                                    ),
-                                                  ),
-                                                  Align(
-                                                    alignment:
-                                                        Alignment.centerRight,
-                                                    child: Text(
-                                                      'Total',
-                                                      style: Theme.of(context)
-                                                          .textTheme
-                                                          .labelMedium,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                        const SizedBox(width: 36),
-                                      ],
-                                    ),
-                                  ),
-                                  const SizedBox(height: 6),
-                                  ConstrainedBox(
-                                    constraints: const BoxConstraints(
-                                      maxHeight: 320,
-                                    ),
-                                    child: ListView.separated(
+                                      child: const Text(
+                                        'Nenhum produto ativo disponível para este tenant.',
+                                      ),
+                                    )
+                                  else if (visibleResults.isNotEmpty)
+                                    ListView.separated(
                                       shrinkWrap: true,
-                                      itemCount: _items.length,
+                                      physics:
+                                          const NeverScrollableScrollPhysics(),
+                                      itemCount: visibleResults.length,
                                       separatorBuilder: (_, index) =>
                                           const Divider(height: 1),
                                       itemBuilder: (context, index) {
-                                        final item = _items[index];
-                                        final product =
-                                            productsById[item.productId];
-                                        final snapshot = item.taxSnapshot;
+                                        final product = visibleResults[index];
                                         final displayCode =
-                                            _resolveItemDisplayCode(
-                                              item,
-                                              product,
-                                            );
-                                        final ipi =
-                                            snapshot?.aliquotaIpiPercent ??
-                                            product?.aliquotaIpiBase;
-                                        final ncm =
-                                            (snapshot?.ncm ?? item.ncm ?? '')
-                                                .trim();
-                                        final cest = (snapshot?.cest ?? '')
-                                            .trim();
-                                        final ipiText = ipi == null
-                                            ? 'IPI -'
-                                            : 'IPI ${_formatPercent(ipi)}';
-                                        final fiscalMetaText = [
-                                          if (ncm.isNotEmpty) 'NCM $ncm',
-                                          if (cest.isNotEmpty) 'CEST $cest',
-                                        ].join(' · ');
-                                        final discountSummary =
-                                            _formatPointDiscountSummary(
-                                              item.appliedDiscountPercents,
-                                            );
-                                        final policyFields =
-                                          _orderDiscountPolicy.fields;
-                                        final maxDiscountSlots =
-                                          policyFields.length;
-                                        final activeDiscountSlots =
-                                          item
-                                            .appliedDiscountPercents
-                                            .length;
-                                        final canAddDiscountSlot =
-                                          maxDiscountSlots > 0 &&
-                                          activeDiscountSlots <
-                                            maxDiscountSlots;
-                                        final inlineDiscountControllers =
-                                          activeDiscountSlots > 0
-                                          ? _ensureDiscountControllersForItem(
-                                            item,
-                                            activeDiscountSlots,
-                                            )
-                                          : const <TextEditingController>[];
-
-                                        return Padding(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 8,
-                                            vertical: 6,
+                                            _resolveCommercialCode(product);
+                                        return Material(
+                                          type: MaterialType.transparency,
+                                          child: ListTile(
+                                            dense: true,
+                                            onTap: widget.saving
+                                                ? null
+                                                : () => _addProduct(product),
+                                            title: Text(product.descricao),
+                                            subtitle: Text(
+                                              '${displayCode.isEmpty ? '-' : displayCode} · ${product.marca?.trim().isEmpty ?? true ? '-' : product.marca} · NCM ${product.ncm?.trim().isEmpty ?? true ? '-' : product.ncm} · R\$ ${_formatMoneyBr(product.valorBruto ?? 0)}',
+                                            ),
+                                            trailing: IconButton.filledTonal(
+                                              tooltip: 'Adicionar ao pedido',
+                                              onPressed: widget.saving
+                                                  ? null
+                                                  : () => _addProduct(product),
+                                              icon: const Icon(Icons.add),
+                                            ),
                                           ),
-                                          child: Row(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              _buildItemThumbnail(
-                                                product,
-                                                item.productName,
+                                        );
+                                      },
+                                    ),
+                                  if (hasMoreResults) ...[
+                                    const SizedBox(height: 6),
+                                    Align(
+                                      alignment: Alignment.centerLeft,
+                                      child: TextButton.icon(
+                                        onPressed: widget.saving
+                                            ? null
+                                            : () => _openSearchResultsModal(
+                                                searchResults,
                                               ),
-                                              const SizedBox(width: 10),
-                                              Expanded(
-                                                child: Table(
-                                                  columnWidths:
-                                                      itemTableColumnWidths,
-                                                  defaultVerticalAlignment:
-                                                      TableCellVerticalAlignment
-                                                          .middle,
-                                                  children: [
-                                                    TableRow(
-                                                      children: [
-                                                        Padding(
-                                                          padding:
-                                                              const EdgeInsets.only(
-                                                                right: 8,
-                                                              ),
-                                                          child: Text(
-                                                            '$displayCode · ${item.productName}',
-                                                            maxLines: 1,
-                                                            overflow:
-                                                                TextOverflow
-                                                                    .ellipsis,
+                                        icon: const Icon(Icons.open_in_new),
+                                        label: Text(
+                                          'Ver todos os resultados (${searchResults.length})',
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                  const SizedBox(height: 8),
+                                  if (_items.isEmpty)
+                                    Container(
+                                      width: double.infinity,
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(
+                                          color: Theme.of(context).dividerColor,
+                                        ),
+                                      ),
+                                      child: const Text(
+                                        'Nenhum item adicionado.',
+                                      ),
+                                    )
+                                  else
+                                    Column(
+                                      children: [
+                                        if (!isCompactItems)
+                                          Container(
+                                            width: double.infinity,
+                                            padding: const EdgeInsets.fromLTRB(
+                                              10,
+                                              8,
+                                              10,
+                                              8,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                              color: Theme.of(context)
+                                                  .colorScheme
+                                                  .surfaceContainerHighest,
+                                            ),
+                                            child: Row(
+                                              children: [
+                                                const SizedBox(width: 54),
+                                                Expanded(
+                                                  child: Table(
+                                                    columnWidths:
+                                                        itemTableColumnWidths,
+                                                    children: [
+                                                      TableRow(
+                                                        children: [
+                                                          Align(
+                                                            alignment: Alignment
+                                                                .centerLeft,
+                                                            child: Text(
+                                                              'Produto',
+                                                              style:
+                                                                  Theme.of(
+                                                                        context,
+                                                                      )
+                                                                      .textTheme
+                                                                      .labelMedium,
+                                                            ),
                                                           ),
+                                                          Align(
+                                                            alignment: Alignment
+                                                                .centerRight,
+                                                            child: Text(
+                                                              'Qtd',
+                                                              style:
+                                                                  Theme.of(
+                                                                        context,
+                                                                      )
+                                                                      .textTheme
+                                                                      .labelMedium,
+                                                            ),
+                                                          ),
+                                                          Align(
+                                                            alignment: Alignment
+                                                                .centerRight,
+                                                            child: Text(
+                                                              'Preco',
+                                                              style:
+                                                                  Theme.of(
+                                                                        context,
+                                                                      )
+                                                                      .textTheme
+                                                                      .labelMedium,
+                                                            ),
+                                                          ),
+                                                          Align(
+                                                            alignment: Alignment
+                                                                .centerRight,
+                                                            child: Text(
+                                                              'Total',
+                                                              style:
+                                                                  Theme.of(
+                                                                        context,
+                                                                      )
+                                                                      .textTheme
+                                                                      .labelMedium,
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 36),
+                                              ],
+                                            ),
+                                          ),
+                                        if (!isCompactItems)
+                                          const SizedBox(height: 6),
+                                        ListView.separated(
+                                          shrinkWrap: true,
+                                          physics:
+                                              const NeverScrollableScrollPhysics(),
+                                          itemCount: _items.length,
+                                          separatorBuilder: (_, index) =>
+                                              const Divider(height: 1),
+                                          itemBuilder: (context, index) {
+                                            final item = _items[index];
+                                            final product =
+                                                productsById[item.productId];
+                                            final snapshot = item.taxSnapshot;
+                                            final displayCode =
+                                                _resolveItemDisplayCode(
+                                                  item,
+                                                  product,
+                                                );
+                                            final ipi =
+                                                snapshot?.aliquotaIpiPercent ??
+                                                product?.aliquotaIpiBase;
+                                            final ncm =
+                                                (snapshot?.ncm ??
+                                                        item.ncm ??
+                                                        '')
+                                                    .trim();
+                                            final cest = (snapshot?.cest ?? '')
+                                                .trim();
+                                            final ipiText = ipi == null
+                                                ? 'IPI -'
+                                                : 'IPI ${_formatPercent(ipi)}';
+                                            final fiscalMetaText = [
+                                              if (ncm.isNotEmpty) 'NCM $ncm',
+                                              if (cest.isNotEmpty) 'CEST $cest',
+                                            ].join(' · ');
+                                            final discountSummary =
+                                                _formatPointDiscountSummary(
+                                                  item.appliedDiscountPercents,
+                                                );
+                                            final policyFields =
+                                                _orderDiscountPolicy.fields;
+                                            final maxDiscountSlots =
+                                                policyFields.length;
+                                            final activeDiscountSlots = item
+                                                .appliedDiscountPercents
+                                                .length;
+                                            final canAddDiscountSlot =
+                                                maxDiscountSlots > 0 &&
+                                                activeDiscountSlots <
+                                                    maxDiscountSlots;
+                                            final inlineDiscountControllers =
+                                                activeDiscountSlots > 0
+                                                ? _ensureDiscountControllersForItem(
+                                                    item,
+                                                    activeDiscountSlots,
+                                                  )
+                                                : const <
+                                                    TextEditingController
+                                                  >[];
+
+                                            if (isCompactItems) {
+                                              return Padding(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 4,
+                                                      vertical: 6,
+                                                    ),
+                                                child: Container(
+                                                  width: double.infinity,
+                                                  padding: const EdgeInsets.all(
+                                                    10,
+                                                  ),
+                                                  decoration: BoxDecoration(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          10,
                                                         ),
-                                                        Align(
-                                                          alignment: Alignment
-                                                              .centerRight,
-                                                          child: Row(
-                                                            mainAxisSize:
-                                                                MainAxisSize
-                                                                    .min,
-                                                            children: [
-                                                              IconButton(
-                                                                tooltip: 'Diminuir quantidade',
-                                                                onPressed:
-                                                                    widget
-                                                                        .saving
-                                                                    ? null
-                                                                    : () => _decrementItemQuantity(
+                                                    border: Border.all(
+                                                      color: Theme.of(context)
+                                                          .dividerColor,
+                                                    ),
+                                                  ),
+                                                  child: Column(
+                                                    crossAxisAlignment:
+                                                        CrossAxisAlignment
+                                                            .start,
+                                                    children: [
+                                                      Row(
+                                                        crossAxisAlignment:
+                                                            CrossAxisAlignment
+                                                                .start,
+                                                        children: [
+                                                          _buildItemThumbnail(
+                                                            product,
+                                                            item.productName,
+                                                          ),
+                                                          const SizedBox(
+                                                            width: 10,
+                                                          ),
+                                                          Expanded(
+                                                            child: Column(
+                                                              crossAxisAlignment:
+                                                                  CrossAxisAlignment
+                                                                      .start,
+                                                              children: [
+                                                                Text(
+                                                                  '$displayCode · ${item.productName}',
+                                                                  maxLines: 2,
+                                                                  overflow:
+                                                                      TextOverflow
+                                                                          .ellipsis,
+                                                                ),
+                                                                const SizedBox(
+                                                                  height: 4,
+                                                                ),
+                                                                Text(
+                                                                  fiscalMetaText
+                                                                          .isEmpty
+                                                                      ? '$ipiText · ICMS-ST por regra fiscal'
+                                                                      : '$ipiText · $fiscalMetaText · ICMS-ST por regra fiscal',
+                                                                  style: Theme.of(
+                                                                    context,
+                                                                  ).textTheme.bodySmall,
+                                                                ),
+                                                              ],
+                                                            ),
+                                                          ),
+                                                          IconButton(
+                                                            tooltip:
+                                                                'Remover item',
+                                                            onPressed:
+                                                                widget.saving
+                                                                ? null
+                                                                : () {
+                                                                    setState(() {
+                                                                      _disposeDiscountControllersForItem(
+                                                                        item.id,
+                                                                      );
+                                                                      _items.removeAt(
+                                                                        index,
+                                                                      );
+                                                                    });
+                                                                  },
+                                                            icon: const Icon(
+                                                              Icons
+                                                                  .delete_outline,
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                      const SizedBox(height: 8),
+                                                      Text(
+                                                        'Quantidade',
+                                                        style: Theme.of(context)
+                                                            .textTheme
+                                                            .labelMedium,
+                                                      ),
+                                                      const SizedBox(height: 4),
+                                                      Row(
+                                                        children: [
+                                                          IconButton(
+                                                            tooltip: 'Diminuir quantidade',
+                                                            onPressed:
+                                                                widget.saving
+                                                                ? null
+                                                                : () =>
+                                                                      _decrementItemQuantity(
                                                                         index,
                                                                       ),
-                                                                icon: const Icon(
-                                                                  Icons
-                                                                      .remove_circle_outline,
-                                                                  size: 18,
+                                                            icon: const Icon(
+                                                              Icons
+                                                                  .remove_circle_outline,
+                                                              size: 18,
+                                                            ),
+                                                            visualDensity:
+                                                                VisualDensity
+                                                                    .compact,
+                                                            constraints:
+                                                                const BoxConstraints(
+                                                                  minWidth: 30,
+                                                                  minHeight: 30,
                                                                 ),
-                                                                visualDensity:
-                                                                    VisualDensity
-                                                                        .compact,
-                                                                constraints:
-                                                                    const BoxConstraints(
+                                                            padding:
+                                                                EdgeInsets.zero,
+                                                          ),
+                                                          const SizedBox(
+                                                            width: 6,
+                                                          ),
+                                                          SizedBox(
+                                                            width: 72,
+                                                            child: TextFormField(
+                                                              key: ValueKey(
+                                                                'qtd_${item.id}_${_formatQuantity(item.quantity)}',
+                                                              ),
+                                                              initialValue:
+                                                                  _formatQuantity(
+                                                                    item.quantity,
+                                                                  ),
+                                                              enabled: !widget
+                                                                  .saving,
+                                                              keyboardType:
+                                                                  TextInputType
+                                                                      .number,
+                                                              inputFormatters: [
+                                                                FilteringTextInputFormatter
+                                                                    .digitsOnly,
+                                                                LengthLimitingTextInputFormatter(
+                                                                  5,
+                                                                ),
+                                                              ],
+                                                              textAlign:
+                                                                  TextAlign
+                                                                      .center,
+                                                              decoration: const InputDecoration(
+                                                                isDense: true,
+                                                                contentPadding:
+                                                                    EdgeInsets.symmetric(
+                                                                      horizontal:
+                                                                          6,
+                                                                      vertical:
+                                                                          6,
+                                                                    ),
+                                                                border:
+                                                                    OutlineInputBorder(),
+                                                              ),
+                                                              onFieldSubmitted: (value) {
+                                                                final parsed =
+                                                                    _readIntegerQuantity(
+                                                                      value,
+                                                                    );
+                                                                _setItemQuantity(
+                                                                  index,
+                                                                  parsed,
+                                                                );
+                                                              },
+                                                            ),
+                                                          ),
+                                                          const SizedBox(
+                                                            width: 6,
+                                                          ),
+                                                          IconButton(
+                                                            tooltip: 'Aumentar quantidade',
+                                                            onPressed:
+                                                                widget.saving
+                                                                ? null
+                                                                : () =>
+                                                                      _incrementItemQuantity(
+                                                                        index,
+                                                                      ),
+                                                            icon: const Icon(
+                                                              Icons
+                                                                  .add_circle_outline,
+                                                              size: 18,
+                                                            ),
+                                                            visualDensity:
+                                                                VisualDensity
+                                                                    .compact,
+                                                            constraints:
+                                                                const BoxConstraints(
+                                                                  minWidth: 30,
+                                                                  minHeight: 30,
+                                                                ),
+                                                            padding:
+                                                                EdgeInsets.zero,
+                                                          ),
+                                                        ],
+                                                      ),
+                                                      const SizedBox(height: 8),
+                                                      Text(
+                                                        discountSummary,
+                                                        style: Theme.of(context)
+                                                            .textTheme
+                                                            .bodySmall,
+                                                      ),
+                                                      const SizedBox(height: 4),
+                                                      Wrap(
+                                                        spacing: 8,
+                                                        runSpacing: 6,
+                                                        crossAxisAlignment:
+                                                            WrapCrossAlignment
+                                                                .center,
+                                                        children: [
+                                                          if (activeDiscountSlots ==
+                                                              0)
+                                                            TextButton.icon(
+                                                              onPressed:
+                                                                  widget.saving
+                                                                  ? null
+                                                                  : () =>
+                                                                        _addPointDiscountField(
+                                                                          index,
+                                                                        ),
+                                                              icon: const Icon(
+                                                                Icons
+                                                                    .percent_outlined,
+                                                                size: 16,
+                                                              ),
+                                                              label: const Text(
+                                                                'Adicionar desconto',
+                                                              ),
+                                                              style: TextButton.styleFrom(
+                                                                padding:
+                                                                    const EdgeInsets.symmetric(
+                                                                      horizontal:
+                                                                          4,
+                                                                      vertical:
+                                                                          0,
+                                                                    ),
+                                                                minimumSize:
+                                                                    const Size(
+                                                                      0,
+                                                                      30,
+                                                                    ),
+                                                                tapTargetSize:
+                                                                    MaterialTapTargetSize
+                                                                        .shrinkWrap,
+                                                              ),
+                                                            ),
+                                                        ],
+                                                      ),
+                                                      if (activeDiscountSlots >
+                                                          0) ...[
+                                                        const SizedBox(
+                                                          height: 6,
+                                                        ),
+                                                        Wrap(
+                                                          spacing: 8,
+                                                          runSpacing: 8,
+                                                          crossAxisAlignment:
+                                                              WrapCrossAlignment
+                                                                  .center,
+                                                          children: [
+                                                            for (
+                                                              var i = 0;
+                                                              i < activeDiscountSlots;
+                                                              i++
+                                                            )
+                                                              Container(
+                                                                padding:
+                                                                    const EdgeInsets.symmetric(
+                                                                      horizontal:
+                                                                          6,
+                                                                      vertical:
+                                                                          4,
+                                                                    ),
+                                                                decoration: BoxDecoration(
+                                                                  borderRadius:
+                                                                      BorderRadius.circular(
+                                                                        10,
+                                                                      ),
+                                                                  color:
+                                                                      Theme.of(
+                                                                        context,
+                                                                      ).colorScheme.surfaceContainerHighest.withValues(
+                                                                        alpha:
+                                                                            0.35,
+                                                                      ),
+                                                                  border: Border.all(
+                                                                    color:
+                                                                        Theme.of(
+                                                                          context,
+                                                                        ).colorScheme.outlineVariant.withValues(
+                                                                          alpha:
+                                                                              0.55,
+                                                                        ),
+                                                                  ),
+                                                                ),
+                                                                child: Row(
+                                                                  mainAxisSize:
+                                                                      MainAxisSize
+                                                                          .min,
+                                                                  children: [
+                                                                    SizedBox(
+                                                                      width: 96,
+                                                                      child: TextField(
+                                                                        controller:
+                                                                            inlineDiscountControllers[i],
+                                                                        enabled:
+                                                                            !widget.saving,
+                                                                        keyboardType: const TextInputType.numberWithOptions(
+                                                                          decimal:
+                                                                              true,
+                                                                        ),
+                                                                        decoration: InputDecoration(
+                                                                          labelText:
+                                                                              i < policyFields.length
+                                                                              ? policyFields[i].label
+                                                                              : 'Desconto ${i + 1}',
+                                                                          suffixText: '%',
+                                                                          isDense:
+                                                                              true,
+                                                                          contentPadding: const EdgeInsets.symmetric(
+                                                                            horizontal:
+                                                                                8,
+                                                                            vertical:
+                                                                                8,
+                                                                          ),
+                                                                          border:
+                                                                              const OutlineInputBorder(),
+                                                                        ),
+                                                                        onSubmitted: (_) => _applyInlineItemDiscounts(
+                                                                          index,
+                                                                          showErrors:
+                                                                              true,
+                                                                        ),
+                                                                        onChanged: (_) => _applyInlineItemDiscounts(
+                                                                          index,
+                                                                          showErrors:
+                                                                              false,
+                                                                        ),
+                                                                      ),
+                                                                    ),
+                                                                    const SizedBox(
+                                                                      width: 4,
+                                                                    ),
+                                                                    IconButton(
+                                                                      tooltip: 'Remover este desconto',
+                                                                      onPressed:
+                                                                          widget
+                                                                              .saving
+                                                                          ? null
+                                                                          : () => _removeInlineItemDiscountField(
+                                                                              index,
+                                                                              i,
+                                                                            ),
+                                                                      icon: const Icon(
+                                                                        Icons
+                                                                            .close,
+                                                                        size:
+                                                                            16,
+                                                                      ),
+                                                                      visualDensity:
+                                                                          VisualDensity
+                                                                              .compact,
+                                                                      constraints: const BoxConstraints(
+                                                                        minWidth:
+                                                                            24,
+                                                                        minHeight:
+                                                                            24,
+                                                                      ),
+                                                                      padding:
+                                                                          EdgeInsets
+                                                                              .zero,
+                                                                    ),
+                                                                  ],
+                                                                ),
+                                                              ),
+                                                            if (canAddDiscountSlot)
+                                                              Padding(
+                                                                padding:
+                                                                    const EdgeInsets.only(
+                                                                      top: 2,
+                                                                    ),
+                                                                child: FloatingActionButton.small(
+                                                                  heroTag:
+                                                                      'item_discount_fab_${item.id}_$activeDiscountSlots',
+                                                                  tooltip: 'Adicionar próximo campo',
+                                                                  onPressed:
+                                                                      widget
+                                                                          .saving
+                                                                      ? null
+                                                                      : () => _addPointDiscountField(
+                                                                          index,
+                                                                        ),
+                                                                  child:
+                                                                      const Icon(
+                                                                        Icons
+                                                                            .add,
+                                                                        size:
+                                                                            18,
+                                                                      ),
+                                                                ),
+                                                              ),
+                                                          ],
+                                                        ),
+                                                      ],
+                                                      const SizedBox(height: 8),
+                                                      Text(
+                                                        'Preco unitario: R\$ ${_formatMoney(item.unitPrice)}',
+                                                        style: Theme.of(context)
+                                                            .textTheme
+                                                            .bodyMedium,
+                                                      ),
+                                                      const SizedBox(height: 2),
+                                                      Text(
+                                                        'Total: R\$ ${_formatMoney(item.totalPrice)}',
+                                                        style: Theme.of(context)
+                                                            .textTheme
+                                                            .titleSmall,
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              );
+                                            }
+
+                                            return Padding(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 8,
+                                                    vertical: 6,
+                                                  ),
+                                              child: Row(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  _buildItemThumbnail(
+                                                    product,
+                                                    item.productName,
+                                                  ),
+                                                  const SizedBox(width: 10),
+                                                  Expanded(
+                                                    child: Table(
+                                                      columnWidths:
+                                                          itemTableColumnWidths,
+                                                      defaultVerticalAlignment:
+                                                          TableCellVerticalAlignment
+                                                              .middle,
+                                                      children: [
+                                                        TableRow(
+                                                          children: [
+                                                            Padding(
+                                                              padding:
+                                                                  const EdgeInsets.only(
+                                                                    right: 8,
+                                                                  ),
+                                                              child: Text(
+                                                                '$displayCode · ${item.productName}',
+                                                                maxLines: 1,
+                                                                overflow:
+                                                                    TextOverflow
+                                                                        .ellipsis,
+                                                              ),
+                                                            ),
+                                                            Align(
+                                                              alignment: Alignment
+                                                                  .centerRight,
+                                                              child: Row(
+                                                                mainAxisSize:
+                                                                    MainAxisSize
+                                                                        .min,
+                                                                children: [
+                                                                  IconButton(
+                                                                    tooltip: 'Diminuir quantidade',
+                                                                    onPressed:
+                                                                        widget
+                                                                            .saving
+                                                                        ? null
+                                                                        : () => _decrementItemQuantity(
+                                                                            index,
+                                                                          ),
+                                                                    icon: const Icon(
+                                                                      Icons
+                                                                          .remove_circle_outline,
+                                                                      size: 18,
+                                                                    ),
+                                                                    visualDensity:
+                                                                        VisualDensity
+                                                                            .compact,
+                                                                    constraints: const BoxConstraints(
                                                                       minWidth:
                                                                           26,
                                                                       minHeight:
                                                                           26,
                                                                     ),
-                                                                padding:
-                                                                    EdgeInsets
-                                                                        .zero,
-                                                              ),
-                                                              const SizedBox(
-                                                                width: 4,
-                                                              ),
-                                                              SizedBox(
-                                                                width: 52,
-                                                                child: TextFormField(
-                                                                  key: ValueKey(
-                                                                    'qtd_${item.id}_${_formatQuantity(item.quantity)}',
+                                                                    padding:
+                                                                        EdgeInsets
+                                                                            .zero,
                                                                   ),
-                                                                  initialValue:
-                                                                      _formatQuantity(
-                                                                        item.quantity,
+                                                                  const SizedBox(
+                                                                    width: 4,
+                                                                  ),
+                                                                  SizedBox(
+                                                                    width: 52,
+                                                                    child: TextFormField(
+                                                                      key: ValueKey(
+                                                                        'qtd_${item.id}_${_formatQuantity(item.quantity)}',
                                                                       ),
-                                                                  enabled: !widget
-                                                                      .saving,
-                                                                  keyboardType:
-                                                                      TextInputType
-                                                                          .number,
-                                                                  inputFormatters: [
-                                                                    FilteringTextInputFormatter
-                                                                        .digitsOnly,
-                                                                    LengthLimitingTextInputFormatter(
-                                                                      5,
-                                                                    ),
-                                                                  ],
-                                                                  textAlign:
-                                                                      TextAlign
-                                                                          .center,
-                                                                  decoration: const InputDecoration(
-                                                                    isDense:
-                                                                        true,
-                                                                    contentPadding:
-                                                                        EdgeInsets.symmetric(
+                                                                      initialValue:
+                                                                          _formatQuantity(
+                                                                            item.quantity,
+                                                                          ),
+                                                                      enabled:
+                                                                          !widget
+                                                                              .saving,
+                                                                      keyboardType:
+                                                                          TextInputType
+                                                                              .number,
+                                                                      inputFormatters: [
+                                                                        FilteringTextInputFormatter
+                                                                            .digitsOnly,
+                                                                        LengthLimitingTextInputFormatter(
+                                                                          5,
+                                                                        ),
+                                                                      ],
+                                                                      textAlign:
+                                                                          TextAlign
+                                                                              .center,
+                                                                      decoration: const InputDecoration(
+                                                                        isDense:
+                                                                            true,
+                                                                        contentPadding: EdgeInsets.symmetric(
                                                                           horizontal:
                                                                               6,
                                                                           vertical:
                                                                               6,
                                                                         ),
-                                                                    border:
-                                                                        OutlineInputBorder(),
-                                                                  ),
-                                                                  onFieldSubmitted: (value) {
-                                                                    final parsed =
-                                                                        _readIntegerQuantity(
-                                                                          value,
-                                                                        );
-                                                                    _setItemQuantity(
-                                                                      index,
-                                                                      parsed,
-                                                                    );
-                                                                  },
-                                                                ),
-                                                              ),
-                                                              const SizedBox(
-                                                                width: 4,
-                                                              ),
-                                                              IconButton(
-                                                                tooltip: 'Aumentar quantidade',
-                                                                onPressed:
-                                                                    widget
-                                                                        .saving
-                                                                    ? null
-                                                                    : () => _incrementItemQuantity(
-                                                                        index,
+                                                                        border:
+                                                                            OutlineInputBorder(),
                                                                       ),
-                                                                icon: const Icon(
-                                                                  Icons
-                                                                      .add_circle_outline,
-                                                                  size: 18,
-                                                                ),
-                                                                visualDensity:
-                                                                    VisualDensity
-                                                                        .compact,
-                                                                constraints:
-                                                                    const BoxConstraints(
+                                                                      onFieldSubmitted: (value) {
+                                                                        final parsed =
+                                                                            _readIntegerQuantity(
+                                                                              value,
+                                                                            );
+                                                                        _setItemQuantity(
+                                                                          index,
+                                                                          parsed,
+                                                                        );
+                                                                      },
+                                                                    ),
+                                                                  ),
+                                                                  const SizedBox(
+                                                                    width: 4,
+                                                                  ),
+                                                                  IconButton(
+                                                                    tooltip: 'Aumentar quantidade',
+                                                                    onPressed:
+                                                                        widget
+                                                                            .saving
+                                                                        ? null
+                                                                        : () => _incrementItemQuantity(
+                                                                            index,
+                                                                          ),
+                                                                    icon: const Icon(
+                                                                      Icons
+                                                                          .add_circle_outline,
+                                                                      size: 18,
+                                                                    ),
+                                                                    visualDensity:
+                                                                        VisualDensity
+                                                                            .compact,
+                                                                    constraints: const BoxConstraints(
                                                                       minWidth:
                                                                           26,
                                                                       minHeight:
                                                                           26,
                                                                     ),
-                                                                padding:
-                                                                    EdgeInsets
-                                                                        .zero,
+                                                                    padding:
+                                                                        EdgeInsets
+                                                                            .zero,
+                                                                  ),
+                                                                ],
                                                               ),
-                                                            ],
-                                                          ),
-                                                        ),
-                                                        Align(
-                                                          alignment: Alignment
-                                                              .centerRight,
-                                                          child: Text(
-                                                            _formatMoney(
-                                                              item.unitPrice,
                                                             ),
-                                                          ),
-                                                        ),
-                                                        Align(
-                                                          alignment: Alignment
-                                                              .centerRight,
-                                                          child: Text(
-                                                            _formatMoney(
-                                                              item.totalPrice,
+                                                            Align(
+                                                              alignment: Alignment
+                                                                  .centerRight,
+                                                              child: Text(
+                                                                _formatMoney(
+                                                                  item.unitPrice,
+                                                                ),
+                                                              ),
                                                             ),
-                                                          ),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                    TableRow(
-                                                      children: [
-                                                        Padding(
-                                                          padding:
-                                                              const EdgeInsets.only(
-                                                                top: 3,
+                                                            Align(
+                                                              alignment: Alignment
+                                                                  .centerRight,
+                                                              child: Text(
+                                                                _formatMoney(
+                                                                  item.totalPrice,
+                                                                ),
                                                               ),
-                                                          child: Text(
-                                                            fiscalMetaText
-                                                                    .isEmpty
-                                                                ? '$ipiText · ICMS-ST por regra fiscal'
-                                                                : '$ipiText · $fiscalMetaText · ICMS-ST por regra fiscal',
-                                                            maxLines: 1,
-                                                            overflow:
-                                                                TextOverflow
-                                                                    .ellipsis,
-                                                            style:
-                                                                Theme.of(
-                                                                      context,
-                                                                    )
-                                                                    .textTheme
-                                                                    .bodySmall,
-                                                          ),
+                                                            ),
+                                                          ],
                                                         ),
-                                                        const SizedBox.shrink(),
-                                                        const SizedBox.shrink(),
-                                                        const SizedBox.shrink(),
-                                                      ],
-                                                    ),
-                                                    TableRow(
-                                                      children: [
-                                                        Padding(
-                                                          padding:
-                                                              const EdgeInsets.only(
-                                                                top: 2,
-                                                              ),
-                                                          child: Column(
-                                                            crossAxisAlignment:
-                                                                CrossAxisAlignment
-                                                                    .start,
-                                                            children: [
-                                                              Text(
-                                                                discountSummary,
+                                                        TableRow(
+                                                          children: [
+                                                            Padding(
+                                                              padding:
+                                                                  const EdgeInsets.only(
+                                                                    top: 3,
+                                                                  ),
+                                                              child: Text(
+                                                                fiscalMetaText
+                                                                        .isEmpty
+                                                                    ? '$ipiText · ICMS-ST por regra fiscal'
+                                                                    : '$ipiText · $fiscalMetaText · ICMS-ST por regra fiscal',
                                                                 maxLines: 1,
                                                                 overflow:
                                                                     TextOverflow
                                                                         .ellipsis,
-                                                                style:
-                                                                    Theme.of(
-                                                                          context,
-                                                                        )
-                                                                        .textTheme
-                                                                        .bodySmall,
+                                                                style: Theme.of(
+                                                                  context,
+                                                                ).textTheme.bodySmall,
                                                               ),
-                                                              const SizedBox(
-                                                                height: 4,
-                                                              ),
-                                                              Wrap(
-                                                                spacing: 8,
-                                                                runSpacing: 6,
+                                                            ),
+                                                            const SizedBox.shrink(),
+                                                            const SizedBox.shrink(),
+                                                            const SizedBox.shrink(),
+                                                          ],
+                                                        ),
+                                                        TableRow(
+                                                          children: [
+                                                            Padding(
+                                                              padding:
+                                                                  const EdgeInsets.only(
+                                                                    top: 2,
+                                                                  ),
+                                                              child: Column(
                                                                 crossAxisAlignment:
-                                                                    WrapCrossAlignment
-                                                                        .center,
+                                                                    CrossAxisAlignment
+                                                                        .start,
                                                                 children: [
-                                                                  if (activeDiscountSlots ==
-                                                                      0)
-                                                                    TextButton.icon(
-                                                                      onPressed:
-                                                                          widget.saving
-                                                                          ? null
-                                                                          : () =>
-                                                                                _addPointDiscountField(
-                                                                                  index,
-                                                                                ),
-                                                                      icon: const Icon(
-                                                                        Icons
-                                                                            .percent_outlined,
-                                                                        size: 16,
-                                                                      ),
-                                                                      label: const Text(
-                                                                        'Adicionar desconto',
-                                                                      ),
-                                                                      style: TextButton.styleFrom(
-                                                                        padding:
-                                                                            const EdgeInsets.symmetric(
-                                                                              horizontal:
-                                                                                  4,
-                                                                              vertical:
-                                                                                  0,
-                                                                            ),
-                                                                        minimumSize:
-                                                                            const Size(
-                                                                              0,
-                                                                              30,
-                                                                            ),
-                                                                        tapTargetSize:
-                                                                            MaterialTapTargetSize
-                                                                                .shrinkWrap,
-                                                                      ),
-                                                                    ),
-                                                                ],
-                                                              ),
-                                                              if (activeDiscountSlots >
-                                                                  0) ...[
-                                                                const SizedBox(
-                                                                  height: 6,
-                                                                ),
-                                                                Wrap(
-                                                                  spacing: 8,
-                                                                  runSpacing: 8,
-                                                                  crossAxisAlignment:
-                                                                      WrapCrossAlignment
-                                                                          .center,
-                                                                  children: [
-                                                                    for (
-                                                                      var i = 0;
-                                                                      i <
-                                                                          activeDiscountSlots;
-                                                                      i++
-                                                                    )
-                                                                      Container(
-                                                                        padding:
-                                                                            const EdgeInsets.symmetric(
-                                                                              horizontal:
-                                                                                  6,
-                                                                              vertical:
-                                                                                  4,
-                                                                            ),
-                                                                        decoration: BoxDecoration(
-                                                                          borderRadius:
-                                                                              BorderRadius.circular(
-                                                                                10,
-                                                                              ),
-                                                                          color: Theme.of(
-                                                                                context,
-                                                                              )
-                                                                              .colorScheme
-                                                                              .surfaceContainerHighest
-                                                                              .withValues(
-                                                                                alpha:
-                                                                                    0.35,
-                                                                              ),
-                                                                          border: Border.all(
-                                                                            color: Theme.of(context)
-                                                                                .colorScheme
-                                                                                .outlineVariant
-                                                                                .withValues(
-                                                                                  alpha:
-                                                                                      0.55,
-                                                                                ),
-                                                                          ),
-                                                                        ),
-                                                                        child: Row(
-                                                                          mainAxisSize:
-                                                                              MainAxisSize
-                                                                                  .min,
-                                                                          children: [
-                                                                            SizedBox(
-                                                                              width:
-                                                                                  96,
-                                                                              child: TextField(
-                                                                                controller:
-                                                                                    inlineDiscountControllers[i],
-                                                                                enabled:
-                                                                                    !widget.saving,
-                                                                                keyboardType: const TextInputType.numberWithOptions(
-                                                                                  decimal:
-                                                                                      true,
-                                                                                ),
-                                                                                decoration: InputDecoration(
-                                                                                  labelText: i < policyFields.length
-                                                                                      ? policyFields[i].label
-                                                                                      : 'Desc ${i + 1}',
-                                                                                  suffixText:
-                                                                                      '%',
-                                                                                  isDense:
-                                                                                      true,
-                                                                                  contentPadding:
-                                                                                      const EdgeInsets.symmetric(
-                                                                                        horizontal:
-                                                                                            8,
-                                                                                        vertical:
-                                                                                            8,
-                                                                                      ),
-                                                                                  border:
-                                                                                      const OutlineInputBorder(),
-                                                                                ),
-                                                                                onSubmitted:
-                                                                                    (_) =>
-                                                                                        _applyInlineItemDiscounts(
-                                                                                          index,
-                                                                                          showErrors:
-                                                                                              true,
-                                                                                        ),
-                                                                                onChanged:
-                                                                                    (_) =>
-                                                                                        _applyInlineItemDiscounts(
-                                                                                          index,
-                                                                                          showErrors:
-                                                                                              false,
-                                                                                        ),
-                                                                              ),
-                                                                            ),
-                                                                            const SizedBox(
-                                                                              width:
-                                                                                  4,
-                                                                            ),
-                                                                            IconButton(
-                                                                              tooltip:
-                                                                                  'Remover este desconto',
-                                                                              onPressed:
-                                                                                  widget.saving
-                                                                                  ? null
-                                                                                  : () =>
-                                                                                        _removeInlineItemDiscountField(
-                                                                                          index,
-                                                                                          i,
-                                                                                        ),
-                                                                              icon: const Icon(
-                                                                                Icons
-                                                                                    .close,
-                                                                                size:
-                                                                                    16,
-                                                                              ),
-                                                                              visualDensity:
-                                                                                  VisualDensity
-                                                                                      .compact,
-                                                                              constraints:
-                                                                                  const BoxConstraints(
-                                                                                    minWidth:
-                                                                                        24,
-                                                                                    minHeight:
-                                                                                        24,
-                                                                                  ),
-                                                                              padding:
-                                                                                  EdgeInsets
-                                                                                      .zero,
-                                                                            ),
-                                                                          ],
-                                                                        ),
-                                                                      ),
-                                                                    if (canAddDiscountSlot)
-                                                                      Padding(
-                                                                        padding:
-                                                                            const EdgeInsets.only(
-                                                                              top:
-                                                                                  2,
-                                                                            ),
-                                                                        child: FloatingActionButton.small(
-                                                                          heroTag:
-                                                                              'item_discount_fab_${item.id}_$activeDiscountSlots',
-                                                                          tooltip:
-                                                                              'Adicionar próximo campo',
+                                                                  Text(
+                                                                    discountSummary,
+                                                                    maxLines: 1,
+                                                                    overflow:
+                                                                        TextOverflow
+                                                                            .ellipsis,
+                                                                    style: Theme.of(
+                                                                      context,
+                                                                    ).textTheme.bodySmall,
+                                                                  ),
+                                                                  const SizedBox(
+                                                                    height: 4,
+                                                                  ),
+                                                                  Wrap(
+                                                                    spacing: 8,
+                                                                    runSpacing:
+                                                                        6,
+                                                                    crossAxisAlignment:
+                                                                        WrapCrossAlignment
+                                                                            .center,
+                                                                    children: [
+                                                                      if (activeDiscountSlots ==
+                                                                          0)
+                                                                        TextButton.icon(
                                                                           onPressed:
                                                                               widget.saving
                                                                               ? null
-                                                                              : () =>
-                                                                                    _addPointDiscountField(
-                                                                                      index,
-                                                                                    ),
-                                                                          child:
-                                                                              const Icon(
-                                                                                Icons
-                                                                                    .add,
-                                                                                size:
-                                                                                    18,
+                                                                              : () => _addPointDiscountField(index),
+                                                                          icon: const Icon(
+                                                                            Icons.percent_outlined,
+                                                                            size:
+                                                                                16,
+                                                                          ),
+                                                                          label:
+                                                                              const Text(
+                                                                                'Adicionar desconto',
                                                                               ),
+                                                                          style: TextButton.styleFrom(
+                                                                            padding: const EdgeInsets.symmetric(
+                                                                              horizontal: 4,
+                                                                              vertical: 0,
+                                                                            ),
+                                                                            minimumSize: const Size(
+                                                                              0,
+                                                                              30,
+                                                                            ),
+                                                                            tapTargetSize:
+                                                                                MaterialTapTargetSize.shrinkWrap,
+                                                                          ),
                                                                         ),
-                                                                      ),
+                                                                    ],
+                                                                  ),
+                                                                  if (activeDiscountSlots >
+                                                                      0) ...[
+                                                                    const SizedBox(
+                                                                      height: 6,
+                                                                    ),
+                                                                    Wrap(
+                                                                      spacing:
+                                                                          8,
+                                                                      runSpacing:
+                                                                          8,
+                                                                      crossAxisAlignment:
+                                                                          WrapCrossAlignment
+                                                                              .center,
+                                                                      children: [
+                                                                        for (
+                                                                          var i =
+                                                                              0;
+                                                                          i < activeDiscountSlots;
+                                                                          i++
+                                                                        )
+                                                                          Container(
+                                                                            padding: const EdgeInsets.symmetric(
+                                                                              horizontal: 6,
+                                                                              vertical: 4,
+                                                                            ),
+                                                                            decoration: BoxDecoration(
+                                                                              borderRadius: BorderRadius.circular(
+                                                                                10,
+                                                                              ),
+                                                                              color: Theme.of(
+                                                                                context,
+                                                                              ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+                                                                              border: Border.all(
+                                                                                color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.55),
+                                                                              ),
+                                                                            ),
+                                                                            child: Row(
+                                                                              mainAxisSize: MainAxisSize.min,
+                                                                              children: [
+                                                                                SizedBox(
+                                                                                  width: 96,
+                                                                                  child: TextField(
+                                                                                    controller: inlineDiscountControllers[i],
+                                                                                    enabled: !widget.saving,
+                                                                                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                                                                    decoration: InputDecoration(
+                                                                                      labelText: i < policyFields.length ? policyFields[i].label : 'Desconto ${i + 1}',
+                                                                                      suffixText: '%',
+                                                                                      isDense: true,
+                                                                                      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                                                                                      border: const OutlineInputBorder(),
+                                                                                    ),
+                                                                                    onSubmitted: (_) => _applyInlineItemDiscounts(index, showErrors: true),
+                                                                                    onChanged: (_) => _applyInlineItemDiscounts(index, showErrors: false),
+                                                                                  ),
+                                                                                ),
+                                                                                const SizedBox(width: 4),
+                                                                                IconButton(
+                                                                                  tooltip: 'Remover este desconto',
+                                                                                  onPressed: widget.saving ? null : () => _removeInlineItemDiscountField(index, i),
+                                                                                  icon: const Icon(Icons.close, size: 16),
+                                                                                  visualDensity: VisualDensity.compact,
+                                                                                  constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+                                                                                  padding: EdgeInsets.zero,
+                                                                                ),
+                                                                              ],
+                                                                            ),
+                                                                          ),
+                                                                        if (canAddDiscountSlot)
+                                                                          Padding(
+                                                                            padding: const EdgeInsets.only(
+                                                                              top: 2,
+                                                                            ),
+                                                                            child: FloatingActionButton.small(
+                                                                              heroTag: 'item_discount_fab_${item.id}_$activeDiscountSlots',
+                                                                              tooltip: 'Adicionar próximo campo',
+                                                                              onPressed: widget.saving ? null : () => _addPointDiscountField(index),
+                                                                              child: const Icon(
+                                                                                Icons.add,
+                                                                                size: 18,
+                                                                              ),
+                                                                            ),
+                                                                          ),
+                                                                      ],
+                                                                    ),
                                                                   ],
-                                                                ),
-                                                              ],
-                                                            ],
-                                                          ),
+                                                                ],
+                                                              ),
+                                                            ),
+                                                            const SizedBox.shrink(),
+                                                            const SizedBox.shrink(),
+                                                            const SizedBox.shrink(),
+                                                          ],
                                                         ),
-                                                        const SizedBox.shrink(),
-                                                        const SizedBox.shrink(),
-                                                        const SizedBox.shrink(),
                                                       ],
                                                     ),
-                                                  ],
-                                                ),
-                                              ),
-                                              Column(
-                                                children: [
-                                                  IconButton(
-                                                    tooltip: 'Remover item',
-                                                    onPressed: widget.saving
-                                                        ? null
-                                                        : () {
-                                                            setState(() {
-                                                              _disposeDiscountControllersForItem(
-                                                                item.id,
-                                                              );
-                                                              _items.removeAt(
-                                                                index,
-                                                              );
-                                                            });
-                                                          },
-                                                    icon: const Icon(
-                                                      Icons.delete_outline,
-                                                    ),
+                                                  ),
+                                                  Column(
+                                                    children: [
+                                                      IconButton(
+                                                        tooltip: 'Remover item',
+                                                        onPressed: widget.saving
+                                                            ? null
+                                                            : () {
+                                                                setState(() {
+                                                                  _disposeDiscountControllersForItem(
+                                                                    item.id,
+                                                                  );
+                                                                  _items
+                                                                      .removeAt(
+                                                                        index,
+                                                                      );
+                                                                });
+                                                              },
+                                                        icon: const Icon(
+                                                          Icons.delete_outline,
+                                                        ),
+                                                      ),
+                                                    ],
                                                   ),
                                                 ],
                                               ),
-                                            ],
+                                            );
+                                          },
+                                        ),
+                                        const SizedBox(height: 12),
+                                        Container(
+                                          width: double.infinity,
+                                          padding: const EdgeInsets.all(12),
+                                          decoration: BoxDecoration(
+                                            borderRadius: BorderRadius.circular(
+                                              8,
+                                            ),
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .surfaceContainerHighest,
                                           ),
-                                        );
-                                      },
+                                          child: Text(
+                                            'Total de itens: ${_items.length} · Total com impostos: R\$ ${_formatMoney(_totalGross())}',
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                  ),
                                 ],
-                              ),
-                            const SizedBox(height: 12),
-                            Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(8),
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .surfaceContainerHighest,
-                              ),
-                              child: Text(
-                                'Total de itens: ${_items.length} · Total com impostos: R\$ ${_formatMoney(_totalGross())}',
                               ),
                             ),
                           ],
                         ),
-                      ),
-                    ),
-            ),
-            Container(
-              width: double.infinity,
-              color: _chromeColor,
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-              child: Row(
-                children: [
-                  TextButton(
-                    onPressed: canClose ? widget.onClose : null,
-                    child: const Text('Fechar'),
-                  ),
-                  const Spacer(),
-                  FilledButton(
-                    onPressed: hasSelection && !widget.saving ? _save : null,
-                    child: Text(
-                      widget.saving ? 'Salvando...' : 'Salvar rascunho',
-                    ),
-                  ),
-                ],
+                ),
               ),
-            ),
-          ],
+              Container(
+                width: double.infinity,
+                color: _chromeColor,
+                child: SafeArea(
+                  top: false,
+                  minimum: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+                  child: Row(
+                    children: [
+                      TextButton(
+                        onPressed: canClose ? widget.onClose : null,
+                        child: const Text('Fechar'),
+                      ),
+                      const Spacer(),
+                      FilledButton(
+                        onPressed: hasSelection && !widget.saving
+                            ? _save
+                            : null,
+                        child: Text(
+                          widget.saving ? 'Salvando...' : 'Salvar rascunho',
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

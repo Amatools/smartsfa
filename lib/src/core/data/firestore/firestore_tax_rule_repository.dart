@@ -3,11 +3,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/tax_rule.dart';
 import '../../repositories/tax_rule_repository.dart';
 import 'firestore_map_normalizer.dart';
+import 'firestore_sync_metadata.dart';
 
 class FirestoreTaxRuleRepository implements TaxRuleRepository {
   FirestoreTaxRuleRepository(this._firestore);
 
   final FirebaseFirestore _firestore;
+  final Map<String, List<TaxRule>> _tenantCache = <String, List<TaxRule>>{};
 
   CollectionReference<Map<String, dynamic>> get _collection =>
       _firestore.collection('tax_rules');
@@ -29,6 +31,7 @@ class FirestoreTaxRuleRepository implements TaxRuleRepository {
             return TaxRule.fromMap(data);
           }).toList();
           items.sort((a, b) => b.priority.compareTo(a.priority));
+          _tenantCache[normalizedTenantId] = List<TaxRule>.unmodifiable(items);
           return items;
         });
   }
@@ -40,6 +43,11 @@ class FirestoreTaxRuleRepository implements TaxRuleRepository {
       return const <TaxRule>[];
     }
 
+    final cached = _tenantCache[normalizedTenantId];
+    if (cached != null) {
+      return List<TaxRule>.from(cached);
+    }
+
     final snapshot = await _collection
         .where('tenantId', isEqualTo: normalizedTenantId)
         .get();
@@ -49,6 +57,7 @@ class FirestoreTaxRuleRepository implements TaxRuleRepository {
       return TaxRule.fromMap(data);
     }).toList();
     items.sort((a, b) => b.priority.compareTo(a.priority));
+    _tenantCache[normalizedTenantId] = List<TaxRule>.unmodifiable(items);
     return items;
   }
 
@@ -61,6 +70,15 @@ class FirestoreTaxRuleRepository implements TaxRuleRepository {
     final normalizedId = id.trim();
     if (normalizedTenantId.isEmpty || normalizedId.isEmpty) {
       return null;
+    }
+
+    final cached = _tenantCache[normalizedTenantId];
+    if (cached != null) {
+      for (final item in cached) {
+        if (item.id == normalizedId) {
+          return item;
+        }
+      }
     }
 
     final doc = await _collection.doc(normalizedId).get();
@@ -79,7 +97,9 @@ class FirestoreTaxRuleRepository implements TaxRuleRepository {
 
   @override
   Future<void> save(TaxRule entity) {
-    return _collection.doc(entity.id).set(entity.toMap());
+    final payload = buildSyncUpsertPayload(source: entity.toMap());
+    _tenantCache.remove(entity.tenantId.trim());
+    return _collection.doc(entity.id).set(payload);
   }
 
   @override
@@ -89,5 +109,6 @@ class FirestoreTaxRuleRepository implements TaxRuleRepository {
       return;
     }
     await _collection.doc(id).delete();
+    _tenantCache.remove(tenantId.trim());
   }
 }

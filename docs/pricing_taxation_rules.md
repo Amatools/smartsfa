@@ -150,11 +150,28 @@ No menu Configuracoes da area comercial:
 - Tributacoes: mesma restricao (owner) para criar/editar/excluir.
 - Perfis sem permissao recebem modo somente leitura.
 
+## Importacao e exportacao por planilha (estado atual)
+
+Implementado no fluxo atual:
+
+- Download de template XLSX para produtos, tabelas de preco e tributacao.
+- Templates com abas de dados e instrucoes para preenchimento.
+- Validacao de cabecalho e validacao por linha com retorno previsivel de erro.
+- Importacao de tabela de preco com regra de integridade por codigo interno existente.
+- Importacao tributaria com validacoes condicionais por tipo (MVA/PMC).
+
+Direcao de negocio aplicada:
+
+- importacao deve ser idempotente quando houver chave consistente;
+- planilha nao deve criar entidades invalidas por inferencia;
+- validacao deve falhar cedo em lote quando regra critica nao for atendida.
+
 ## Limites atuais e proximos passos
 
 - O tax engine ainda nao esta plugado no fluxo de pedido (decisao intencional desta fase).
 - Ainda faltam testes unitarios dedicados para cenarios de ST/DIFAL/fallback de regra.
 - Integracao com politicas comerciais avancadas (mangas/travas) segue em evolucao separada.
+- Catalogos grandes ainda precisam migrar para sincronizacao incremental por delta (updatedAt/version) para reduzir leituras recorrentes no Firestore.
 
 ## Fonte da verdade tecnica
 

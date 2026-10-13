@@ -29,6 +29,7 @@ class ProductEditorSaveCommandBuilder {
   ProductEditorSaveCommandBuildResult build({
     required ProdutoRepository repository,
     required AppIdentity identity,
+    required String? representedCompanyId,
     required Produto? existing,
     required bool createAnother,
     required bool isEnterprise,
@@ -70,6 +71,7 @@ class ProductEditorSaveCommandBuilder {
       ProductEditorSaveCommand(
         repository: repository,
         identity: identity,
+        representedCompanyId: representedCompanyId,
         existing: existing,
         createAnother: createAnother,
         isEnterprise: isEnterprise,

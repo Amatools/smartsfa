@@ -9,10 +9,7 @@ import '../../../auth/services/tenant_membership_service.dart';
 import '../../domain/tenant_membership_audit_filter.dart';
 
 class TenantMembershipAuditPage extends StatefulWidget {
-  const TenantMembershipAuditPage({
-    super.key,
-    required this.identity,
-  });
+  const TenantMembershipAuditPage({super.key, required this.identity});
 
   final AppIdentity identity;
 
@@ -36,12 +33,40 @@ class _TenantMembershipAuditPageState extends State<TenantMembershipAuditPage> {
     super.dispose();
   }
 
+  InputDecoration _fieldDecoration({
+    required BuildContext context,
+    required String label,
+    IconData? icon,
+    String? hintText,
+  }) {
+    final colors = Theme.of(context).colorScheme;
+
+    OutlineInputBorder border(Color color, {double width = 1}) {
+      return OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: color, width: width),
+      );
+    }
+
+    return InputDecoration(
+      labelText: label,
+      hintText: hintText,
+      isDense: true,
+      filled: true,
+      fillColor: colors.surfaceContainerHighest.withValues(alpha: 0.35),
+      prefixIcon: icon == null ? null : Icon(icon, size: 18),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      enabledBorder: border(colors.outlineVariant.withValues(alpha: 0.45)),
+      focusedBorder: border(colors.primary.withValues(alpha: 0.75), width: 1.4),
+      errorBorder: border(colors.error.withValues(alpha: 0.75)),
+      focusedErrorBorder: border(colors.error, width: 1.4),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Auditoria de memberships'),
-      ),
+      appBar: AppBar(title: const Text('Auditoria de memberships')),
       body: SafeArea(
         child: SingleChildScrollView(
           child: Padding(
@@ -66,22 +91,25 @@ class _TenantMembershipAuditPageState extends State<TenantMembershipAuditPage> {
                               _currentPage = 0;
                             });
                           },
-                          decoration: const InputDecoration(
-                            border: OutlineInputBorder(),
-                            labelText: 'Buscar por acao, ator ou membershipId',
-                            prefixIcon: Icon(Icons.search),
+                          decoration: _fieldDecoration(
+                            context: context,
+                            label: 'Buscar por acao, ator ou membershipId',
+                            icon: Icons.search,
                           ),
                         ),
                         const SizedBox(height: 12),
                         DropdownButtonFormField<String>(
                           initialValue: _selectedAction,
                           isExpanded: true,
-                          decoration: const InputDecoration(
-                            border: OutlineInputBorder(),
-                            labelText: 'Acao',
+                          decoration: _fieldDecoration(
+                            context: context,
+                            label: 'Acao',
                           ),
                           items: const [
-                            DropdownMenuItem(value: 'todos', child: Text('Todos')),
+                            DropdownMenuItem(
+                              value: 'todos',
+                              child: Text('Todos'),
+                            ),
                             DropdownMenuItem(
                               value: 'membership_revoked',
                               child: Text('membership_revoked'),
@@ -114,8 +142,9 @@ class _TenantMembershipAuditPageState extends State<TenantMembershipAuditPage> {
                 ),
                 const SizedBox(height: 12),
                 StreamBuilder<List<Map<String, dynamic>>>(
-                  stream: _membershipService
-                      .watchAuditForTenant(widget.identity.tenantId),
+                  stream: _membershipService.watchAuditForTenant(
+                    widget.identity.tenantId,
+                  ),
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) {
                       return const AppInfoCard(
@@ -128,8 +157,7 @@ class _TenantMembershipAuditPageState extends State<TenantMembershipAuditPage> {
                     if (entries.isEmpty) {
                       return const AppInfoCard(
                         title: 'Sem eventos de auditoria',
-                        subtitle:
-                            'Eventos aparecem quando houver revogacao, reativacao ou alteracao de papel.',
+                        subtitle: 'Eventos aparecem quando houver revogacao, reativacao ou alteracao de papel.',
                       );
                     }
 
@@ -241,4 +269,3 @@ class _AuditCard extends StatelessWidget {
     );
   }
 }
-

@@ -476,6 +476,7 @@ class _ProductEditorSheetState extends State<ProductEditorSheet>
     final uiAction = await _asyncActionsCoordinator.save(
       repository: widget.repository,
       identity: widget.identity,
+      representedCompanyId: widget.representedCompanyId,
       existingProduct: widget.produto,
       createAnother: createAnother,
       isEnterprise: widget.isEnterprise,

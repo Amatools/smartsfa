@@ -115,6 +115,7 @@ class _ProdutosPageState extends State<ProdutosPage>
       context,
       identity: widget.identity,
       repository: widget.repository,
+      representedCompanyId: widget.selectedRepresentedCompanyId,
     );
   }
 
@@ -123,6 +124,7 @@ class _ProdutosPageState extends State<ProdutosPage>
       context,
       identity: widget.identity,
       repository: widget.repository,
+      representedCompanyId: widget.selectedRepresentedCompanyId,
     );
   }
 

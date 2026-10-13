@@ -95,11 +95,9 @@ class ProductCatalogTopSection extends StatelessWidget {
         if (!creatingNewProduct)
           HeaderCard(
             title: 'Produtos',
-            subtitle: 'Cadastro de atributos fisicos e tributarios do produto. Precos e politicas comerciais ficam em modulos dedicados.',
+            subtitle: 'Cadastro dos Produtos da Representada ativa',
             actions: [
-              if (canCreateOrImportProducts) ...[
-                _buildHeaderActions(),
-              ],
+              if (canCreateOrImportProducts) ...[_buildHeaderActions()],
             ],
           ),
         if (availableBrands.isNotEmpty) ...[

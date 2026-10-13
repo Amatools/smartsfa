@@ -53,14 +53,18 @@ class ProductsTable extends StatelessWidget {
       color: Colors.black87,
     );
     final dividerColor = theme.colorScheme.outline.withValues(alpha: 0.2);
-    final alternateRowColor = theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.35);
+    final alternateRowColor = theme.colorScheme.surfaceContainerHighest
+        .withValues(alpha: 0.35);
 
     return LayoutBuilder(
       builder: (context, constraints) {
         final availableWidth = constraints.maxWidth.isFinite
             ? constraints.maxWidth
             : _ProductTableLayout.minTableWidth;
-        final tableWidth = math.max(availableWidth, _ProductTableLayout.minTableWidth);
+        final tableWidth = math.max(
+          availableWidth,
+          _ProductTableLayout.minTableWidth,
+        );
 
         return SingleChildScrollView(
           scrollDirection: Axis.horizontal,
@@ -82,10 +86,14 @@ class ProductsTable extends StatelessWidget {
                       context: context,
                       produto: produtos[i],
                       rowTextStyle: rowTextStyle,
-                      statusUpdating: updatingStatusProductIds.contains(produtos[i].id),
+                      statusUpdating: updatingStatusProductIds.contains(
+                        produtos[i].id,
+                      ),
                       onToggleStatus: () => onToggleStatus(produtos[i]),
                       onTap: () => onOpen(produtos[i]),
-                      backgroundColor: i.isOdd ? alternateRowColor : Colors.transparent,
+                      backgroundColor: i.isOdd
+                          ? alternateRowColor
+                          : Colors.transparent,
                     ),
                 ],
               ),
@@ -118,9 +126,7 @@ class ProductsTable extends StatelessWidget {
             child: Text('Código', style: style),
           ),
           const SizedBox(width: _ProductTableLayout.columnGap),
-          Expanded(
-            child: Text('Nome', style: style),
-          ),
+          Expanded(child: Text('Nome', style: style)),
           const SizedBox(width: _ProductTableLayout.columnGap),
           SizedBox(
             width: _ProductTableLayout.priceColumnWidth,
@@ -153,7 +159,9 @@ class ProductsTable extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 8),
           child: Align(
-            alignment: alignRight ? Alignment.centerRight : Alignment.centerLeft,
+            alignment: alignRight
+                ? Alignment.centerRight
+                : Alignment.centerLeft,
             child: child,
           ),
         ),
@@ -180,8 +188,12 @@ class ProductsTable extends StatelessWidget {
                       visualDensity: VisualDensity.compact,
                       onPressed: onToggleStatus,
                       icon: Icon(
-                        isActive ? Icons.visibility_outlined : Icons.visibility_off_outlined,
-                        color: isActive ? theme.colorScheme.primary : theme.colorScheme.error,
+                        isActive
+                            ? Icons.visibility_outlined
+                            : Icons.visibility_off_outlined,
+                        color: isActive
+                            ? theme.colorScheme.primary
+                            : theme.colorScheme.error,
                       ),
                     ),
             ),
@@ -234,12 +246,12 @@ class ProductsTable extends StatelessWidget {
 }
 
 class _ProductTableLayout {
-  static const double rowHorizontalPadding = 16;
+  static const double rowHorizontalPadding = 8;
   static const double eyeColumnWidth = 40;
   static const double thumbnailColumnWidth = 44;
   static const double codeColumnWidth = 120;
   static const double priceColumnWidth = 130;
-  static const double columnGap = 24;
+  static const double columnGap = 18;
   static const double minNameColumnWidth = 220;
 
   static const double minTableWidth =

@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import '../../../../core/models/app_identity.dart';
 import '../../../../core/models/tenant_invitation.dart';
 import '../../../../shared/domain/date_time_label.dart';
-import '../../../../shared/presentation/widgets/app_info_card.dart';
 import '../../../auth/services/tenant_invitation_service.dart';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -101,6 +100,110 @@ class _NotificacoesPageState extends State<NotificacoesPage> {
         .showSnackBar(SnackBar(content: Text(message)));
   }
 
+  String _invitationAccordionSubtitle({
+    required ConnectionState state,
+    required int count,
+  }) {
+    if (state == ConnectionState.waiting) {
+      return 'Carregando...';
+    }
+    if (count == 0) {
+      return 'Sem convites pendentes';
+    }
+    if (count == 1) {
+      return '1 convite pendente';
+    }
+    return '$count convites pendentes';
+  }
+
+  Widget _buildInvitationsAccordion(String email) {
+    if (email.isEmpty) {
+      return const Card(
+        child: ExpansionTile(
+          leading: Icon(Icons.mail_outline),
+          title: Text('Convites'),
+          subtitle: Text('Sem e-mail autenticado'),
+          childrenPadding: EdgeInsets.fromLTRB(16, 0, 16, 12),
+          children: [
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Nao foi possivel identificar convites para esta sessao.',
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return StreamBuilder<List<TenantInvitation>>(
+      stream: _invitationService.watchPendingInvitationsForEmail(email),
+      builder: (context, snapshot) {
+        final invitations = snapshot.data ?? const <TenantInvitation>[];
+        return Card(
+          child: ExpansionTile(
+            leading: const Icon(Icons.mail_outline),
+            initiallyExpanded: invitations.isNotEmpty,
+            title: const Text('Convites'),
+            subtitle: Text(
+              _invitationAccordionSubtitle(
+                state: snapshot.connectionState,
+                count: invitations.length,
+              ),
+            ),
+            childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            children: [
+              if (snapshot.connectionState == ConnectionState.waiting)
+                const Padding(
+                  padding: EdgeInsets.only(bottom: 10),
+                  child: LinearProgressIndicator(minHeight: 2),
+                )
+              else if (invitations.isEmpty)
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text('Nenhum convite novo no momento.'),
+                )
+              else
+                ...invitations.map(
+                  (invitation) => _InvitationCard(
+                    invitation: invitation,
+                    processing: _processingToken == invitation.token,
+                    onAccept: () => _acceptInvite(invitation),
+                    onDecline: () => _declineInvite(invitation),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildGeneralNotificationsAccordion() {
+    return const Card(
+      child: ExpansionTile(
+        leading: Icon(Icons.notifications_active_outlined),
+        title: Text('Outras notificacoes'),
+        subtitle: Text('Comunicados da representada e da equipe'),
+        childrenPadding: EdgeInsets.fromLTRB(16, 0, 16, 12),
+        children: [
+          ListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            title: Text('Informacoes da representada'),
+            subtitle: Text('Sem novas informacoes.'),
+          ),
+          ListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            title: Text('Mensagens do owner para equipe'),
+            subtitle: Text('Sem novos comunicados.'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
@@ -116,57 +219,10 @@ class _NotificacoesPageState extends State<NotificacoesPage> {
               'Notificacoes',
               style: Theme.of(context).textTheme.headlineSmall,
             ),
-            const SizedBox(height: 8),
-            Text(
-              'Convites pendentes para ${widget.identity.userLabel}.',
-              style: Theme.of(context).textTheme.bodyLarge,
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Esta tela e apenas para aceitar ou recusar convites pessoais. O envio e gerenciamento ficam no modulo Tenant.',
-            ),
             const SizedBox(height: 16),
-            if (email.isEmpty)
-              const AppInfoCard(
-                title: 'Sem e-mail autenticado',
-                subtitle: 'Nao foi possivel identificar convites para a sessao atual.',
-              )
-            else
-              StreamBuilder<List<TenantInvitation>>(
-                stream: _invitationService.watchPendingInvitationsForEmail(
-                  email,
-                ),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const AppInfoCard(
-                      title: 'Carregando notificacoes',
-                      subtitle: 'Buscando convites pendentes...',
-                    );
-                  }
-
-                  final invitations = snapshot.data ?? const [];
-                  if (invitations.isEmpty) {
-                    return const AppInfoCard(
-                      title: 'Sem convites pendentes',
-                      subtitle: 'Quando um owner enviar convite para seu e-mail, ele aparece aqui.',
-                    );
-                  }
-
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: invitations
-                        .map(
-                          (invitation) => _InvitationCard(
-                            invitation: invitation,
-                            processing: _processingToken == invitation.token,
-                            onAccept: () => _acceptInvite(invitation),
-                            onDecline: () => _declineInvite(invitation),
-                          ),
-                        )
-                        .toList(),
-                  );
-                },
-              ),
+            _buildInvitationsAccordion(email),
+            const SizedBox(height: 12),
+            _buildGeneralNotificationsAccordion(),
           ],
         ),
       ),
@@ -190,7 +246,7 @@ class _InvitationCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: 10),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(

@@ -82,8 +82,9 @@ class _TenantInvitationsPageState extends State<TenantInvitationsPage> {
         .collection('tenants')
         .doc(widget.identity.tenantId)
         .get();
-    final workspaceType = (tenantDoc.data()?['workspaceType'] ?? 'brand_owner_workspace')
-        .toString();
+    final workspaceType =
+        (tenantDoc.data()?['workspaceType'] ?? 'brand_owner_workspace')
+            .toString();
     final allowedRolesForContext = _allowedRolesForContext(workspaceType);
 
     if (allowedRolesForContext.isEmpty) {
@@ -140,8 +141,9 @@ class _TenantInvitationsPageState extends State<TenantInvitationsPage> {
         .collection('tenants')
         .doc(widget.identity.tenantId)
         .get();
-    final workspaceType = (tenantDoc.data()?['workspaceType'] ?? 'brand_owner_workspace')
-        .toString();
+    final workspaceType =
+        (tenantDoc.data()?['workspaceType'] ?? 'brand_owner_workspace')
+            .toString();
     final allowedRolesForContext = _allowedRolesForContext(workspaceType);
 
     if (allowedRolesForContext.isEmpty) {
@@ -194,7 +196,8 @@ class _TenantInvitationsPageState extends State<TenantInvitationsPage> {
           .snapshots(),
       builder: (context, tenantSnapshot) {
         final workspaceType =
-            (tenantSnapshot.data?.data()?['workspaceType'] ?? 'brand_owner_workspace')
+            (tenantSnapshot.data?.data()?['workspaceType'] ??
+                    'brand_owner_workspace')
                 .toString();
         final allowedRoles = _allowedRolesForContext(workspaceType);
         final canManageInvites = allowedRoles.isNotEmpty;
@@ -232,8 +235,7 @@ class _TenantInvitationsPageState extends State<TenantInvitationsPage> {
                     if (!canManageInvites)
                       const AppInfoCard(
                         title: 'Acesso restrito',
-                        subtitle:
-                            'Seu perfil nao tem permissao para enviar convites neste tenant.',
+                        subtitle: 'Seu perfil nao tem permissao para enviar convites neste tenant.',
                       )
                     else
                       _CreateInvitationCard(
@@ -266,10 +268,12 @@ class _TenantInvitationsPageState extends State<TenantInvitationsPage> {
                         widget.identity.tenantId,
                       ),
                       builder: (context, snapshot) {
-                        if (snapshot.connectionState == ConnectionState.waiting) {
+                        if (snapshot.connectionState ==
+                            ConnectionState.waiting) {
                           return const AppInfoCard(
                             title: 'Carregando convites',
-                            subtitle: 'Buscando historico de convites do tenant...',
+                            subtitle:
+                                'Buscando historico de convites do tenant...',
                           );
                         }
 
@@ -277,7 +281,8 @@ class _TenantInvitationsPageState extends State<TenantInvitationsPage> {
                         if (invitations.isEmpty) {
                           return const AppInfoCard(
                             title: 'Sem convites emitidos',
-                            subtitle: 'Crie um convite para iniciar o onboarding.',
+                            subtitle:
+                                'Crie um convite para iniciar o onboarding.',
                           );
                         }
 
@@ -332,7 +337,8 @@ class _TenantInvitationsPageState extends State<TenantInvitationsPage> {
                               (invitation) => _ManagedInvitationCard(
                                 invitation: invitation,
                                 revoking: _revokingToken == invitation.token,
-                                onRevoke: canManageInvites &&
+                                onRevoke:
+                                    canManageInvites &&
                                         invitation.status ==
                                             TenantInvitationStatus.pending
                                     ? () => _revokeInvitation(invitation)
@@ -379,6 +385,34 @@ class _CreateInvitationCard extends StatelessWidget {
   final ValueChanged<bool> onDefaultTenantChanged;
   final VoidCallback onCreate;
 
+  InputDecoration _fieldDecoration(
+    BuildContext context, {
+    required String label,
+    String? hintText,
+  }) {
+    final colors = Theme.of(context).colorScheme;
+
+    OutlineInputBorder border(Color color, {double width = 1}) {
+      return OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: color, width: width),
+      );
+    }
+
+    return InputDecoration(
+      labelText: label,
+      hintText: hintText,
+      isDense: true,
+      filled: true,
+      fillColor: colors.surfaceContainerHighest.withValues(alpha: 0.35),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      enabledBorder: border(colors.outlineVariant.withValues(alpha: 0.45)),
+      focusedBorder: border(colors.primary.withValues(alpha: 0.75), width: 1.4),
+      errorBorder: border(colors.error.withValues(alpha: 0.75)),
+      focusedErrorBorder: border(colors.error, width: 1.4),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Card(
@@ -390,9 +424,9 @@ class _CreateInvitationCard extends StatelessWidget {
             TextField(
               controller: emailController,
               keyboardType: TextInputType.emailAddress,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                labelText: 'E-mail do convidado',
+              decoration: _fieldDecoration(
+                context,
+                label: 'E-mail do convidado',
                 hintText: 'representante@empresa.com',
               ),
             ),
@@ -400,16 +434,10 @@ class _CreateInvitationCard extends StatelessWidget {
             DropdownButtonFormField<String>(
               initialValue: selectedRole,
               isExpanded: true,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                labelText: 'Perfil no tenant',
-              ),
+              decoration: _fieldDecoration(context, label: 'Perfil no tenant'),
               items: allowedRoles
                   .map(
-                    (role) => DropdownMenuItem(
-                      value: role,
-                      child: Text(role),
-                    ),
+                    (role) => DropdownMenuItem(value: role, child: Text(role)),
                   )
                   .toList(),
               onChanged: creating
@@ -424,10 +452,7 @@ class _CreateInvitationCard extends StatelessWidget {
             DropdownButtonFormField<int>(
               initialValue: expirationDays,
               isExpanded: true,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                labelText: 'Expiracao',
-              ),
+              decoration: _fieldDecoration(context, label: 'Expiracao'),
               items: const [
                 DropdownMenuItem(value: 1, child: Text('1 dia')),
                 DropdownMenuItem(value: 3, child: Text('3 dias')),

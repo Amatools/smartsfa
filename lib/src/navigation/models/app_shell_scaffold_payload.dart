@@ -12,6 +12,12 @@ class AppShellScaffoldPayload {
     required this.onDestinationSelected,
     required this.onSignOut,
     required this.onSwitchProfile,
+    required this.onSyncNow,
+    required this.syncRunning,
+    required this.representedScopeLabel,
+    required this.representedScopeLoading,
+    required this.showRepresentedScopeBar,
+    required this.onRepresentedScopeTap,
   });
 
   final AppIdentity identity;
@@ -21,4 +27,10 @@ class AppShellScaffoldPayload {
   final ValueChanged<int> onDestinationSelected;
   final VoidCallback onSignOut;
   final VoidCallback? onSwitchProfile;
+  final VoidCallback? onSyncNow;
+  final bool syncRunning;
+  final String? representedScopeLabel;
+  final bool representedScopeLoading;
+  final bool showRepresentedScopeBar;
+  final VoidCallback? onRepresentedScopeTap;
 }

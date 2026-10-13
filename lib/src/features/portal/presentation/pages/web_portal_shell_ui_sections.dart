@@ -6,6 +6,7 @@ class _WorkspaceSelectionView extends StatelessWidget {
     required this.tenants,
     required this.selectedTenantId,
     required this.onSelectTenant,
+    required this.onAddWorkspace,
     required this.onSignOut,
   });
 
@@ -13,6 +14,7 @@ class _WorkspaceSelectionView extends StatelessWidget {
   final List<TenantEntryOption> tenants;
   final String selectedTenantId;
   final ValueChanged<String> onSelectTenant;
+  final VoidCallback onAddWorkspace;
   final VoidCallback onSignOut;
 
   @override
@@ -123,6 +125,17 @@ class _WorkspaceSelectionView extends StatelessWidget {
                         ),
                       );
                     },
+                  ),
+                  const SizedBox(height: 16),
+                  FilledButton.tonalIcon(
+                    onPressed: onAddWorkspace,
+                    icon: const Icon(Icons.add_business_outlined),
+                    label: const Text('Adicionar workspace'),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Crie Individual/Representacoes ou entre com convite.',
+                    style: textTheme.bodySmall,
                   ),
                 ],
               ),
@@ -380,191 +393,225 @@ class _WebPortalTopBar extends StatelessWidget {
           bottom: BorderSide(color: Theme.of(context).dividerColor),
         ),
       ),
-      child: Row(
-        children: [
-          const Icon(Icons.web_asset_outlined),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final stackLines = constraints.maxWidth < 1040;
+
+          if (stackLines) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(
-                  'Portal de Gestão',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                Text(
-                  '${identity.tenantName} • ${_roleLabel(activeTenant.role, activeTenant.workspaceType, activeTenant.tenantName)} • ${_workspaceTypeLabel(activeTenant.workspaceType)} • ${_accountContractLockLabel(accountContractLock)}',
-                  style: Theme.of(context).textTheme.bodySmall,
+                _buildPortalInfoPanel(context),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(child: _buildRepresentedSelector(context)),
+                    const SizedBox(width: 8),
+                    _buildSwitchWorkspaceButton(),
+                    const SizedBox(width: 8),
+                    _buildSignOutButton(),
+                  ],
                 ),
               ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          SizedBox(
-            width: 320,
-            child: StreamBuilder<Map<String, dynamic>?>(
-              stream: WorkspaceProfileService(FirebaseFirestore.instance)
-                  .watchWorkspace(activeTenant.tenantId),
-              builder: (context, snapshot) {
-                final workspaceData =
-                    snapshot.data ?? const <String, dynamic>{};
-                final supportsRepresentedCompanies =
-                    activeTenant.workspaceType == 'seller_solo_workspace' ||
-                    activeTenant.workspaceType == 'rep_workspace';
-                final favoriteRepresentedCompanyId =
-                    (workspaceData['favoriteRepresentedCompanyId'] ?? '')
-                        .toString()
-                        .trim();
-                return StreamBuilder<List<Map<String, Object?>>>(
-                  stream: WorkspaceProfileService(FirebaseFirestore.instance)
-                      .watchRepresentedCompanies(activeTenant.tenantId),
-                  builder: (context, representedSnapshot) {
-                    final representedCompanies =
-                        _representedCompaniesFromStorage(
-                          representedSnapshot.data ??
-                              const <Map<String, Object?>>[],
-                        );
-                    final selectedId =
-                        representedCompanies.any(
-                          (company) =>
-                              company.id == selectedRepresentedCompanyId,
-                        )
-                        ? selectedRepresentedCompanyId
-                        : null;
-                    final favoriteId =
-                        representedCompanies.any(
-                          (company) =>
-                              company.id == favoriteRepresentedCompanyId,
-                        )
-                        ? favoriteRepresentedCompanyId
-                        : null;
-                    final effectiveSelectedId = selectedId ?? favoriteId;
-                    if (effectiveSelectedId != null &&
-                        effectiveSelectedId != selectedRepresentedCompanyId) {
-                      _RepresentedCompany? selectedCompany;
-                      for (final company in representedCompanies) {
-                        if (company.id == effectiveSelectedId) {
-                          selectedCompany = company;
-                          break;
-                        }
-                      }
-                      WidgetsBinding.instance.addPostFrameCallback((_) {
-                        onRepresentedCompanySelected(
-                          effectiveSelectedId,
-                          selectedCompany?.nomeFantasia,
-                        );
-                      });
-                    }
-                    final isFavoriteSelection =
-                        effectiveSelectedId != null &&
-                        effectiveSelectedId == favoriteRepresentedCompanyId;
+            );
+          }
 
-                    return Row(
-                      children: [
-                        Expanded(
-                          child: DropdownButtonFormField<String?>(
-                            initialValue: effectiveSelectedId,
-                            isExpanded: true,
-                            decoration: const InputDecoration(
-                              labelText: 'Representada ativa',
-                              border: OutlineInputBorder(),
-                              isDense: true,
-                            ),
-                            items: [
-                              const DropdownMenuItem<String?>(
-                                value: null,
-                                child: Text('Nenhuma selecionada'),
+          return Row(
+            children: [
+              Expanded(child: _buildPortalInfoPanel(context)),
+              const SizedBox(width: 12),
+              SizedBox(width: 320, child: _buildRepresentedSelector(context)),
+              const SizedBox(width: 8),
+              _buildSwitchWorkspaceButton(),
+              const SizedBox(width: 8),
+              _buildSignOutButton(),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildPortalInfoPanel(BuildContext context) {
+    return Row(
+      children: [
+        const Icon(Icons.web_asset_outlined),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Portal de Gestão',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              Text(
+                '${identity.tenantName} • ${_roleLabel(activeTenant.role, activeTenant.workspaceType, activeTenant.tenantName)} • ${_workspaceTypeLabel(activeTenant.workspaceType)} • ${_accountContractLockLabel(accountContractLock)}',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRepresentedSelector(BuildContext context) {
+    return StreamBuilder<Map<String, dynamic>?>(
+      stream: WorkspaceProfileService(FirebaseFirestore.instance)
+          .watchWorkspace(activeTenant.tenantId),
+      builder: (context, snapshot) {
+        final workspaceData = snapshot.data ?? const <String, dynamic>{};
+        final supportsRepresentedCompanies =
+            activeTenant.workspaceType == 'seller_solo_workspace' ||
+            activeTenant.workspaceType == 'rep_workspace';
+        final favoriteRepresentedCompanyId =
+            (workspaceData['favoriteRepresentedCompanyId'] ?? '')
+                .toString()
+                .trim();
+
+        return StreamBuilder<List<Map<String, Object?>>>(
+          stream: WorkspaceProfileService(FirebaseFirestore.instance)
+              .watchRepresentedCompanies(activeTenant.tenantId),
+          builder: (context, representedSnapshot) {
+            final representedCompanies = _representedCompaniesFromStorage(
+              representedSnapshot.data ?? const <Map<String, Object?>>[],
+            );
+            final selectedId =
+                representedCompanies.any(
+                  (company) => company.id == selectedRepresentedCompanyId,
+                )
+                ? selectedRepresentedCompanyId
+                : null;
+            final favoriteId =
+                representedCompanies.any(
+                  (company) => company.id == favoriteRepresentedCompanyId,
+                )
+                ? favoriteRepresentedCompanyId
+                : null;
+            final effectiveSelectedId = selectedId ?? favoriteId;
+            if (effectiveSelectedId != null &&
+                effectiveSelectedId != selectedRepresentedCompanyId) {
+              _RepresentedCompany? selectedCompany;
+              for (final company in representedCompanies) {
+                if (company.id == effectiveSelectedId) {
+                  selectedCompany = company;
+                  break;
+                }
+              }
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                onRepresentedCompanySelected(
+                  effectiveSelectedId,
+                  selectedCompany?.nomeFantasia,
+                );
+              });
+            }
+            final isFavoriteSelection =
+                effectiveSelectedId != null &&
+                effectiveSelectedId == favoriteRepresentedCompanyId;
+
+            return Row(
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<String?>(
+                    initialValue: effectiveSelectedId,
+                    isExpanded: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Representada ativa',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                    items: [
+                      const DropdownMenuItem<String?>(
+                        value: null,
+                        child: Text('Nenhuma selecionada'),
+                      ),
+                      ...representedCompanies.map(
+                        (company) => DropdownMenuItem<String?>(
+                          value: company.id,
+                          child: Row(
+                            children: [
+                              _RepresentedCompanyAvatar(
+                                company: company,
+                                size: 40,
                               ),
-                              ...representedCompanies.map(
-                                (company) => DropdownMenuItem<String?>(
-                                  value: company.id,
-                                  child: Row(
-                                    children: [
-                                      _RepresentedCompanyAvatar(
-                                        company: company,
-                                        size: 40,
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Text(
-                                          company.nomeFantasia,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  company.nomeFantasia,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
                             ],
-                            onChanged: !supportsRepresentedCompanies
-                                ? null
-                                : (value) {
-                                    _RepresentedCompany? selectedCompany;
-                                    for (final company
-                                        in representedCompanies) {
-                                      if (company.id == value) {
-                                        selectedCompany = company;
-                                        break;
-                                      }
-                                    }
-                                    onRepresentedCompanySelected(
-                                      value,
-                                      selectedCompany?.nomeFantasia,
-                                    );
-                                  },
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        Tooltip(
-                          message: effectiveSelectedId == null
-                              ? 'Selecione uma representada para favoritar'
-                              : isFavoriteSelection
-                              ? 'Representada favorita'
-                              : 'Favoritar representada ativa',
-                          child: IconButton.outlined(
-                            onPressed:
-                                effectiveSelectedId == null ||
-                                    settingFavoriteRepresented ||
-                                    !supportsRepresentedCompanies
-                                ? null
-                                : () => onToggleFavoriteRepresented(
-                                    activeTenant: activeTenant,
-                                    selectedRepresentedCompanyId:
-                                        effectiveSelectedId,
-                                    favoriteRepresentedCompanyId:
-                                        favoriteRepresentedCompanyId,
-                                  ),
-                            icon: Icon(
-                              isFavoriteSelection
-                                  ? Icons.star
-                                  : Icons.star_outline,
-                            ),
+                      ),
+                    ],
+                    onChanged: !supportsRepresentedCompanies
+                        ? null
+                        : (value) {
+                            _RepresentedCompany? selectedCompany;
+                            for (final company in representedCompanies) {
+                              if (company.id == value) {
+                                selectedCompany = company;
+                                break;
+                              }
+                            }
+                            onRepresentedCompanySelected(
+                              value,
+                              selectedCompany?.nomeFantasia,
+                            );
+                          },
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Tooltip(
+                  message: effectiveSelectedId == null
+                      ? 'Selecione uma representada para favoritar'
+                      : isFavoriteSelection
+                      ? 'Representada favorita'
+                      : 'Favoritar representada ativa',
+                  child: IconButton.outlined(
+                    onPressed:
+                        effectiveSelectedId == null ||
+                            settingFavoriteRepresented ||
+                            !supportsRepresentedCompanies
+                        ? null
+                        : () => onToggleFavoriteRepresented(
+                            activeTenant: activeTenant,
+                            selectedRepresentedCompanyId: effectiveSelectedId,
+                            favoriteRepresentedCompanyId:
+                                favoriteRepresentedCompanyId,
                           ),
-                        ),
-                      ],
-                    );
-                  },
-                );
-              },
-            ),
-          ),
-          const SizedBox(width: 8),
-          Tooltip(
-            message: 'Trocar workspace',
-            child: IconButton.outlined(
-              onPressed: onBackToWorkspaceSelection,
-              icon: const Icon(Icons.u_turn_left),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Tooltip(
-            message: 'Sair da conta',
-            child: IconButton.outlined(
-              onPressed: onSignOut,
-              icon: const Icon(Icons.logout),
-            ),
-          ),
-        ],
+                    icon: Icon(
+                      isFavoriteSelection ? Icons.star : Icons.star_outline,
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildSwitchWorkspaceButton() {
+    return Tooltip(
+      message: 'Trocar workspace',
+      child: IconButton.outlined(
+        onPressed: onBackToWorkspaceSelection,
+        icon: const Icon(Icons.u_turn_left),
+      ),
+    );
+  }
+
+  Widget _buildSignOutButton() {
+    return Tooltip(
+      message: 'Sair da conta',
+      child: IconButton.outlined(
+        onPressed: onSignOut,
+        icon: const Icon(Icons.logout),
       ),
     );
   }

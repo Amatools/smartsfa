@@ -9,6 +9,8 @@ class FirestoreClientePreCadastroRepository
   FirestoreClientePreCadastroRepository(this._firestore);
 
   final FirebaseFirestore _firestore;
+  final Map<String, List<ClientePreCadastro>> _tenantCache =
+      <String, List<ClientePreCadastro>>{};
 
   CollectionReference<Map<String, dynamic>> get _collection =>
       _firestore.collection('cliente_pre_cadastros');
@@ -29,8 +31,13 @@ class FirestoreClientePreCadastroRepository
             data.putIfAbsent('id', () => doc.id);
             return ClientePreCadastro.fromMap(data);
           }).toList();
-          items.sort((a, b) => (b.updatedAt ?? b.createdAt ?? DateTime.now())
-              .compareTo(a.updatedAt ?? a.createdAt ?? DateTime.now()));
+          items.sort(
+            (a, b) => (b.updatedAt ?? b.createdAt ?? DateTime.now()).compareTo(
+              a.updatedAt ?? a.createdAt ?? DateTime.now(),
+            ),
+          );
+          _tenantCache[normalizedTenantId] =
+              List<ClientePreCadastro>.unmodifiable(items);
           return items;
         });
   }
@@ -42,6 +49,11 @@ class FirestoreClientePreCadastroRepository
       return const [];
     }
 
+    final cached = _tenantCache[normalizedTenantId];
+    if (cached != null) {
+      return List<ClientePreCadastro>.from(cached);
+    }
+
     final snapshot = await _collection
         .where('tenantId', isEqualTo: normalizedTenantId)
         .get();
@@ -50,8 +62,14 @@ class FirestoreClientePreCadastroRepository
       data.putIfAbsent('id', () => doc.id);
       return ClientePreCadastro.fromMap(data);
     }).toList();
-    items.sort((a, b) => (b.updatedAt ?? b.createdAt ?? DateTime.now())
-        .compareTo(a.updatedAt ?? a.createdAt ?? DateTime.now()));
+    items.sort(
+      (a, b) => (b.updatedAt ?? b.createdAt ?? DateTime.now()).compareTo(
+        a.updatedAt ?? a.createdAt ?? DateTime.now(),
+      ),
+    );
+    _tenantCache[normalizedTenantId] = List<ClientePreCadastro>.unmodifiable(
+      items,
+    );
     return items;
   }
 
@@ -64,6 +82,15 @@ class FirestoreClientePreCadastroRepository
     final normalizedId = id.trim();
     if (normalizedTenantId.isEmpty || normalizedId.isEmpty) {
       return null;
+    }
+
+    final cached = _tenantCache[normalizedTenantId];
+    if (cached != null) {
+      for (final item in cached) {
+        if (item.id == normalizedId) {
+          return item;
+        }
+      }
     }
 
     final doc = await _collection.doc(normalizedId).get();
@@ -82,6 +109,7 @@ class FirestoreClientePreCadastroRepository
 
   @override
   Future<void> save(ClientePreCadastro entity) {
+    _tenantCache.remove(entity.tenantId.trim());
     return _collection.doc(entity.id).set(entity.toMap());
   }
 
@@ -93,5 +121,6 @@ class FirestoreClientePreCadastroRepository
     }
 
     await _collection.doc(id).delete();
+    _tenantCache.remove(tenantId.trim());
   }
 }

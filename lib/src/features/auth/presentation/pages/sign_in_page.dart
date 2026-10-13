@@ -34,10 +34,7 @@ class _SignInPageState extends State<SignInPage> {
       await FirebaseAuth.instance.signInWithPopup(provider);
     } on FirebaseAuthException catch (e) {
       setState(() {
-        _error = AuthErrorInfo.fromFirebaseException(
-          e,
-          provider: 'google',
-        );
+        _error = AuthErrorInfo.fromFirebaseException(e, provider: 'google');
       });
     } catch (_) {
       setState(() {
@@ -78,10 +75,7 @@ class _SignInPageState extends State<SignInPage> {
       );
     } on FirebaseAuthException catch (e) {
       setState(() {
-        _error = AuthErrorInfo.fromFirebaseException(
-          e,
-          provider: 'password',
-        );
+        _error = AuthErrorInfo.fromFirebaseException(e, provider: 'password');
       });
     } catch (_) {
       setState(() {
@@ -94,6 +88,36 @@ class _SignInPageState extends State<SignInPage> {
         });
       }
     }
+  }
+
+  InputDecoration _loginInputDecoration(
+    BuildContext context, {
+    required String label,
+    required IconData icon,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    OutlineInputBorder border(Color color, {double width = 1}) {
+      return OutlineInputBorder(
+        borderRadius: BorderRadius.circular(999),
+        borderSide: BorderSide(color: color, width: width),
+      );
+    }
+
+    return InputDecoration(
+      labelText: label,
+      prefixIcon: Icon(icon, size: 18),
+      filled: true,
+      fillColor: colorScheme.surfaceContainerHighest.withValues(alpha: 0.26),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      enabledBorder: border(colorScheme.outlineVariant.withValues(alpha: 0.32)),
+      focusedBorder: border(
+        colorScheme.primary.withValues(alpha: 0.48),
+        width: 1.25,
+      ),
+      errorBorder: border(colorScheme.error.withValues(alpha: 0.72)),
+      focusedErrorBorder: border(colorScheme.error, width: 1.25),
+    );
   }
 
   @override
@@ -158,18 +182,20 @@ class _SignInPageState extends State<SignInPage> {
                   TextField(
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      labelText: 'E-mail',
+                    decoration: _loginInputDecoration(
+                      context,
+                      label: 'E-mail',
+                      icon: Icons.alternate_email,
                     ),
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: _passwordController,
                     obscureText: true,
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      labelText: 'Senha',
+                    decoration: _loginInputDecoration(
+                      context,
+                      label: 'Senha',
+                      icon: Icons.lock_outline,
                     ),
                     onSubmitted: (_) => _signInWithEmailPassword(),
                   ),

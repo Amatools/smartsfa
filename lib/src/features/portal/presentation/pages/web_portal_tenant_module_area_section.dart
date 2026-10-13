@@ -130,6 +130,7 @@ class _TenantWorkspaceModuleAreaState
         } else if (activeSubmenu.key == 'tributacoes') {
           content = _TaxRulesSection(
             activeTenant: widget.activeTenant,
+            selectedRepresentedCompanyId: widget.selectedRepresentedCompanyId,
             activeRepresentedCompanyName: widget.activeRepresentedCompanyName,
           );
         } else if (activeSubmenu.key == 'produtos_tabelas') {

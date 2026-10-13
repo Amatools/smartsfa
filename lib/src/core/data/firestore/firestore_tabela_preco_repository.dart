@@ -3,11 +3,14 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/tabela_preco.dart';
 import '../../repositories/tabela_preco_repository.dart';
 import 'firestore_map_normalizer.dart';
+import 'firestore_sync_metadata.dart';
 
 class FirestoreTabelaPrecoRepository implements TabelaPrecoRepository {
   FirestoreTabelaPrecoRepository(this._firestore);
 
   final FirebaseFirestore _firestore;
+  final Map<String, List<TabelaPreco>> _tenantCache =
+      <String, List<TabelaPreco>>{};
 
   CollectionReference<Map<String, dynamic>> get _collection =>
       _firestore.collection('tabelas_preco');
@@ -29,7 +32,11 @@ class FirestoreTabelaPrecoRepository implements TabelaPrecoRepository {
             return TabelaPreco.fromMap(data);
           }).toList()
             ..sort((a, b) => b.updatedAt?.compareTo(a.updatedAt ?? DateTime(1970)) ?? 0),
-        );
+        )
+        .map((items) {
+          _tenantCache[normalizedTenantId] = List<TabelaPreco>.unmodifiable(items);
+          return items;
+        });
   }
 
   @override
@@ -37,6 +44,11 @@ class FirestoreTabelaPrecoRepository implements TabelaPrecoRepository {
     final normalizedTenantId = tenantId.trim();
     if (normalizedTenantId.isEmpty) {
       return const [];
+    }
+
+    final cached = _tenantCache[normalizedTenantId];
+    if (cached != null) {
+      return List<TabelaPreco>.from(cached);
     }
 
     final snapshot = await _collection
@@ -53,6 +65,7 @@ class FirestoreTabelaPrecoRepository implements TabelaPrecoRepository {
       final right = b.updatedAt ?? DateTime(1970);
       return right.compareTo(left);
     });
+    _tenantCache[normalizedTenantId] = List<TabelaPreco>.unmodifiable(items);
     return items;
   }
 
@@ -62,6 +75,15 @@ class FirestoreTabelaPrecoRepository implements TabelaPrecoRepository {
     final normalizedId = id.trim();
     if (normalizedTenantId.isEmpty || normalizedId.isEmpty) {
       return null;
+    }
+
+    final cached = _tenantCache[normalizedTenantId];
+    if (cached != null) {
+      for (final item in cached) {
+        if (item.id == normalizedId) {
+          return item;
+        }
+      }
     }
 
     final doc = await _collection.doc(normalizedId).get();
@@ -80,7 +102,9 @@ class FirestoreTabelaPrecoRepository implements TabelaPrecoRepository {
 
   @override
   Future<void> save(TabelaPreco entity) {
-    return _collection.doc(entity.id).set(entity.toMap());
+    final payload = buildSyncUpsertPayload(source: entity.toMap());
+    _tenantCache.remove(entity.tenantId.trim());
+    return _collection.doc(entity.id).set(payload);
   }
 
   @override
@@ -111,5 +135,6 @@ class FirestoreTabelaPrecoRepository implements TabelaPrecoRepository {
     }
 
     await _collection.doc(id).delete();
+    _tenantCache.remove(tenantId.trim());
   }
 }

@@ -409,115 +409,131 @@ class _TenantAdminPageState extends State<TenantAdminPage> {
             ),
             const SizedBox(height: 12),
             StreamBuilder<List<TenantMembership>>(
-                stream: _membershipService.watchMembershipsForTenant(
-                  widget.identity.tenantId,
-                ),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const AppInfoCard(
-                      title: 'Carregando memberships',
-                      subtitle: 'Buscando membros vinculados ao tenant...',
-                    );
-                  }
-
-                  final memberships = snapshot.data ?? const [];
-                  if (memberships.isEmpty) {
-                    return const AppInfoCard(
-                      title: 'Sem memberships',
-                      subtitle:
-                          'Nenhum usuario vinculado ao tenant no momento.',
-                    );
-                  }
-
-                  final filteredMemberships = _applyFilters(memberships);
-                  if (filteredMemberships.isEmpty) {
-                    return const AppInfoCard(
-                      title: 'Sem resultados para o filtro atual',
-                      subtitle: 'Ajuste busca, papel ou status para visualizar os memberships.',
-                    );
-                  }
-
-                  final page = buildPaginationSlice(
-                    source: filteredMemberships,
-                    requestedPage: _currentPage,
-                    pageSize: _pageSize,
-                  );
-
-                  if (page.currentPage != _currentPage) {
-                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                      if (mounted) {
-                        setState(() {
-                          _currentPage = page.currentPage;
-                        });
-                      }
-                    });
-                  }
-
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      AppPaginationBar(
-                        currentPage: page.currentPage,
-                        totalPages: page.totalPages,
-                        pageSize: _pageSize,
-                        startDisplay: page.startDisplay,
-                        endDisplay: page.endDisplay,
-                        totalItems: page.totalItems,
-                        onPageSizeChanged: (value) {
-                          setState(() {
-                            _pageSize = value;
-                            _currentPage = 0;
-                          });
-                        },
-                        onPrevious: !page.hasPrevious
-                            ? null
-                            : () {
-                                setState(() {
-                                  _currentPage = page.currentPage - 1;
-                                });
-                              },
-                        onNext: !page.hasNext
-                            ? null
-                            : () {
-                                setState(() {
-                                  _currentPage = page.currentPage + 1;
-                                });
-                              },
-                      ),
-                      const SizedBox(height: 10),
-                      ...page.items.map(
-                        (membership) => _MembershipCard(
-                          membership: membership,
-                          processing:
-                              _processingMembershipId ==
-                              membership.membershipId,
-                          availableRoles: _availableRoleTargets(membership),
-                          onRevoke:
-                              membership.isActive &&
-                                  (_actorUid != null &&
-                                      _permissions.canRevoke(
-                                        membership,
-                                        actorUid: _actorUid!,
-                                      ))
-                              ? () => _revoke(membership)
-                              : null,
-                          onReactivate:
-                              membership.isActive ||
-                                  _actorUid == null ||
-                                  !_permissions.canReactivate(
-                                    membership,
-                                    actorUid: _actorUid!,
-                                  )
-                              ? null
-                              : () => _reactivate(membership),
-                          onChangeRole: (newRole) =>
-                              _changeRole(membership, newRole),
-                        ),
-                      ),
-                    ],
-                  );
-                },
+              stream: _membershipService.watchMembershipsForTenant(
+                widget.identity.tenantId,
               ),
+              builder: (context, snapshot) {
+                if (snapshot.hasError) {
+                  final error = snapshot.error;
+                  final isPermissionDenied =
+                      error is FirebaseException &&
+                      error.code == 'permission-denied';
+                  if (isPermissionDenied) {
+                    return const AppInfoCard(
+                      title: 'Sem permissão para memberships',
+                      subtitle: 'Seu perfil atual não possui acesso para listar memberships deste tenant.',
+                    );
+                  }
+
+                  return AppInfoCard(
+                    title: 'Falha ao carregar memberships',
+                    subtitle: '$error',
+                  );
+                }
+
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const AppInfoCard(
+                    title: 'Carregando memberships',
+                    subtitle: 'Buscando membros vinculados ao tenant...',
+                  );
+                }
+
+                final memberships = snapshot.data ?? const [];
+                if (memberships.isEmpty) {
+                  return const AppInfoCard(
+                    title: 'Sem memberships',
+                    subtitle: 'Nenhum usuario vinculado ao tenant no momento.',
+                  );
+                }
+
+                final filteredMemberships = _applyFilters(memberships);
+                if (filteredMemberships.isEmpty) {
+                  return const AppInfoCard(
+                    title: 'Sem resultados para o filtro atual',
+                    subtitle: 'Ajuste busca, papel ou status para visualizar os memberships.',
+                  );
+                }
+
+                final page = buildPaginationSlice(
+                  source: filteredMemberships,
+                  requestedPage: _currentPage,
+                  pageSize: _pageSize,
+                );
+
+                if (page.currentPage != _currentPage) {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (mounted) {
+                      setState(() {
+                        _currentPage = page.currentPage;
+                      });
+                    }
+                  });
+                }
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    AppPaginationBar(
+                      currentPage: page.currentPage,
+                      totalPages: page.totalPages,
+                      pageSize: _pageSize,
+                      startDisplay: page.startDisplay,
+                      endDisplay: page.endDisplay,
+                      totalItems: page.totalItems,
+                      onPageSizeChanged: (value) {
+                        setState(() {
+                          _pageSize = value;
+                          _currentPage = 0;
+                        });
+                      },
+                      onPrevious: !page.hasPrevious
+                          ? null
+                          : () {
+                              setState(() {
+                                _currentPage = page.currentPage - 1;
+                              });
+                            },
+                      onNext: !page.hasNext
+                          ? null
+                          : () {
+                              setState(() {
+                                _currentPage = page.currentPage + 1;
+                              });
+                            },
+                    ),
+                    const SizedBox(height: 10),
+                    ...page.items.map(
+                      (membership) => _MembershipCard(
+                        membership: membership,
+                        processing:
+                            _processingMembershipId == membership.membershipId,
+                        availableRoles: _availableRoleTargets(membership),
+                        onRevoke:
+                            membership.isActive &&
+                                (_actorUid != null &&
+                                    _permissions.canRevoke(
+                                      membership,
+                                      actorUid: _actorUid!,
+                                    ))
+                            ? () => _revoke(membership)
+                            : null,
+                        onReactivate:
+                            membership.isActive ||
+                                _actorUid == null ||
+                                !_permissions.canReactivate(
+                                  membership,
+                                  actorUid: _actorUid!,
+                                )
+                            ? null
+                            : () => _reactivate(membership),
+                        onChangeRole: (newRole) =>
+                            _changeRole(membership, newRole),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
           ],
         ),
       ),
@@ -542,6 +558,36 @@ class _MembershipFilters extends StatelessWidget {
   final ValueChanged<String> onRoleChanged;
   final ValueChanged<String> onStatusChanged;
 
+  InputDecoration _fieldDecoration(
+    BuildContext context, {
+    required String label,
+    IconData? icon,
+    String? hintText,
+  }) {
+    final colors = Theme.of(context).colorScheme;
+
+    OutlineInputBorder border(Color color, {double width = 1}) {
+      return OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: color, width: width),
+      );
+    }
+
+    return InputDecoration(
+      labelText: label,
+      hintText: hintText,
+      isDense: true,
+      filled: true,
+      fillColor: colors.surfaceContainerHighest.withValues(alpha: 0.35),
+      prefixIcon: icon == null ? null : Icon(icon, size: 18),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      enabledBorder: border(colors.outlineVariant.withValues(alpha: 0.45)),
+      focusedBorder: border(colors.primary.withValues(alpha: 0.75), width: 1.4),
+      errorBorder: border(colors.error.withValues(alpha: 0.75)),
+      focusedErrorBorder: border(colors.error, width: 1.4),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Card(
@@ -553,11 +599,11 @@ class _MembershipFilters extends StatelessWidget {
             TextField(
               controller: searchController,
               onChanged: onSearchChanged,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                labelText: 'Buscar membro',
+              decoration: _fieldDecoration(
+                context,
+                label: 'Buscar membro',
                 hintText: 'uid, membershipId ou papel',
-                prefixIcon: Icon(Icons.search),
+                icon: Icons.search,
               ),
             ),
             const SizedBox(height: 12),
@@ -570,10 +616,7 @@ class _MembershipFilters extends StatelessWidget {
                   child: DropdownButtonFormField<String>(
                     initialValue: selectedRoleFilter,
                     isExpanded: true,
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      labelText: 'Papel',
-                    ),
+                    decoration: _fieldDecoration(context, label: 'Papel'),
                     items: const [
                       DropdownMenuItem(value: 'todos', child: Text('Todos')),
                       DropdownMenuItem(value: 'owner', child: Text('owner')),
@@ -602,10 +645,7 @@ class _MembershipFilters extends StatelessWidget {
                   child: DropdownButtonFormField<String>(
                     initialValue: selectedStatusFilter,
                     isExpanded: true,
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      labelText: 'Status',
-                    ),
+                    decoration: _fieldDecoration(context, label: 'Status'),
                     items: const [
                       DropdownMenuItem(value: 'todos', child: Text('Todos')),
                       DropdownMenuItem(value: 'ativo', child: Text('Ativo')),

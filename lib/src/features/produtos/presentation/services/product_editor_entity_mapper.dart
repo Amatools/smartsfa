@@ -11,6 +11,7 @@ class ProductEditorEntityMapper {
   static Produto buildFromForm({
     required AppIdentity identity,
     required Produto? existing,
+    required String? representedCompanyId,
     required DateTime now,
     required String codigo,
     required String descricao,
@@ -68,6 +69,9 @@ class ProductEditorEntityMapper {
     return Produto(
       id: existing?.id ?? 'prd_${now.microsecondsSinceEpoch}',
       tenantId: identity.tenantId,
+      representedCompanyId: (representedCompanyId ?? '').trim().isEmpty
+          ? null
+          : representedCompanyId!.trim(),
       codigoInterno: codigo,
       descricao: descricao,
       origemCadastro: existing?.origemCadastro ?? ProductSource.manual,

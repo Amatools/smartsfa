@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 
 class ProductEditorTabsShell extends StatelessWidget {
   const ProductEditorTabsShell({
@@ -26,10 +27,19 @@ class ProductEditorTabsShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final compactTabLabelStyle = !kIsWeb
+        ? Theme.of(context).textTheme.labelSmall
+              ?.copyWith(fontSize: 11, fontWeight: FontWeight.w600, height: 1.1)
+        : null;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         TabBar(
+          labelStyle: compactTabLabelStyle,
+          unselectedLabelStyle: compactTabLabelStyle?.copyWith(
+            fontWeight: FontWeight.w500,
+          ),
           tabs: [
             const Tab(icon: Icon(Icons.sell_outlined), text: 'Preco'),
             const Tab(icon: Icon(Icons.info_outline), text: 'Informacoes'),

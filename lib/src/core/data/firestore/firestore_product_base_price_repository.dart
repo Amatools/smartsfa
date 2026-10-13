@@ -8,6 +8,8 @@ class FirestoreProductBasePriceRepository implements ProductBasePriceRepository 
   FirestoreProductBasePriceRepository(this._firestore);
 
   final FirebaseFirestore _firestore;
+  final Map<String, List<ProductBasePrice>> _tenantCache =
+      <String, List<ProductBasePrice>>{};
 
   CollectionReference<Map<String, dynamic>> get _collection =>
       _firestore.collection('product_base_prices');
@@ -29,6 +31,8 @@ class FirestoreProductBasePriceRepository implements ProductBasePriceRepository 
         return ProductBasePrice.fromMap(data);
       }).toList();
       items.sort((a, b) => a.productId.compareTo(b.productId));
+      _tenantCache[normalizedTenantId] =
+          List<ProductBasePrice>.unmodifiable(items);
       return items;
     });
   }
@@ -40,6 +44,11 @@ class FirestoreProductBasePriceRepository implements ProductBasePriceRepository 
       return const [];
     }
 
+    final cached = _tenantCache[normalizedTenantId];
+    if (cached != null) {
+      return List<ProductBasePrice>.from(cached);
+    }
+
     final snapshot =
         await _collection.where('tenantId', isEqualTo: normalizedTenantId).get();
     final items = snapshot.docs.map((doc) {
@@ -48,6 +57,8 @@ class FirestoreProductBasePriceRepository implements ProductBasePriceRepository 
       return ProductBasePrice.fromMap(data);
     }).toList();
     items.sort((a, b) => a.productId.compareTo(b.productId));
+    _tenantCache[normalizedTenantId] =
+      List<ProductBasePrice>.unmodifiable(items);
     return items;
   }
 
@@ -60,6 +71,15 @@ class FirestoreProductBasePriceRepository implements ProductBasePriceRepository 
     final normalizedId = id.trim();
     if (normalizedTenantId.isEmpty || normalizedId.isEmpty) {
       return null;
+    }
+
+    final cached = _tenantCache[normalizedTenantId];
+    if (cached != null) {
+      for (final item in cached) {
+        if (item.id == normalizedId) {
+          return item;
+        }
+      }
     }
 
     final doc = await _collection.doc(normalizedId).get();
@@ -78,6 +98,7 @@ class FirestoreProductBasePriceRepository implements ProductBasePriceRepository 
 
   @override
   Future<void> save(ProductBasePrice entity) {
+    _tenantCache.remove(entity.tenantId.trim());
     return _collection.doc(entity.id).set(entity.toMap());
   }
 
@@ -88,5 +109,6 @@ class FirestoreProductBasePriceRepository implements ProductBasePriceRepository 
       return;
     }
     await _collection.doc(id).delete();
+    _tenantCache.remove(tenantId.trim());
   }
 }

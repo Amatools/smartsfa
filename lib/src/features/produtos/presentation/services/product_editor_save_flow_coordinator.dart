@@ -59,6 +59,7 @@ class ProductEditorSaveFlowCoordinator {
   Future<ProductEditorSaveFlowOutcome> execute({
     required ProdutoRepository repository,
     required AppIdentity identity,
+    required String? representedCompanyId,
     required Produto? existingProduct,
     required bool createAnother,
     required bool isEnterprise,
@@ -93,6 +94,7 @@ class ProductEditorSaveFlowCoordinator {
     final commandBuildResult = saveCommandBuilder.build(
       repository: repository,
       identity: identity,
+      representedCompanyId: representedCompanyId,
       existing: existingProduct,
       createAnother: createAnother,
       isEnterprise: isEnterprise,
