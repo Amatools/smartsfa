@@ -17,7 +17,7 @@ Este arquivo e a fonte de verdade para decisoes de produto e implementacao nesse
 | workspaceType | Uso principal | Convites | Papel inicial recomendado |
 | --- | --- | --- | --- |
 | seller_solo_workspace | uso individual, base privada | nao | vendedor |
-| rep_workspace | escritorio de representacao, equipe comercial | sim (para vendedor) | owner |
+| rep_workspace | escritorio de representacao, equipe comercial | sim (representante e vendedor) | owner |
 | brand_owner_workspace | tenant oficial da marca, cadeia completa | sim (hierarquia completa) | owner |
 
 Regras estruturais:
@@ -60,6 +60,18 @@ Observacoes:
 
 - convite pode ser recusado por regra de lock quando o tenant de destino nao for compativel;
 - regras de UI e backend devem ser equivalentes (nao apenas esconder botao).
+
+## Arquitetura unica (Web + Android + iOS)
+
+Regra de produto e engenharia:
+
+- a arquitetura funcional e a mesma para todos os clientes (web, Android e iOS);
+- regras de acesso, hierarquia e billing sao centralizadas em servicos compartilhados e Firestore rules;
+- diferencas por plataforma devem existir somente na apresentacao (view/ux), nunca na regra de negocio.
+
+Consequencia pratica:
+
+- qualquer mudanca de hierarquia, convite ou billing precisa refletir no backend/rules e ficar valida para todas as plataformas no mesmo contrato.
 
 ## Fluxo esperado no produto
 
@@ -108,6 +120,39 @@ Situacao atual:
 - ainda nao existe motor completo de billing (assinatura, ciclo, cobranca e conciliacao);
 - existe base de parametrizacao por workspace (planTier e feature flags) para controle funcional;
 - o controle financeiro real ainda nao e a fonte de verdade das permissoes.
+
+### Campos canônicos de billing
+
+Fonte de verdade operacional recomendada: tenant (workspace). Usuario guarda apenas estado de conta global.
+
+Em tenants/{tenantId}:
+
+- planTier
+- billingScope
+- billingPlanKey
+- billingStatus
+- billingCycle
+- billingCurrentPeriodStartAt
+- billingCurrentPeriodEndAt
+- billingGracePeriodDays
+- billingGraceUntilAt
+- billingPastDueSinceAt
+- billingSuspendedAt
+- billingDelinquencyStage
+- billingUpdatedAt
+
+Em usuarios/{uid}:
+
+- billingAccountState
+- billingGraceUntilAt
+- billingSuspendedAt
+- billingUpdatedAt
+
+Status de implementacao atual:
+
+- novos workspaces passam a ser criados com seed desses campos;
+- existe script de backfill para preencher tenants/usuarios legados sem quebrar cadastros;
+- a logica de bloqueio financeiro fino (ex.: grace e suspensao por atraso) ainda sera conectada ao motor de billing completo.
 
 Direcao recomendada:
 

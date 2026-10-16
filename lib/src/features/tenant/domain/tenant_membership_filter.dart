@@ -30,7 +30,12 @@ class TenantMembershipFilter {
         return true;
       }
 
-      return membership.uid.toLowerCase().contains(normalizedQuery) ||
+      final userName = (membership.userName ?? '').toLowerCase();
+      final userEmail = (membership.userEmail ?? '').toLowerCase();
+
+      return userName.contains(normalizedQuery) ||
+          userEmail.contains(normalizedQuery) ||
+          membership.uid.toLowerCase().contains(normalizedQuery) ||
           membership.membershipId.toLowerCase().contains(normalizedQuery) ||
           role.contains(normalizedQuery);
     }).toList();

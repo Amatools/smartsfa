@@ -40,6 +40,10 @@ class TenantAdminPermissions {
     return canRevoke(membership, actorUid: actorUid);
   }
 
+  bool canDeactivate(TenantMembership membership, {required String actorUid}) {
+    return canRevoke(membership, actorUid: actorUid);
+  }
+
   bool canChangeRole(
     TenantMembership membership, {
     required String actorUid,

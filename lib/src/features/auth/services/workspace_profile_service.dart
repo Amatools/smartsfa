@@ -180,11 +180,28 @@ class WorkspaceProfileService {
 
   Stream<List<PaymentConditionRule>> watchPaymentConditionRules({
     required String tenantId,
+    String? representedCompanyId,
   }) {
     final normalizedTenantId = tenantId.trim();
     if (normalizedTenantId.isEmpty) {
       return Stream.value(const <PaymentConditionRule>[]);
     }
+
+    final normalizedRepresentedCompanyId = (representedCompanyId ?? '').trim();
+    if (normalizedRepresentedCompanyId.isNotEmpty) {
+      final representedRef = _representedCompaniesCollection.doc(
+        _representedCompanyDocId(
+          normalizedTenantId,
+          normalizedRepresentedCompanyId,
+        ),
+      );
+      return representedRef.snapshots().map((doc) {
+        final data = doc.data() ?? const <String, dynamic>{};
+        return _parsePaymentConditionRulesList(data['paymentConditionRules']);
+      });
+    }
+
+    final scopeKey = _scopeKey(representedCompanyId);
 
     return _firestore
         .collection('tenants')
@@ -192,45 +209,10 @@ class WorkspaceProfileService {
         .snapshots()
         .map((doc) {
           final data = doc.data() ?? const <String, dynamic>{};
-          final raw = data['paymentConditionRules'];
-          if (raw is! List) {
-            return const <PaymentConditionRule>[];
-          }
-
-          final result = <PaymentConditionRule>[];
-          for (final item in raw) {
-            if (item is String) {
-              final description = item.trim();
-              if (description.isEmpty) {
-                continue;
-              }
-              result.add(
-                PaymentConditionRule(description: description, minimumValue: 0),
-              );
-              continue;
-            }
-
-            if (item is Map) {
-              final map = item.cast<Object?, Object?>();
-              final description = (map['description'] ?? map['descricao'] ?? '')
-                  .toString()
-                  .trim();
-              if (description.isEmpty) {
-                continue;
-              }
-
-              result.add(
-                PaymentConditionRule(
-                  description: description,
-                  minimumValue: _toDouble(
-                    map['minimumValue'] ?? map['valorMinimo'],
-                  ),
-                ),
-              );
-            }
-          }
-
-          return result;
+          return _readPaymentConditionRulesForScope(
+            data: data,
+            scopeKey: scopeKey,
+          );
         });
   }
 
@@ -478,11 +460,14 @@ class WorkspaceProfileService {
   Future<void> updatePaymentConditionRules({
     required String tenantId,
     required List<PaymentConditionRule> values,
+    String? representedCompanyId,
   }) async {
     final normalizedTenantId = tenantId.trim();
     if (normalizedTenantId.isEmpty) {
       throw StateError('Dados invalidos para salvar condicoes de pagamento.');
     }
+
+    final scopeKey = _scopeKey(representedCompanyId);
 
     final normalizedValues = values
         .map(
@@ -495,8 +480,30 @@ class WorkspaceProfileService {
         .map((rule) => rule.toMap())
         .toList(growable: false);
 
+    final normalizedRepresentedCompanyId = (representedCompanyId ?? '').trim();
+    if (normalizedRepresentedCompanyId.isNotEmpty) {
+      final representedRef = _representedCompaniesCollection.doc(
+        _representedCompanyDocId(
+          normalizedTenantId,
+          normalizedRepresentedCompanyId,
+        ),
+      );
+      final representedSnapshot = await representedRef.get();
+      if (!representedSnapshot.exists) {
+        throw StateError(
+          'Representada ativa não encontrada para salvar condições de pagamento.',
+        );
+      }
+
+      await representedRef.set({
+        'paymentConditionRules': normalizedValues,
+        'updatedAt': DateTime.now().toUtc().toIso8601String(),
+      }, SetOptions(merge: true));
+      return;
+    }
+
     await _firestore.collection('tenants').doc(normalizedTenantId).set({
-      'paymentConditionRules': normalizedValues,
+      'representedPaymentConditionRules': {scopeKey: normalizedValues},
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
   }
@@ -668,6 +675,69 @@ class WorkspaceProfileService {
     return rules
         .where((rule) => normalizedTotal >= rule.minimumValue)
         .toList(growable: false);
+  }
+
+  List<PaymentConditionRule> _parsePaymentConditionRulesList(Object? raw) {
+    if (raw is! List) {
+      return const <PaymentConditionRule>[];
+    }
+
+    final result = <PaymentConditionRule>[];
+    for (final item in raw) {
+      if (item is String) {
+        final description = item.trim();
+        if (description.isEmpty) {
+          continue;
+        }
+        result.add(
+          PaymentConditionRule(description: description, minimumValue: 0),
+        );
+        continue;
+      }
+
+      if (item is Map) {
+        final map = item.cast<Object?, Object?>();
+        final description = (map['description'] ?? map['descricao'] ?? '')
+            .toString()
+            .trim();
+        if (description.isEmpty) {
+          continue;
+        }
+
+        result.add(
+          PaymentConditionRule(
+            description: description,
+            minimumValue: _toDouble(map['minimumValue'] ?? map['valorMinimo']),
+          ),
+        );
+      }
+    }
+
+    return result;
+  }
+
+  List<PaymentConditionRule> _readPaymentConditionRulesForScope({
+    required Map<String, dynamic> data,
+    required String scopeKey,
+  }) {
+    final scopedRoot = data['representedPaymentConditionRules'];
+    if (scopedRoot is Map) {
+      final scopedRaw = scopedRoot[scopeKey] ?? scopedRoot['__tenant__'];
+      final scopedParsed = _parsePaymentConditionRulesList(scopedRaw);
+      if (scopedParsed.isNotEmpty) {
+        return scopedParsed;
+      }
+    }
+
+    // Legacy fallback for old tenant-wide payloads.
+    return _parsePaymentConditionRulesList(data['paymentConditionRules']);
+  }
+
+  String _representedCompanyDocId(
+    String tenantId,
+    String representedCompanyId,
+  ) {
+    return '${tenantId}_$representedCompanyId';
   }
 
   Future<void> updateWorkspaceProfile({
@@ -1166,9 +1236,8 @@ class WorkspaceProfileService {
       return true;
     }
 
-    return RegExp(
-      r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$',
-    ).hasMatch(normalized);
+    return RegExp(r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$')
+        .hasMatch(normalized);
   }
 
   bool _isValidCnpjDigits(String value) {
@@ -1189,7 +1258,20 @@ class WorkspaceProfileService {
       return remainder < 2 ? 0 : 11 - remainder;
     }
 
-    final firstDigit = calcDigit(value.substring(0, 12), <int>[5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]);
+    final firstDigit = calcDigit(value.substring(0, 12), <int>[
+      5,
+      4,
+      3,
+      2,
+      9,
+      8,
+      7,
+      6,
+      5,
+      4,
+      3,
+      2,
+    ]);
     final secondDigit = calcDigit(
       value.substring(0, 12) + firstDigit.toString(),
       <int>[6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2],
@@ -1309,7 +1391,9 @@ class WorkspaceProfileService {
     }
 
     final mappedScope = _normalizeScopeValue(
-      data['representedCompanyId'] ?? data['representadaId'] ?? data['companyId'],
+      data['representedCompanyId'] ??
+          data['representadaId'] ??
+          data['companyId'],
     );
 
     if (mappedScope.isEmpty) {

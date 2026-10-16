@@ -9,12 +9,16 @@ class TenantAdminActionController {
     required String tenantId,
     required bool allowManagerDisableRepresentative,
     required bool allowRepresentativeDisableSeller,
+    required bool allowManagerSendInvites,
+    required bool allowRepresentativeSendInvites,
     required String updatedByUid,
   }) async {
     await _membershipService.updateGovernancePolicy(
       tenantId: tenantId,
       allowManagerDisableRepresentative: allowManagerDisableRepresentative,
       allowRepresentativeDisableSeller: allowRepresentativeDisableSeller,
+      allowManagerSendInvites: allowManagerSendInvites,
+      allowRepresentativeSendInvites: allowRepresentativeSendInvites,
       allowPersonalWorkspace: true,
       updatedByUid: updatedByUid,
     );
@@ -22,6 +26,8 @@ class TenantAdminActionController {
     return {
       'allowManagerDisableRepresentative': allowManagerDisableRepresentative,
       'allowRepresentativeDisableSeller': allowRepresentativeDisableSeller,
+      'allowManagerSendInvites': allowManagerSendInvites,
+      'allowRepresentativeSendInvites': allowRepresentativeSendInvites,
     };
   }
 
@@ -30,6 +36,16 @@ class TenantAdminActionController {
     required String actorUid,
   }) {
     return _membershipService.revokeMembershipByActor(
+      membershipId: membershipId,
+      actorUid: actorUid,
+    );
+  }
+
+  Future<void> deactivateMembership({
+    required String membershipId,
+    required String actorUid,
+  }) {
+    return _membershipService.deactivateMembershipByActor(
       membershipId: membershipId,
       actorUid: actorUid,
     );

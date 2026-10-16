@@ -179,17 +179,19 @@ Evitar como padrao:
 
 ## 12. Plano de implementacao por fase (custo minimo)
 
-Fase 1 (curto prazo):
+Fase 1 (concluida em grande parte):
 
-1. Padronizar campos de sync em catalogos: updatedAt, version, deletedAt.
-2. Criar estado local de ultimo cursor de sync por modulo/tenant.
-3. Implementar endpoint/servico de pull incremental por lote.
+1. Cursor local por tenant/modulo implementado.
+2. Pull incremental por syncVersion implementado para clientes, produtos, tabelas_preco e tax_rules.
+3. Bootstrap inicial com fallback de carga completa apenas no primeiro ciclo do modulo.
+4. Tombstone de exclusao (deletedAt) aplicado nos modulos de catalogo principais.
 
 Fase 2 (evolucao):
 
 1. Paginacao para UI nas listagens mais extensas.
 2. Warmup guiado de catalogos (download antes do campo).
 3. Telemetria de custo (leituras por sincronizacao e por usuario).
+4. Expansao do mesmo padrao incremental para pedidos, com estrategia de tombstone no modulo.
 
 Fase 3 (escala):
 

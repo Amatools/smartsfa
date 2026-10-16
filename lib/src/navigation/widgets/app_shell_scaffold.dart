@@ -21,7 +21,10 @@ class AppShellScaffold extends StatelessWidget {
     return label;
   }
 
-  Widget _buildRepresentedScopeBar(BuildContext context) {
+  Widget _buildRepresentedScopeBar(
+    BuildContext context, {
+    required bool compactChrome,
+  }) {
     final representedLabel = (payload.representedScopeLabel ?? '').trim();
     final subtitle = payload.representedScopeLoading
         ? 'Representada: carregando...'
@@ -31,7 +34,10 @@ class AppShellScaffold extends StatelessWidget {
 
     final content = Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: EdgeInsets.symmetric(
+        horizontal: 10,
+        vertical: compactChrome ? 5 : 4,
+      ),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surfaceContainerHighest
             .withValues(alpha: 0.35),
@@ -41,8 +47,8 @@ class AppShellScaffold extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(Icons.apartment_outlined, size: 15),
-          const SizedBox(width: 8),
+          const Icon(Icons.apartment_outlined, size: 13),
+          const SizedBox(width: 6),
           Expanded(
             child: Text(
               subtitle,
@@ -55,9 +61,10 @@ class AppShellScaffold extends StatelessWidget {
             TextButton(
               onPressed: payload.onRepresentedScopeTap,
               style: TextButton.styleFrom(
-                minimumSize: const Size(0, 24),
-                padding: const EdgeInsets.symmetric(horizontal: 8),
+                minimumSize: const Size(0, 18),
+                padding: const EdgeInsets.symmetric(horizontal: 6),
                 visualDensity: VisualDensity.compact,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
               child: const Text('Trocar'),
             ),
@@ -84,6 +91,7 @@ class AppShellScaffold extends StatelessWidget {
     final isWide = kIsWeb
         ? !isWebMobilePreview
         : MediaQuery.sizeOf(context).width >= 900;
+    final mobileNavigationBarHeight = kIsWeb ? 76.0 : 72.0;
 
     return Scaffold(
       appBar: AppBar(
@@ -141,7 +149,10 @@ class AppShellScaffold extends StatelessWidget {
                     child: Column(
                       children: [
                         if (payload.showRepresentedScopeBar)
-                          _buildRepresentedScopeBar(context),
+                          _buildRepresentedScopeBar(
+                            context,
+                            compactChrome: false,
+                          ),
                         Expanded(
                           child: payload.selectedItem.builder(
                             context,
@@ -156,7 +167,7 @@ class AppShellScaffold extends StatelessWidget {
             : Column(
                 children: [
                   if (payload.showRepresentedScopeBar)
-                    _buildRepresentedScopeBar(context),
+                    _buildRepresentedScopeBar(context, compactChrome: true),
                   Expanded(
                     child: payload.selectedItem.builder(
                       context,
@@ -170,6 +181,7 @@ class AppShellScaffold extends StatelessWidget {
           ? null
           : NavigationBarTheme(
               data: NavigationBarThemeData(
+                height: mobileNavigationBarHeight,
                 labelTextStyle: WidgetStateProperty.resolveWith((states) {
                   final selected = states.contains(WidgetState.selected);
                   return TextStyle(

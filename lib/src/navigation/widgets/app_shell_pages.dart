@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/models/app_identity.dart';
+import '../../core/services/sync_cost_metrics_service.dart';
 import '../models/app_shell_sync_status.dart';
 
 class AppShellDashboardPage extends StatelessWidget {
@@ -9,15 +10,23 @@ class AppShellDashboardPage extends StatelessWidget {
     required this.identity,
     required this.usingLocalFallback,
     required this.syncStatus,
+    required this.costMetrics,
+    required this.costAlert,
+    required this.queryReviewOverdue,
     required this.onSyncNow,
     required this.onRefreshSyncStatus,
+    required this.onRegisterQueryReview,
   });
 
   final AppIdentity identity;
   final bool usingLocalFallback;
   final AppShellSyncStatus syncStatus;
+  final SyncCostMetricsSnapshot costMetrics;
+  final SyncCostAlert? costAlert;
+  final bool queryReviewOverdue;
   final VoidCallback? onSyncNow;
   final VoidCallback? onRefreshSyncStatus;
+  final VoidCallback? onRegisterQueryReview;
 
   String _syncResultLabel() {
     if (syncStatus.lastAttemptSucceeded == null) {
@@ -60,6 +69,16 @@ class AppShellDashboardPage extends StatelessWidget {
       return 'Nuvem acessivel para leitura';
     }
     return 'Sem conexao para consultar nuvem';
+  }
+
+  String _queryReviewLabel() {
+    final reviewedAt = costMetrics.lastQueryReviewAt;
+    if (reviewedAt == null) {
+      return 'Revisao ainda nao registrada hoje';
+    }
+
+    String twoDigits(int value) => value.toString().padLeft(2, '0');
+    return 'Revisao registrada em ${twoDigits(reviewedAt.day)}/${twoDigits(reviewedAt.month)} ${twoDigits(reviewedAt.hour)}:${twoDigits(reviewedAt.minute)}';
   }
 
   bool _isUploadOk() {
@@ -129,6 +148,7 @@ class AppShellDashboardPage extends StatelessWidget {
     final downloadRows = <(String, String)>[
       ('Clientes para baixar', syncStatus.pendingDownloadClientes.toString()),
       ('Produtos para baixar', syncStatus.pendingDownloadProdutos.toString()),
+      ('Pedidos para baixar', syncStatus.pendingDownloadPedidos.toString()),
       (
         'Tabelas de preco para baixar',
         syncStatus.pendingDownloadTabelasPreco.toString(),
@@ -276,6 +296,115 @@ class AppShellDashboardPage extends StatelessWidget {
     );
   }
 
+  Widget _buildCostMetricsCard(BuildContext context) {
+    final rows = <(String, String)>[
+      (
+        'Leituras estimadas hoje',
+        costMetrics.estimatedDocumentReads.toString(),
+      ),
+      ('Operacoes de consulta', costMetrics.cloudQueryOperations.toString()),
+      ('Checks cloud executados', costMetrics.cloudSnapshotChecks.toString()),
+      ('Warmups executados', costMetrics.warmupRuns.toString()),
+      ('Paginas puxadas no warmup', costMetrics.warmupPages.toString()),
+      ('Itens recebidos no warmup', costMetrics.warmupItems.toString()),
+      ('Fallback full-read', costMetrics.fallbackFullReads.toString()),
+    ];
+
+    final alert = costAlert;
+    final alertColor = alert?.level == SyncCostAlertLevel.critical
+        ? Colors.red
+        : Colors.orange;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.insights_outlined),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Custo e performance de sincronizacao (hoje)',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (alert != null)
+              Container(
+                width: double.infinity,
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: alertColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: alertColor.withValues(alpha: 0.4)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      alert.title,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        color: alertColor,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      alert.message,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
+            ...rows.map(
+              (entry) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  children: [
+                    Expanded(child: Text(entry.$1)),
+                    Text(
+                      entry.$2,
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                Icon(
+                  queryReviewOverdue ? Icons.warning_amber : Icons.check_circle,
+                  color: queryReviewOverdue ? Colors.orange : Colors.green,
+                  size: 18,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _queryReviewLabel(),
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: onRegisterQueryReview,
+              icon: const Icon(Icons.fact_check_outlined),
+              label: const Text('Registrar revisao de queries/paginacao'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final cards = [
@@ -290,7 +419,7 @@ class AppShellDashboardPage extends StatelessWidget {
 
     return SingleChildScrollView(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(10, 16, 10, 16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -300,6 +429,8 @@ class AppShellDashboardPage extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             _buildSyncStatusCard(context),
+            const SizedBox(height: 12),
+            _buildCostMetricsCard(context),
             const SizedBox(height: 16),
             Column(
               children: cards
@@ -363,7 +494,7 @@ class AppShellModulePage extends StatelessWidget {
   Widget build(BuildContext context) {
     return SingleChildScrollView(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(10, 16, 10, 16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

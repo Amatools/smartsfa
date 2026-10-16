@@ -28,6 +28,11 @@ class TenantMembership {
     required this.gerenteId,
     required this.representanteId,
     required this.vendedorId,
+    this.activeSellerChildrenCount = 0,
+    this.activeRepresentativeChildrenCount = 0,
+    this.activeSubordinateCount = 0,
+    this.userName,
+    this.userEmail,
     this.state = TenantMembershipState.active,
     this.revokedByUid,
     this.revokedReason,
@@ -45,6 +50,11 @@ class TenantMembership {
   final String gerenteId;
   final String representanteId;
   final String vendedorId;
+  final int activeSellerChildrenCount;
+  final int activeRepresentativeChildrenCount;
+  final int activeSubordinateCount;
+  final String? userName;
+  final String? userEmail;
   final TenantMembershipState state;
   final String? revokedByUid;
   final String? revokedReason;
@@ -64,6 +74,11 @@ class TenantMembership {
     String? gerenteId,
     String? representanteId,
     String? vendedorId,
+    int? activeSellerChildrenCount,
+    int? activeRepresentativeChildrenCount,
+    int? activeSubordinateCount,
+    String? userName,
+    String? userEmail,
     TenantMembershipState? state,
     String? revokedByUid,
     String? revokedReason,
@@ -81,6 +96,15 @@ class TenantMembership {
       gerenteId: gerenteId ?? this.gerenteId,
       representanteId: representanteId ?? this.representanteId,
       vendedorId: vendedorId ?? this.vendedorId,
+        activeSellerChildrenCount:
+          activeSellerChildrenCount ?? this.activeSellerChildrenCount,
+        activeRepresentativeChildrenCount:
+          activeRepresentativeChildrenCount ??
+          this.activeRepresentativeChildrenCount,
+        activeSubordinateCount:
+          activeSubordinateCount ?? this.activeSubordinateCount,
+      userName: userName ?? this.userName,
+      userEmail: userEmail ?? this.userEmail,
       state: state ?? this.state,
       revokedByUid: revokedByUid ?? this.revokedByUid,
       revokedReason: revokedReason ?? this.revokedReason,
@@ -100,6 +124,20 @@ class TenantMembership {
       revokedByUid: revokedByUid,
       revokedReason: reason,
       revokedAt: revokedAt ?? DateTime.now(),
+    );
+  }
+
+  TenantMembership deactivate({
+    String? deactivatedByUid,
+    String? reason,
+    DateTime? deactivatedAt,
+  }) {
+    return copyWith(
+      ativo: false,
+      state: TenantMembershipState.inactive,
+      revokedByUid: deactivatedByUid,
+      revokedReason: reason,
+      revokedAt: deactivatedAt ?? DateTime.now(),
     );
   }
 
@@ -126,6 +164,11 @@ class TenantMembership {
       'gerenteId': gerenteId,
       'representanteId': representanteId,
       'vendedorId': vendedorId,
+      'activeSellerChildrenCount': activeSellerChildrenCount,
+      'activeRepresentativeChildrenCount': activeRepresentativeChildrenCount,
+      'activeSubordinateCount': activeSubordinateCount,
+      'userName': userName,
+      'userEmail': userEmail,
       'state': state.value,
       'revokedByUid': revokedByUid,
       'revokedReason': revokedReason,
@@ -146,6 +189,17 @@ class TenantMembership {
       gerenteId: map['gerenteId'] as String? ?? '',
       representanteId: map['representanteId'] as String? ?? '',
       vendedorId: map['vendedorId'] as String? ?? '',
+      activeSellerChildrenCount: _readInt(map['activeSellerChildrenCount']),
+      activeRepresentativeChildrenCount: _readInt(
+        map['activeRepresentativeChildrenCount'],
+      ),
+      activeSubordinateCount: _readInt(map['activeSubordinateCount']),
+      userName:
+          map['userName'] as String? ??
+          map['displayName'] as String? ??
+          map['name'] as String?,
+      userEmail:
+          map['userEmail'] as String? ?? map['email'] as String?,
       state: TenantMembershipState.fromValue(
         map['state'] as String? ?? TenantMembershipState.active.value,
       ),
@@ -171,4 +225,20 @@ DateTime? _readDateTime(Object? value) {
   }
 
   return null;
+}
+
+int _readInt(Object? value) {
+  if (value is int) {
+    return value;
+  }
+
+  if (value is num) {
+    return value.toInt();
+  }
+
+  if (value is String) {
+    return int.tryParse(value) ?? 0;
+  }
+
+  return 0;
 }

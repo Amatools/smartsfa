@@ -21,17 +21,57 @@ class TenantInvitationService {
         .where('tenantId', isEqualTo: normalizedTenantId)
         .snapshots()
         .map(
-          (snapshot) => snapshot.docs
+          (snapshot) =>
+              snapshot.docs
+                  .map((doc) => TenantInvitation.fromMap(doc.data()))
+                  .toList()
+                ..sort(
+                  (a, b) =>
+                      (b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0))
+                          .compareTo(
+                            a.createdAt ??
+                                DateTime.fromMillisecondsSinceEpoch(0),
+                          ),
+                ),
+        );
+  }
+
+  Stream<List<TenantInvitation>> watchManagedInvitationsForViewer({
+    required String tenantId,
+    required String viewerUid,
+    required String viewerRole,
+  }) {
+    final normalizedTenantId = tenantId.trim();
+    final normalizedViewerUid = viewerUid.trim();
+    final normalizedViewerRole = viewerRole.trim().toLowerCase();
+    if (normalizedTenantId.isEmpty || normalizedViewerUid.isEmpty) {
+      return Stream.value(const []);
+    }
+
+    Query<Map<String, dynamic>> query = _firestore
+        .collection('tenant_invitations')
+        .where('tenantId', isEqualTo: normalizedTenantId);
+
+    final canSeeAllInvitations =
+        normalizedViewerRole == 'owner' ||
+        normalizedViewerRole == 'platform_admin';
+
+    if (!canSeeAllInvitations) {
+      query = query.where('createdByUid', isEqualTo: normalizedViewerUid);
+    }
+
+    return query.snapshots().map(
+      (snapshot) =>
+          snapshot.docs
               .map((doc) => TenantInvitation.fromMap(doc.data()))
               .toList()
             ..sort(
-              (a, b) =>
-                  (b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0))
-                      .compareTo(
-                a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0),
-              ),
+              (a, b) => (b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0))
+                  .compareTo(
+                    a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0),
+                  ),
             ),
-        );
+    );
   }
 
   Stream<List<TenantInvitation>> watchPendingInvitationsForEmail(String email) {
@@ -61,7 +101,7 @@ class TenantInvitationService {
     DateTime? expiresAt,
   }) async {
     final normalizedTenantId = tenantId.trim();
-    final normalizedRole = role.trim();
+    final normalizedRole = role.trim().toLowerCase();
     final normalizedCreatedByUid = createdByUid.trim();
     final normalizedEmail = invitedEmail?.trim().toLowerCase();
 
@@ -126,10 +166,9 @@ class TenantInvitationService {
       throw StateError('Apenas convites pendentes podem ser revogados.');
     }
 
-    await _requireInvitationPermission(
-      tenantId: invitation.tenantId,
-      uid: normalizedRevokedByUid,
-      invitedRole: invitation.role,
+    await _requireInvitationRevocationPermission(
+      invitation: invitation,
+      revokedByUid: normalizedRevokedByUid,
     );
 
     final now = DateTime.now();
@@ -185,7 +224,10 @@ class TenantInvitationService {
       return null;
     }
 
-    final doc = await _firestore.collection('tenant_invitations').doc(token).get();
+    final doc = await _firestore
+        .collection('tenant_invitations')
+        .doc(token)
+        .get();
     if (!doc.exists) {
       return null;
     }
@@ -252,36 +294,44 @@ class TenantInvitationService {
       lastSyncedAt: now,
     );
 
-    await _firestore.collection('tenant_memberships').doc(membershipId).set(
-          {
-            ...membership.toMap(),
-            'invitationToken': invitation.token,
-          },
-          SetOptions(merge: true),
-        );
+    await _firestore.runTransaction((tx) async {
+      final membershipRef = _firestore
+          .collection('tenant_memberships')
+          .doc(membershipId);
+      tx.set(membershipRef, {
+        ...membership.toMap(),
+        'invitationToken': invitation.token,
+        'userName': user.displayName ?? user.email ?? user.uid,
+        'userEmail': user.email ?? '',
+      }, SetOptions(merge: true));
 
-    await _firestore.collection('usuarios').doc(user.uid).set(
-      {
+      await _applyHierarchyAggregateForCreatedMembership(
+        tx: tx,
+        membership: membership,
+      );
+
+      final userRef = _firestore.collection('usuarios').doc(user.uid);
+      tx.set(userRef, {
         'uid': user.uid,
         'email': user.email ?? '',
         'displayName': user.displayName ?? user.email ?? user.uid,
+        'name': user.displayName ?? user.email ?? user.uid,
         'platformRole': 'none',
         'ativoGlobal': true,
         'accountContractLock': accountContractLock.value,
         'updatedAt': now.toIso8601String(),
-      },
-      SetOptions(merge: true),
-    );
+      }, SetOptions(merge: true));
 
-    await _firestore.collection('tenant_invitations').doc(invitation.token).set(
-      {
+      final invitationRef = _firestore
+          .collection('tenant_invitations')
+          .doc(invitation.token);
+      tx.set(invitationRef, {
         'status': TenantInvitationStatus.accepted.value,
         'acceptedByUid': user.uid,
         'acceptedAt': now.toIso8601String(),
         'updatedAt': now.toIso8601String(),
-      },
-      SetOptions(merge: true),
-    );
+      }, SetOptions(merge: true));
+    });
 
     await _syncTenantSelectionAfterInvitation(
       uid: user.uid,
@@ -302,7 +352,10 @@ class TenantInvitationService {
       return;
     }
 
-    final tenantDoc = await _firestore.collection('tenants').doc(invitation.tenantId).get();
+    final tenantDoc = await _firestore
+        .collection('tenants')
+        .doc(invitation.tenantId)
+        .get();
     final workspaceType =
         (tenantDoc.data()?['workspaceType'] ?? 'brand_owner_workspace')
             .toString()
@@ -328,23 +381,17 @@ class TenantInvitationService {
           .where('uid', isEqualTo: uid)
           .get();
       for (final doc in memberships.docs) {
-        batch.set(
-          doc.reference,
-          {'defaultTenant': doc.id == membershipId},
-          SetOptions(merge: true),
-        );
+        batch.set(doc.reference, {
+          'defaultTenant': doc.id == membershipId,
+        }, SetOptions(merge: true));
       }
     }
 
-    batch.set(
-      _firestore.collection('usuarios').doc(uid),
-      {
-        'lastSelectedTenantId': tenantId,
-        if (makeDefault) 'defaultTenantId': tenantId,
-        'updatedAt': DateTime.now().toIso8601String(),
-      },
-      SetOptions(merge: true),
-    );
+    batch.set(_firestore.collection('usuarios').doc(uid), {
+      'lastSelectedTenantId': tenantId,
+      if (makeDefault) 'defaultTenantId': tenantId,
+      'updatedAt': DateTime.now().toIso8601String(),
+    }, SetOptions(merge: true));
 
     await batch.commit();
   }
@@ -356,17 +403,26 @@ class TenantInvitationService {
     required String createdByUid,
   }) async {
     final normalizedRole = invitedRole.trim().toLowerCase();
-    final tenantDoc = await _firestore.collection('tenants').doc(tenantId).get();
+    final tenantDoc = await _firestore
+        .collection('tenants')
+        .doc(tenantId)
+        .get();
     final workspaceType =
-        (tenantDoc.data()?['workspaceType'] ?? 'brand_owner_workspace').toString();
+        (tenantDoc.data()?['workspaceType'] ?? 'brand_owner_workspace')
+            .toString();
 
     final inviterMembership = createdByUid.trim().isEmpty
         ? null
         : await _firestore
-            .collection('tenant_memberships')
-            .doc('${tenantId}_${createdByUid.trim()}')
-            .get();
+              .collection('tenant_memberships')
+              .doc('${tenantId}_${createdByUid.trim()}')
+              .get();
     final inviterData = inviterMembership?.data() ?? <String, dynamic>{};
+    final ownerId = _pickOwnerId(inviterData, createdByUid);
+    final inviterRole = (inviterData['role'] ?? '')
+        .toString()
+        .trim()
+        .toLowerCase();
 
     if (workspaceType == 'seller_solo_workspace') {
       throw StateError('Workspace seller solo nao aceita convites.');
@@ -375,48 +431,78 @@ class TenantInvitationService {
     if (workspaceType == 'rep_workspace') {
       if (normalizedRole == 'representante') {
         return _InvitationMembershipScope(
-          ownerId: _pickOwnerId(inviterData, createdByUid),
-          gerenteId: '',
+          ownerId: ownerId,
+          gerenteId: ownerId,
           representanteId: invitedUid,
-          vendedorId: '',
-        );
-      }
-
-      if (normalizedRole == 'vendedor') {
-        return _InvitationMembershipScope(
-          ownerId: _pickOwnerId(inviterData, createdByUid),
-          gerenteId: '',
-          representanteId: _pickRepresentativeId(inviterData, createdByUid),
           vendedorId: invitedUid,
         );
       }
 
-      throw StateError('Workspace de representacao exige hierarquia owner > representante > vendedor.');
+      if (normalizedRole == 'vendedor') {
+        final representativeId = _pickRepresentativeId(
+          inviterData,
+          createdByUid,
+        );
+        final effectiveRepresentativeId = representativeId.isNotEmpty
+            ? representativeId
+            : ownerId;
+
+        return _InvitationMembershipScope(
+          ownerId: ownerId,
+          gerenteId: ownerId,
+          representanteId: effectiveRepresentativeId,
+          vendedorId: invitedUid,
+        );
+      }
+
+      throw StateError(
+        'Workspace de representacao exige hierarquia owner > representante > vendedor.',
+      );
     }
 
     if (normalizedRole == 'gerente') {
       return _InvitationMembershipScope(
-        ownerId: _pickOwnerId(inviterData, createdByUid),
+        ownerId: ownerId,
         gerenteId: invitedUid,
-        representanteId: '',
-        vendedorId: '',
+        representanteId: invitedUid,
+        vendedorId: invitedUid,
       );
     }
 
     if (normalizedRole == 'representante') {
+      final managerId = inviterRole == 'owner'
+          ? _pickManagerIdWithOwnerFallback(inviterData, ownerId)
+          : _pickManagerId(inviterData);
+      if (managerId.isEmpty) {
+        throw StateError('Convite para representante exige gerente vinculado.');
+      }
+
       return _InvitationMembershipScope(
-        ownerId: _pickOwnerId(inviterData, createdByUid),
-        gerenteId: _pickManagerId(inviterData),
+        ownerId: ownerId,
+        gerenteId: managerId,
         representanteId: invitedUid,
-        vendedorId: '',
+        vendedorId: invitedUid,
       );
     }
 
     if (normalizedRole == 'vendedor') {
+      final managerId = inviterRole == 'owner'
+          ? _pickManagerIdWithOwnerFallback(inviterData, ownerId)
+          : _pickManagerId(inviterData);
+      final representativeId = _pickRepresentativeId(inviterData, createdByUid);
+      final effectiveRepresentativeId = representativeId.isNotEmpty
+          ? representativeId
+          : (inviterRole == 'owner' ? ownerId : '');
+      if (managerId.isEmpty || effectiveRepresentativeId.isEmpty) {
+        throw StateError(
+          'Convite para vendedor exige cadeia hierarquica valida.',
+        );
+      }
+
       return _InvitationMembershipScope(
-        ownerId: _pickOwnerId(inviterData, createdByUid),
-        gerenteId: _pickManagerId(inviterData),
-        representanteId: _pickRepresentativeId(inviterData, createdByUid),
+        ownerId: ownerId,
+        gerenteId: managerId,
+        representanteId: effectiveRepresentativeId,
         vendedorId: invitedUid,
       );
     }
@@ -436,17 +522,32 @@ class TenantInvitationService {
     return (inviterData['gerenteId'] ?? '').toString().trim();
   }
 
+  String _pickManagerIdWithOwnerFallback(
+    Map<String, dynamic> inviterData,
+    String ownerId,
+  ) {
+    final managerId = _pickManagerId(inviterData);
+    if (managerId.isNotEmpty) {
+      return managerId;
+    }
+    return ownerId.trim();
+  }
+
   String _pickRepresentativeId(
     Map<String, dynamic> inviterData,
     String createdByUid,
   ) {
-    final representativeId =
-        (inviterData['representanteId'] ?? '').toString().trim();
+    final representativeId = (inviterData['representanteId'] ?? '')
+        .toString()
+        .trim();
     if (representativeId.isNotEmpty) {
       return representativeId;
     }
 
-    final inviterRole = (inviterData['role'] ?? '').toString().trim().toLowerCase();
+    final inviterRole = (inviterData['role'] ?? '')
+        .toString()
+        .trim()
+        .toLowerCase();
     if (inviterRole == 'representante' || inviterRole == 'owner') {
       return createdByUid.trim();
     }
@@ -476,22 +577,79 @@ class TenantInvitationService {
     final actorRole = (actorData['role'] ?? '').toString().trim().toLowerCase();
     final targetRole = invitedRole.trim().toLowerCase();
 
-    final tenantDoc = await _firestore.collection('tenants').doc(tenantId).get();
+    final tenantDoc = await _firestore
+        .collection('tenants')
+        .doc(tenantId)
+        .get();
     final tenantData = tenantDoc.data() ?? <String, dynamic>{};
+    final policy =
+        tenantData['policy'] as Map<String, dynamic>? ?? <String, dynamic>{};
     final workspaceType =
         (tenantData['workspaceType'] ?? 'brand_owner_workspace')
             .toString()
             .trim()
             .toLowerCase();
+    final allowManagerSendInvites =
+        policy['allowManagerSendInvites'] as bool? ?? false;
+    final allowRepresentativeSendInvites =
+        policy['allowRepresentativeSendInvites'] as bool? ?? false;
 
     final allowed = _canInvite(
       workspaceType: workspaceType,
       actorRole: actorRole,
       targetRole: targetRole,
+      allowManagerSendInvites: allowManagerSendInvites,
+      allowRepresentativeSendInvites: allowRepresentativeSendInvites,
     );
 
     if (!allowed) {
-      throw StateError('Sem permissao para este convite neste tipo de workspace.');
+      throw StateError(
+        'Sem permissao para este convite neste tipo de workspace.',
+      );
+    }
+  }
+
+  Future<void> _requireInvitationRevocationPermission({
+    required TenantInvitation invitation,
+    required String revokedByUid,
+  }) async {
+    final actorUserDoc = await _firestore
+        .collection('usuarios')
+        .doc(revokedByUid)
+        .get();
+    final actorPlatformRole = (actorUserDoc.data()?['platformRole'] ?? '')
+        .toString()
+        .trim()
+        .toLowerCase();
+    if (actorPlatformRole == 'platform_admin') {
+      return;
+    }
+
+    final memberships = await _firestore
+        .collection('tenant_memberships')
+        .where('tenantId', isEqualTo: invitation.tenantId)
+        .where('uid', isEqualTo: revokedByUid)
+        .where('ativo', isEqualTo: true)
+        .where('state', isEqualTo: 'active')
+        .limit(1)
+        .get();
+
+    if (memberships.docs.isEmpty) {
+      throw StateError('Sem permissao para gerenciar convites neste tenant.');
+    }
+
+    final actorData = memberships.docs.first.data();
+    final actorRole = (actorData['role'] ?? '').toString().trim().toLowerCase();
+
+    if (actorRole == 'owner') {
+      return;
+    }
+
+    final invitationCreatorUid = (invitation.createdByUid ?? '').trim();
+    if (invitationCreatorUid != revokedByUid) {
+      throw StateError(
+        'Apenas o owner do tenant ou o emissor do convite pode revogar este convite.',
+      );
     }
   }
 
@@ -499,6 +657,8 @@ class TenantInvitationService {
     required String workspaceType,
     required String actorRole,
     required String targetRole,
+    required bool allowManagerSendInvites,
+    required bool allowRepresentativeSendInvites,
   }) {
     if (workspaceType == 'seller_solo_workspace') {
       return false;
@@ -510,7 +670,7 @@ class TenantInvitationService {
       }
 
       if (actorRole == 'representante') {
-        return targetRole == 'vendedor';
+        return allowRepresentativeSendInvites && targetRole == 'vendedor';
       }
 
       return false;
@@ -518,21 +678,76 @@ class TenantInvitationService {
 
     if (workspaceType == 'brand_owner_workspace') {
       if (actorRole == 'owner') {
-        return targetRole == 'gerente';
+        return targetRole == 'gerente' ||
+            targetRole == 'representante' ||
+            targetRole == 'vendedor';
       }
 
       if (actorRole == 'gerente') {
-        return targetRole == 'representante';
+        return allowManagerSendInvites && targetRole == 'representante';
       }
 
       if (actorRole == 'representante') {
-        return targetRole == 'vendedor';
+        return allowRepresentativeSendInvites && targetRole == 'vendedor';
       }
 
       return false;
     }
 
     return false;
+  }
+
+  Future<void> _applyHierarchyAggregateForCreatedMembership({
+    required Transaction tx,
+    required TenantMembership membership,
+  }) async {
+    if (!membership.isActive) {
+      return;
+    }
+
+    final role = membership.role.trim().toLowerCase();
+    if (role != 'vendedor' && role != 'representante') {
+      return;
+    }
+
+    final parentUid = role == 'vendedor'
+        ? membership.representanteId.trim()
+        : membership.gerenteId.trim();
+    if (parentUid.isEmpty || parentUid == membership.uid) {
+      return;
+    }
+
+    final parentRef = _firestore
+        .collection('tenant_memberships')
+        .doc('${membership.tenantId}_$parentUid');
+    final parentSnapshot = await tx.get(parentRef);
+    if (!parentSnapshot.exists) {
+      return;
+    }
+
+    final parentData = parentSnapshot.data() ?? <String, dynamic>{};
+    final parentRole = (parentData['role'] ?? '').toString().trim().toLowerCase();
+    var sellerCount = (parentData['activeSellerChildrenCount'] as int?) ?? 0;
+    var representativeCount =
+        (parentData['activeRepresentativeChildrenCount'] as int?) ?? 0;
+
+    if (role == 'vendedor') {
+      if (parentRole != 'representante') {
+        return;
+      }
+      sellerCount += 1;
+    } else {
+      if (parentRole != 'gerente') {
+        return;
+      }
+      representativeCount += 1;
+    }
+
+    tx.set(parentRef, {
+      'activeSellerChildrenCount': sellerCount,
+      'activeRepresentativeChildrenCount': representativeCount,
+      'activeSubordinateCount': sellerCount + representativeCount,
+    }, SetOptions(merge: true));
   }
 }
 

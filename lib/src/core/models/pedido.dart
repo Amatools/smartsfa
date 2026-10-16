@@ -22,6 +22,8 @@ class Pedido implements TenantScopedEntity {
     this.totalBruto = 0,
     this.createdAt,
     this.updatedAt,
+    this.syncVersion,
+    this.deletedAt,
   });
 
   factory Pedido.fromMap(Map<String, Object?> map) {
@@ -52,6 +54,8 @@ class Pedido implements TenantScopedEntity {
       totalBruto: _readDouble(map['totalBruto']) ?? 0,
       createdAt: _readDateTime(map['createdAt']),
       updatedAt: _readDateTime(map['updatedAt']),
+      syncVersion: _readInt(map['syncVersion']),
+      deletedAt: _readDateTime(map['deletedAt']),
     );
   }
 
@@ -75,6 +79,8 @@ class Pedido implements TenantScopedEntity {
   final double totalBruto;
   final DateTime? createdAt;
   final DateTime? updatedAt;
+  final int? syncVersion;
+  final DateTime? deletedAt;
 
   Pedido copyWith({
     String? id,
@@ -96,6 +102,8 @@ class Pedido implements TenantScopedEntity {
     double? totalBruto,
     DateTime? createdAt,
     DateTime? updatedAt,
+    int? syncVersion,
+    DateTime? deletedAt,
   }) {
     return Pedido(
       id: id ?? this.id,
@@ -119,6 +127,8 @@ class Pedido implements TenantScopedEntity {
       totalBruto: totalBruto ?? this.totalBruto,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      syncVersion: syncVersion ?? this.syncVersion,
+      deletedAt: deletedAt ?? this.deletedAt,
     );
   }
 
@@ -142,8 +152,26 @@ class Pedido implements TenantScopedEntity {
       'totalBruto': totalBruto,
       'createdAt': createdAt?.toIso8601String(),
       'updatedAt': updatedAt?.toIso8601String(),
+      'syncVersion': syncVersion,
+      'deletedAt': deletedAt?.toIso8601String(),
     };
   }
+}
+
+int? _readInt(Object? value) {
+  if (value is int) {
+    return value;
+  }
+
+  if (value is double) {
+    return value.round();
+  }
+
+  if (value is String) {
+    return int.tryParse(value.trim());
+  }
+
+  return null;
 }
 
 class PedidoItem {
@@ -170,9 +198,7 @@ class PedidoItem {
       quantity: _readDouble(map['quantity']) ?? 0,
       unitPrice: _readDouble(map['unitPrice']) ?? 0,
       totalPrice: _readDouble(map['totalPrice']) ?? 0,
-      appliedDiscountPercents: _readDoubleList(
-        map['appliedDiscountPercents'],
-      ),
+      appliedDiscountPercents: _readDoubleList(map['appliedDiscountPercents']),
       unit: map['unit'] as String?,
       ncm: map['ncm'] as String?,
       taxSnapshot: map['taxSnapshot'] is Map

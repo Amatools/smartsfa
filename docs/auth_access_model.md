@@ -2,6 +2,11 @@
 
 ## Decisao adotada
 
+Referencias canonicas para hierarquia comercial:
+
+- tecnica (desenvolvimento/backlog): [hierarquia_comercial_backlog_tecnico.md](hierarquia_comercial_backlog_tecnico.md)
+- linguagem para cliente final (site/ajuda): [enduser_hierarquia_comercial.md](enduser_hierarquia_comercial.md)
+
 - Login no app: Google (Firebase Authentication).
 - Login oficial ja habilitado e em uso no projeto smart-sfa.
 - Autorizacao de uso: interna por tenant via documentos em Firestore.

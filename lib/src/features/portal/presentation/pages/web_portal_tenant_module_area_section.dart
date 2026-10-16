@@ -8,6 +8,8 @@ class _TenantWorkspaceModuleArea extends StatefulWidget {
     required this.tenantItems,
     required this.selectedItemLabel,
     required this.tenantSectionLocked,
+    this.selectedSubmenuKey,
+    this.onSubmenuChanged,
   });
 
   final TenantEntryOption activeTenant;
@@ -16,6 +18,8 @@ class _TenantWorkspaceModuleArea extends StatefulWidget {
   final List<_PortalNavItem> tenantItems;
   final String selectedItemLabel;
   final bool tenantSectionLocked;
+  final String? selectedSubmenuKey;
+  final ValueChanged<String>? onSubmenuChanged;
 
   @override
   State<_TenantWorkspaceModuleArea> createState() =>
@@ -68,11 +72,26 @@ class _TenantWorkspaceModuleAreaState
           _virtualSubmenuKey = null;
         }
 
+        final externalSubmenuKey = widget.selectedSubmenuKey?.trim();
+        if (externalSubmenuKey != null &&
+            externalSubmenuKey.isNotEmpty &&
+            _hasSubmenuKey(modules, externalSubmenuKey)) {
+          _virtualSubmenuKey = externalSubmenuKey;
+        }
+
         if (_virtualSubmenuKey == null) {
           final fallback =
               _findSubmenuByLabel(modules, widget.selectedItemLabel) ??
               _firstEnabledSubmenu(modules);
           _virtualSubmenuKey = fallback?.key;
+          if (_virtualSubmenuKey != null) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!mounted) {
+                return;
+              }
+              widget.onSubmenuChanged?.call(_virtualSubmenuKey!);
+            });
+          }
         }
 
         final activeSubmenu = _findSubmenuByKey(modules, _virtualSubmenuKey);
@@ -107,6 +126,12 @@ class _TenantWorkspaceModuleAreaState
           );
         } else if (activeSubmenu.key == 'fotos') {
           content = _MediaLibrarySection(
+            activeTenant: widget.activeTenant,
+            selectedRepresentedCompanyId: widget.selectedRepresentedCompanyId,
+            activeRepresentedCompanyName: widget.activeRepresentedCompanyName,
+          );
+        } else if (activeSubmenu.key == 'condicoes_pagamento') {
+          content = _PaymentConditionsSection(
             activeTenant: widget.activeTenant,
             selectedRepresentedCompanyId: widget.selectedRepresentedCompanyId,
             activeRepresentedCompanyName: widget.activeRepresentedCompanyName,
@@ -270,6 +295,7 @@ class _TenantWorkspaceModuleAreaState
       setState(() {
         _virtualSubmenuKey = submenu.key;
       });
+      widget.onSubmenuChanged?.call(submenu.key);
       return;
     }
 
@@ -287,6 +313,7 @@ class _TenantWorkspaceModuleAreaState
     setState(() {
       _virtualSubmenuKey = submenu.key;
     });
+    widget.onSubmenuChanged?.call(submenu.key);
   }
 
   _TenantCommercialModule? _findModuleBySubmenu(

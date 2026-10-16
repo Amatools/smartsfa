@@ -80,6 +80,19 @@ service cloud.firestore {
       return myTenantRole(tenantId) == 'owner';
     }
 
+    function isTenantDocumentOwner(tenantId) {
+      return exists(/databases/$(database)/documents/tenants/$(tenantId))
+        && get(/databases/$(database)/documents/tenants/$(tenantId)).data.ownerUid == uid();
+    }
+
+    function isEffectiveTenantOwner(tenantId) {
+      return isTenantOwner(tenantId) || isTenantDocumentOwner(tenantId);
+    }
+
+    function hasTenantAccessContext(tenantId) {
+      return hasActiveMembership(tenantId) || isTenantDocumentOwner(tenantId);
+    }
+
     function isTenantGerente(tenantId) {
       return myTenantRole(tenantId) == 'gerente';
     }
@@ -140,14 +153,15 @@ service cloud.firestore {
       return productSyncEnabledFromData(resource.data) == productSyncEnabledFromData(request.resource.data)
         || (
           isBrandOwnerWorkspace(tenantId)
-          && isTenantOwner(tenantId)
+          && isEffectiveTenantOwner(tenantId)
         );
     }
 
     function canManageRepresentedCompanyPreferenceUpdate(tenantId) {
       return (
           (isRepWorkspace(tenantId)
-            && hasTenantRoleIn(tenantId, ['owner', 'representante']))
+            && (isEffectiveTenantOwner(tenantId)
+              || hasTenantRoleIn(tenantId, ['representante'])))
           || (isSellerSoloWorkspace(tenantId)
             && hasTenantRoleIn(tenantId, ['vendedor']))
         );
@@ -162,43 +176,69 @@ service cloud.firestore {
     }
 
     function canReadTenantDocument(tenantId) {
-      return isPlatformAdmin() || hasActiveMembership(tenantId);
+      return isPlatformAdmin() || hasTenantAccessContext(tenantId);
     }
 
     function canReadTenantBoundDocument(data) {
       return isPlatformAdmin()
         || (hasTenantField(data) && (
           canAccessOwnPersonalData(data)
-          || hasActiveMembership(data.tenantId)
+          || hasTenantAccessContext(data.tenantId)
         ));
     }
 
     function canAccessTenantWorkflow(tenantId) {
       return isPlatformAdmin()
         || isPersonalWorkspaceTenant(tenantId)
-        || hasAnyTenantRole(tenantId);
+        || hasAnyTenantRole(tenantId)
+        || isTenantDocumentOwner(tenantId);
+    }
+
+    function allowManagerSendInvitesByPolicy(tenantId) {
+      return exists(/databases/$(database)/documents/tenants/$(tenantId))
+        && get(/databases/$(database)/documents/tenants/$(tenantId)).data.policy is map
+        && get(/databases/$(database)/documents/tenants/$(tenantId)).data.policy.allowManagerSendInvites is bool
+          ? get(/databases/$(database)/documents/tenants/$(tenantId)).data.policy.allowManagerSendInvites
+          : false;
+    }
+
+    function allowRepresentativeSendInvitesByPolicy(tenantId) {
+      return exists(/databases/$(database)/documents/tenants/$(tenantId))
+        && get(/databases/$(database)/documents/tenants/$(tenantId)).data.policy is map
+        && get(/databases/$(database)/documents/tenants/$(tenantId)).data.policy.allowRepresentativeSendInvites is bool
+          ? get(/databases/$(database)/documents/tenants/$(tenantId)).data.policy.allowRepresentativeSendInvites
+          : false;
     }
 
     function canInviteRoleForTenant(tenantId, targetRole) {
       return isPlatformAdmin()
         || (
-          hasActiveMembership(tenantId)
+          hasTenantAccessContext(tenantId)
           && (
             (isSellerSoloWorkspace(tenantId) && false)
             || (
               isRepWorkspace(tenantId)
               && (
-                (hasTenantRoleIn(tenantId, ['owner'])
+                (isEffectiveTenantOwner(tenantId)
                   && (targetRole == 'representante' || targetRole == 'vendedor'))
-                || (hasTenantRoleIn(tenantId, ['representante']) && targetRole == 'vendedor')
+                || (hasTenantRoleIn(tenantId, ['representante'])
+                  && allowRepresentativeSendInvitesByPolicy(tenantId)
+                  && targetRole == 'vendedor')
               )
             )
             || (
               isBrandOwnerWorkspace(tenantId)
               && (
-                (hasTenantRoleIn(tenantId, ['owner']) && targetRole == 'gerente')
-                || (hasTenantRoleIn(tenantId, ['gerente']) && targetRole == 'representante')
-                || (hasTenantRoleIn(tenantId, ['representante']) && targetRole == 'vendedor')
+                (isEffectiveTenantOwner(tenantId)
+                  && (targetRole == 'gerente'
+                    || targetRole == 'representante'
+                    || targetRole == 'vendedor'))
+                || (hasTenantRoleIn(tenantId, ['gerente'])
+                  && allowManagerSendInvitesByPolicy(tenantId)
+                  && targetRole == 'representante')
+                || (hasTenantRoleIn(tenantId, ['representante'])
+                  && allowRepresentativeSendInvitesByPolicy(tenantId)
+                  && targetRole == 'vendedor')
               )
             )
           )
@@ -206,21 +246,21 @@ service cloud.firestore {
     }
 
     function canManageMembershipByDirectSuperior(data) {
-      return hasActiveMembership(data.tenantId)
+      return hasTenantAccessContext(data.tenantId)
         && (
           (
             isRepWorkspace(data.tenantId)
             && (
               (data.role == 'representante'
-                && isTenantOwner(data.tenantId)
+                && isEffectiveTenantOwner(data.tenantId)
                 && data.ownerId == uid())
               || (data.role == 'vendedor'
                 && (
-                  (isTenantOwner(data.tenantId)
+                  (isEffectiveTenantOwner(data.tenantId)
                     && data.ownerId == uid())
                   || (isTenantRepresentante(data.tenantId)
                     && data.representanteId == uid()
-                    && data.gerenteId == ''
+                    && data.gerenteId == myMembership(data.tenantId).data.gerenteId
                     && data.ownerId == myMembership(data.tenantId).data.ownerId)
                 ))
             )
@@ -229,17 +269,31 @@ service cloud.firestore {
             isBrandOwnerWorkspace(data.tenantId)
             && (
               (data.role == 'gerente'
-                && isTenantOwner(data.tenantId)
+                && isEffectiveTenantOwner(data.tenantId)
                 && data.ownerId == uid())
               || (data.role == 'representante'
-                && isTenantGerente(data.tenantId)
-                && data.gerenteId == uid()
-                && data.ownerId == myMembership(data.tenantId).data.ownerId)
+                && (
+                  (isEffectiveTenantOwner(data.tenantId)
+                    && data.ownerId == uid()
+                    && data.gerenteId is string
+                    && data.gerenteId != '')
+                  || (isTenantGerente(data.tenantId)
+                    && data.gerenteId == uid()
+                    && data.ownerId == myMembership(data.tenantId).data.ownerId)
+                ))
               || (data.role == 'vendedor'
-                && isTenantRepresentante(data.tenantId)
-                && data.representanteId == uid()
-                && data.gerenteId == myMembership(data.tenantId).data.gerenteId
-                && data.ownerId == myMembership(data.tenantId).data.ownerId)
+                && (
+                  (isEffectiveTenantOwner(data.tenantId)
+                    && data.ownerId == uid()
+                    && data.gerenteId is string
+                    && data.gerenteId != ''
+                    && data.representanteId is string
+                    && data.representanteId != '')
+                  || (isTenantRepresentante(data.tenantId)
+                    && data.representanteId == uid()
+                    && data.gerenteId == myMembership(data.tenantId).data.gerenteId
+                    && data.ownerId == myMembership(data.tenantId).data.ownerId)
+                ))
             )
           )
         );
@@ -270,8 +324,8 @@ service cloud.firestore {
     function canWriteScopedData(data) {
       return isPlatformAdmin()
         || canAccessOwnPersonalData(data)
-        || (hasActiveMembership(data.tenantId) && (
-          (isTenantOwner(data.tenantId) && data.ownerId == uid())
+        || (hasTenantAccessContext(data.tenantId) && (
+          (isEffectiveTenantOwner(data.tenantId) && data.ownerId == uid())
           || (isTenantGerente(data.tenantId)
             && data.gerenteId == uid()
             && data.ownerId == myMembership(data.tenantId).data.ownerId)
@@ -295,7 +349,7 @@ service cloud.firestore {
     function canDeleteCliente(data) {
       return isPlatformAdmin()
         || canAccessOwnPersonalData(data)
-        || (isTenantOwner(data.tenantId) && data.ownerId == uid());
+        || (isEffectiveTenantOwner(data.tenantId) && data.ownerId == uid());
     }
 
     function immutableScopeOnUpdate() {
@@ -312,7 +366,25 @@ service cloud.firestore {
         && data.nomeFantasia is string
         && data.ativo is bool
         && data.operationMode in ['manual', 'sankhya', 'custom']
-        && data.erpProvider in ['none', 'sankhya', 'custom'];
+        && data.erpProvider in ['none', 'sankhya', 'custom']
+        && validOptionalTenantPolicy(data);
+    }
+
+    function validOptionalTenantPolicy(data) {
+      return !('policy' in data)
+        || (
+          data.policy is map
+          && (!('allowManagerDisableRepresentative' in data.policy)
+            || data.policy.allowManagerDisableRepresentative is bool)
+          && (!('allowRepresentativeDisableSeller' in data.policy)
+            || data.policy.allowRepresentativeDisableSeller is bool)
+          && (!('allowManagerSendInvites' in data.policy)
+            || data.policy.allowManagerSendInvites is bool)
+          && (!('allowRepresentativeSendInvites' in data.policy)
+            || data.policy.allowRepresentativeSendInvites is bool)
+          && (!('allowPersonalWorkspace' in data.policy)
+            || data.policy.allowPersonalWorkspace is bool)
+        );
     }
 
     function validWorkspaceTypeFields(data) {
@@ -352,19 +424,21 @@ service cloud.firestore {
     function validRepMembershipHierarchy(data) {
       return (data.role == 'owner'
           && data.ownerId == data.uid
-          && data.gerenteId == ''
-          && data.representanteId == ''
-          && data.vendedorId == '')
+          && data.gerenteId == data.uid
+          && data.representanteId == data.uid
+          && data.vendedorId == data.uid)
         || (data.role == 'representante'
           && data.ownerId is string
           && data.ownerId != ''
-          && data.gerenteId == ''
+          && data.gerenteId is string
+          && data.gerenteId != ''
           && data.representanteId == data.uid
-          && data.vendedorId == '')
+          && data.vendedorId == data.uid)
         || (data.role == 'vendedor'
           && data.ownerId is string
           && data.ownerId != ''
-          && data.gerenteId == ''
+          && data.gerenteId is string
+          && data.gerenteId != ''
           && data.representanteId is string
           && data.representanteId != ''
           && data.vendedorId == data.uid);
@@ -373,22 +447,22 @@ service cloud.firestore {
     function validEnterpriseMembershipHierarchy(data) {
       return (data.role == 'owner'
           && data.ownerId == data.uid
-          && data.gerenteId == ''
-          && data.representanteId == ''
-          && data.vendedorId == '')
+          && data.gerenteId == data.uid
+          && data.representanteId == data.uid
+          && data.vendedorId == data.uid)
         || (data.role == 'gerente'
           && data.ownerId is string
           && data.ownerId != ''
           && data.gerenteId == data.uid
-          && data.representanteId == ''
-          && data.vendedorId == '')
+          && data.representanteId == data.uid
+          && data.vendedorId == data.uid)
         || (data.role == 'representante'
           && data.ownerId is string
           && data.ownerId != ''
           && data.gerenteId is string
           && data.gerenteId != ''
           && data.representanteId == data.uid
-          && data.vendedorId == '')
+          && data.vendedorId == data.uid)
         || (data.role == 'vendedor'
           && data.ownerId is string
           && data.ownerId != ''
@@ -416,7 +490,20 @@ service cloud.firestore {
         && data.ownerId is string
         && data.gerenteId is string
         && data.representanteId is string
-        && data.vendedorId is string;
+        && data.vendedorId is string
+        && data.activeSellerChildrenCount is int
+        && data.activeSellerChildrenCount >= 0
+        && data.activeRepresentativeChildrenCount is int
+        && data.activeRepresentativeChildrenCount >= 0
+        && data.activeSubordinateCount is int
+        && data.activeSubordinateCount >= 0
+        && data.activeSubordinateCount == data.activeSellerChildrenCount + data.activeRepresentativeChildrenCount;
+    }
+
+    function hasZeroHierarchyAggregates(data) {
+      return data.activeSellerChildrenCount == 0
+        && data.activeRepresentativeChildrenCount == 0
+        && data.activeSubordinateCount == 0;
     }
 
     function validMembershipDoc(membershipKey, data) {
@@ -426,7 +513,10 @@ service cloud.firestore {
 
     function validManagedMembershipByDirectSuperior(membershipKey, data) {
       return validMembershipBaseDoc(membershipKey, data)
-        && data.ativo == true
+        && (
+          (data.ativo == true && data.state == 'active')
+          || (data.ativo == false && data.state in ['inactive', 'revoked'])
+        )
         && data.defaultTenant is bool
         && (
           (
@@ -434,12 +524,12 @@ service cloud.firestore {
             && (
               (data.role == 'representante'
                 && data.ownerId == uid()
-                && data.gerenteId == ''
+                && data.gerenteId == uid()
                 && data.representanteId == data.uid
-                && data.vendedorId == '')
+                && data.vendedorId == data.uid)
               || (data.role == 'vendedor'
                 && data.ownerId == myMembership(data.tenantId).data.ownerId
-                && data.gerenteId == ''
+                && data.gerenteId == myMembership(data.tenantId).data.gerenteId
                 && data.representanteId is string
                 && data.representanteId != ''
                 && data.vendedorId == data.uid)
@@ -451,18 +541,35 @@ service cloud.firestore {
               (data.role == 'gerente'
                 && data.ownerId == uid()
                 && data.gerenteId == data.uid
-                && data.representanteId == ''
-                && data.vendedorId == '')
-              || (data.role == 'representante'
-                && data.ownerId == myMembership(data.tenantId).data.ownerId
-                && data.gerenteId == uid()
                 && data.representanteId == data.uid
-                && data.vendedorId == '')
-              || (data.role == 'vendedor'
-                && data.ownerId == myMembership(data.tenantId).data.ownerId
-                && data.gerenteId == myMembership(data.tenantId).data.gerenteId
-                && data.representanteId == uid()
                 && data.vendedorId == data.uid)
+              || (data.role == 'representante'
+                && (
+                  (isEffectiveTenantOwner(data.tenantId)
+                    && data.ownerId == uid()
+                    && data.gerenteId is string
+                    && data.gerenteId != ''
+                    && data.representanteId == data.uid
+                    && data.vendedorId == data.uid)
+                  || (data.ownerId == myMembership(data.tenantId).data.ownerId
+                    && data.gerenteId == uid()
+                    && data.representanteId == data.uid
+                    && data.vendedorId == data.uid)
+                ))
+              || (data.role == 'vendedor'
+                && (
+                  (isEffectiveTenantOwner(data.tenantId)
+                    && data.ownerId == uid()
+                    && data.gerenteId is string
+                    && data.gerenteId != ''
+                    && data.representanteId is string
+                    && data.representanteId != ''
+                    && data.vendedorId == data.uid)
+                  || (data.ownerId == myMembership(data.tenantId).data.ownerId
+                    && data.gerenteId == myMembership(data.tenantId).data.gerenteId
+                    && data.representanteId == uid()
+                    && data.vendedorId == data.uid)
+                ))
             )
           )
         );
@@ -561,11 +668,11 @@ service cloud.firestore {
       return isPlatformAdmin()
         || isPersonalWorkspaceTenant(tenantId)
         || (
-          hasActiveMembership(tenantId)
+          hasTenantAccessContext(tenantId)
           && (!isBrandOwnerWorkspace(tenantId)
             || !tenantProductSyncFromErpEnabled(tenantId))
           && (
-            (isBrandOwnerWorkspace(tenantId) && isTenantOwner(tenantId))
+            (isBrandOwnerWorkspace(tenantId) && isEffectiveTenantOwner(tenantId))
             || isRepWorkspace(tenantId)
             || (isSellerSoloWorkspace(tenantId)
               && hasTenantRoleIn(tenantId, ['owner', 'vendedor']))
@@ -577,10 +684,10 @@ service cloud.firestore {
       return isPlatformAdmin()
         || isPersonalWorkspaceTenant(tenantId)
         || (
-          hasActiveMembership(tenantId)
+          hasTenantAccessContext(tenantId)
           && (
             (isBrandOwnerWorkspace(tenantId)
-              && (isTenantOwner(tenantId) || isTenantGerente(tenantId)))
+              && (isEffectiveTenantOwner(tenantId) || isTenantGerente(tenantId)))
             || isRepWorkspace(tenantId)
             || (isSellerSoloWorkspace(tenantId)
               && hasTenantRoleIn(tenantId, ['owner', 'vendedor']))
@@ -592,12 +699,12 @@ service cloud.firestore {
       return isPlatformAdmin()
         || isPersonalWorkspaceTenant(tenantId)
         || (
-          hasActiveMembership(tenantId)
+          hasTenantAccessContext(tenantId)
           && (
-            (isSellerSoloWorkspace(tenantId) && isTenantOwner(tenantId))
-            || (isRepWorkspace(tenantId) && isTenantOwner(tenantId))
+            (isSellerSoloWorkspace(tenantId) && isEffectiveTenantOwner(tenantId))
+            || (isRepWorkspace(tenantId) && isEffectiveTenantOwner(tenantId))
             || (isBrandOwnerWorkspace(tenantId)
-              && (isTenantOwner(tenantId) || isTenantGerente(tenantId)))
+              && (isEffectiveTenantOwner(tenantId) || isTenantGerente(tenantId)))
           )
         );
     }
@@ -605,13 +712,14 @@ service cloud.firestore {
     function canManageRepresentedCompanyWrite(tenantId) {
       return isPlatformAdmin()
         || (
-          hasActiveMembership(tenantId)
+          hasTenantAccessContext(tenantId)
           && (
             ((isSellerSoloWorkspace(tenantId)
               || isRepWorkspace(tenantId))
-              && hasTenantRoleIn(tenantId, ['owner', 'representante']))
+              && (isEffectiveTenantOwner(tenantId)
+                || hasTenantRoleIn(tenantId, ['representante'])))
             || (isBrandOwnerWorkspace(tenantId)
-              && hasTenantRoleIn(tenantId, ['owner']))
+              && isEffectiveTenantOwner(tenantId))
           )
         );
     }
@@ -726,7 +834,8 @@ service cloud.firestore {
     function canReadMembershipDoc(data) {
       return isPlatformAdmin()
         || uid() == data.uid
-        || (isTenantOwner(data.tenantId) && data.ownerId == uid())
+        || (data.ownerId is string && data.ownerId == uid())
+        || isEffectiveTenantOwner(data.tenantId)
         || (isTenantGerente(data.tenantId)
           && data.gerenteId == uid()
           && (data.role == 'representante' || data.role == 'vendedor'))
@@ -735,9 +844,127 @@ service cloud.firestore {
           && data.role == 'vendedor');
     }
 
-    function canManageInvitationDoc(data) {
+    function canReadInvitationDoc(data) {
       return isPlatformAdmin()
-        || canInviteRoleForTenant(data.tenantId, data.role);
+        || (
+          hasTenantAccessContext(data.tenantId)
+          && (
+            isEffectiveTenantOwner(data.tenantId)
+            || (data.createdByUid is string && data.createdByUid == uid())
+          )
+        )
+        || isInvitationRecipient(data);
+    }
+
+    function canRevokeInvitationDoc(data) {
+      return isPlatformAdmin()
+        || (
+          hasTenantAccessContext(data.tenantId)
+          && (
+            isEffectiveTenantOwner(data.tenantId)
+            || (
+              data.createdByUid is string
+              && data.createdByUid != ''
+              && data.createdByUid == uid()
+            )
+          )
+        );
+    }
+
+    function validHierarchyMovementDoc(movementId, data) {
+      return data.movementId == movementId
+        && data.tenantId is string
+        && data.tenantId != ''
+        && data.subjectUid is string
+        && data.subjectUid != ''
+        && validTenantRole(data.subjectRole)
+        && data.fromOwnerId is string
+        && data.fromGerenteId is string
+        && data.fromRepresentanteId is string
+        && data.fromVendedorId is string
+        && data.toOwnerId is string
+        && data.toGerenteId is string
+        && data.toRepresentanteId is string
+        && data.toVendedorId is string
+        && data.reason is string
+        && data.reason != ''
+        && data.actorUid is string
+        && data.actorUid == uid()
+        && data.createdAt is string;
+    }
+
+    function canCreateHierarchyMovementDoc(data) {
+      return isPlatformAdmin()
+        || (
+          hasTenantAccessContext(data.tenantId)
+          && isEffectiveTenantOwner(data.tenantId)
+          && data.fromOwnerId == uid()
+          && data.toOwnerId == uid()
+        );
+    }
+
+    function canReadHierarchyMovementDoc(data) {
+      return isPlatformAdmin()
+        || (
+          hasTenantAccessContext(data.tenantId)
+          && isEffectiveTenantOwner(data.tenantId)
+        );
+    }
+
+    function validTenantMembershipAuditAction(action) {
+      return action in [
+        'membership_revoked',
+        'membership_deactivated',
+        'membership_reactivated',
+        'membership_role_changed',
+        'tenant_policy_updated'
+      ];
+    }
+
+    function validTenantMembershipAuditDoc(data) {
+      return data.tenantId is string
+        && data.tenantId != ''
+        && data.membershipId is string
+        && validTenantMembershipAuditAction(data.action)
+        && data.actorUid is string
+        && data.actorUid != ''
+        && data.createdAt is string
+        && (!('actorLabel' in data) || data.actorLabel is string)
+        && (!('actorEmail' in data) || data.actorEmail is string)
+        && (!('details' in data) || data.details == null || data.details is map);
+    }
+
+    function canReadTenantMembershipAuditDoc(data) {
+      return isPlatformAdmin()
+        || (
+          hasTenantAccessContext(data.tenantId)
+          && (
+            isEffectiveTenantOwner(data.tenantId)
+            || isTenantGerente(data.tenantId)
+            || isTenantRepresentante(data.tenantId)
+          )
+        );
+    }
+
+    function canCreateTenantMembershipAuditDoc(data) {
+      return validTenantMembershipAuditDoc(data)
+        && data.actorUid == uid()
+        && (
+          isPlatformAdmin()
+          || isEffectiveTenantOwner(data.tenantId)
+          || isTenantGerente(data.tenantId)
+          || isTenantRepresentante(data.tenantId)
+        )
+        && (
+          data.action != 'tenant_policy_updated'
+          || isPlatformAdmin()
+          || isEffectiveTenantOwner(data.tenantId)
+        )
+        && (
+          data.action != 'membership_role_changed'
+          || isPlatformAdmin()
+          || isEffectiveTenantOwner(data.tenantId)
+        );
     }
 
     function isPossibleSelfServiceBootstrapMembership(data) {
@@ -760,9 +987,9 @@ service cloud.firestore {
             && data.role == 'owner'
             && (
               data.ownerId == uid()
-              && data.gerenteId == ''
-              && data.representanteId == ''
-              && data.vendedorId == ''))
+              && data.gerenteId == uid()
+              && data.representanteId == uid()
+              && data.vendedorId == uid()))
         );
     }
 
@@ -784,6 +1011,8 @@ service cloud.firestore {
         && data.status in ['pending', 'accepted', 'declined', 'expired', 'revoked']
         && data.invitedEmail is string
         && data.invitedEmail != ''
+        && data.createdByUid is string
+        && data.createdByUid != ''
         && data.defaultTenant is bool;
     }
 
@@ -811,7 +1040,8 @@ service cloud.firestore {
           (
             resourceData.status == 'pending'
             && requestData.status == 'revoked'
-            && canManageInvitationDoc(resourceData)
+            && requestData.revokedByUid == uid()
+            && canRevokeInvitationDoc(resourceData)
           )
           || (
             resourceData.status == 'pending'
@@ -838,6 +1068,9 @@ service cloud.firestore {
         && resource.data.gerenteId == request.resource.data.gerenteId
         && resource.data.representanteId == request.resource.data.representanteId
         && resource.data.vendedorId == request.resource.data.vendedorId
+        && resource.data.activeSellerChildrenCount == request.resource.data.activeSellerChildrenCount
+        && resource.data.activeRepresentativeChildrenCount == request.resource.data.activeRepresentativeChildrenCount
+        && resource.data.activeSubordinateCount == request.resource.data.activeSubordinateCount
         && request.resource.data.state == 'active';
     }
 
@@ -857,7 +1090,7 @@ service cloud.firestore {
 
     function canTenantOwnerManageTenantDocumentUpdate(tenantId) {
       return uid() == resource.data.ownerUid
-        && isTenantOwner(tenantId)
+        && isEffectiveTenantOwner(tenantId)
         && validTenantDoc(tenantId, request.resource.data)
         && validWorkspaceTypeFields(request.resource.data)
         && validProductSyncFlagForWorkspace(request.resource.data)
@@ -866,22 +1099,28 @@ service cloud.firestore {
 
     function canCreateMembershipDocByPlatformAdmin(membershipKey, data) {
       return isPlatformAdmin()
-        && validMembershipDoc(membershipKey, data);
+        && validMembershipDoc(membershipKey, data)
+        && hasZeroHierarchyAggregates(data);
     }
 
     function canCreateMembershipDocByDirectSuperior(membershipKey, data) {
       return canManageMembershipByDirectSuperior(data)
-        && validManagedMembershipByDirectSuperior(membershipKey, data);
+        && validManagedMembershipByDirectSuperior(membershipKey, data)
+        && data.ativo == true
+        && data.state == 'active'
+        && hasZeroHierarchyAggregates(data);
     }
 
     function canCreateMembershipDocByInvitation(membershipKey, data) {
       return hasMatchingPendingInvitationForMembership(data)
-        && validMembershipDoc(membershipKey, data);
+        && validMembershipDoc(membershipKey, data)
+        && hasZeroHierarchyAggregates(data);
     }
 
     function canCreateMembershipDocBySelfServiceBootstrap(membershipKey, data) {
       return isPossibleSelfServiceBootstrapMembership(data)
-        && validSelfServiceBootstrapMembership(membershipKey, data);
+        && validSelfServiceBootstrapMembership(membershipKey, data)
+        && hasZeroHierarchyAggregates(data);
     }
 
     function canCreateMembershipDoc(membershipKey, data) {
@@ -911,11 +1150,53 @@ service cloud.firestore {
         && validSelfServiceBootstrapMembership(membershipKey, data);
     }
 
+    function isHierarchyLeadershipRole(role) {
+      return role == 'gerente' || role == 'representante';
+    }
+
+    function hasLeadershipRoleTransitionRisk() {
+      return isHierarchyLeadershipRole(resource.data.role)
+        && request.resource.data.role != resource.data.role;
+    }
+
+    function hasLeadershipDeactivationRisk() {
+      return isHierarchyLeadershipRole(resource.data.role)
+        && resource.data.ativo == true
+        && request.resource.data.ativo == false;
+    }
+
+    function hasLeadershipRevocationRisk() {
+      return isHierarchyLeadershipRole(resource.data.role)
+        && resource.data.state is string
+        && request.resource.data.state is string
+        && resource.data.state != 'revoked'
+        && request.resource.data.state == 'revoked';
+    }
+
+    function hasLeadershipDestructiveTransitionRisk() {
+      return hasLeadershipRoleTransitionRisk()
+        || hasLeadershipDeactivationRisk()
+        || hasLeadershipRevocationRisk();
+    }
+
+    function hasNoStoredActiveSubordinates() {
+      return resource.data.activeSubordinateCount is int
+        && resource.data.activeSubordinateCount == 0;
+    }
+
+    function canApplyLeadershipTransitionSafety() {
+      return !hasLeadershipDestructiveTransitionRisk()
+        || hasNoStoredActiveSubordinates();
+    }
+
     function canUpdateMembershipDoc(membershipKey, data) {
-      return canUpdateMembershipDocByPlatformAdmin(membershipKey, data)
+      return canApplyLeadershipTransitionSafety()
+        && (
+          canUpdateMembershipDocByPlatformAdmin(membershipKey, data)
         || canUpdateMembershipDocByDirectSuperior(membershipKey, data)
         || canUpdateMembershipDocByOwnTenantSelection(membershipKey, data)
-        || canUpdateMembershipDocBySelfServiceBootstrap(membershipKey, data);
+        || canUpdateMembershipDocBySelfServiceBootstrap(membershipKey, data)
+        );
     }
 
     function canDeleteMembershipDoc(data) {
@@ -1011,12 +1292,12 @@ service cloud.firestore {
 
     match /tenant_invitations/{token} {
       allow read: if signedIn() && (
-        canManageInvitationDoc(resource.data)
-        || isInvitationRecipient(resource.data)
+        canReadInvitationDoc(resource.data)
       );
 
       allow create: if signedIn()
         && request.resource.data.token == token
+        && request.resource.data.createdByUid == uid()
         && request.resource.data.status == 'pending'
         && canInviteRoleForTenant(request.resource.data.tenantId, request.resource.data.role)
         && validInvitationDoc(request.resource.data);
@@ -1026,8 +1307,27 @@ service cloud.firestore {
         && validInvitationDoc(request.resource.data);
 
       allow delete: if signedIn() && (
-        canManageInvitationDoc(resource.data)
+        canRevokeInvitationDoc(resource.data)
       );
+    }
+
+    match /tenant_hierarchy_movements/{movementId} {
+      allow read: if signedIn() && canReadHierarchyMovementDoc(resource.data);
+
+      allow create: if signedIn()
+        && validHierarchyMovementDoc(movementId, request.resource.data)
+        && canCreateHierarchyMovementDoc(request.resource.data);
+
+      allow update, delete: if false;
+    }
+
+    match /tenant_membership_audit/{auditId} {
+      allow read: if signedIn() && canReadTenantMembershipAuditDoc(resource.data);
+
+      allow create: if signedIn()
+        && canCreateTenantMembershipAuditDoc(request.resource.data);
+
+      allow update, delete: if false;
     }
 
     match /solicitacoes_acesso/{requestId} {
@@ -1151,7 +1451,7 @@ service cloud.firestore {
         && (
           isPlatformAdmin()
           || isPersonalWorkspaceTenant(resource.data.tenantId)
-          || hasActiveMembership(resource.data.tenantId)
+          || hasTenantAccessContext(resource.data.tenantId)
         );
 
       allow create: if hasTenantField(request.resource.data)
@@ -1249,7 +1549,7 @@ service cloud.firestore {
       allow delete: if hasScopeFields(resource.data)
         && (isPlatformAdmin()
           || canAccessOwnPersonalData(resource.data)
-          || isTenantOwner(resource.data.tenantId));
+          || isEffectiveTenantOwner(resource.data.tenantId));
     }
 
     match /{document=**} {

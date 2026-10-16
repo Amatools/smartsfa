@@ -1,5 +1,9 @@
 # SmartSFA - Firebase (Acesso e Hierarquia)
 
+> Nota: este arquivo permanece como referencia de baixo nivel (foco Firebase/rules).
+> A especificacao canonica de produto + backlog tecnico da hierarquia esta em:
+> [../hierarquia_comercial_backlog_tecnico.md](../hierarquia_comercial_backlog_tecnico.md)
+
 ## Objetivo
 Definir um modelo de dados que permita aplicar seguranca estrita para a hierarquia:
 Owner > Gerente > Representante > Vendedor.

@@ -20,11 +20,14 @@ class FirestoreClienteRepository implements ClienteRepository {
   List<Cliente> _mapAndSortClientes(
     QuerySnapshot<Map<String, dynamic>> snapshot,
   ) {
-    final items = snapshot.docs.map((doc) {
-      final data = normalizeFirestoreMap(doc.data());
-      data.putIfAbsent('id', () => doc.id);
-      return Cliente.fromMap(data);
-    }).toList();
+    final items = snapshot.docs
+        .map((doc) {
+          final data = normalizeFirestoreMap(doc.data());
+          data.putIfAbsent('id', () => doc.id);
+          return Cliente.fromMap(data);
+        })
+        .where((cliente) => cliente.deletedAt == null)
+        .toList();
     items.sort((a, b) => a.nome.compareTo(b.nome));
     return items;
   }
@@ -143,6 +146,9 @@ class FirestoreClienteRepository implements ClienteRepository {
           final data = normalizeFirestoreMap(doc.data());
           data.putIfAbsent('id', () => doc.id);
           final cliente = Cliente.fromMap(data);
+          if (cliente.deletedAt != null) {
+            continue;
+          }
           if (cliente.id.trim().isEmpty) {
             continue;
           }
@@ -216,6 +222,9 @@ class FirestoreClienteRepository implements ClienteRepository {
               final data = normalizeFirestoreMap(doc.data());
               data.putIfAbsent('id', () => doc.id);
               final cliente = Cliente.fromMap(data);
+              if (cliente.deletedAt != null) {
+                continue;
+              }
               if (cliente.id.trim().isEmpty) {
                 continue;
               }
@@ -270,17 +279,15 @@ class FirestoreClienteRepository implements ClienteRepository {
             },
             onError: (Object error, StackTrace stackTrace) {
               final isPermissionDenied =
-                  error is FirebaseException && error.code == 'permission-denied';
+                  error is FirebaseException &&
+                  error.code == 'permission-denied';
               if (isPermissionDenied && fallbackSubscription == null) {
-                fallbackSubscription = _watchScopedFallbackClientes(
-                  tenantId: normalizedTenantId,
-                ).listen(
-                  (items) {
-                    _setTenantCache(normalizedTenantId, items);
-                    controller.add(items);
-                  },
-                  onError: controller.addError,
-                );
+                fallbackSubscription =
+                    _watchScopedFallbackClientes(tenantId: normalizedTenantId)
+                        .listen((items) {
+                          _setTenantCache(normalizedTenantId, items);
+                          controller.add(items);
+                        }, onError: controller.addError);
                 return;
               }
 
@@ -364,6 +371,9 @@ class FirestoreClienteRepository implements ClienteRepository {
     if (entity.tenantId != normalizedTenantId) {
       return null;
     }
+    if (entity.deletedAt != null) {
+      return null;
+    }
     return entity;
   }
 
@@ -381,7 +391,8 @@ class FirestoreClienteRepository implements ClienteRepository {
       return;
     }
 
-    await _collection.doc(id).delete();
+    final payload = buildSyncDeletePayload(source: existing.toMap());
+    await _collection.doc(id).set(payload, SetOptions(merge: true));
     _tenantCache.remove(tenantId.trim());
   }
 }

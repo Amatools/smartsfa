@@ -93,10 +93,58 @@ class _UserAccessResolver extends StatefulWidget {
 class _UserAccessResolverState extends State<_UserAccessResolver> {
   int _refreshNonce = 0;
 
+  @override
+  void initState() {
+    super.initState();
+    _seedUserProfileFromAuth();
+  }
+
+  Future<void> _seedUserProfileFromAuth() async {
+    final user = widget.user;
+    final normalizedEmail = (user.email ?? '').trim();
+    final normalizedDisplayName = (user.displayName ?? '').trim();
+    final fallbackName = normalizedDisplayName.isNotEmpty
+        ? normalizedDisplayName
+        : (normalizedEmail.isNotEmpty
+              ? normalizedEmail.split('@').first
+              : user.uid);
+
+    try {
+      await FirebaseFirestore.instance.collection('usuarios').doc(user.uid).set({
+        'uid': user.uid,
+        if (normalizedEmail.isNotEmpty) 'email': normalizedEmail,
+        if (fallbackName.isNotEmpty) 'displayName': fallbackName,
+        if (fallbackName.isNotEmpty) 'name': fallbackName,
+        'updatedAt': DateTime.now().toIso8601String(),
+      }, SetOptions(merge: true));
+    } catch (_) {
+      // Best effort only: access resolution must not fail because of profile sync.
+    }
+  }
+
   void _refreshAccess() {
     setState(() {
       _refreshNonce++;
     });
+  }
+
+  String _describeAccessResolutionError(Object? error) {
+    if (error is TenantEntryResolverException) {
+      return error.message;
+    }
+
+    if (error is FirebaseException) {
+      if (error.code == 'permission-denied') {
+        return 'Sem permissao para validar acesso ao workspace no momento. Tente novamente.';
+      }
+
+      final firebaseMessage = (error.message ?? '').trim();
+      if (firebaseMessage.isNotEmpty) {
+        return 'Falha ao validar acesso: $firebaseMessage';
+      }
+    }
+
+    return 'Falha temporaria ao validar acesso ao workspace. Tente novamente.';
   }
 
   @override
@@ -108,6 +156,14 @@ class _UserAccessResolverState extends State<_UserAccessResolver> {
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const LoadingPage(label: 'Resolving tenant access...');
+        }
+
+        if (snapshot.hasError) {
+          return _AccessResolutionErrorScaffold(
+            message: _describeAccessResolutionError(snapshot.error),
+            onRetry: _refreshAccess,
+            onSignOut: () => FirebaseAuth.instance.signOut(),
+          );
         }
 
         final decision = snapshot.data;
@@ -210,6 +266,15 @@ class _TenantAccessResolverState extends State<_TenantAccessResolver> {
       stream: TenantMembershipService(FirebaseFirestore.instance)
           .watchTenantChoicesForUser(widget.user.uid),
       builder: (context, accessSnapshot) {
+        if (accessSnapshot.hasError) {
+          return _AccessResolutionErrorScaffold(
+            message:
+                'Nao foi possivel carregar seus workspaces agora. Tente novamente.',
+            onRetry: widget.onAccessUpdated,
+            onSignOut: () => FirebaseAuth.instance.signOut(),
+          );
+        }
+
         final liveOptions = accessSnapshot.data ?? const <TenantEntryOption>[];
         final options = liveOptions.isNotEmpty
             ? liveOptions
@@ -246,6 +311,15 @@ class _TenantAccessResolverState extends State<_TenantAccessResolver> {
           builder: (context, tenantSnapshot) {
             if (tenantSnapshot.connectionState == ConnectionState.waiting) {
               return const LoadingPage(label: 'Carregando tenant...');
+            }
+
+            if (tenantSnapshot.hasError) {
+              return _AccessResolutionErrorScaffold(
+                message:
+                    'Falha ao carregar os dados do tenant selecionado. Tente novamente.',
+                onRetry: widget.onAccessUpdated,
+                onSignOut: () => FirebaseAuth.instance.signOut(),
+              );
             }
 
             final tenantDoc = tenantSnapshot.data;
@@ -409,6 +483,68 @@ class _TenantAccessResolverState extends State<_TenantAccessResolver> {
           ),
         );
       },
+    );
+  }
+}
+
+class _AccessResolutionErrorScaffold extends StatelessWidget {
+  const _AccessResolutionErrorScaffold({
+    required this.message,
+    required this.onRetry,
+    required this.onSignOut,
+  });
+
+  final String message;
+  final VoidCallback onRetry;
+  final VoidCallback onSignOut;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520),
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Falha ao validar acesso',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      const SizedBox(height: 12),
+                      Text(message),
+                      const SizedBox(height: 16),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          FilledButton.icon(
+                            onPressed: onRetry,
+                            icon: const Icon(Icons.refresh),
+                            label: const Text('Tentar novamente'),
+                          ),
+                          OutlinedButton.icon(
+                            onPressed: onSignOut,
+                            icon: const Icon(Icons.logout),
+                            label: const Text('Sair e entrar de novo'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

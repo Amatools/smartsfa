@@ -75,7 +75,7 @@ class _TenantMembershipAuditPageState extends State<TenantMembershipAuditPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Historico de alteracoes criticas no tenant ${widget.identity.tenantName}.',
+                  'Histórico de alterações críticas no tenant ${widget.identity.tenantName}.',
                   style: Theme.of(context).textTheme.bodyLarge,
                 ),
                 const SizedBox(height: 12),
@@ -93,7 +93,7 @@ class _TenantMembershipAuditPageState extends State<TenantMembershipAuditPage> {
                           },
                           decoration: _fieldDecoration(
                             context: context,
-                            label: 'Buscar por acao, ator ou membershipId',
+                            label: 'Buscar por ação, ator ou membershipId',
                             icon: Icons.search,
                           ),
                         ),
@@ -103,28 +103,28 @@ class _TenantMembershipAuditPageState extends State<TenantMembershipAuditPage> {
                           isExpanded: true,
                           decoration: _fieldDecoration(
                             context: context,
-                            label: 'Acao',
+                            label: 'Ação',
                           ),
-                          items: const [
-                            DropdownMenuItem(
+                          items: [
+                            const DropdownMenuItem(
                               value: 'todos',
                               child: Text('Todos'),
                             ),
-                            DropdownMenuItem(
-                              value: 'membership_revoked',
-                              child: Text('membership_revoked'),
-                            ),
-                            DropdownMenuItem(
-                              value: 'membership_reactivated',
-                              child: Text('membership_reactivated'),
-                            ),
-                            DropdownMenuItem(
-                              value: 'membership_role_changed',
-                              child: Text('membership_role_changed'),
-                            ),
-                            DropdownMenuItem(
-                              value: 'tenant_policy_updated',
-                              child: Text('tenant_policy_updated'),
+                            ...const [
+                              'membership_revoked',
+                              'membership_reactivated',
+                              'membership_deactivated',
+                              'membership_role_changed',
+                              'tenant_policy_updated',
+                            ].map(
+                              (action) => DropdownMenuItem(
+                                value: action,
+                                child: Text(
+                                  TenantMembershipAuditFilter.actionLabel(
+                                    action,
+                                  ),
+                                ),
+                              ),
                             ),
                           ],
                           onChanged: (value) {
@@ -146,10 +146,17 @@ class _TenantMembershipAuditPageState extends State<TenantMembershipAuditPage> {
                     widget.identity.tenantId,
                   ),
                   builder: (context, snapshot) {
+                    if (snapshot.hasError) {
+                      return AppInfoCard(
+                        title: 'Falha ao carregar auditoria',
+                        subtitle: '${snapshot.error}',
+                      );
+                    }
+
                     if (snapshot.connectionState == ConnectionState.waiting) {
                       return const AppInfoCard(
                         title: 'Carregando auditoria',
-                        subtitle: 'Buscando eventos de governanca...',
+                        subtitle: 'Buscando eventos de governança...',
                       );
                     }
 
@@ -157,7 +164,7 @@ class _TenantMembershipAuditPageState extends State<TenantMembershipAuditPage> {
                     if (entries.isEmpty) {
                       return const AppInfoCard(
                         title: 'Sem eventos de auditoria',
-                        subtitle: 'Eventos aparecem quando houver revogacao, reativacao ou alteracao de papel.',
+                        subtitle: 'Eventos aparecem quando houver inativação, revogação, reativação ou alteração de papel.',
                       );
                     }
 
@@ -243,6 +250,13 @@ class _AuditCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final details = entry['details'];
     final detailsText = details is Map ? details.toString() : '-';
+    final action = (entry['action'] ?? '-').toString();
+    final actionLabel = TenantMembershipAuditFilter.actionLabel(action);
+    final actorUid = (entry['actorUid'] ?? '-').toString();
+    final actorLabel = (entry['actorLabel'] ?? '').toString().trim();
+    final actorText = actorLabel.isEmpty || actorLabel == actorUid
+        ? actorUid
+        : '$actorLabel ($actorUid)';
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -252,11 +266,11 @@ class _AuditCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              (entry['action'] ?? '-').toString(),
+              actionLabel,
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 6),
-            Text('Ator: ${(entry['actorUid'] ?? '-').toString()}'),
+            Text('Ator: $actorText'),
             const SizedBox(height: 6),
             Text('Membership: ${(entry['membershipId'] ?? '-').toString()}'),
             const SizedBox(height: 6),

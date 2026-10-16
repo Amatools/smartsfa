@@ -8,6 +8,7 @@ class _WebPortalShellState extends State<_WebPortalShell> {
   bool _settingFavoriteRepresented = false;
   String? _accountContractLockUid;
   Future<AccountContractLock>? _accountContractLockFuture;
+  final Map<String, String?> _selectedTenantSubmenuByTenant = {};
   final Map<String, String?> _activeRepresentedCompanyByTenant = {};
   final Map<String, String?> _activeRepresentedCompanyNameByTenant = {};
 
@@ -141,6 +142,14 @@ class _WebPortalShellState extends State<_WebPortalShell> {
                           ? selectedItem.label
                           : tenantModuleItems.first.label,
                       tenantSectionLocked: tenantSectionLocked,
+                      selectedSubmenuKey:
+                          _selectedTenantSubmenuByTenant[activeTenant.tenantId],
+                      onSubmenuChanged: (submenuKey) {
+                        _setSelectedTenantSubmenu(
+                          tenantId: activeTenant.tenantId,
+                          submenuKey: submenuKey,
+                        );
+                      },
                     ),
                   )
                 : SingleChildScrollView(
@@ -329,6 +338,25 @@ class _WebPortalShellState extends State<_WebPortalShell> {
     setState(() {
       _activeRepresentedCompanyByTenant[tenantId] = companyId;
       _activeRepresentedCompanyNameByTenant[tenantId] = companyName;
+    });
+  }
+
+  void _setSelectedTenantSubmenu({
+    required String tenantId,
+    required String submenuKey,
+  }) {
+    final normalized = submenuKey.trim();
+    if (normalized.isEmpty) {
+      return;
+    }
+
+    final current = _selectedTenantSubmenuByTenant[tenantId];
+    if (current == normalized) {
+      return;
+    }
+
+    setState(() {
+      _selectedTenantSubmenuByTenant[tenantId] = normalized;
     });
   }
 
@@ -539,6 +567,7 @@ class _WebPortalShellState extends State<_WebPortalShell> {
         normalizedRole == 'gerente' ||
         normalizedRole == 'representante' ||
         normalizedRole == 'platform_admin';
+    final canOpenTenantAdmin = canAccessInvites;
     final isEnterpriseWorkspace =
         activeTenant.workspaceType == 'brand_owner_workspace';
     final supportsRepresentedCompanies =
@@ -565,6 +594,16 @@ class _WebPortalShellState extends State<_WebPortalShell> {
                   onUpgradeToRep: () => _openUpgradeToRepDialog(activeTenant),
                 ),
       ),
+      if (canOpenTenantAdmin)
+        _PortalNavItem(
+          label: 'Configurações do workspace',
+          icon: Icons.admin_panel_settings_outlined,
+          section: _PortalSection.global,
+          builder: ({
+            required activeTenant,
+            required activeRepresentedCompanyName,
+          }) => TenantAdminPage(identity: _tenantAdminIdentity(activeTenant)),
+        ),
       if (supportsRepresentedCompanies)
         const _PortalNavItem(
           label: 'Representadas',
@@ -743,6 +782,24 @@ class _WebPortalShellState extends State<_WebPortalShell> {
     }
 
     return items;
+  }
+
+  AppIdentity _tenantAdminIdentity(TenantEntryOption activeTenant) {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    final userLabel = currentUser?.displayName?.trim().isNotEmpty == true
+        ? currentUser!.displayName!.trim()
+        : (currentUser?.email ?? widget.identity.userLabel);
+
+    return AppIdentity(
+      tenantId: activeTenant.tenantId,
+      userLabel: userLabel,
+      role: activeTenant.role,
+      tenantName: activeTenant.tenantName,
+      isMock: false,
+      membershipId: activeTenant.membershipId,
+      isPersonalWorkspace:
+          activeTenant.workspaceType == 'seller_solo_workspace',
+    );
   }
 
   List<_PortalMenuSection> _groupItems(

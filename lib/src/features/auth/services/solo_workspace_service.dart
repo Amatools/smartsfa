@@ -64,6 +64,8 @@ class SoloWorkspaceService {
     );
     final tenantName = normalizedName;
     final membershipId = '${tenantId}_${user.uid}';
+    final tenantBillingSeed = _seedTenantBillingFields(plan: plan.value);
+    final userBillingSeed = _seedUserBillingFields();
 
     final tenantRef = _firestore.collection('tenants').doc(tenantId);
     final membershipRef = _firestore
@@ -82,6 +84,7 @@ class SoloWorkspaceService {
         'operationMode': 'manual',
         'erpProvider': 'none',
         'plan': plan.value,
+        ...tenantBillingSeed,
         'workspaceType': effectiveWorkspaceType.value,
         'hierarchyModel': effectiveWorkspaceType.hierarchyModel,
         'allowInvitations': effectiveWorkspaceType.allowsInvitations,
@@ -103,8 +106,10 @@ class SoloWorkspaceService {
         'uid': user.uid,
         'email': user.email ?? '',
         'displayName': user.displayName ?? (user.email ?? user.uid),
+        'name': user.displayName ?? (user.email ?? user.uid),
         'platformRole': 'none',
         'ativoGlobal': true,
+        ...userBillingSeed,
         'accountContractLock':
             effectiveWorkspaceType == WorkspaceType.brandOwnerWorkspace
             ? AccountContractLock.enterpriseOnly.value
@@ -127,6 +132,11 @@ class SoloWorkspaceService {
         'gerenteId': scope.gerenteId,
         'representanteId': scope.representanteId,
         'vendedorId': scope.vendedorId,
+        'activeSellerChildrenCount': 0,
+        'activeRepresentativeChildrenCount': 0,
+        'activeSubordinateCount': 0,
+        'userName': user.displayName ?? user.email ?? user.uid,
+        'userEmail': user.email ?? '',
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
@@ -206,6 +216,10 @@ class SoloWorkspaceService {
       workspaceName: normalizedName,
     );
     final targetMembershipId = '${targetTenantId}_${user.uid}';
+    final tenantBillingSeed = _seedTenantBillingFields(
+      plan: OnboardingPlan.team.value,
+    );
+    final userBillingSeed = _seedUserBillingFields();
 
     final targetTenantRef = _firestore
         .collection('tenants')
@@ -230,6 +244,7 @@ class SoloWorkspaceService {
         'operationMode': 'manual',
         'erpProvider': 'none',
         'plan': OnboardingPlan.team.value,
+        ...tenantBillingSeed,
         'workspaceType': WorkspaceType.repWorkspace.value,
         'hierarchyModel': WorkspaceType.repWorkspace.hierarchyModel,
         'allowInvitations': WorkspaceType.repWorkspace.allowsInvitations,
@@ -251,9 +266,14 @@ class SoloWorkspaceService {
         'defaultTenant': true,
         'state': 'active',
         'ownerId': user.uid,
-        'gerenteId': '',
-        'representanteId': '',
-        'vendedorId': '',
+        'gerenteId': user.uid,
+        'representanteId': user.uid,
+        'vendedorId': user.uid,
+        'activeSellerChildrenCount': 0,
+        'activeRepresentativeChildrenCount': 0,
+        'activeSubordinateCount': 0,
+        'userName': user.displayName ?? user.email ?? user.uid,
+        'userEmail': user.email ?? '',
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
@@ -271,6 +291,7 @@ class SoloWorkspaceService {
 
       tx.set(userRef, {
         'accountContractLock': AccountContractLock.flexible.value,
+        ...userBillingSeed,
         'defaultTenantId': targetTenantId,
         'lastSelectedTenantId': targetTenantId,
         'upgradedFromTenantId': sourceTenantId,
@@ -576,7 +597,12 @@ class SoloWorkspaceService {
         gerenteId: '',
         representanteId: '',
         vendedorId: '',
-      ).copyWith(ownerId: uid);
+      ).copyWith(
+        ownerId: uid,
+        gerenteId: uid,
+        representanteId: uid,
+        vendedorId: uid,
+      );
     }
 
     if (normalized == 'gerente') {
@@ -621,6 +647,35 @@ class SoloWorkspaceService {
     }
 
     return slug.substring(0, 48);
+  }
+
+  Map<String, Object?> _seedTenantBillingFields({required String plan}) {
+    final now = DateTime.now().toUtc();
+    final periodEnd = now.add(const Duration(days: 30));
+    return <String, Object?>{
+      'planTier': 'base',
+      'billingScope': 'tenant',
+      'billingPlanKey': plan,
+      'billingStatus': 'active',
+      'billingCycle': 'monthly',
+      'billingCurrentPeriodStartAt': now.toIso8601String(),
+      'billingCurrentPeriodEndAt': periodEnd.toIso8601String(),
+      'billingGracePeriodDays': 7,
+      'billingGraceUntilAt': null,
+      'billingPastDueSinceAt': null,
+      'billingSuspendedAt': null,
+      'billingDelinquencyStage': 'none',
+      'billingUpdatedAt': now.toIso8601String(),
+    };
+  }
+
+  Map<String, Object?> _seedUserBillingFields() {
+    return <String, Object?>{
+      'billingAccountState': 'active',
+      'billingGraceUntilAt': null,
+      'billingSuspendedAt': null,
+      'billingUpdatedAt': DateTime.now().toUtc().toIso8601String(),
+    };
   }
 }
 

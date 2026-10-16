@@ -26,15 +26,28 @@ class FirestoreTabelaPrecoRepository implements TabelaPrecoRepository {
         .where('tenantId', isEqualTo: normalizedTenantId)
         .snapshots()
         .map(
-          (snapshot) => snapshot.docs.map((doc) {
-            final data = normalizeFirestoreMap(doc.data());
-            data.putIfAbsent('id', () => doc.id);
-            return TabelaPreco.fromMap(data);
-          }).toList()
-            ..sort((a, b) => b.updatedAt?.compareTo(a.updatedAt ?? DateTime(1970)) ?? 0),
+          (snapshot) =>
+              snapshot.docs
+                  .map((doc) {
+                    final data = normalizeFirestoreMap(doc.data());
+                    data.putIfAbsent('id', () => doc.id);
+                    return TabelaPreco.fromMap(data);
+                  })
+                  .where((tabela) {
+                    final deletedAt = tabela.deletedAt;
+                    return deletedAt == null;
+                  })
+                  .toList()
+                ..sort(
+                  (a, b) =>
+                      b.updatedAt?.compareTo(a.updatedAt ?? DateTime(1970)) ??
+                      0,
+                ),
         )
         .map((items) {
-          _tenantCache[normalizedTenantId] = List<TabelaPreco>.unmodifiable(items);
+          _tenantCache[normalizedTenantId] = List<TabelaPreco>.unmodifiable(
+            items,
+          );
           return items;
         });
   }
@@ -54,11 +67,17 @@ class FirestoreTabelaPrecoRepository implements TabelaPrecoRepository {
     final snapshot = await _collection
         .where('tenantId', isEqualTo: normalizedTenantId)
         .get();
-    final items = snapshot.docs.map((doc) {
-      final data = normalizeFirestoreMap(doc.data());
-      data.putIfAbsent('id', () => doc.id);
-      return TabelaPreco.fromMap(data);
-    }).toList();
+    final items = snapshot.docs
+        .map((doc) {
+          final data = normalizeFirestoreMap(doc.data());
+          data.putIfAbsent('id', () => doc.id);
+          return TabelaPreco.fromMap(data);
+        })
+        .where((tabela) {
+          final deletedAt = tabela.deletedAt;
+          return deletedAt == null;
+        })
+        .toList();
 
     items.sort((a, b) {
       final left = a.updatedAt ?? DateTime(1970);
@@ -70,7 +89,10 @@ class FirestoreTabelaPrecoRepository implements TabelaPrecoRepository {
   }
 
   @override
-  Future<TabelaPreco?> fetchById({required String tenantId, required String id}) async {
+  Future<TabelaPreco?> fetchById({
+    required String tenantId,
+    required String id,
+  }) async {
     final normalizedTenantId = tenantId.trim();
     final normalizedId = id.trim();
     if (normalizedTenantId.isEmpty || normalizedId.isEmpty) {
@@ -97,6 +119,9 @@ class FirestoreTabelaPrecoRepository implements TabelaPrecoRepository {
     if (entity.tenantId != normalizedTenantId) {
       return null;
     }
+    if (entity.deletedAt != null) {
+      return null;
+    }
     return entity;
   }
 
@@ -118,7 +143,9 @@ class FirestoreTabelaPrecoRepository implements TabelaPrecoRepository {
         existing.origem.trim().toLowerCase() == 'system' &&
         existing.nome.trim().toLowerCase() == 'tabela padrao';
     if (isProtectedDefault) {
-      throw StateError('A tabela padrao do sistema nao pode ser excluida manualmente.');
+      throw StateError(
+        'A tabela padrao do sistema nao pode ser excluida manualmente.',
+      );
     }
 
     final basePrices = await _firestore
@@ -134,7 +161,8 @@ class FirestoreTabelaPrecoRepository implements TabelaPrecoRepository {
       await batch.commit();
     }
 
-    await _collection.doc(id).delete();
+    final payload = buildSyncDeletePayload(source: existing.toMap());
+    await _collection.doc(id).set(payload, SetOptions(merge: true));
     _tenantCache.remove(tenantId.trim());
   }
 }

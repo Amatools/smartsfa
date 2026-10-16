@@ -5,6 +5,7 @@ import '../../core/repositories/cliente_pre_cadastro_repository.dart';
 import '../../core/repositories/cliente_repository.dart';
 import '../../core/repositories/pedido_repository.dart';
 import '../../core/repositories/produto_repository.dart';
+import '../../core/services/sync_cost_metrics_service.dart';
 import '../../features/auth/presentation/pages/account_settings_page.dart';
 import '../../features/clientes/presentation/pages/clientes_page.dart';
 import '../../features/notificacoes/presentation/pages/notificacoes_page.dart';
@@ -31,8 +32,12 @@ class AppShellNavigationFactory {
     required String? selectedOriginCompanyUnitLabel,
     required String? selectedOriginCompanyUf,
     required AppShellSyncStatus syncStatus,
+    required SyncCostMetricsSnapshot costMetrics,
+    required SyncCostAlert? costAlert,
+    required bool queryReviewOverdue,
     required VoidCallback? onSyncNow,
     required VoidCallback? onRefreshSyncStatus,
+    required VoidCallback? onRegisterQueryReview,
     required VoidCallback? onAccessUpdated,
   }) {
     final normalizedRole = role.toLowerCase().replaceAll(' ', '_');
@@ -44,8 +49,12 @@ class AppShellNavigationFactory {
           identity: identity,
           usingLocalFallback: usingLocalFallback,
           syncStatus: syncStatus,
+          costMetrics: costMetrics,
+          costAlert: costAlert,
+          queryReviewOverdue: queryReviewOverdue,
           onSyncNow: onSyncNow,
           onRefreshSyncStatus: onRefreshSyncStatus,
+          onRegisterQueryReview: onRegisterQueryReview,
         ),
       ),
       AppShellItem(

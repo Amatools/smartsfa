@@ -25,11 +25,17 @@ class FirestoreTaxRuleRepository implements TaxRuleRepository {
         .where('tenantId', isEqualTo: normalizedTenantId)
         .snapshots()
         .map((snapshot) {
-          final items = snapshot.docs.map((doc) {
-            final data = normalizeFirestoreMap(doc.data());
-            data.putIfAbsent('id', () => doc.id);
-            return TaxRule.fromMap(data);
-          }).toList();
+          final items = snapshot.docs
+              .map((doc) {
+                final data = normalizeFirestoreMap(doc.data());
+                data.putIfAbsent('id', () => doc.id);
+                return TaxRule.fromMap(data);
+              })
+              .where((rule) {
+                final deletedAt = rule.deletedAt;
+                return deletedAt == null;
+              })
+              .toList();
           items.sort((a, b) => b.priority.compareTo(a.priority));
           _tenantCache[normalizedTenantId] = List<TaxRule>.unmodifiable(items);
           return items;
@@ -51,11 +57,17 @@ class FirestoreTaxRuleRepository implements TaxRuleRepository {
     final snapshot = await _collection
         .where('tenantId', isEqualTo: normalizedTenantId)
         .get();
-    final items = snapshot.docs.map((doc) {
-      final data = normalizeFirestoreMap(doc.data());
-      data.putIfAbsent('id', () => doc.id);
-      return TaxRule.fromMap(data);
-    }).toList();
+    final items = snapshot.docs
+        .map((doc) {
+          final data = normalizeFirestoreMap(doc.data());
+          data.putIfAbsent('id', () => doc.id);
+          return TaxRule.fromMap(data);
+        })
+        .where((rule) {
+          final deletedAt = rule.deletedAt;
+          return deletedAt == null;
+        })
+        .toList();
     items.sort((a, b) => b.priority.compareTo(a.priority));
     _tenantCache[normalizedTenantId] = List<TaxRule>.unmodifiable(items);
     return items;
@@ -92,6 +104,9 @@ class FirestoreTaxRuleRepository implements TaxRuleRepository {
     if (entity.tenantId != normalizedTenantId) {
       return null;
     }
+    if (entity.deletedAt != null) {
+      return null;
+    }
     return entity;
   }
 
@@ -108,7 +123,8 @@ class FirestoreTaxRuleRepository implements TaxRuleRepository {
     if (existing == null) {
       return;
     }
-    await _collection.doc(id).delete();
+    final payload = buildSyncDeletePayload(source: existing.toMap());
+    await _collection.doc(id).set(payload, SetOptions(merge: true));
     _tenantCache.remove(tenantId.trim());
   }
 }

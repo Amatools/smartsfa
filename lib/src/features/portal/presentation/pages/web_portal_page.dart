@@ -30,6 +30,7 @@ import '../../../clientes/presentation/pages/clientes_page.dart';
 import '../../../pedidos/presentation/pages/pedidos_page.dart';
 import '../../../precos/presentation/pages/tabelas_preco_page.dart';
 import '../../../produtos/presentation/pages/produtos_page.dart';
+import '../../../tenant/presentation/pages/tenant_admin_page.dart';
 import '../../../produtos/presentation/services/product_editor_defaults.dart';
 import '../../../produtos/presentation/services/product_unit_catalog_service.dart';
 

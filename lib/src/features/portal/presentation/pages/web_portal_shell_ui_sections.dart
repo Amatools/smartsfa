@@ -489,7 +489,12 @@ class _WebPortalTopBar extends StatelessWidget {
                 )
                 ? favoriteRepresentedCompanyId
                 : null;
-            final effectiveSelectedId = selectedId ?? favoriteId;
+            final effectiveSelectedId =
+                selectedId ??
+                favoriteId ??
+                (representedCompanies.length == 1
+                    ? representedCompanies.first.id
+                    : null);
             if (effectiveSelectedId != null &&
                 effectiveSelectedId != selectedRepresentedCompanyId) {
               _RepresentedCompany? selectedCompany;

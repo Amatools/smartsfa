@@ -6,6 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../models/pedido.dart';
 import '../../repositories/pedido_repository.dart';
 import 'firestore_map_normalizer.dart';
+import 'firestore_sync_metadata.dart';
 
 class FirestorePedidoRepository implements PedidoRepository {
   FirestorePedidoRepository(this._firestore);
@@ -19,11 +20,14 @@ class FirestorePedidoRepository implements PedidoRepository {
   List<Pedido> _mapAndSortPedidos(
     QuerySnapshot<Map<String, dynamic>> snapshot,
   ) {
-    final items = snapshot.docs.map((doc) {
-      final data = normalizeFirestoreMap(doc.data());
-      data.putIfAbsent('id', () => doc.id);
-      return Pedido.fromMap(data);
-    }).toList();
+    final items = snapshot.docs
+        .map((doc) {
+          final data = normalizeFirestoreMap(doc.data());
+          data.putIfAbsent('id', () => doc.id);
+          return Pedido.fromMap(data);
+        })
+        .where((pedido) => pedido.deletedAt == null)
+        .toList();
     items.sort((a, b) => a.id.compareTo(b.id));
     return items;
   }
@@ -141,6 +145,9 @@ class FirestorePedidoRepository implements PedidoRepository {
           final data = normalizeFirestoreMap(doc.data());
           data.putIfAbsent('id', () => doc.id);
           final pedido = Pedido.fromMap(data);
+          if (pedido.deletedAt != null) {
+            continue;
+          }
           if (pedido.id.trim().isEmpty) {
             continue;
           }
@@ -175,9 +182,7 @@ class FirestorePedidoRepository implements PedidoRepository {
     return const [];
   }
 
-  Stream<List<Pedido>> _watchScopedFallbackPedidos({
-    required String tenantId,
-  }) {
+  Stream<List<Pedido>> _watchScopedFallbackPedidos({required String tenantId}) {
     return Stream.multi((controller) async {
       final queries = await _buildScopedFallbackQueries(tenantId: tenantId);
       if (queries.isEmpty) {
@@ -213,6 +218,9 @@ class FirestorePedidoRepository implements PedidoRepository {
               final data = normalizeFirestoreMap(doc.data());
               data.putIfAbsent('id', () => doc.id);
               final pedido = Pedido.fromMap(data);
+              if (pedido.deletedAt != null) {
+                continue;
+              }
               if (pedido.id.trim().isEmpty) {
                 continue;
               }
@@ -267,17 +275,15 @@ class FirestorePedidoRepository implements PedidoRepository {
             },
             onError: (Object error, StackTrace stackTrace) {
               final isPermissionDenied =
-                  error is FirebaseException && error.code == 'permission-denied';
+                  error is FirebaseException &&
+                  error.code == 'permission-denied';
               if (isPermissionDenied && fallbackSubscription == null) {
-                fallbackSubscription = _watchScopedFallbackPedidos(
-                  tenantId: normalizedTenantId,
-                ).listen(
-                  (items) {
-                    _setTenantCache(normalizedTenantId, items);
-                    controller.add(items);
-                  },
-                  onError: controller.addError,
-                );
+                fallbackSubscription =
+                    _watchScopedFallbackPedidos(tenantId: normalizedTenantId)
+                        .listen((items) {
+                          _setTenantCache(normalizedTenantId, items);
+                          controller.add(items);
+                        }, onError: controller.addError);
                 return;
               }
 
@@ -359,13 +365,17 @@ class FirestorePedidoRepository implements PedidoRepository {
     if (entity.tenantId != normalizedTenantId) {
       return null;
     }
+    if (entity.deletedAt != null) {
+      return null;
+    }
     return entity;
   }
 
   @override
   Future<void> save(Pedido entity) {
+    final payload = buildSyncUpsertPayload(source: entity.toMap());
     _tenantCache.remove(entity.tenantId.trim());
-    return _collection.doc(entity.id).set(entity.toMap());
+    return _collection.doc(entity.id).set(payload);
   }
 
   @override
@@ -375,7 +385,8 @@ class FirestorePedidoRepository implements PedidoRepository {
       return;
     }
 
-    await _collection.doc(id).delete();
+    final payload = buildSyncDeletePayload(source: existing.toMap());
+    await _collection.doc(id).set(payload, SetOptions(merge: true));
     _tenantCache.remove(tenantId.trim());
   }
 }

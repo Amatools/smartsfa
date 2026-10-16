@@ -3,7 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../data/firestore/firestore_map_normalizer.dart';
 import 'catalog_sync_cursor_store.dart';
 
-enum CatalogSyncModule { clientes, produtos, tabelasPreco, taxRules }
+enum CatalogSyncModule { clientes, produtos, pedidos, tabelasPreco, taxRules }
 
 extension CatalogSyncModuleCollectionName on CatalogSyncModule {
   String get collectionName {
@@ -12,6 +12,8 @@ extension CatalogSyncModuleCollectionName on CatalogSyncModule {
         return 'clientes';
       case CatalogSyncModule.produtos:
         return 'produtos';
+      case CatalogSyncModule.pedidos:
+        return 'pedidos';
       case CatalogSyncModule.tabelasPreco:
         return 'tabelas_preco';
       case CatalogSyncModule.taxRules:
@@ -43,6 +45,9 @@ class CatalogSyncPullResult {
     required this.nextCursor,
     required this.items,
     required this.hasMore,
+    this.estimatedDocumentReads = 0,
+    this.queryOperations = 0,
+    this.fallbackFullReads = 0,
   });
 
   final CatalogSyncModule module;
@@ -50,9 +55,37 @@ class CatalogSyncPullResult {
   final int nextCursor;
   final List<CatalogSyncDeltaItem> items;
   final bool hasMore;
+  final int estimatedDocumentReads;
+  final int queryOperations;
+  final int fallbackFullReads;
+
+  bool get usedFallbackFullRead => fallbackFullReads > 0;
+}
+
+class CatalogSyncPendingCountResult {
+  const CatalogSyncPendingCountResult({
+    required this.pendingCount,
+    required this.estimatedDocumentReads,
+    required this.queryOperations,
+    required this.fromCache,
+    required this.fallbackFullReads,
+  });
+
+  final int pendingCount;
+  final int estimatedDocumentReads;
+  final int queryOperations;
+  final bool fromCache;
+  final int fallbackFullReads;
 }
 
 class CatalogIncrementalSyncService {
+  static const Duration _missingIndexRetryWindow = Duration(minutes: 15);
+  static const Duration _fullFallbackCooldown = Duration(hours: 2);
+  static final Map<String, DateTime> _retryAfterByModule = <String, DateTime>{};
+  static final Map<String, DateTime> _lastFullFallbackByModule =
+      <String, DateTime>{};
+  static final Map<String, int> _lastKnownPendingByModule = <String, int>{};
+
   CatalogIncrementalSyncService(
     this._firestore, {
     CatalogSyncCursorStore? cursorStore,
@@ -89,7 +122,7 @@ class CatalogIncrementalSyncService {
 
     final shouldBootstrap = previousCursor == 0 && !bootstrapComplete;
 
-    final documents = shouldBootstrap
+    final fetchResult = shouldBootstrap
         ? await _fetchInitialBootstrapDocuments(
             tenantId: normalizedTenantId,
             module: module,
@@ -100,6 +133,7 @@ class CatalogIncrementalSyncService {
             previousCursor: previousCursor,
             pageSize: safePageSize,
           );
+    final documents = fetchResult.documents;
 
     final items = <CatalogSyncDeltaItem>[];
     var nextCursor = previousCursor;
@@ -151,6 +185,9 @@ class CatalogIncrementalSyncService {
       nextCursor: nextCursor,
       items: items,
       hasMore: shouldBootstrap ? false : items.length >= safePageSize,
+      estimatedDocumentReads: fetchResult.estimatedDocumentReads,
+      queryOperations: fetchResult.queryOperations,
+      fallbackFullReads: fetchResult.fallbackFullReads,
     );
   }
 
@@ -168,9 +205,26 @@ class CatalogIncrementalSyncService {
     required String tenantId,
     required CatalogSyncModule module,
   }) async {
+    final result = await countPendingCloudToDeviceDeltaDetailed(
+      tenantId: tenantId,
+      module: module,
+    );
+    return result.pendingCount;
+  }
+
+  Future<CatalogSyncPendingCountResult> countPendingCloudToDeviceDeltaDetailed({
+    required String tenantId,
+    required CatalogSyncModule module,
+  }) async {
     final normalizedTenantId = tenantId.trim();
     if (normalizedTenantId.isEmpty) {
-      return 0;
+      return const CatalogSyncPendingCountResult(
+        pendingCount: 0,
+        estimatedDocumentReads: 0,
+        queryOperations: 0,
+        fromCache: false,
+        fallbackFullReads: 0,
+      );
     }
 
     final previousCursor = await _cursorStore.readCursor(
@@ -181,6 +235,7 @@ class CatalogIncrementalSyncService {
       tenantId: normalizedTenantId,
       module: module.collectionName,
     );
+    final moduleKey = _moduleKey(normalizedTenantId, module);
 
     final shouldBootstrap = previousCursor == 0 && !bootstrapComplete;
     if (shouldBootstrap) {
@@ -188,7 +243,25 @@ class CatalogIncrementalSyncService {
           .collection(module.collectionName)
           .where('tenantId', isEqualTo: normalizedTenantId)
           .get();
-      return snapshot.docs.length;
+      _markDeltaIndexHealthy(moduleKey);
+      _lastKnownPendingByModule[moduleKey] = snapshot.docs.length;
+      return CatalogSyncPendingCountResult(
+        pendingCount: snapshot.docs.length,
+        estimatedDocumentReads: snapshot.docs.length,
+        queryOperations: 1,
+        fromCache: false,
+        fallbackFullReads: 0,
+      );
+    }
+
+    if (_shouldSkipIndexedDeltaQuery(moduleKey)) {
+      return CatalogSyncPendingCountResult(
+        pendingCount: _lastKnownPendingByModule[moduleKey] ?? 0,
+        estimatedDocumentReads: 0,
+        queryOperations: 0,
+        fromCache: true,
+        fallbackFullReads: 0,
+      );
     }
 
     try {
@@ -197,31 +270,32 @@ class CatalogIncrementalSyncService {
           .where('tenantId', isEqualTo: normalizedTenantId)
           .where('syncVersion', isGreaterThan: previousCursor)
           .get();
-      return snapshot.docs.length;
+      _markDeltaIndexHealthy(moduleKey);
+      _lastKnownPendingByModule[moduleKey] = snapshot.docs.length;
+      return CatalogSyncPendingCountResult(
+        pendingCount: snapshot.docs.length,
+        estimatedDocumentReads: snapshot.docs.length,
+        queryOperations: 1,
+        fromCache: false,
+        fallbackFullReads: 0,
+      );
     } on FirebaseException catch (error) {
       if (error.code != 'failed-precondition') {
         rethrow;
       }
 
-      // Fallback when rollout still misses a composite index.
-      final snapshot = await _firestore
-          .collection(module.collectionName)
-          .where('tenantId', isEqualTo: normalizedTenantId)
-          .get();
-      final docs = snapshot.docs
-          .where((doc) {
-            final normalized = normalizeFirestoreMap(doc.data());
-            final syncVersion = _readInt(normalized['syncVersion']) ?? 0;
-            return syncVersion > previousCursor;
-          })
-          .toList(growable: false);
-
-      return docs.length;
+      _markDeltaIndexUnavailable(moduleKey);
+      return CatalogSyncPendingCountResult(
+        pendingCount: _lastKnownPendingByModule[moduleKey] ?? 0,
+        estimatedDocumentReads: 0,
+        queryOperations: 1,
+        fromCache: true,
+        fallbackFullReads: 0,
+      );
     }
   }
 
-  Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>>
-  _fetchInitialBootstrapDocuments({
+  Future<_CatalogFetchResult> _fetchInitialBootstrapDocuments({
     required String tenantId,
     required CatalogSyncModule module,
   }) async {
@@ -253,16 +327,30 @@ class CatalogIncrementalSyncService {
       return left.id.compareTo(right.id);
     });
 
-    return docs;
+    return _CatalogFetchResult(
+      documents: docs,
+      estimatedDocumentReads: snapshot.docs.length,
+      queryOperations: 1,
+      fallbackFullReads: 0,
+    );
   }
 
-  Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>>
-  _fetchIncrementalDocuments({
+  Future<_CatalogFetchResult> _fetchIncrementalDocuments({
     required String tenantId,
     required CatalogSyncModule module,
     required int previousCursor,
     required int pageSize,
   }) async {
+    final moduleKey = _moduleKey(tenantId, module);
+    if (_shouldSkipIndexedDeltaQuery(moduleKey)) {
+      return const _CatalogFetchResult(
+        documents: <QueryDocumentSnapshot<Map<String, dynamic>>>[],
+        estimatedDocumentReads: 0,
+        queryOperations: 0,
+        fallbackFullReads: 0,
+      );
+    }
+
     try {
       final snapshot = await _firestore
           .collection(module.collectionName)
@@ -271,10 +359,26 @@ class CatalogIncrementalSyncService {
           .orderBy('syncVersion')
           .limit(pageSize)
           .get();
-      return snapshot.docs;
+      _markDeltaIndexHealthy(moduleKey);
+      return _CatalogFetchResult(
+        documents: snapshot.docs,
+        estimatedDocumentReads: snapshot.docs.length,
+        queryOperations: 1,
+        fallbackFullReads: 0,
+      );
     } on FirebaseException catch (error) {
       if (error.code != 'failed-precondition') {
         rethrow;
+      }
+
+      _markDeltaIndexUnavailable(moduleKey);
+      if (!_canRunExpensiveFallback(moduleKey)) {
+        return const _CatalogFetchResult(
+          documents: <QueryDocumentSnapshot<Map<String, dynamic>>>[],
+          estimatedDocumentReads: 0,
+          queryOperations: 1,
+          fallbackFullReads: 0,
+        );
       }
 
       // Fallback path when index is missing during rollout.
@@ -296,12 +400,73 @@ class CatalogIncrementalSyncService {
         return leftVersion.compareTo(rightVersion);
       });
 
+      final normalizedDocs = docs.length <= pageSize
+          ? docs
+          : docs.sublist(0, pageSize);
+      _lastFullFallbackByModule[moduleKey] = DateTime.now();
+
       if (docs.length <= pageSize) {
-        return docs;
+        return _CatalogFetchResult(
+          documents: normalizedDocs,
+          estimatedDocumentReads: snapshot.docs.length,
+          queryOperations: 2,
+          fallbackFullReads: 1,
+        );
       }
-      return docs.sublist(0, pageSize);
+
+      return _CatalogFetchResult(
+        documents: normalizedDocs,
+        estimatedDocumentReads: snapshot.docs.length,
+        queryOperations: 2,
+        fallbackFullReads: 1,
+      );
     }
   }
+
+  static String _moduleKey(String tenantId, CatalogSyncModule module) {
+    return '${tenantId.trim()}::${module.collectionName}';
+  }
+
+  static bool _shouldSkipIndexedDeltaQuery(String moduleKey) {
+    final retryAfter = _retryAfterByModule[moduleKey];
+    if (retryAfter == null) {
+      return false;
+    }
+    return DateTime.now().isBefore(retryAfter);
+  }
+
+  static void _markDeltaIndexUnavailable(String moduleKey) {
+    _retryAfterByModule[moduleKey] = DateTime.now().add(
+      _missingIndexRetryWindow,
+    );
+  }
+
+  static void _markDeltaIndexHealthy(String moduleKey) {
+    _retryAfterByModule.remove(moduleKey);
+  }
+
+  static bool _canRunExpensiveFallback(String moduleKey) {
+    final lastFallbackAt = _lastFullFallbackByModule[moduleKey];
+    if (lastFallbackAt == null) {
+      return true;
+    }
+
+    return DateTime.now().difference(lastFallbackAt) >= _fullFallbackCooldown;
+  }
+}
+
+class _CatalogFetchResult {
+  const _CatalogFetchResult({
+    required this.documents,
+    required this.estimatedDocumentReads,
+    required this.queryOperations,
+    required this.fallbackFullReads,
+  });
+
+  final List<QueryDocumentSnapshot<Map<String, dynamic>>> documents;
+  final int estimatedDocumentReads;
+  final int queryOperations;
+  final int fallbackFullReads;
 }
 
 int? _readInt(Object? value) {

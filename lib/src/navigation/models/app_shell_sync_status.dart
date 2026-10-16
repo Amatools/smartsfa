@@ -8,6 +8,7 @@ class AppShellSyncStatus {
     required this.pendingUploadDeletes,
     required this.pendingDownloadClientes,
     required this.pendingDownloadProdutos,
+    required this.pendingDownloadPedidos,
     required this.pendingDownloadTabelasPreco,
     required this.pendingDownloadTaxRules,
     required this.cloudSnapshotAt,
@@ -27,6 +28,7 @@ class AppShellSyncStatus {
       pendingUploadDeletes: 0,
       pendingDownloadClientes: 0,
       pendingDownloadProdutos: 0,
+      pendingDownloadPedidos: 0,
       pendingDownloadTabelasPreco: 0,
       pendingDownloadTaxRules: 0,
       cloudSnapshotAt: null,
@@ -45,6 +47,7 @@ class AppShellSyncStatus {
   final int pendingUploadDeletes;
   final int pendingDownloadClientes;
   final int pendingDownloadProdutos;
+  final int pendingDownloadPedidos;
   final int pendingDownloadTabelasPreco;
   final int pendingDownloadTaxRules;
   final DateTime? cloudSnapshotAt;
@@ -62,6 +65,7 @@ class AppShellSyncStatus {
   int get totalDownloadPending =>
       pendingDownloadClientes +
       pendingDownloadProdutos +
+      pendingDownloadPedidos +
       pendingDownloadTabelasPreco +
       pendingDownloadTaxRules;
 
@@ -76,6 +80,7 @@ class AppShellSyncStatus {
     int? pendingUploadDeletes,
     int? pendingDownloadClientes,
     int? pendingDownloadProdutos,
+    int? pendingDownloadPedidos,
     int? pendingDownloadTabelasPreco,
     int? pendingDownloadTaxRules,
     DateTime? cloudSnapshotAt,
@@ -102,6 +107,8 @@ class AppShellSyncStatus {
           pendingDownloadClientes ?? this.pendingDownloadClientes,
       pendingDownloadProdutos:
           pendingDownloadProdutos ?? this.pendingDownloadProdutos,
+      pendingDownloadPedidos:
+          pendingDownloadPedidos ?? this.pendingDownloadPedidos,
       pendingDownloadTabelasPreco:
           pendingDownloadTabelasPreco ?? this.pendingDownloadTabelasPreco,
       pendingDownloadTaxRules:

@@ -122,5 +122,41 @@ void main() {
       expect(second.previousCursor, 0);
       expect(second.nextCursor, 0);
     });
+
+    test('returns tombstone deletions in incremental pull', () async {
+      await firestore.collection('tax_rules').doc('r1').set({
+        'id': 'r1',
+        'tenantId': 'tenant_a',
+        'status': 'active',
+        'syncVersion': 1,
+      });
+
+      final first = await service.pullDelta(
+        tenantId: 'tenant_a',
+        module: CatalogSyncModule.taxRules,
+      );
+      expect(first.nextCursor, 1);
+      expect(first.items.length, 1);
+      expect(first.items.first.isDeleted, isFalse);
+
+      await firestore.collection('tax_rules').doc('r1').set({
+        'id': 'r1',
+        'tenantId': 'tenant_a',
+        'status': 'inactive',
+        'syncVersion': 2,
+        'deletedAt': DateTime.now().toUtc().toIso8601String(),
+      });
+
+      final second = await service.pullDelta(
+        tenantId: 'tenant_a',
+        module: CatalogSyncModule.taxRules,
+      );
+
+      expect(second.previousCursor, 1);
+      expect(second.nextCursor, 2);
+      expect(second.items.length, 1);
+      expect(second.items.first.id, 'r1');
+      expect(second.items.first.isDeleted, isTrue);
+    });
   });
 }

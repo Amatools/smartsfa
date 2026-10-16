@@ -23,6 +23,7 @@ class AccountSettingsPage extends StatefulWidget {
 
 class _AccountSettingsPageState extends State<AccountSettingsPage> {
   bool _leavingTenant = false;
+  bool _updatingDisplayName = false;
 
   TenantMembershipService get _membershipService =>
       TenantMembershipService(FirebaseFirestore.instance);
@@ -80,6 +81,100 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
   void _showMessage(String message) {
     ScaffoldMessenger.of(context)
         .showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _editDisplayName() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      _showMessage('Sessao expirada. Faca login novamente.');
+      return;
+    }
+
+    String currentName = (user.displayName ?? '').trim();
+    if (currentName.isEmpty) {
+      final userDoc = await FirebaseFirestore.instance
+          .collection('usuarios')
+          .doc(user.uid)
+          .get();
+      final userData = userDoc.data() ?? <String, dynamic>{};
+      currentName =
+          (userData['displayName'] ?? userData['name'] ?? userData['nome'] ?? '')
+              .toString()
+              .trim();
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    final controller = TextEditingController(text: currentName);
+    final selectedName = await showDialog<String>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Atualizar nome de exibicao'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            textInputAction: TextInputAction.done,
+            decoration: const InputDecoration(
+              labelText: 'Nome',
+              hintText: 'Como seu nome deve aparecer no sistema',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () =>
+                  Navigator.of(context).pop(controller.text.trim()),
+              child: const Text('Salvar'),
+            ),
+          ],
+        );
+      },
+    );
+    controller.dispose();
+
+    if (selectedName == null) {
+      return;
+    }
+    if (selectedName.isEmpty) {
+      _showMessage('Informe um nome para salvar.');
+      return;
+    }
+
+    setState(() {
+      _updatingDisplayName = true;
+    });
+
+    try {
+      await user.updateDisplayName(selectedName);
+      await FirebaseFirestore.instance.collection('usuarios').doc(user.uid).set({
+        'uid': user.uid,
+        'email': user.email ?? '',
+        'displayName': selectedName,
+        'name': selectedName,
+        'updatedAt': DateTime.now().toIso8601String(),
+      }, SetOptions(merge: true));
+
+      if (!mounted) {
+        return;
+      }
+
+      _showMessage('Nome atualizado com sucesso.');
+      setState(() {});
+    } catch (_) {
+      _showMessage('Nao foi possivel atualizar o nome agora.');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _updatingDisplayName = false;
+        });
+      }
+    }
   }
 
   String _workspaceTypeLabel(String workspaceType) {
@@ -234,7 +329,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
 
     return SingleChildScrollView(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(10, 16, 10, 16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -261,6 +356,39 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                     const SizedBox(height: 8),
                     const Text(
                       'Sempre ativo para sua conta. Se voce ficar sem tenant ativo, o app abre no workspace pessoal automaticamente.',
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Identificacao da conta',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Nome atual: ${FirebaseAuth.instance.currentUser?.displayName?.trim().isNotEmpty == true ? FirebaseAuth.instance.currentUser!.displayName!.trim() : '-'}',
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Email: ${FirebaseAuth.instance.currentUser?.email?.trim().isNotEmpty == true ? FirebaseAuth.instance.currentUser!.email!.trim() : '-'}',
+                    ),
+                    const SizedBox(height: 10),
+                    OutlinedButton.icon(
+                      onPressed: _updatingDisplayName ? null : _editDisplayName,
+                      icon: const Icon(Icons.badge_outlined),
+                      label: Text(
+                        _updatingDisplayName
+                            ? 'Salvando nome...'
+                            : 'Editar nome de exibicao',
+                      ),
                     ),
                   ],
                 ),

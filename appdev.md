@@ -32,6 +32,8 @@ Regra de uso: cada item entregue deve ser marcado com [x] e manter evidencias cu
 - [x] Tela de auditoria de memberships com filtros basicos
 - [x] Modo pessoal definido como capacidade permanente da conta (nao governado por owner do tenant)
 - [x] Politica do tenant restrita a governanca organizacional (ex.: gerente->representante, representante->vendedor)
+- [x] Especificacao fechada de hierarquia comercial + backlog tecnico registrada em `docs/hierarquia_comercial_backlog_tecnico.md`
+- [x] Guia end-user de hierarquia para site/ajuda registrado em `docs/enduser_hierarquia_comercial.md`
 
 ## Diretrizes de fluxo (multi-tenant + pessoal)
 
@@ -234,6 +236,12 @@ Objetivo: reduzir regressao de permissao antes de publicar regras em producao.
 - [ ] Bloqueio de uso quando versao de preco divergir
 - [ ] Worker de fila para envio automatico ao detectar conectividade
 
+Status da rodada atual (custo/cota/performance):
+
+- [x] Metricas por tenant/usuario para sync e leituras estimadas no dia (card no Inicio + persistencia local).
+- [x] Alertas de regressao de custo (warning/critical) por ambiente, com thresholds por `APP_ENV`.
+- [x] Revisao periodica de queries e paginacao formalizada em runbook: `docs/query_pagination_review.md`.
+
 ## 8) Notificacoes
 
 - [ ] Configurar Firebase Cloud Messaging (Android/iOS/Web)
@@ -248,6 +256,11 @@ Objetivo: reduzir regressao de permissao antes de publicar regras em producao.
 - [ ] Auditoria basica de acoes criticas (login, sync, envio pedido)
 - [ ] Revisao de regras Firestore com testes de autorizacao
 - [ ] Politica de backup/retencao e observabilidade
+
+Implementacao parcial ja concluida nesta etapa:
+
+- [x] Runtime profile no app via `APP_ENV=dev|homolog|prod` (arquivo canonico: `lib/src/core/constants/app_environment.dart`).
+- [x] Polling cloud por ambiente com padroes de quota/performance (dev=20s, homolog=45s, prod=90s) e override opcional por `CLOUD_DELTA_REFRESH_INTERVAL_SECONDS` (piso 15s).
 
 ## 10) Entregaveis tecnicos esperados
 

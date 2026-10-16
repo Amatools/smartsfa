@@ -4,10 +4,12 @@ class _PaymentConditionsSection extends StatefulWidget {
   const _PaymentConditionsSection({
     required this.activeTenant,
     this.activeRepresentedCompanyName,
+    this.selectedRepresentedCompanyId,
   });
 
   final TenantEntryOption activeTenant;
   final String? activeRepresentedCompanyName;
+  final String? selectedRepresentedCompanyId;
 
   @override
   State<_PaymentConditionsSection> createState() =>
@@ -21,15 +23,26 @@ class _PaymentConditionsSectionState extends State<_PaymentConditionsSection> {
   final List<_PaymentConditionDraftRow> _rows = [];
   bool _initialized = false;
   bool _saving = false;
-  String? _loadedTenantId;
+  String? _loadedScope;
+
+  String _currentScopeKey() {
+    final representedCompanyId = (widget.selectedRepresentedCompanyId ?? '')
+        .trim();
+    if (representedCompanyId.isEmpty) {
+      return '${widget.activeTenant.tenantId}::tenant_default';
+    }
+    return '${widget.activeTenant.tenantId}::${representedCompanyId.replaceAll('.', '_')}';
+  }
 
   @override
   void didUpdateWidget(covariant _PaymentConditionsSection oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.activeTenant.tenantId != widget.activeTenant.tenantId) {
+    if (oldWidget.activeTenant.tenantId != widget.activeTenant.tenantId ||
+        oldWidget.selectedRepresentedCompanyId !=
+            widget.selectedRepresentedCompanyId) {
       _clearControllers();
       _initialized = false;
-      _loadedTenantId = null;
+      _loadedScope = null;
     }
   }
 
@@ -71,6 +84,12 @@ class _PaymentConditionsSectionState extends State<_PaymentConditionsSection> {
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     final representedName = widget.activeRepresentedCompanyName?.trim() ?? '';
+    final representedCompanyId = (widget.selectedRepresentedCompanyId ?? '')
+        .trim();
+    final requiresRepresentedScope =
+        widget.activeTenant.workspaceType == 'seller_solo_workspace' ||
+        widget.activeTenant.workspaceType == 'rep_workspace';
+    final hasRepresentedScope = representedCompanyId.isNotEmpty;
     final canEditRules = _canEditRepresentedModuleSettings(
       role: widget.activeTenant.role,
       workspaceType: widget.activeTenant.workspaceType,
@@ -79,12 +98,12 @@ class _PaymentConditionsSectionState extends State<_PaymentConditionsSection> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Condicoes de pagamento', style: textTheme.headlineMedium),
+        Text('Condições de pagamento', style: textTheme.headlineMedium),
         const SizedBox(height: 8),
         Text(
           representedName.isEmpty
-              ? 'Cadastre as condicoes com descricao e valor minimo para elegibilidade no pedido.'
-              : 'Cadastre as condicoes com descricao e valor minimo para a representada $representedName.',
+              ? 'Cadastre as condições com descrição e valor mínimo para elegibilidade no pedido.'
+              : 'Cadastre as condições com descrição e valor mínimo para a representada $representedName.',
           style: textTheme.bodyLarge,
         ),
         const SizedBox(height: 16),
@@ -95,14 +114,38 @@ class _PaymentConditionsSectionState extends State<_PaymentConditionsSection> {
             child: StreamBuilder<List<PaymentConditionRule>>(
               stream: _service.watchPaymentConditionRules(
                 tenantId: widget.activeTenant.tenantId,
+                representedCompanyId: widget.selectedRepresentedCompanyId,
               ),
               builder: (context, snapshot) {
+                if (snapshot.hasError) {
+                  final error = snapshot.error;
+                  return Card(
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      side: BorderSide(
+                        color: Theme.of(context).colorScheme.error
+                            .withValues(alpha: 0.35),
+                      ),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(18),
+                      child: Text(
+                        'Falha ao carregar condições de pagamento: $error',
+                        style: textTheme.bodyMedium?.copyWith(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                      ),
+                    ),
+                  );
+                }
+
                 final rules = snapshot.data ?? const <PaymentConditionRule>[];
-                if (!_initialized ||
-                    _loadedTenantId != widget.activeTenant.tenantId) {
+                final currentScope = _currentScopeKey();
+                if (!_initialized || _loadedScope != currentScope) {
                   _syncControllers(rules);
                   _initialized = true;
-                  _loadedTenantId = widget.activeTenant.tenantId;
+                  _loadedScope = currentScope;
                 }
 
                 return Card(
@@ -110,7 +153,8 @@ class _PaymentConditionsSectionState extends State<_PaymentConditionsSection> {
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
                     side: BorderSide(
-                      color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.35),
+                      color: Theme.of(context).colorScheme.outlineVariant
+                          .withValues(alpha: 0.35),
                     ),
                   ),
                   child: Padding(
@@ -122,7 +166,7 @@ class _PaymentConditionsSectionState extends State<_PaymentConditionsSection> {
                           children: [
                             Expanded(
                               child: Text(
-                                'Condicoes de pagamento',
+                                'Condições de pagamento',
                                 style: textTheme.titleMedium,
                               ),
                             ),
@@ -131,11 +175,12 @@ class _PaymentConditionsSectionState extends State<_PaymentConditionsSection> {
                                   ? _addRule
                                   : null,
                               icon: const Icon(Icons.add),
-                              label: const Text('Nova condicao de pagamento'),
+                              label: const Text('Nova condição de pagamento'),
                               style: OutlinedButton.styleFrom(
                                 shape: const StadiumBorder(),
                                 side: BorderSide(
-                                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.35),
+                                  color: Theme.of(context).colorScheme.primary
+                                      .withValues(alpha: 0.35),
                                 ),
                               ),
                             ),
@@ -143,9 +188,19 @@ class _PaymentConditionsSectionState extends State<_PaymentConditionsSection> {
                         ),
                         const SizedBox(height: 12),
                         Text(
-                          'Cada linha deve ter descricao e valor minimo para habilitar a condicao no pedido.',
+                          'Cada linha deve ter descrição e valor mínimo para habilitar a condição no pedido.',
                           style: textTheme.bodySmall,
                         ),
+                        if (requiresRepresentedScope && !hasRepresentedScope)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: Text(
+                              'Selecione a representada ativa no topo do portal para salvar neste módulo.',
+                              style: textTheme.bodySmall?.copyWith(
+                                color: Theme.of(context).colorScheme.error,
+                              ),
+                            ),
+                          ),
                         const SizedBox(height: 14),
                         Container(
                           padding: const EdgeInsets.symmetric(
@@ -163,7 +218,7 @@ class _PaymentConditionsSectionState extends State<_PaymentConditionsSection> {
                             children: [
                               Expanded(
                                 child: Text(
-                                  'Descricao',
+                                  'Descrição',
                                   style: textTheme.labelLarge,
                                 ),
                               ),
@@ -171,7 +226,7 @@ class _PaymentConditionsSectionState extends State<_PaymentConditionsSection> {
                               SizedBox(
                                 width: 150,
                                 child: Text(
-                                  'Valor minimo',
+                                  'Valor mínimo',
                                   style: textTheme.labelLarge,
                                   textAlign: TextAlign.right,
                                 ),
@@ -182,7 +237,7 @@ class _PaymentConditionsSectionState extends State<_PaymentConditionsSection> {
                         ),
                         const SizedBox(height: 10),
                         if (_rows.isEmpty)
-                          const Text('Nenhuma condicao criada ainda.')
+                          const Text('Nenhuma condição criada ainda.')
                         else
                           Column(
                             children: [
@@ -193,15 +248,21 @@ class _PaymentConditionsSectionState extends State<_PaymentConditionsSection> {
                                     builder: (context, constraints) {
                                       final compact =
                                           constraints.maxWidth < 760;
-                                      final colors = Theme.of(context).colorScheme;
+                                      final colors = Theme.of(context)
+                                          .colorScheme;
                                       if (compact) {
                                         return Container(
                                           padding: const EdgeInsets.all(12),
                                           decoration: BoxDecoration(
-                                            borderRadius: BorderRadius.circular(14),
-                                            color: colors.surfaceContainerHighest.withValues(alpha: 0.16),
+                                            borderRadius: BorderRadius.circular(
+                                              14,
+                                            ),
+                                            color: colors
+                                                .surfaceContainerHighest
+                                                .withValues(alpha: 0.16),
                                             border: Border.all(
-                                              color: colors.outlineVariant.withValues(alpha: 0.45),
+                                              color: colors.outlineVariant
+                                                  .withValues(alpha: 0.45),
                                             ),
                                           ),
                                           child: Column(
@@ -211,9 +272,10 @@ class _PaymentConditionsSectionState extends State<_PaymentConditionsSection> {
                                               TextField(
                                                 controller: _rows[index]
                                                     .descriptionController,
-                                                enabled: canEditRules && !_saving,
+                                                enabled:
+                                                    canEditRules && !_saving,
                                                 decoration: _fieldDecoration(
-                                                  label: 'Descricao *',
+                                                  label: 'Descrição *',
                                                   icon: Icons.short_text,
                                                 ),
                                               ),
@@ -224,6 +286,8 @@ class _PaymentConditionsSectionState extends State<_PaymentConditionsSection> {
                                                     child: TextField(
                                                       controller: _rows[index]
                                                           .minimumValueController,
+                                                      focusNode: _rows[index]
+                                                          .minimumValueFocusNode,
                                                       enabled:
                                                           canEditRules &&
                                                           !_saving,
@@ -231,14 +295,31 @@ class _PaymentConditionsSectionState extends State<_PaymentConditionsSection> {
                                                           const TextInputType.numberWithOptions(
                                                             decimal: true,
                                                           ),
-                                                      textAlign: TextAlign.right,
-                                                      decoration:
-                                                          _fieldDecoration(
-                                                            label:
-                                                                'Valor minimo',
-                                                            icon: Icons.payments_outlined,
-                                                            prefixText: 'R\$ ',
-                                                          ),
+                                                      inputFormatters: [
+                                                        FilteringTextInputFormatter.allow(
+                                                          RegExp(r'[0-9,\.]'),
+                                                        ),
+                                                      ],
+                                                      onEditingComplete: () {
+                                                        _normalizeMoneyController(
+                                                          _rows[index]
+                                                              .minimumValueController,
+                                                        );
+                                                      },
+                                                      onTapOutside: (_) {
+                                                        _normalizeMoneyController(
+                                                          _rows[index]
+                                                              .minimumValueController,
+                                                        );
+                                                      },
+                                                      textAlign:
+                                                          TextAlign.right,
+                                                      decoration: _fieldDecoration(
+                                                        label: 'Valor mínimo',
+                                                        icon: Icons
+                                                            .payments_outlined,
+                                                        prefixText: 'R\$ ',
+                                                      ),
                                                     ),
                                                   ),
                                                   const SizedBox(width: 8),
@@ -246,9 +327,11 @@ class _PaymentConditionsSectionState extends State<_PaymentConditionsSection> {
                                                     message: 'Remover linha',
                                                     child: IconButton.outlined(
                                                       onPressed:
-                                                          canEditRules && !_saving
-                                                          ? () =>
-                                                                _removeRule(index)
+                                                          canEditRules &&
+                                                              !_saving
+                                                          ? () => _removeRule(
+                                                              index,
+                                                            )
                                                           : null,
                                                       icon: const Icon(
                                                         Icons.delete_outline,
@@ -265,10 +348,14 @@ class _PaymentConditionsSectionState extends State<_PaymentConditionsSection> {
                                       return Container(
                                         padding: const EdgeInsets.all(12),
                                         decoration: BoxDecoration(
-                                          borderRadius: BorderRadius.circular(14),
-                                          color: colors.surfaceContainerHighest.withValues(alpha: 0.16),
+                                          borderRadius: BorderRadius.circular(
+                                            14,
+                                          ),
+                                          color: colors.surfaceContainerHighest
+                                              .withValues(alpha: 0.16),
                                           border: Border.all(
-                                            color: colors.outlineVariant.withValues(alpha: 0.45),
+                                            color: colors.outlineVariant
+                                                .withValues(alpha: 0.45),
                                           ),
                                         ),
                                         child: Row(
@@ -277,9 +364,10 @@ class _PaymentConditionsSectionState extends State<_PaymentConditionsSection> {
                                               child: TextField(
                                                 controller: _rows[index]
                                                     .descriptionController,
-                                                enabled: canEditRules && !_saving,
+                                                enabled:
+                                                    canEditRules && !_saving,
                                                 decoration: _fieldDecoration(
-                                                  label: 'Descricao *',
+                                                  label: 'Descrição *',
                                                   icon: Icons.short_text,
                                                 ),
                                               ),
@@ -290,14 +378,34 @@ class _PaymentConditionsSectionState extends State<_PaymentConditionsSection> {
                                               child: TextField(
                                                 controller: _rows[index]
                                                     .minimumValueController,
-                                                enabled: canEditRules && !_saving,
+                                                focusNode: _rows[index]
+                                                    .minimumValueFocusNode,
+                                                enabled:
+                                                    canEditRules && !_saving,
                                                 keyboardType:
                                                     const TextInputType.numberWithOptions(
                                                       decimal: true,
                                                     ),
+                                                inputFormatters: [
+                                                  FilteringTextInputFormatter.allow(
+                                                    RegExp(r'[0-9,\.]'),
+                                                  ),
+                                                ],
+                                                onEditingComplete: () {
+                                                  _normalizeMoneyController(
+                                                    _rows[index]
+                                                        .minimumValueController,
+                                                  );
+                                                },
+                                                onTapOutside: (_) {
+                                                  _normalizeMoneyController(
+                                                    _rows[index]
+                                                        .minimumValueController,
+                                                  );
+                                                },
                                                 textAlign: TextAlign.right,
                                                 decoration: _fieldDecoration(
-                                                  label: 'Valor minimo',
+                                                  label: 'Valor mínimo',
                                                   icon: Icons.payments_outlined,
                                                   prefixText: 'R\$ ',
                                                 ),
@@ -327,7 +435,7 @@ class _PaymentConditionsSectionState extends State<_PaymentConditionsSection> {
                         const SizedBox(height: 8),
                         if (!canEditRules)
                           const Text(
-                            'Esta conta esta em modo somente leitura. Apenas o owner pode alterar condicoes de pagamento.',
+                            'Esta conta está em modo somente leitura. Apenas o owner pode alterar condições de pagamento.',
                           ),
                         if (canEditRules) ...[
                           const SizedBox(height: 8),
@@ -345,11 +453,13 @@ class _PaymentConditionsSectionState extends State<_PaymentConditionsSection> {
                                     )
                                   : const Icon(Icons.save_outlined),
                               label: Text(
-                                _saving ? 'Salvando...' : 'Salvar condicoes',
+                                _saving ? 'Salvando...' : 'Salvar condições',
                               ),
                               style: FilledButton.styleFrom(
                                 shape: const StadiumBorder(),
-                                padding: const EdgeInsets.symmetric(horizontal: 18),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 18,
+                                ),
                               ),
                             ),
                           ),
@@ -369,13 +479,13 @@ class _PaymentConditionsSectionState extends State<_PaymentConditionsSection> {
   void _syncControllers(List<PaymentConditionRule> rules) {
     _clearControllers();
     if (rules.isEmpty) {
-      _rows.add(_PaymentConditionDraftRow());
+      _rows.add(_createDraftRow());
       return;
     }
 
     for (final rule in rules) {
       _rows.add(
-        _PaymentConditionDraftRow(
+        _createDraftRow(
           description: rule.description,
           minimumValue: _formatMoney(rule.minimumValue),
         ),
@@ -385,8 +495,24 @@ class _PaymentConditionsSectionState extends State<_PaymentConditionsSection> {
 
   void _addRule() {
     setState(() {
-      _rows.add(_PaymentConditionDraftRow());
+      _rows.add(_createDraftRow());
     });
+  }
+
+  _PaymentConditionDraftRow _createDraftRow({
+    String description = '',
+    String minimumValue = '0,00',
+  }) {
+    final row = _PaymentConditionDraftRow(
+      description: description,
+      minimumValue: minimumValue,
+    );
+    row.minimumValueFocusNode.addListener(() {
+      if (!row.minimumValueFocusNode.hasFocus) {
+        _normalizeMoneyController(row.minimumValueController);
+      }
+    });
+    return row;
   }
 
   void _removeRule(int index) {
@@ -402,6 +528,26 @@ class _PaymentConditionsSectionState extends State<_PaymentConditionsSection> {
   }
 
   Future<void> _saveRules() async {
+    for (final row in _rows) {
+      _normalizeMoneyController(row.minimumValueController);
+    }
+
+    final representedCompanyId = (widget.selectedRepresentedCompanyId ?? '')
+        .trim();
+    final requiresRepresentedScope =
+        widget.activeTenant.workspaceType == 'seller_solo_workspace' ||
+        widget.activeTenant.workspaceType == 'rep_workspace';
+    if (requiresRepresentedScope && representedCompanyId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Selecione a representada ativa no topo para salvar as condições.',
+          ),
+        ),
+      );
+      return;
+    }
+
     final values = _rows
         .map(
           (row) => PaymentConditionRule(
@@ -415,7 +561,7 @@ class _PaymentConditionsSectionState extends State<_PaymentConditionsSection> {
     if (values.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Informe ao menos uma condicao com descricao.'),
+          content: Text('Informe ao menos uma condição com descrição.'),
         ),
       );
       return;
@@ -429,14 +575,17 @@ class _PaymentConditionsSectionState extends State<_PaymentConditionsSection> {
       await _service.updatePaymentConditionRules(
         tenantId: widget.activeTenant.tenantId,
         values: values,
+        representedCompanyId: representedCompanyId,
       );
+
+      _initialized = false;
 
       if (!mounted) {
         return;
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Condicoes de pagamento salvas.')),
+        const SnackBar(content: Text('Condições de pagamento salvas.')),
       );
     } catch (error) {
       if (!mounted) {
@@ -444,7 +593,13 @@ class _PaymentConditionsSectionState extends State<_PaymentConditionsSection> {
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Falha ao salvar condicoes: $error')),
+        SnackBar(
+          content: Text(
+            error is FirebaseException
+                ? 'Falha ao salvar condições (${error.code}): ${error.message ?? 'erro sem detalhes'}'
+                : 'Falha ao salvar condições: $error',
+          ),
+        ),
       );
     } finally {
       if (mounted) {
@@ -466,16 +621,71 @@ class _PaymentConditionsSectionState extends State<_PaymentConditionsSection> {
     return value.toStringAsFixed(2).replaceAll('.', ',');
   }
 
-  double _parseMoney(String raw) {
-    final normalized = raw.trim();
-    if (normalized.isEmpty) {
-      return 0;
+  void _normalizeMoneyController(TextEditingController controller) {
+    final parsed = _tryParseMoney(controller.text);
+    if (parsed == null) {
+      controller.text = '0,00';
+      controller.selection = TextSelection.fromPosition(
+        TextPosition(offset: controller.text.length),
+      );
+      return;
     }
 
-    final withDotDecimal = normalized.replaceAll('.', '').replaceAll(',', '.');
-    return double.tryParse(withDotDecimal) ??
-        double.tryParse(normalized.replaceAll(',', '.')) ??
-        0;
+    controller.text = _formatMoney(parsed);
+    controller.selection = TextSelection.fromPosition(
+      TextPosition(offset: controller.text.length),
+    );
+  }
+
+  double _parseMoney(String raw) {
+    return _tryParseMoney(raw) ?? 0;
+  }
+
+  double? _tryParseMoney(String raw) {
+    final sanitized = raw.trim();
+    if (sanitized.isEmpty) {
+      return null;
+    }
+
+    final normalized = sanitized.replaceAll(RegExp(r'[^0-9,\.]'), '');
+    if (normalized.isEmpty) {
+      return null;
+    }
+
+    final hasComma = normalized.contains(',');
+    final hasDot = normalized.contains('.');
+
+    // Pure integer: "600" -> 600.00
+    if (!hasComma && !hasDot) {
+      return double.tryParse(normalized);
+    }
+
+    final lastComma = normalized.lastIndexOf(',');
+    final lastDot = normalized.lastIndexOf('.');
+    final separatorIndex = lastComma > lastDot ? lastComma : lastDot;
+
+    if (separatorIndex <= 0) {
+      final digits = normalized.replaceAll(RegExp(r'[^0-9]'), '');
+      return digits.isEmpty ? null : double.tryParse(digits);
+    }
+
+    final intDigits = normalized
+        .substring(0, separatorIndex)
+        .replaceAll(RegExp(r'[^0-9]'), '');
+    var fracDigits = normalized
+        .substring(separatorIndex + 1)
+        .replaceAll(RegExp(r'[^0-9]'), '');
+
+    final safeInt = intDigits.isEmpty ? '0' : intDigits;
+    if (fracDigits.isEmpty) {
+      fracDigits = '00';
+    } else if (fracDigits.length == 1) {
+      fracDigits = '${fracDigits}0';
+    } else if (fracDigits.length > 2) {
+      fracDigits = fracDigits.substring(0, 2);
+    }
+
+    return double.tryParse('$safeInt.$fracDigits');
   }
 }
 
@@ -484,13 +694,16 @@ class _PaymentConditionDraftRow {
     String description = '',
     String minimumValue = '0,00',
   }) : descriptionController = TextEditingController(text: description),
-       minimumValueController = TextEditingController(text: minimumValue);
+       minimumValueController = TextEditingController(text: minimumValue),
+       minimumValueFocusNode = FocusNode();
 
   final TextEditingController descriptionController;
   final TextEditingController minimumValueController;
+  final FocusNode minimumValueFocusNode;
 
   void dispose() {
     descriptionController.dispose();
     minimumValueController.dispose();
+    minimumValueFocusNode.dispose();
   }
 }

@@ -38,7 +38,23 @@ class _TenantInvitationsPageState extends State<TenantInvitationsPage> {
 
   String get _normalizedRole => widget.identity.role.trim().toLowerCase();
 
-  List<String> _allowedRolesForContext(String workspaceType) {
+  bool _policyFlag(
+    Map<String, dynamic>? policy,
+    String key, {
+    required bool defaultValue,
+  }) {
+    if (policy == null) {
+      return defaultValue;
+    }
+    final value = policy[key];
+    return value is bool ? value : defaultValue;
+  }
+
+  List<String> _allowedRolesForContext({
+    required String workspaceType,
+    required bool allowManagerSendInvites,
+    required bool allowRepresentativeSendInvites,
+  }) {
     if (workspaceType == 'seller_solo_workspace') {
       return const [];
     }
@@ -47,19 +63,20 @@ class _TenantInvitationsPageState extends State<TenantInvitationsPage> {
       if (_normalizedRole == 'owner') {
         return const ['representante', 'vendedor'];
       }
-      if (_normalizedRole == 'representante') {
+      if (_normalizedRole == 'representante' &&
+          allowRepresentativeSendInvites) {
         return const ['vendedor'];
       }
       return const [];
     }
 
     if (_normalizedRole == 'owner') {
-      return const ['gerente'];
+      return const ['gerente', 'representante', 'vendedor'];
     }
-    if (_normalizedRole == 'gerente') {
+    if (_normalizedRole == 'gerente' && allowManagerSendInvites) {
       return const ['representante'];
     }
-    if (_normalizedRole == 'representante') {
+    if (_normalizedRole == 'representante' && allowRepresentativeSendInvites) {
       return const ['vendedor'];
     }
     return const [];
@@ -85,21 +102,34 @@ class _TenantInvitationsPageState extends State<TenantInvitationsPage> {
     final workspaceType =
         (tenantDoc.data()?['workspaceType'] ?? 'brand_owner_workspace')
             .toString();
-    final allowedRolesForContext = _allowedRolesForContext(workspaceType);
+    final tenantPolicy = tenantDoc.data()?['policy'] as Map<String, dynamic>?;
+    final allowedRolesForContext = _allowedRolesForContext(
+      workspaceType: workspaceType,
+      allowManagerSendInvites: _policyFlag(
+        tenantPolicy,
+        'allowManagerSendInvites',
+        defaultValue: false,
+      ),
+      allowRepresentativeSendInvites: _policyFlag(
+        tenantPolicy,
+        'allowRepresentativeSendInvites',
+        defaultValue: false,
+      ),
+    );
 
     if (allowedRolesForContext.isEmpty) {
-      _showMessage('Seu perfil nao pode enviar convites neste tenant.');
+      _showMessage('Seu perfil não pode enviar convites neste tenant.');
       return;
     }
 
     if (!allowedRolesForContext.contains(_selectedRole)) {
-      _showMessage('Perfil de convite invalido para este tipo de workspace.');
+      _showMessage('Perfil de convite inválido para este tipo de workspace.');
       return;
     }
 
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      _showMessage('Sessao expirada. Faca login novamente.');
+      _showMessage('Sessão expirada. Faça login novamente.');
       return;
     }
 
@@ -125,7 +155,7 @@ class _TenantInvitationsPageState extends State<TenantInvitationsPage> {
       _showMessage(
         error is StateError
             ? error.message.toString()
-            : 'Nao foi possivel criar convite agora.',
+        : 'Não foi possível criar convite agora.',
       );
     } finally {
       if (mounted) {
@@ -137,23 +167,19 @@ class _TenantInvitationsPageState extends State<TenantInvitationsPage> {
   }
 
   Future<void> _revokeInvitation(TenantInvitation invitation) async {
-    final tenantDoc = await FirebaseFirestore.instance
-        .collection('tenants')
-        .doc(widget.identity.tenantId)
-        .get();
-    final workspaceType =
-        (tenantDoc.data()?['workspaceType'] ?? 'brand_owner_workspace')
-            .toString();
-    final allowedRolesForContext = _allowedRolesForContext(workspaceType);
-
-    if (allowedRolesForContext.isEmpty) {
-      _showMessage('Seu perfil nao pode gerenciar convites neste tenant.');
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      _showMessage('Sessão expirada. Faça login novamente.');
       return;
     }
 
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      _showMessage('Sessao expirada. Faca login novamente.');
+    final normalizedActorRole = _normalizedRole;
+    final isOwnerOrAdmin =
+        normalizedActorRole == 'owner' ||
+        normalizedActorRole == 'platform_admin';
+    final isCreator = invitation.createdByUid?.trim() == user.uid;
+    if (!isOwnerOrAdmin && !isCreator) {
+      _showMessage('Sem permissão para revogar este convite.');
       return;
     }
 
@@ -171,7 +197,7 @@ class _TenantInvitationsPageState extends State<TenantInvitationsPage> {
       _showMessage(
         error is StateError
             ? error.message.toString()
-            : 'Nao foi possivel revogar convite agora.',
+        : 'Não foi possível revogar convite agora.',
       );
     } finally {
       if (mounted) {
@@ -195,12 +221,30 @@ class _TenantInvitationsPageState extends State<TenantInvitationsPage> {
           .doc(widget.identity.tenantId)
           .snapshots(),
       builder: (context, tenantSnapshot) {
+        final currentUser = FirebaseAuth.instance.currentUser;
         final workspaceType =
             (tenantSnapshot.data?.data()?['workspaceType'] ??
                     'brand_owner_workspace')
                 .toString();
-        final allowedRoles = _allowedRolesForContext(workspaceType);
+        final tenantPolicy =
+            tenantSnapshot.data?.data()?['policy'] as Map<String, dynamic>?;
+        final allowedRoles = _allowedRolesForContext(
+          workspaceType: workspaceType,
+          allowManagerSendInvites: _policyFlag(
+            tenantPolicy,
+            'allowManagerSendInvites',
+            defaultValue: false,
+          ),
+          allowRepresentativeSendInvites: _policyFlag(
+            tenantPolicy,
+            'allowRepresentativeSendInvites',
+            defaultValue: false,
+          ),
+        );
         final canManageInvites = allowedRoles.isNotEmpty;
+        final canCreateInvites = canManageInvites;
+        final canRevokeAsOwnerOrAdmin =
+            _normalizedRole == 'owner' || _normalizedRole == 'platform_admin';
 
         if (canManageInvites && !allowedRoles.contains(_selectedRole)) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -232,10 +276,10 @@ class _TenantInvitationsPageState extends State<TenantInvitationsPage> {
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                     const SizedBox(height: 16),
-                    if (!canManageInvites)
+                    if (!canCreateInvites)
                       const AppInfoCard(
                         title: 'Acesso restrito',
-                        subtitle: 'Seu perfil nao tem permissao para enviar convites neste tenant.',
+                        subtitle: 'Seu perfil não pode criar novos convites neste tenant.',
                       )
                     else
                       _CreateInvitationCard(
@@ -263,92 +307,110 @@ class _TenantInvitationsPageState extends State<TenantInvitationsPage> {
                         onCreate: _createInvitation,
                       ),
                     const SizedBox(height: 12),
-                    StreamBuilder<List<TenantInvitation>>(
-                      stream: _invitationService.watchInvitationsForTenant(
-                        widget.identity.tenantId,
-                      ),
-                      builder: (context, snapshot) {
-                        if (snapshot.connectionState ==
-                            ConnectionState.waiting) {
-                          return const AppInfoCard(
-                            title: 'Carregando convites',
-                            subtitle:
-                                'Buscando historico de convites do tenant...',
+                    if (currentUser == null)
+                      const AppInfoCard(
+                        title: 'Sessão indisponível',
+                        subtitle: 'Faça login novamente para listar convites.',
+                      )
+                    else
+                      StreamBuilder<List<TenantInvitation>>(
+                        stream: _invitationService
+                            .watchManagedInvitationsForViewer(
+                              tenantId: widget.identity.tenantId,
+                              viewerUid: currentUser.uid,
+                              viewerRole: _normalizedRole,
+                            ),
+                        builder: (context, snapshot) {
+                          if (snapshot.hasError) {
+                            return const AppInfoCard(
+                              title: 'Sem permissão para listar convites',
+                              subtitle: 'Seu perfil atual não possui acesso para esta listagem.',
+                            );
+                          }
+
+                          if (snapshot.connectionState ==
+                              ConnectionState.waiting) {
+                            return const AppInfoCard(
+                              title: 'Carregando convites',
+                              subtitle:
+                                  'Buscando histórico de convites do tenant...',
+                            );
+                          }
+
+                          final invitations = snapshot.data ?? const [];
+                          if (invitations.isEmpty) {
+                            return const AppInfoCard(
+                              title: 'Sem convites emitidos',
+                              subtitle:
+                                  'Crie um convite para iniciar o onboarding.',
+                            );
+                          }
+
+                          final page = buildPaginationSlice(
+                            source: invitations,
+                            requestedPage: _currentPage,
+                            pageSize: _pageSize,
                           );
-                        }
 
-                        final invitations = snapshot.data ?? const [];
-                        if (invitations.isEmpty) {
-                          return const AppInfoCard(
-                            title: 'Sem convites emitidos',
-                            subtitle:
-                                'Crie um convite para iniciar o onboarding.',
-                          );
-                        }
-
-                        final page = buildPaginationSlice(
-                          source: invitations,
-                          requestedPage: _currentPage,
-                          pageSize: _pageSize,
-                        );
-
-                        if (page.currentPage != _currentPage) {
-                          WidgetsBinding.instance.addPostFrameCallback((_) {
-                            if (mounted) {
-                              setState(() {
-                                _currentPage = page.currentPage;
-                              });
-                            }
-                          });
-                        }
-
-                        return Column(
-                          children: [
-                            AppPaginationBar(
-                              currentPage: page.currentPage,
-                              totalPages: page.totalPages,
-                              pageSize: _pageSize,
-                              startDisplay: page.startDisplay,
-                              endDisplay: page.endDisplay,
-                              totalItems: page.totalItems,
-                              onPageSizeChanged: (value) {
+                          if (page.currentPage != _currentPage) {
+                            WidgetsBinding.instance.addPostFrameCallback((_) {
+                              if (mounted) {
                                 setState(() {
-                                  _pageSize = value;
-                                  _currentPage = 0;
+                                  _currentPage = page.currentPage;
                                 });
-                              },
-                              onPrevious: !page.hasPrevious
-                                  ? null
-                                  : () {
-                                      setState(() {
-                                        _currentPage = page.currentPage - 1;
-                                      });
-                                    },
-                              onNext: !page.hasNext
-                                  ? null
-                                  : () {
-                                      setState(() {
-                                        _currentPage = page.currentPage + 1;
-                                      });
-                                    },
-                            ),
-                            const SizedBox(height: 10),
-                            ...page.items.map(
-                              (invitation) => _ManagedInvitationCard(
-                                invitation: invitation,
-                                revoking: _revokingToken == invitation.token,
-                                onRevoke:
-                                    canManageInvites &&
-                                        invitation.status ==
-                                            TenantInvitationStatus.pending
-                                    ? () => _revokeInvitation(invitation)
-                                    : null,
+                              }
+                            });
+                          }
+
+                          return Column(
+                            children: [
+                              AppPaginationBar(
+                                currentPage: page.currentPage,
+                                totalPages: page.totalPages,
+                                pageSize: _pageSize,
+                                startDisplay: page.startDisplay,
+                                endDisplay: page.endDisplay,
+                                totalItems: page.totalItems,
+                                onPageSizeChanged: (value) {
+                                  setState(() {
+                                    _pageSize = value;
+                                    _currentPage = 0;
+                                  });
+                                },
+                                onPrevious: !page.hasPrevious
+                                    ? null
+                                    : () {
+                                        setState(() {
+                                          _currentPage = page.currentPage - 1;
+                                        });
+                                      },
+                                onNext: !page.hasNext
+                                    ? null
+                                    : () {
+                                        setState(() {
+                                          _currentPage = page.currentPage + 1;
+                                        });
+                                      },
                               ),
-                            ),
-                          ],
-                        );
-                      },
-                    ),
+                              const SizedBox(height: 10),
+                              ...page.items.map(
+                                (invitation) => _ManagedInvitationCard(
+                                  invitation: invitation,
+                                  revoking: _revokingToken == invitation.token,
+                                  onRevoke:
+                                      (canRevokeAsOwnerOrAdmin ||
+                                              invitation.createdByUid?.trim() ==
+                                                  currentUser.uid) &&
+                                          invitation.status ==
+                                              TenantInvitationStatus.pending
+                                      ? () => _revokeInvitation(invitation)
+                                      : null,
+                                ),
+                              ),
+                            ],
+                          );
+                        },
+                      ),
                   ],
                 ),
               ),

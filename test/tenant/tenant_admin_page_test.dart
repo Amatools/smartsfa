@@ -56,7 +56,14 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      final revokeButton = find.byKey(const Key('revoke_tenant_a_vendedor_uid'));
+      expect(find.byKey(const Key('hierarchy_membership_list')), findsOneWidget);
+      expect(find.byKey(const Key('workspace_group_header')), findsOneWidget);
+      expect(find.textContaining('Workspace: Tenant A (tenant_a)'), findsOneWidget);
+      expect(find.textContaining('Vinculo:'), findsNothing);
+
+      final revokeButton = find.byKey(
+        const Key('revoke_tenant_a_vendedor_uid'),
+      );
       expect(revokeButton, findsOneWidget);
       await tester.ensureVisible(revokeButton);
       await tester.tap(revokeButton);
@@ -67,6 +74,62 @@ void main() {
           .doc('tenant_a_vendedor_uid')
           .get();
       expect(doc.data()?['state'], 'revoked');
+      expect(doc.data()?['ativo'], false);
+    });
+
+    testWidgets('owner can deactivate vendedor membership', (tester) async {
+      await _seedMembership(
+        firestore,
+        membershipId: 'tenant_a_owner_uid',
+        tenantId: 'tenant_a',
+        uid: 'owner_uid',
+        role: 'owner',
+        ativo: true,
+        state: 'active',
+      );
+      await _seedMembership(
+        firestore,
+        membershipId: 'tenant_a_vendedor_inactive_uid',
+        tenantId: 'tenant_a',
+        uid: 'vendedor_inactive_uid',
+        role: 'vendedor',
+        ativo: true,
+        state: 'active',
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: TenantAdminPage(
+              identity: const AppIdentity(
+                tenantId: 'tenant_a',
+                userLabel: 'owner@empresa.com',
+                role: 'owner',
+                tenantName: 'Tenant A',
+                isMock: false,
+              ),
+              membershipService: membershipService,
+              currentUserUid: 'owner_uid',
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      final deactivateButton = find.byKey(
+        const Key('deactivate_tenant_a_vendedor_inactive_uid'),
+      );
+      expect(deactivateButton, findsOneWidget);
+      await tester.ensureVisible(deactivateButton);
+      await tester.tap(deactivateButton);
+      await tester.pumpAndSettle();
+
+      final doc = await firestore
+          .collection('tenant_memberships')
+          .doc('tenant_a_vendedor_inactive_uid')
+          .get();
+      expect(doc.data()?['state'], 'inactive');
       expect(doc.data()?['ativo'], false);
     });
 
@@ -116,7 +179,9 @@ void main() {
       expect(buttonWidget.onPressed, isNull);
     });
 
-    testWidgets('platform admin can reactivate revoked membership', (tester) async {
+    testWidgets('platform admin can reactivate revoked membership', (
+      tester,
+    ) async {
       await firestore.collection('usuarios').doc('admin_uid').set({
         'uid': 'admin_uid',
         'email': 'admin@plataforma.com',
@@ -162,7 +227,9 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      final reactivateButton = find.byKey(const Key('reactivate_tenant_a_revoked_uid'));
+      final reactivateButton = find.byKey(
+        const Key('reactivate_tenant_a_revoked_uid'),
+      );
       expect(reactivateButton, findsOneWidget);
       await tester.ensureVisible(reactivateButton);
       await tester.tap(reactivateButton);
@@ -216,8 +283,9 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      final changeRoleButton =
-          find.byKey(const Key('change_role_tenant_a_vendedor_to_promote'));
+      final changeRoleButton = find.byKey(
+        const Key('change_role_tenant_a_vendedor_to_promote'),
+      );
       expect(changeRoleButton, findsOneWidget);
       await tester.ensureVisible(changeRoleButton);
       await tester.tap(changeRoleButton);
@@ -237,10 +305,13 @@ void main() {
 
       expect(doc.data()?['role'], 'gerente');
       expect(doc.data()?['gerenteId'], 'vendedor_uid');
-      expect(doc.data()?['vendedorId'], '');
+      expect(doc.data()?['representanteId'], 'vendedor_uid');
+      expect(doc.data()?['vendedorId'], 'vendedor_uid');
     });
 
-    testWidgets('owner cannot see owner role option in change role', (tester) async {
+    testWidgets('owner cannot see owner role option in change role', (
+      tester,
+    ) async {
       await _seedMembership(
         firestore,
         membershipId: 'tenant_a_owner_uid',
@@ -280,8 +351,9 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      final changeRoleButton =
-          find.byKey(const Key('change_role_tenant_a_representante_uid'));
+      final changeRoleButton = find.byKey(
+        const Key('change_role_tenant_a_representante_uid'),
+      );
       expect(changeRoleButton, findsOneWidget);
       await tester.ensureVisible(changeRoleButton);
       await tester.tap(changeRoleButton);
@@ -304,17 +376,60 @@ Future<void> _seedMembership(
   required bool ativo,
   required String state,
 }) {
+  final normalizedRole = role.trim().toLowerCase();
+  final ownerScopeUid = 'owner_uid';
+
+  late final String ownerId;
+  late final String gerenteId;
+  late final String representanteId;
+  late final String vendedorId;
+
+  switch (normalizedRole) {
+    case 'owner':
+      ownerId = uid;
+      gerenteId = uid;
+      representanteId = uid;
+      vendedorId = uid;
+      break;
+    case 'gerente':
+      ownerId = ownerScopeUid;
+      gerenteId = uid;
+      representanteId = uid;
+      vendedorId = uid;
+      break;
+    case 'representante':
+      ownerId = ownerScopeUid;
+      gerenteId = ownerScopeUid;
+      representanteId = uid;
+      vendedorId = uid;
+      break;
+    case 'vendedor':
+      ownerId = ownerScopeUid;
+      gerenteId = ownerScopeUid;
+      representanteId = uid;
+      vendedorId = uid;
+      break;
+    default:
+      ownerId = '';
+      gerenteId = '';
+      representanteId = '';
+      vendedorId = '';
+      break;
+  }
+
   return firestore.collection('tenant_memberships').doc(membershipId).set({
     'membershipId': membershipId,
     'tenantId': tenantId,
     'uid': uid,
+    'userName': uid,
+    'userEmail': '$uid@test.local',
     'role': role,
     'ativo': ativo,
     'defaultTenant': false,
-    'ownerId': '',
-    'gerenteId': '',
-    'representanteId': '',
-    'vendedorId': '',
+    'ownerId': ownerId,
+    'gerenteId': gerenteId,
+    'representanteId': representanteId,
+    'vendedorId': vendedorId,
     'state': state,
   });
 }

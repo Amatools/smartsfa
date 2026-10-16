@@ -278,7 +278,7 @@ class _ClientesPageState extends State<ClientesPage> {
 
             return SingleChildScrollView(
               child: Padding(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.fromLTRB(10, 16, 10, 16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [

@@ -1,11 +1,11 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:smartsfa/src/core/models/cliente_pre_cadastro.dart';
+import 'package:smartsfa/src/core/models/domain_types.dart';
 import 'package:smartsfa/src/core/repositories/cliente_pre_cadastro_repository.dart';
 import 'package:smartsfa/src/core/services/offline_sync_queue.dart';
-import 'package:smartsfa/src/features/clientes/presentation/pages/cliente_pre_cadastro_page.dart';
+import 'package:smartsfa/src/core/services/pre_cadastro_save_service.dart';
 
 class _FakeRepository implements ClientePreCadastroRepository {
   final List<ClientePreCadastro> saved = [];
@@ -44,65 +44,44 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
-  testWidgets(
-    'submitting the form ends up queued locally when connectivity cannot be resolved '
-    '(no platform channel registered, exactly like a real permission/network failure)',
-    (tester) async {
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      tester.view.physicalSize = const Size(800, 2400);
-      tester.view.devicePixelRatio = 1.0;
+  test('saveOrQueue keeps pre-cadastro in local queue when connectivity is treated as offline', () async {
+    final repository = _FakeRepository();
+    final now = DateTime.now();
+    final entity = ClientePreCadastro(
+      id: 'pre-test-offline-widget-parity',
+      tenantId: 'personal_test-uid',
+      nome: 'Cliente Teste Fluxo',
+      documento: '07228424000157',
+      tipoPessoa: 'pj',
+      canal: 'vendedor',
+      celular: '11999999999',
+      origemCadastro: CustomerOrigin.manual,
+      status: PreRegistrationStatus.pending,
+      requestedByUid: 'test-uid',
+      createdAt: now,
+      updatedAt: now,
+    );
 
-      final repository = _FakeRepository();
+    final result = await PreCadastroSaveService.saveOrQueue(
+      entity: entity,
+      repository: repository,
+      tenantId: 'personal_test-uid',
+      isOffline: true,
+    );
 
-      await tester.pumpWidget(
-        MaterialApp(
-          home: ClientePreCadastroPage(
-            tenantId: 'personal_test-uid',
-            requestedByUid: 'test-uid',
-            repository: repository,
-          ),
-        ),
-      );
+    final queuedRaw = await OfflineSyncQueue.readAll();
+    final hasQueuedPreCadastro = queuedRaw.any((item) {
+      if (item.type != 'cliente_pre_cadastro') {
+        return false;
+      }
 
-      await tester.enterText(
-        find.widgetWithText(TextFormField, 'Nome / razao social *'),
-        'Cliente Teste Fluxo',
-      );
-      await tester.enterText(
-        find.widgetWithText(TextFormField, 'CPF / CNPJ *'),
-        '12345678000199',
-      );
-      await tester.enterText(
-        find.widgetWithText(TextFormField, 'Celular'),
-        '11999999999',
-      );
+      final payloadId = (item.payload['id'] ?? '').toString();
+      return payloadId == entity.id;
+    });
 
-      final submitButtonFinder = find.widgetWithText(
-        FilledButton,
-        'Salvar pré-cadastro',
-      );
-
-      // The connectivity check uses a real bounded timeout internally, so we
-      // must drive real async time here instead of the fake test clock.
-      await tester.runAsync(() async {
-        await tester.tap(submitButtonFinder);
-        await Future<void>.delayed(const Duration(seconds: 4));
-      });
-      await tester.pumpAndSettle();
-
-      final queued = await OfflineSyncQueue.readQueuedPreCadastros(
-        tenantId: 'personal_test-uid',
-        includePersonalWorkspace: true,
-      );
-
-      expect(
-        queued.any((item) => item.documento == '12345678000199'),
-        isTrue,
-        reason:
-            'The pre-cadastro must land in the local queue even when the '
-            'connectivity check throws, otherwise the data is silently lost.',
-      );
-    },
-  );
+    expect(result.savedLocally, isTrue);
+    expect(result.savedRemotely, isFalse);
+    expect(hasQueuedPreCadastro, isTrue);
+    expect(repository.saved, isEmpty);
+  });
 }

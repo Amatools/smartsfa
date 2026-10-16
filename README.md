@@ -24,6 +24,40 @@ SmartSFA e um app Flutter para operacao comercial B2B em modelo SaaS multi-tenan
 2. `flutter analyze`
 3. `flutter run -d chrome`
 
+## Ambientes (dev, homolog, prod)
+
+O app usa um switch de ambiente via `--dart-define APP_ENV`.
+
+- `dev`: padrao quando APP_ENV nao e informado.
+- `homolog`: ambiente de validacao/homologacao.
+- `prod`: ambiente produtivo.
+
+Implementacao central:
+
+- `lib/src/core/constants/app_environment.dart`
+
+Define suportados:
+
+- `APP_ENV=dev|homolog|prod`
+- `CLOUD_DELTA_REFRESH_INTERVAL_SECONDS=<segundos>` (opcional; minimo efetivo de 15s)
+
+Valores padrao de polling de pendencia cloud por ambiente:
+
+- `dev`: 20s
+- `homolog`: 45s
+- `prod`: 90s
+
+Exemplos de execucao:
+
+1. Dev web:
+   `flutter run -d chrome --dart-define APP_ENV=dev`
+2. Homolog web:
+   `flutter run -d chrome --dart-define APP_ENV=homolog`
+3. Prod web:
+   `flutter run -d chrome --dart-define APP_ENV=prod`
+4. Android com override de polling:
+   `flutter run -d 25282525700315 --dart-define APP_ENV=homolog --dart-define CLOUD_DELTA_REFRESH_INTERVAL_SECONDS=60`
+
 O login e exclusivamente via Firebase Auth (Google ou e-mail/senha cadastrados no projeto). Nao ha mais modos mock/local de desenvolvimento: a conta precisa existir no Firebase para liberar o app. Apos o primeiro login bem-sucedido, a sessao fica persistida localmente e o app continua funcionando offline (Firestore com persistencia habilitada) ate que seja necessario reautenticar.
 
 ## Guias do projeto
@@ -31,6 +65,3 @@ O login e exclusivamente via Firebase Auth (Google ou e-mail/senha cadastrados n
 - `appdev.md`: board de execucao e proximas etapas.
 - `docs/guia_implementacao_saas.md`: referencia principal de arquitetura e regras.
 - `docs/auth_access_model.md`: modelo de login/autorizacao.
-
-
-flutter run -d chrome --web-port 43177 --target lib/main.dart

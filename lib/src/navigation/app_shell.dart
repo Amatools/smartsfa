@@ -7,9 +7,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../core/models/app_identity.dart';
+import '../core/constants/app_environment.dart';
 import '../core/services/catalog_incremental_sync_service.dart';
 import '../core/services/offline_sync_queue.dart';
 import '../core/services/represented_scope_backfill_service.dart';
+import '../core/services/sync_cost_metrics_service.dart';
 import '../features/auth/services/workspace_profile_service.dart';
 import '../features/portal/presentation/pages/web_portal_page.dart';
 import 'models/app_shell_item.dart';
@@ -57,6 +59,8 @@ class _AppShellPageState extends State<AppShellPage> {
     'ENABLE_LOCAL_MOCK_FALLBACK',
     defaultValue: false,
   );
+  static final Duration _cloudDeltaRefreshInterval =
+      AppEnvironmentConfig.cloudDeltaRefreshInterval;
 
   AppShellViewState _viewState = AppShellViewState.initial();
   final Connectivity _connectivity = Connectivity();
@@ -77,6 +81,8 @@ class _AppShellPageState extends State<AppShellPage> {
       const AppShellSelectionCoordinator();
   final AppShellViewStateCoordinator _viewStateCoordinator =
       const AppShellViewStateCoordinator();
+  final SyncCostMetricsService _syncCostMetricsService =
+      SyncCostMetricsService();
 
   AppShellRepositoryBundle? get _repositoryBundle =>
       _viewState.repositoryBundle;
@@ -94,6 +100,10 @@ class _AppShellPageState extends State<AppShellPage> {
   List<_RepresentedScopeOption> _representedScopeOptions =
       const <_RepresentedScopeOption>[];
   _RepresentedScopeOption? _selectedRepresentedScope;
+  DateTime? _lastCloudDeltaCheckAt;
+  SyncCostMetricsSnapshot _costMetrics = const SyncCostMetricsSnapshot.empty();
+  SyncCostAlert? _costAlert;
+  bool _queryReviewOverdue = true;
 
   void _updateViewState(
     AppShellViewState Function(AppShellViewState state) update,
@@ -121,8 +131,13 @@ class _AppShellPageState extends State<AppShellPage> {
       _selectedRepresentedScope = null;
       _representedScopeBackfillDone = false;
       _syncStatus = AppShellSyncStatus.initial();
+      _lastCloudDeltaCheckAt = null;
+      _costMetrics = const SyncCostMetricsSnapshot.empty();
+      _costAlert = null;
+      _queryReviewOverdue = true;
       _loadRepresentedScopeContext();
       unawaited(_refreshSyncStatusSnapshot(includeCloudDeltaCheck: true));
+      unawaited(_refreshSyncCostMetrics());
     }
   }
 
@@ -155,6 +170,10 @@ class _AppShellPageState extends State<AppShellPage> {
       ),
     );
 
+    // Cost metrics are local/session-scoped telemetry and should be visible
+    // even if this runtime is using a local data fallback.
+    unawaited(_refreshSyncCostMetrics());
+
     if (repositoryBundle.usingLocalFallback) {
       return;
     }
@@ -163,6 +182,117 @@ class _AppShellPageState extends State<AppShellPage> {
     unawaited(_runAutomaticSyncCycle());
     unawaited(_refreshSyncStatusSnapshot(includeCloudDeltaCheck: true));
     _loadRepresentedScopeContext();
+  }
+
+  String _resolveMetricsActorId() {
+    final membershipId = (widget.identity.membershipId ?? '').trim();
+    if (membershipId.isNotEmpty) {
+      return membershipId;
+    }
+
+    final authUid = (FirebaseAuth.instance.currentUser?.uid ?? '').trim();
+    if (authUid.isNotEmpty) {
+      return authUid;
+    }
+
+    final normalizedUserLabel = widget.identity.userLabel.trim();
+    if (normalizedUserLabel.isNotEmpty) {
+      return normalizedUserLabel;
+    }
+
+    return 'unknown_user';
+  }
+
+  void _applyCostMetricsState(SyncCostMetricsSnapshot metrics) {
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _costMetrics = metrics;
+      _costAlert = _syncCostMetricsService.evaluateRegression(summary: metrics);
+      _queryReviewOverdue = _syncCostMetricsService
+          .isQueryPaginationReviewOverdue(metrics);
+    });
+  }
+
+  Future<void> _refreshSyncCostMetrics() async {
+    final tenantId = widget.identity.tenantId.trim();
+    if (tenantId.isEmpty) {
+      return;
+    }
+
+    final metrics = await _syncCostMetricsService.readToday(
+      tenantId: tenantId,
+      userId: _resolveMetricsActorId(),
+    );
+    _applyCostMetricsState(metrics);
+  }
+
+  Future<void> _registerQueryPaginationReview() async {
+    final tenantId = widget.identity.tenantId.trim();
+    if (tenantId.isEmpty) {
+      return;
+    }
+
+    final metrics = await _syncCostMetricsService.markQueryPaginationReview(
+      tenantId: tenantId,
+      userId: _resolveMetricsActorId(),
+    );
+    _applyCostMetricsState(metrics);
+
+    if (!mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Revisao de queries/paginacao registrada nesta sessao.'),
+      ),
+    );
+  }
+
+  Future<void> _recordCloudSnapshotCostMetrics(
+    _CloudPendingSnapshot snapshot,
+  ) async {
+    final tenantId = widget.identity.tenantId.trim();
+    if (tenantId.isEmpty || snapshot.queryOperations <= 0) {
+      return;
+    }
+
+    final metrics = await _syncCostMetricsService.recordCloudSnapshotCheck(
+      tenantId: tenantId,
+      userId: _resolveMetricsActorId(),
+      queryOperations: snapshot.queryOperations,
+      estimatedDocumentReads: snapshot.estimatedDocumentReads,
+      fallbackFullReads: snapshot.fallbackFullReads,
+    );
+    _applyCostMetricsState(metrics);
+  }
+
+  Future<void> _recordWarmupCostMetrics(CatalogWarmupSummary summary) async {
+    final tenantId = widget.identity.tenantId.trim();
+    if (tenantId.isEmpty) {
+      return;
+    }
+
+    if (summary.queryOperations <= 0 &&
+        summary.estimatedDocumentReads <= 0 &&
+        summary.fallbackFullReads <= 0 &&
+        summary.pagesPulled <= 0) {
+      return;
+    }
+
+    final metrics = await _syncCostMetricsService.recordWarmupRun(
+      tenantId: tenantId,
+      userId: _resolveMetricsActorId(),
+      pagesPulled: summary.pagesPulled,
+      itemsPulled: summary.itemsPulled,
+      queryOperations: summary.queryOperations,
+      estimatedDocumentReads: summary.estimatedDocumentReads,
+      fallbackFullReads: summary.fallbackFullReads,
+    );
+    _applyCostMetricsState(metrics);
   }
 
   Future<void> _runAutomaticSyncCycle() async {
@@ -227,39 +357,61 @@ class _AppShellPageState extends State<AppShellPage> {
       return const _CloudPendingSnapshot(
         pendingClientes: 0,
         pendingProdutos: 0,
+        pendingPedidos: 0,
         pendingTabelasPreco: 0,
         pendingTaxRules: 0,
+        queryOperations: 0,
+        estimatedDocumentReads: 0,
+        fallbackFullReads: 0,
       );
     }
 
     final syncService = CatalogIncrementalSyncService(
       FirebaseFirestore.instance,
     );
-    final results = await Future.wait<int>([
-      syncService.countPendingCloudToDeviceDelta(
+    final results = await Future.wait<CatalogSyncPendingCountResult>([
+      syncService.countPendingCloudToDeviceDeltaDetailed(
         tenantId: tenantId,
         module: CatalogSyncModule.clientes,
       ),
-      syncService.countPendingCloudToDeviceDelta(
+      syncService.countPendingCloudToDeviceDeltaDetailed(
         tenantId: tenantId,
         module: CatalogSyncModule.produtos,
       ),
-      syncService.countPendingCloudToDeviceDelta(
+      syncService.countPendingCloudToDeviceDeltaDetailed(
+        tenantId: tenantId,
+        module: CatalogSyncModule.pedidos,
+      ),
+      syncService.countPendingCloudToDeviceDeltaDetailed(
         tenantId: tenantId,
         module: CatalogSyncModule.tabelasPreco,
       ),
-      syncService.countPendingCloudToDeviceDelta(
+      syncService.countPendingCloudToDeviceDeltaDetailed(
         tenantId: tenantId,
         module: CatalogSyncModule.taxRules,
       ),
     ]);
 
-    return _CloudPendingSnapshot(
-      pendingClientes: results[0],
-      pendingProdutos: results[1],
-      pendingTabelasPreco: results[2],
-      pendingTaxRules: results[3],
+    final snapshot = _CloudPendingSnapshot(
+      pendingClientes: results[0].pendingCount,
+      pendingProdutos: results[1].pendingCount,
+      pendingPedidos: results[2].pendingCount,
+      pendingTabelasPreco: results[3].pendingCount,
+      pendingTaxRules: results[4].pendingCount,
+      queryOperations: results
+          .map((item) => item.queryOperations)
+          .fold<int>(0, (acc, item) => acc + item),
+      estimatedDocumentReads: results
+          .map((item) => item.estimatedDocumentReads)
+          .fold<int>(0, (acc, item) => acc + item),
+      fallbackFullReads: results
+          .map((item) => item.fallbackFullReads)
+          .fold<int>(0, (acc, item) => acc + item),
     );
+
+    await _recordCloudSnapshotCostMetrics(snapshot);
+
+    return snapshot;
   }
 
   Future<_SyncStatusSnapshot> _refreshSyncStatusSnapshot({
@@ -271,7 +423,15 @@ class _AppShellPageState extends State<AppShellPage> {
     var cloudReachable = _syncStatus.cloudSnapshotReachable;
     var cloudSnapshotAt = _syncStatus.cloudSnapshotAt;
 
-    if (includeCloudDeltaCheck && !_usingLocalFallback) {
+    final now = DateTime.now();
+    final shouldCheckCloudDelta =
+        includeCloudDeltaCheck &&
+        !_usingLocalFallback &&
+        (_lastCloudDeltaCheckAt == null ||
+            now.difference(_lastCloudDeltaCheckAt!) >=
+                _cloudDeltaRefreshInterval);
+
+    if (shouldCheckCloudDelta) {
       final hasConnection = await _connectivityCoordinator.hasConnection(
         _connectivity,
       );
@@ -279,7 +439,8 @@ class _AppShellPageState extends State<AppShellPage> {
         try {
           cloudSnapshot = await _readCloudPendingSnapshot();
           cloudReachable = true;
-          cloudSnapshotAt = DateTime.now();
+          cloudSnapshotAt = now;
+          _lastCloudDeltaCheckAt = now;
         } catch (_) {
           cloudReachable = false;
         }
@@ -323,6 +484,9 @@ class _AppShellPageState extends State<AppShellPage> {
           pendingDownloadProdutos:
               cloudSnapshot?.pendingProdutos ??
               _syncStatus.pendingDownloadProdutos,
+          pendingDownloadPedidos:
+              cloudSnapshot?.pendingPedidos ??
+              _syncStatus.pendingDownloadPedidos,
           pendingDownloadTabelasPreco:
               cloudSnapshot?.pendingTabelasPreco ??
               _syncStatus.pendingDownloadTabelasPreco,
@@ -765,11 +929,12 @@ class _AppShellPageState extends State<AppShellPage> {
 
     _catalogWarmupRunning = true;
     try {
-      await _catalogSyncCoordinator.warmupCatalogs(
+      final summary = await _catalogSyncCoordinator.warmupCatalogs(
         firestore: FirebaseFirestore.instance,
         tenantId: tenantId,
         maxPagesPerModule: fullPull ? null : 10,
       );
+      await _recordWarmupCostMetrics(summary);
     } finally {
       _catalogWarmupRunning = false;
     }
@@ -848,10 +1013,14 @@ class _AppShellPageState extends State<AppShellPage> {
           _selectedRepresentedScope?.originCompanyUnitLabel,
       selectedOriginCompanyUf: _selectedRepresentedScope?.originCompanyUf,
       syncStatus: _syncStatus,
+      costMetrics: _costMetrics,
+      costAlert: _costAlert,
+      queryReviewOverdue: _queryReviewOverdue,
       onSyncNow: _usingLocalFallback ? null : _syncWorkspaceNow,
       onRefreshSyncStatus: _usingLocalFallback
           ? null
           : _refreshSyncStatusFromHome,
+      onRegisterQueryReview: _registerQueryPaginationReview,
       onAccessUpdated: widget.onAccessUpdated,
     );
   }
@@ -999,17 +1168,29 @@ class _CloudPendingSnapshot {
   const _CloudPendingSnapshot({
     required this.pendingClientes,
     required this.pendingProdutos,
+    required this.pendingPedidos,
     required this.pendingTabelasPreco,
     required this.pendingTaxRules,
+    required this.queryOperations,
+    required this.estimatedDocumentReads,
+    required this.fallbackFullReads,
   });
 
   final int pendingClientes;
   final int pendingProdutos;
+  final int pendingPedidos;
   final int pendingTabelasPreco;
   final int pendingTaxRules;
+  final int queryOperations;
+  final int estimatedDocumentReads;
+  final int fallbackFullReads;
 
   int get totalPending =>
-      pendingClientes + pendingProdutos + pendingTabelasPreco + pendingTaxRules;
+      pendingClientes +
+      pendingProdutos +
+      pendingPedidos +
+      pendingTabelasPreco +
+      pendingTaxRules;
 }
 
 class _SyncStatusSnapshot {

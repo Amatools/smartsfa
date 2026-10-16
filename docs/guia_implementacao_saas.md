@@ -37,6 +37,16 @@ Para regras oficiais de tipos de workspace, lock de conta e criacao de enterpris
 
 - [workspace_access_billing_policy.md](workspace_access_billing_policy.md)
 
+### Hierarquia comercial (referencias canonicas)
+
+Para especificacao fechada da hierarquia e backlog tecnico de implementacao:
+
+- [hierarquia_comercial_backlog_tecnico.md](hierarquia_comercial_backlog_tecnico.md)
+
+Para versao de linguagem acessivel ao cliente final (site/ajuda):
+
+- [enduser_hierarquia_comercial.md](enduser_hierarquia_comercial.md)
+
 ### Canais de uso
 
 - app mobile: operacao comercial, pedidos, orcamentos e dashboards resumidos;
@@ -519,24 +529,81 @@ Para fechar o ciclo de onboarding de tenant no app:
 
 Objetivo: reduzir custo Firebase e manter operacao offline de campo confiavel.
 
-### Fase 1 - Base de sincronizacao incremental
+### Padrao de ambiente (dev, homolog, prod)
 
-1. Padronizar metadados em colecoes de catalogo: updatedAt, version, deletedAt.
-2. Criar cursor local de sincronizacao por tenant+modulo (ultimo updatedAt/version aplicado).
-3. Substituir cargas completas recorrentes por pull incremental em lotes.
-4. Preservar fallback para carga completa apenas no primeiro bootstrap do dispositivo.
+Configuracao canonica de runtime:
+
+1. `APP_ENV=dev|homolog|prod` controla o perfil do app.
+2. Arquivo fonte da regra: `lib/src/core/constants/app_environment.dart`.
+3. `CLOUD_DELTA_REFRESH_INTERVAL_SECONDS` pode sobrescrever o intervalo de polling cloud para testes controlados (com piso de 15s).
+
+Perfis padrao definidos no codigo:
+
+1. dev: polling cloud a cada 20s.
+2. homolog: polling cloud a cada 45s.
+3. prod: polling cloud a cada 90s.
+
+Comandos recomendados:
+
+1. dev: `flutter run -d chrome --dart-define APP_ENV=dev`
+2. homolog: `flutter run -d chrome --dart-define APP_ENV=homolog`
+3. prod: `flutter run -d chrome --dart-define APP_ENV=prod`
+
+### Status atual consolidado (out/2026)
+
+Ja implementado no codigo:
+
+1. Sync incremental por modulo com cursor local por tenant em SharedPreferences.
+2. Bootstrap inicial quando cursor=0 e modulo ainda nao marcado como bootstrap completo.
+3. Pull incremental por syncVersion para clientes, produtos, tabelas_preco e tax_rules.
+4. Snapshot local por modulo para aplicacao de delta (upsert/remocao) no dispositivo.
+5. Warmup automatico no ciclo de sincronizacao do app shell.
+
+Implementado nesta rodada:
+
+1. Tombstone de exclusao (deletedAt + syncVersion++) nos repositorios de clientes, produtos, tabelas_preco e tax_rules.
+2. Leituras dessas colecoes agora ignoram registros tombstonados.
+3. Modulo de pedidos entrou no mesmo fluxo incremental (syncVersion + tombstone) para reduzir carga completa recorrente.
+4. Polling de pendencias cloud no app shell foi limitado por intervalo para reduzir leituras repetitivas no mesmo ciclo de uso.
+5. Fallback pesado de leitura completa no sync incremental ganhou janela de retry/cooldown para evitar full-scan repetitivo quando indice ainda nao esta disponivel.
+6. Metricas de custo/performance por tenant+usuario (leituras estimadas, operacoes de query, fallback full-read e warmup) registradas no app para acompanhamento diario.
+7. Alertas de regressao de custo (warning/critical) por ambiente, com thresholds especificos para dev/homolog/prod.
+8. Revisao periodica de queries/paginacao passou a ter registro explicito no dashboard e runbook operacional em `docs/query_pagination_review.md`.
+
+### Fase 1 - Base de sincronizacao incremental (fechamento)
+
+1. Garantir que todos os pontos de escrita de catalogo usem metadados padronizados: createdAt, updatedAt, syncVersion, deletedAt.
+2. Garantir indice para consulta incremental tenantId + syncVersion em todos os modulos de catalogo.
+3. Eliminar caminhos legados que ainda facam fallback recorrente para leitura completa sem necessidade.
+4. Validar fluxo ponta a ponta: vendedor novo (bootstrap) e vendedor existente (somente delta).
+
+Indice minimo exigido para o delta:
+
+1. clientes: tenantId ASC, syncVersion ASC.
+2. produtos: tenantId ASC, syncVersion ASC.
+3. pedidos: tenantId ASC, syncVersion ASC.
+4. tabelas_preco: tenantId ASC, syncVersion ASC.
+5. tax_rules: tenantId ASC, syncVersion ASC.
 
 ### Fase 2 - UX e desempenho de leitura
 
 1. Introduzir paginação para listagens extensas no portal e no mobile.
 2. Executar pre-download orientado por modulo antes da saida para campo.
 3. Exibir status de sincronizacao por modulo (ok, parcial, pendente, erro).
+4. Incluir pedidos no mesmo padrao incremental quando a estrategia de tombstone do modulo for concluida.
 
 ### Fase 3 - Observabilidade de custo
 
 1. Medir leituras por sincronizacao, por usuario e por tenant.
 2. Definir alertas de regressao de custo apos releases.
 3. Revisar periodicamente consultas sem filtro/paginacao.
+
+### Regra operacional de bootstrap + delta
+
+1. Primeiro acesso do dispositivo ao tenant/modulo: faz bootstrap completo e grava cursor no maior syncVersion recebido.
+2. Sincronizacoes seguintes: baixam somente registros com syncVersion maior que o cursor local.
+3. Exclusoes: devem ser publicadas como tombstone (deletedAt) para serem propagadas no delta.
+4. Recuperacao: comando de reset de cursor por modulo deve forcar novo bootstrap apenas quando necessario.
 
 ## Plano de reducao dos docs (sem criar arquivo novo)
 

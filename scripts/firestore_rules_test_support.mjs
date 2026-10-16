@@ -109,6 +109,13 @@ export async function seedBaseData(testEnv) {
       ownerUid: ids.ownerUid,
       plan: 'team',
       favoriteRepresentedCompanyId: '',
+      policy: {
+        allowManagerDisableRepresentative: false,
+        allowRepresentativeDisableSeller: true,
+        allowManagerSendInvites: false,
+        allowRepresentativeSendInvites: false,
+        allowPersonalWorkspace: true,
+      },
     });
 
     await setDoc(doc(db, 'tenants', membershipIds.soloTenantId), {
@@ -136,9 +143,12 @@ export async function seedBaseData(testEnv) {
       ativo: true,
       defaultTenant: true,
       ownerId: ids.ownerUid,
-      gerenteId: '',
-      representanteId: '',
-      vendedorId: '',
+      gerenteId: ids.ownerUid,
+      representanteId: ids.ownerUid,
+      vendedorId: ids.ownerUid,
+      activeSellerChildrenCount: 0,
+      activeRepresentativeChildrenCount: 0,
+      activeSubordinateCount: 0,
       state: 'active',
     });
 
@@ -150,9 +160,12 @@ export async function seedBaseData(testEnv) {
       ativo: true,
       defaultTenant: false,
       ownerId: ids.ownerUid,
-      gerenteId: '',
+      gerenteId: ids.ownerUid,
       representanteId: ids.repUid,
-      vendedorId: '',
+      vendedorId: ids.repUid,
+      activeSellerChildrenCount: 1,
+      activeRepresentativeChildrenCount: 0,
+      activeSubordinateCount: 1,
       state: 'active',
     });
 
@@ -164,9 +177,12 @@ export async function seedBaseData(testEnv) {
       ativo: true,
       defaultTenant: false,
       ownerId: ids.ownerUid,
-      gerenteId: '',
+      gerenteId: ids.ownerUid,
       representanteId: ids.repUid,
       vendedorId: ids.sellerUid,
+      activeSellerChildrenCount: 0,
+      activeRepresentativeChildrenCount: 0,
+      activeSubordinateCount: 0,
       state: 'active',
     });
 
@@ -181,6 +197,9 @@ export async function seedBaseData(testEnv) {
       gerenteId: '',
       representanteId: '',
       vendedorId: ids.soloUid,
+      activeSellerChildrenCount: 0,
+      activeRepresentativeChildrenCount: 0,
+      activeSubordinateCount: 0,
       state: 'active',
     });
   });

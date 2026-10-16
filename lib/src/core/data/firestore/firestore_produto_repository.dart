@@ -25,11 +25,19 @@ class FirestoreProdutoRepository implements ProdutoRepository {
         .where('tenantId', isEqualTo: normalizedTenantId)
         .snapshots()
         .map(
-          (snapshot) => snapshot.docs.map((doc) {
-            final data = normalizeFirestoreMap(doc.data());
-            data.putIfAbsent('id', () => doc.id);
-            return Produto.fromMap(data);
-          }).toList()..sort((a, b) => a.descricao.compareTo(b.descricao)),
+          (snapshot) =>
+              snapshot.docs
+                  .map((doc) {
+                    final data = normalizeFirestoreMap(doc.data());
+                    data.putIfAbsent('id', () => doc.id);
+                    return Produto.fromMap(data);
+                  })
+                  .where((produto) {
+                    final deletedAt = produto.deletedAt;
+                    return deletedAt == null;
+                  })
+                  .toList()
+                ..sort((a, b) => a.descricao.compareTo(b.descricao)),
         )
         .map((items) {
           _tenantCache[normalizedTenantId] = List<Produto>.unmodifiable(items);
@@ -52,11 +60,17 @@ class FirestoreProdutoRepository implements ProdutoRepository {
     final snapshot = await _collection
         .where('tenantId', isEqualTo: normalizedTenantId)
         .get();
-    final items = snapshot.docs.map((doc) {
-      final data = normalizeFirestoreMap(doc.data());
-      data.putIfAbsent('id', () => doc.id);
-      return Produto.fromMap(data);
-    }).toList();
+    final items = snapshot.docs
+        .map((doc) {
+          final data = normalizeFirestoreMap(doc.data());
+          data.putIfAbsent('id', () => doc.id);
+          return Produto.fromMap(data);
+        })
+        .where((produto) {
+          final deletedAt = produto.deletedAt;
+          return deletedAt == null;
+        })
+        .toList();
     items.sort((a, b) => a.descricao.compareTo(b.descricao));
     _tenantCache[normalizedTenantId] = List<Produto>.unmodifiable(items);
     return items;
@@ -93,6 +107,9 @@ class FirestoreProdutoRepository implements ProdutoRepository {
     if (entity.tenantId != normalizedTenantId) {
       return null;
     }
+    if (entity.deletedAt != null) {
+      return null;
+    }
     return entity;
   }
 
@@ -120,7 +137,8 @@ class FirestoreProdutoRepository implements ProdutoRepository {
       return;
     }
 
-    await _collection.doc(id).delete();
+    final payload = buildSyncDeletePayload(source: existing.toMap());
+    await _collection.doc(id).set(payload, SetOptions(merge: true));
     _tenantCache.remove(tenantId.trim());
   }
 }

@@ -53,7 +53,8 @@ lib/
 - Repositorios principais ja estao em Firestore tenant-scoped (clientes, produtos, pedidos, precos e tributacao).
 - Cache offline nativo do Firestore esta habilitado no mobile.
 - Operacao offline de escrita usa fila local para sincronizacao posterior.
-- Ainda falta sincronizacao incremental formal para catalogos grandes.
+- Sincronizacao incremental formal para catalogos ja existe (clientes, produtos, tabelas_preco e tax_rules) com cursor local por tenant/modulo.
+- Exclusao em catalogos principais usa tombstone (deletedAt) para propagacao de delta.
 
 ## Mapa de documentacao canonica (reduzir docs)
 
@@ -78,8 +79,8 @@ Arquivos operacionais e legais (manter separados):
 
 ## Proxima evolucao
 
-1. Implementar sincronizacao incremental para catalogos grandes (delta por updatedAt/version + tombstones).
-2. Adicionar paginação nas listagens que hoje usam leitura completa por tenant.
+1. Fechar rollout de indices tenantId + syncVersion para evitar fallback de leitura completa no incremental.
+2. Adicionar paginacao nas listagens que hoje usam leitura completa por tenant.
 3. Introduzir pre-download de catalogos antes de saida para campo, com feedback por modulo.
-4. Consolidar documentos redundantes no conjunto canonico e reduzir manutencao paralela.
+4. Expandir o mesmo padrao incremental para pedidos.
 5. Expandir cobertura de testes para custo de leitura, fallback offline e conflitos de sync.
