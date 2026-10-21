@@ -359,6 +359,8 @@ class _WebPortalTopBar extends StatelessWidget {
     required this.accountContractLock,
     required this.selectedRepresentedCompanyId,
     required this.selectedRepresentedCompanyName,
+    this.enterpriseDefaultRepresentedCompanyId,
+    this.enterpriseDefaultRepresentedCompanyName,
     required this.onRepresentedCompanySelected,
     required this.onToggleFavoriteRepresented,
     required this.settingFavoriteRepresented,
@@ -371,6 +373,8 @@ class _WebPortalTopBar extends StatelessWidget {
   final AccountContractLock accountContractLock;
   final String? selectedRepresentedCompanyId;
   final String? selectedRepresentedCompanyName;
+  final String? enterpriseDefaultRepresentedCompanyId;
+  final String? enterpriseDefaultRepresentedCompanyName;
   final void Function(String? companyId, String? companyName)
   onRepresentedCompanySelected;
   final Future<void> Function({
@@ -465,6 +469,9 @@ class _WebPortalTopBar extends StatelessWidget {
         final supportsRepresentedCompanies =
             activeTenant.workspaceType == 'seller_solo_workspace' ||
             activeTenant.workspaceType == 'rep_workspace';
+        final hasEnterpriseDefaultRepresented =
+          activeTenant.workspaceType == 'brand_owner_workspace' &&
+          (enterpriseDefaultRepresentedCompanyId ?? '').trim().isNotEmpty;
         final favoriteRepresentedCompanyId =
             (workspaceData['favoriteRepresentedCompanyId'] ?? '')
                 .toString()
@@ -477,6 +484,11 @@ class _WebPortalTopBar extends StatelessWidget {
             final representedCompanies = _representedCompaniesFromStorage(
               representedSnapshot.data ?? const <Map<String, Object?>>[],
             );
+            final normalizedEnterpriseDefaultId =
+                (enterpriseDefaultRepresentedCompanyId ?? '').trim();
+            final normalizedEnterpriseDefaultName =
+                (enterpriseDefaultRepresentedCompanyName ?? '')
+                    .trim();
             final selectedId =
                 representedCompanies.any(
                   (company) => company.id == selectedRepresentedCompanyId,
@@ -489,12 +501,16 @@ class _WebPortalTopBar extends StatelessWidget {
                 )
                 ? favoriteRepresentedCompanyId
                 : null;
-            final effectiveSelectedId =
-                selectedId ??
-                favoriteId ??
-                (representedCompanies.length == 1
-                    ? representedCompanies.first.id
-                    : null);
+            String? effectiveSelectedId;
+            if (selectedId != null) {
+              effectiveSelectedId = selectedId;
+            } else if (hasEnterpriseDefaultRepresented) {
+              effectiveSelectedId = normalizedEnterpriseDefaultId;
+            } else if (favoriteId != null) {
+              effectiveSelectedId = favoriteId;
+            } else if (representedCompanies.length == 1) {
+              effectiveSelectedId = representedCompanies.first.id;
+            }
             if (effectiveSelectedId != null &&
                 effectiveSelectedId != selectedRepresentedCompanyId) {
               _RepresentedCompany? selectedCompany;
@@ -504,13 +520,23 @@ class _WebPortalTopBar extends StatelessWidget {
                   break;
                 }
               }
+              final isEnterpriseDefaultSelection =
+                  hasEnterpriseDefaultRepresented &&
+                  effectiveSelectedId == normalizedEnterpriseDefaultId;
               WidgetsBinding.instance.addPostFrameCallback((_) {
                 onRepresentedCompanySelected(
                   effectiveSelectedId,
-                  selectedCompany?.nomeFantasia,
+                  isEnterpriseDefaultSelection
+                      ? normalizedEnterpriseDefaultName
+                      : selectedCompany?.nomeFantasia,
                 );
               });
             }
+            final dropdownSelectedValue =
+                hasEnterpriseDefaultRepresented &&
+                    effectiveSelectedId == normalizedEnterpriseDefaultId
+                ? normalizedEnterpriseDefaultId
+                : effectiveSelectedId;
             final isFavoriteSelection =
                 effectiveSelectedId != null &&
                 effectiveSelectedId == favoriteRepresentedCompanyId;
@@ -519,7 +545,7 @@ class _WebPortalTopBar extends StatelessWidget {
               children: [
                 Expanded(
                   child: DropdownButtonFormField<String?>(
-                    initialValue: effectiveSelectedId,
+                    initialValue: dropdownSelectedValue,
                     isExpanded: true,
                     decoration: const InputDecoration(
                       labelText: 'Representada ativa',
@@ -527,10 +553,38 @@ class _WebPortalTopBar extends StatelessWidget {
                       isDense: true,
                     ),
                     items: [
-                      const DropdownMenuItem<String?>(
-                        value: null,
-                        child: Text('Nenhuma selecionada'),
-                      ),
+                      if (!hasEnterpriseDefaultRepresented)
+                        const DropdownMenuItem<String?>(
+                          value: null,
+                          child: Text('Nenhuma selecionada'),
+                        ),
+                      if (hasEnterpriseDefaultRepresented)
+                        DropdownMenuItem<String?>(
+                          value: normalizedEnterpriseDefaultId,
+                          child: Row(
+                            children: [
+                              CircleAvatar(
+                                radius: 20,
+                                backgroundColor: Theme.of(
+                                  context,
+                                ).colorScheme.primaryContainer,
+                                child: const Icon(
+                                  Icons.apartment,
+                                  size: 18,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  normalizedEnterpriseDefaultName.isEmpty
+                                      ? 'Empresa do workspace'
+                                      : normalizedEnterpriseDefaultName,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ...representedCompanies.map(
                         (company) => DropdownMenuItem<String?>(
                           value: company.id,
@@ -555,6 +609,14 @@ class _WebPortalTopBar extends StatelessWidget {
                     onChanged: !supportsRepresentedCompanies
                         ? null
                         : (value) {
+                            if (hasEnterpriseDefaultRepresented &&
+                                value == normalizedEnterpriseDefaultId) {
+                              onRepresentedCompanySelected(
+                                normalizedEnterpriseDefaultId,
+                                normalizedEnterpriseDefaultName,
+                              );
+                              return;
+                            }
                             _RepresentedCompany? selectedCompany;
                             for (final company in representedCompanies) {
                               if (company.id == value) {

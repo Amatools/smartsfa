@@ -29,3 +29,16 @@
 
 - Quando o app estiver em ambiente sem internet, o comportamento esperado é salvar localmente e sincronizar depois.
 - Quando o app estiver online, o fluxo deve tentar persistir no backend e apenas cair para fila local em caso de falha real.
+
+## Integracao Sankhya API (OpenAPI-first)
+
+- Em qualquer tarefa de integracao com Sankhya API, tratar o contrato OpenAPI oficial como fonte primaria de verdade tecnica.
+- Para definicao de endpoint, metodo, headers, parametros, payload e codigos de erro, validar primeiro no OpenAPI antes de propor ou alterar implementacoes.
+- Usar base de ajuda/comunidade Sankhya apenas como apoio funcional e troubleshooting, nunca como contrato tecnico principal.
+- Em caso de divergencia entre documentacao textual e contrato OpenAPI, seguir o OpenAPI e registrar a divergencia no resultado.
+- Sempre que sugerir implementacao de integracao, explicitar:
+  - endpoint e metodo HTTP;
+  - parametros obrigatorios e opcionais;
+  - headers obrigatorios;
+  - schema de request e response usado no app;
+  - tratamento de erros e estrategia de timeout/retry.

@@ -54,6 +54,10 @@ bool _canEditRepresentedModuleSettings({
     return normalizedRole == 'owner';
   }
 
+   if (normalizedWorkspaceType == 'brand_owner_workspace') {
+    return normalizedRole == 'owner';
+  }
+
   return false;
 }
 

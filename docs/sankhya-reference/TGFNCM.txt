@@ -1,0 +1,9 @@
+AD_IDEXTERNO	ID do registro no sistema legado	S	P	N	S
+CATEGORIA	Categoria	S	P	S	S
+CODNCM	NCM	S	P	S	S
+DFIMVIGENCIA	Data Fim Vigência	D	P	N	S
+DINIVIGENCIA	Data Início Vigência	D	P	N	S
+DSNCM	Descrição	S	P	S	S
+DSUNITRIBUTACAO	Descrição Unidade de Tributação	S	P	N	S
+IPI	IPI	S	P	N	S
+UNITRIBUTACAO	Unidade de Tributação	S	P	N	S

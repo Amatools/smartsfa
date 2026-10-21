@@ -1,0 +1,162 @@
+{
+  "marker": "SQL_FILE_PROBE",
+  "ok": true,
+  "tenantId": "self_T8oqTD0UBtWATPbITOGsqAEZt3d2_smartsfa-enterprise-teste",
+  "environment": "prod",
+  "sqlFile": "G:\\smartsfa\\docs\\sankhya-api\\examples\\difal_eligibility_probe.sql",
+  "baseUrl": "https://api.sankhya.com.br",
+  "endpointPath": "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+  "status": 200,
+  "responseIsJson": true,
+  "rowCount": 1,
+  "fields": [
+    {
+      "name": "FAIXA_ANO",
+      "order": 1,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "PARTILHA_DESTINO_ESPERADA",
+      "order": 2,
+      "userType": "F",
+      "precision": 2
+    },
+    {
+      "name": "TOTAL_ITENS",
+      "order": 3,
+      "userType": "I",
+      "precision": null
+    },
+    {
+      "name": "ITENS_COM_BASEDIFAL",
+      "order": 4,
+      "userType": "I",
+      "precision": null
+    },
+    {
+      "name": "ITENS_COM_DIFAL_DEST",
+      "order": 5,
+      "userType": "I",
+      "precision": null
+    },
+    {
+      "name": "ITENS_COM_DIFAL_REM",
+      "order": 6,
+      "userType": "I",
+      "precision": null
+    },
+    {
+      "name": "ITENS_COM_PERCPART",
+      "order": 7,
+      "userType": "I",
+      "precision": null
+    },
+    {
+      "name": "ITENS_COM_PERCPART_ESPERADO",
+      "order": 8,
+      "userType": "I",
+      "precision": null
+    },
+    {
+      "name": "ITENS_COM_TIPCALCDIFAL",
+      "order": 9,
+      "userType": "I",
+      "precision": null
+    }
+  ],
+  "rows": [
+    [
+      "2019+",
+      100,
+      3457905,
+      0,
+      0,
+      0,
+      0,
+      0,
+      3457905
+    ]
+  ],
+  "responseBody": {
+    "serviceName": "DbExplorerSP.executeQuery",
+    "status": "1",
+    "pendingPrinting": "false",
+    "transactionId": "8CFDC3BA94495E22C7DE4F6527600770",
+    "responseBody": {
+      "fieldsMetadata": [
+        {
+          "name": "FAIXA_ANO",
+          "description": "FAIXA_ANO",
+          "order": 1,
+          "userType": "S"
+        },
+        {
+          "name": "PARTILHA_DESTINO_ESPERADA",
+          "description": "PARTILHA_DESTINO_ESPERADA",
+          "order": 2,
+          "userType": "F",
+          "precision": 2
+        },
+        {
+          "name": "TOTAL_ITENS",
+          "description": "TOTAL_ITENS",
+          "order": 3,
+          "userType": "I"
+        },
+        {
+          "name": "ITENS_COM_BASEDIFAL",
+          "description": "ITENS_COM_BASEDIFAL",
+          "order": 4,
+          "userType": "I"
+        },
+        {
+          "name": "ITENS_COM_DIFAL_DEST",
+          "description": "ITENS_COM_DIFAL_DEST",
+          "order": 5,
+          "userType": "I"
+        },
+        {
+          "name": "ITENS_COM_DIFAL_REM",
+          "description": "ITENS_COM_DIFAL_REM",
+          "order": 6,
+          "userType": "I"
+        },
+        {
+          "name": "ITENS_COM_PERCPART",
+          "description": "ITENS_COM_PERCPART",
+          "order": 7,
+          "userType": "I"
+        },
+        {
+          "name": "ITENS_COM_PERCPART_ESPERADO",
+          "description": "ITENS_COM_PERCPART_ESPERADO",
+          "order": 8,
+          "userType": "I"
+        },
+        {
+          "name": "ITENS_COM_TIPCALCDIFAL",
+          "description": "ITENS_COM_TIPCALCDIFAL",
+          "order": 9,
+          "userType": "I"
+        }
+      ],
+      "rows": [
+        [
+          "2019+",
+          100,
+          3457905,
+          0,
+          0,
+          0,
+          0,
+          0,
+          3457905
+        ]
+      ],
+      "burstLimit": false,
+      "timeQuery": "4,642s",
+      "timeResultSet": "1ms"
+    }
+  }
+}

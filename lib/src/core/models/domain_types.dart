@@ -73,6 +73,41 @@ enum CustomerStatus {
   }
 }
 
+enum SalePurpose {
+  usoConsumo('uso_consumo', 'Uso/consumo'),
+  revenda('revenda', 'Revenda'),
+  industrializacao('industrializacao', 'Industrializacao');
+
+  const SalePurpose(this.value, this.label);
+
+  final String value;
+  final String label;
+
+  static SalePurpose fromValue(String value) {
+    return SalePurpose.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => SalePurpose.revenda,
+    );
+  }
+}
+
+enum CustomerTaxProfile {
+  contribuinte('contribuinte', 'Contribuinte ICMS'),
+  naoContribuinte('nao_contribuinte', 'Nao contribuinte ICMS');
+
+  const CustomerTaxProfile(this.value, this.label);
+
+  final String value;
+  final String label;
+
+  static CustomerTaxProfile fromValue(String value) {
+    return CustomerTaxProfile.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => CustomerTaxProfile.contribuinte,
+    );
+  }
+}
+
 enum PreRegistrationStatus {
   draft('rascunho', 'Rascunho'),
   pending('pendente', 'Pendente'),

@@ -30,3 +30,16 @@
 - repositories para acesso ao dado;
 - fila local para pendências offline;
 - aprovação de pré-cadastros na tela de clientes quando o usuário for dono do workspace ou tiver permissão.
+
+## Integração Sankhya (OpenAPI-first)
+
+- Para dúvidas de integração com Sankhya API (rota, método, schema, headers, autenticação, paginação e erros), priorizar sempre o contrato formal OpenAPI antes de qualquer sugestão baseada em texto livre.
+- Usar documentação de ajuda/comunidade do Sankhya apenas como apoio de processo funcional e troubleshooting, nunca como fonte principal de contrato técnico de endpoint.
+- Quando houver divergência entre documentação textual e OpenAPI, considerar OpenAPI como fonte de verdade do contrato e sinalizar a divergência no resultado.
+- Em propostas de implementação, incluir de forma explícita:
+  - endpoint e método HTTP;
+  - parâmetros obrigatórios e opcionais;
+  - headers obrigatórios;
+  - payload de request e formato de response esperado;
+  - mapeamento de erros e estratégia de retry/timeout.
+- Em mudanças de integração, preferir criar/atualizar testes de contrato e exemplos de chamada reais para reduzir regressão silenciosa.

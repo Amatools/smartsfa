@@ -107,36 +107,10 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
       return;
     }
 
-    final controller = TextEditingController(text: currentName);
     final selectedName = await showDialog<String>(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Atualizar nome de exibicao'),
-          content: TextField(
-            controller: controller,
-            autofocus: true,
-            textInputAction: TextInputAction.done,
-            decoration: const InputDecoration(
-              labelText: 'Nome',
-              hintText: 'Como seu nome deve aparecer no sistema',
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancelar'),
-            ),
-            FilledButton(
-              onPressed: () =>
-                  Navigator.of(context).pop(controller.text.trim()),
-              child: const Text('Salvar'),
-            ),
-          ],
-        );
-      },
+      builder: (_) => _EditDisplayNameDialog(initialName: currentName),
     );
-    controller.dispose();
 
     if (selectedName == null) {
       return;
@@ -464,6 +438,58 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _EditDisplayNameDialog extends StatefulWidget {
+  const _EditDisplayNameDialog({required this.initialName});
+
+  final String initialName;
+
+  @override
+  State<_EditDisplayNameDialog> createState() =>
+      _EditDisplayNameDialogState();
+}
+
+class _EditDisplayNameDialogState extends State<_EditDisplayNameDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialName);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Atualizar nome de exibicao'),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        textInputAction: TextInputAction.done,
+        decoration: const InputDecoration(
+          labelText: 'Nome',
+          hintText: 'Como seu nome deve aparecer no sistema',
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancelar'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(_controller.text.trim()),
+          child: const Text('Salvar'),
+        ),
+      ],
     );
   }
 }

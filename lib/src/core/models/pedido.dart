@@ -17,6 +17,8 @@ class Pedido implements TenantScopedEntity {
     this.originCompanyUnitId,
     this.originCompanyUnitLabel,
     this.originCompanyUf,
+    this.salePurpose = SalePurpose.revenda,
+    this.formaPagamento,
     this.itens = const [],
     this.totalItens = 0,
     this.totalBruto = 0,
@@ -49,6 +51,12 @@ class Pedido implements TenantScopedEntity {
       originCompanyUnitId: map['originCompanyUnitId'] as String?,
       originCompanyUnitLabel: map['originCompanyUnitLabel'] as String?,
       originCompanyUf: map['originCompanyUf'] as String?,
+      salePurpose: SalePurpose.fromValue(
+        map['salePurpose'] as String? ?? SalePurpose.revenda.value,
+      ),
+      formaPagamento:
+          (map['formaPagamento'] ?? map['paymentConditionDescription'])
+              as String?,
       itens: _readItems(map['itens']),
       totalItens: _readDouble(map['totalItens']) ?? 0,
       totalBruto: _readDouble(map['totalBruto']) ?? 0,
@@ -74,6 +82,8 @@ class Pedido implements TenantScopedEntity {
   final String? originCompanyUnitId;
   final String? originCompanyUnitLabel;
   final String? originCompanyUf;
+  final SalePurpose salePurpose;
+  final String? formaPagamento;
   final List<PedidoItem> itens;
   final double totalItens;
   final double totalBruto;
@@ -97,6 +107,8 @@ class Pedido implements TenantScopedEntity {
     String? originCompanyUnitId,
     String? originCompanyUnitLabel,
     String? originCompanyUf,
+    SalePurpose? salePurpose,
+    String? formaPagamento,
     List<PedidoItem>? itens,
     double? totalItens,
     double? totalBruto,
@@ -122,6 +134,8 @@ class Pedido implements TenantScopedEntity {
       originCompanyUnitLabel:
           originCompanyUnitLabel ?? this.originCompanyUnitLabel,
       originCompanyUf: originCompanyUf ?? this.originCompanyUf,
+      salePurpose: salePurpose ?? this.salePurpose,
+      formaPagamento: formaPagamento ?? this.formaPagamento,
       itens: itens ?? this.itens,
       totalItens: totalItens ?? this.totalItens,
       totalBruto: totalBruto ?? this.totalBruto,
@@ -147,6 +161,8 @@ class Pedido implements TenantScopedEntity {
       'originCompanyUnitId': originCompanyUnitId,
       'originCompanyUnitLabel': originCompanyUnitLabel,
       'originCompanyUf': originCompanyUf,
+      'salePurpose': salePurpose.value,
+      'formaPagamento': formaPagamento,
       'itens': itens.map((item) => item.toMap()).toList(),
       'totalItens': totalItens,
       'totalBruto': totalBruto,

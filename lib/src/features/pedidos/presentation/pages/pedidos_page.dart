@@ -1,6 +1,8 @@
 import 'dart:convert';
+import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -154,12 +156,19 @@ class _PedidosPageState extends State<PedidosPage> {
 
     var syncedRemotely = false;
     Object? remoteError;
-    try {
-      await widget.repository.save(order);
-      await OfflineSyncQueue.markSynced(order.id);
-      syncedRemotely = true;
-    } catch (error) {
-      remoteError = error;
+    final isOffline = await _resolveIsOffline();
+    if (!isOffline) {
+      try {
+        await widget.repository
+            .save(order)
+            .timeout(const Duration(seconds: 8));
+        await OfflineSyncQueue.markSynced(order.id);
+        syncedRemotely = true;
+      } catch (error) {
+        remoteError = error;
+      }
+    } else {
+      remoteError = const _PedidoOfflineSaveMarker();
     }
 
     if (!mounted) {
@@ -173,21 +182,38 @@ class _PedidosPageState extends State<PedidosPage> {
       final firebaseError = remoteError is FirebaseException
           ? remoteError.code
           : null;
-      final reason = firebaseError == 'permission-denied'
-          ? 'sem permissao no Firestore para este usuario'
-          : 'sem sincronizar no servidor agora';
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Pedido ${_pedidoDisplayNumber(order.id)} $pendingActionLabel localmente ($reason). Ele sera sincronizado quando permitido/conectado.',
-          ),
-        ),
-      );
+      final isTimeout = remoteError is TimeoutException;
+      final isOfflineMarker = remoteError is _PedidoOfflineSaveMarker;
+      final isOfflineFallback = isOfflineMarker || isTimeout;
+      if (isOfflineFallback) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Salvo no dispositivo Local (off-line)')),
+        );
+      } else {
+        final reason = firebaseError == 'permission-denied'
+            ? 'Sem permissao no Firestore para este usuario.'
+            : 'Sem sincronizar no servidor agora.';
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(reason)));
+      }
     }
 
     setState(() {
       // Rebuild to refresh local queue merge and sync badges.
     });
+  }
+
+  Future<bool> _resolveIsOffline() async {
+    try {
+      final connectivity = await Connectivity().checkConnectivity().timeout(
+        const Duration(seconds: 3),
+      );
+      return connectivity.contains(ConnectivityResult.none);
+    } catch (_) {
+      // If we cannot resolve connectivity quickly, prefer local-first mode.
+      return true;
+    }
   }
 
   Future<Map<String, String>> _resolveScopeIdsForCurrentUser(
@@ -606,10 +632,13 @@ class _PedidosPageState extends State<PedidosPage> {
     final selectedRepresentedCompanyId = (_effectiveRepresentedCompanyId ?? '')
         .trim();
     if (selectedRepresentedCompanyId.isEmpty) {
-      return false;
+      return true;
     }
 
     final productScope = (product.representedCompanyId ?? '').trim();
+    if (productScope.isEmpty) {
+      return true;
+    }
     return productScope == selectedRepresentedCompanyId;
   }
 
@@ -696,6 +725,7 @@ class _PedidosPageState extends State<PedidosPage> {
             .where(
               (item) =>
                   item.status == ProductStatus.active &&
+                  item.deletedAt == null &&
                   _isProductInRepresentedScope(item),
             )
             .toList()
@@ -731,6 +761,8 @@ class _PedidosPageState extends State<PedidosPage> {
     Pedido pedido,
     List<PedidoItem> editedItems,
     ClienteReference? editedClienteReferencia,
+    SalePurpose editedSalePurpose,
+    String? editedFormaPagamento,
   ) async {
     setState(() {
       _savingDraftEdition = true;
@@ -741,6 +773,10 @@ class _PedidosPageState extends State<PedidosPage> {
       final updatedOrder = pedido.copyWith(
         clienteReferencia: editedClienteReferencia,
         clearClienteReferencia: editedClienteReferencia == null,
+        salePurpose: editedSalePurpose,
+        formaPagamento: (editedFormaPagamento ?? '').trim().isEmpty
+            ? null
+            : editedFormaPagamento?.trim(),
         itens: editedItems,
         totalItens: _roundCurrency(_totalQuantity(editedItems)),
         totalBruto: _roundCurrency(_totalGross(editedItems)),
@@ -817,6 +853,8 @@ class _PedidosPageState extends State<PedidosPage> {
         originCompanyUnitId: originCompanyUnitId,
         originCompanyUnitLabel: originLabel,
         originCompanyUf: originUf,
+        salePurpose: SalePurpose.revenda,
+        formaPagamento: null,
         itens: const [],
         totalItens: 0,
         totalBruto: 0,
@@ -1148,6 +1186,8 @@ class _PedidoCard extends StatelessWidget {
         subtitle: Text(
           '${pedido.origemPedido.label} · ${pedido.statusFila.label} · ${pedido.clienteReferencia?.nomeSnapshot ?? '-'}\n'
           'Itens: ${pedido.itens.length} · Quantidade: ${pedido.totalItens.toStringAsFixed(2)} · Total: R\$ ${_formatMoneyBr(pedido.totalBruto)}\n'
+          'Forma de pagamento: ${((pedido.formaPagamento ?? '').trim().isEmpty ? '-' : pedido.formaPagamento)}\n'
+          'Finalidade: ${pedido.salePurpose.label}\n'
           'Origem empresa: ${pedido.originCompanyUnitLabel ?? '-'}${(pedido.originCompanyUf ?? '').trim().isEmpty ? '' : ' (${pedido.originCompanyUf})'}\n'
           'Sync: ${syncedRemotely ? 'sincronizado' : 'pendente'}',
         ),
@@ -1225,6 +1265,8 @@ class _PedidoInlineEditor extends StatefulWidget {
     Pedido pedido,
     List<PedidoItem> items,
     ClienteReference? clienteReferencia,
+    SalePurpose salePurpose,
+    String? formaPagamento,
   )
   onSave;
 
@@ -1250,6 +1292,11 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
   final Map<String, int> _discountApplyRevisionByItemId = <String, int>{};
   List<PedidoItem> _items = const [];
   List<Cliente> _clientes = const [];
+  List<PaymentConditionRule> _paymentConditionRules =
+      const <PaymentConditionRule>[];
+  bool _paymentConditionRulesLoaded = false;
+  Future<void>? _paymentConditionRulesLoader;
+  String? _selectedPaymentConditionDescription;
   bool _loadingClientes = false;
   bool _customerReadDenied = false;
   bool _commercialRulesLoaded = false;
@@ -1259,6 +1306,7 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
   bool _orderDiscountPolicyLoaded = false;
   Future<void>? _orderDiscountPolicyLoader;
   OrderDiscountPolicy _orderDiscountPolicy = const OrderDiscountPolicy();
+  SalePurpose _selectedSalePurpose = SalePurpose.revenda;
   ClienteReference? _clienteReferenciaSelecionada;
   String? _customerInputError;
   String? _boundOrderId;
@@ -1292,6 +1340,9 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
     _orderDiscountPolicyLoaded = false;
     _orderDiscountPolicyLoader = null;
     _orderDiscountPolicy = const OrderDiscountPolicy();
+    _paymentConditionRulesLoaded = false;
+    _paymentConditionRulesLoader = null;
+    _paymentConditionRules = const <PaymentConditionRule>[];
   }
 
   @override
@@ -1301,6 +1352,7 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
     _loadClientes();
     _loadCommercialRules();
     _loadOrderDiscountPolicy();
+    _loadPaymentConditionRules();
   }
 
   @override
@@ -1315,11 +1367,13 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
       _resetScopedPoliciesState();
       _loadCommercialRules();
       _loadOrderDiscountPolicy();
+      _loadPaymentConditionRules();
     }
     if (oldScope != newScope) {
       _resetScopedPoliciesState();
       _loadCommercialRules();
       _loadOrderDiscountPolicy();
+      _loadPaymentConditionRules();
     }
     _syncFromPedidoIfNeeded();
   }
@@ -1386,6 +1440,74 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
     } catch (_) {
       _orderDiscountPolicy = const OrderDiscountPolicy();
       _orderDiscountPolicyLoaded = true;
+    }
+  }
+
+  Future<void> _loadPaymentConditionRules() async {
+    final tenantId = widget.tenantId.trim();
+    if (tenantId.isEmpty) {
+      _paymentConditionRules = const <PaymentConditionRule>[];
+      _paymentConditionRulesLoaded = true;
+      return;
+    }
+
+    try {
+      final rules = await _workspaceProfileService
+          .watchPaymentConditionRules(
+            tenantId: tenantId,
+            representedCompanyId: _effectiveRepresentedCompanyId,
+          )
+          .first;
+      _paymentConditionRules = rules;
+      _paymentConditionRulesLoaded = true;
+    } catch (_) {
+      _paymentConditionRules = const <PaymentConditionRule>[];
+      _paymentConditionRulesLoaded = true;
+    }
+  }
+
+  Future<void> _ensurePaymentConditionRulesLoaded() async {
+    if (_paymentConditionRulesLoaded) {
+      return;
+    }
+
+    final inFlight = _paymentConditionRulesLoader;
+    if (inFlight != null) {
+      await inFlight;
+      return;
+    }
+
+    final future = _loadPaymentConditionRules();
+    _paymentConditionRulesLoader = future;
+    await future;
+    if (identical(_paymentConditionRulesLoader, future)) {
+      _paymentConditionRulesLoader = null;
+    }
+  }
+
+  List<PaymentConditionRule> _eligiblePaymentConditionRules() {
+    final total = _totalGross();
+    return _workspaceProfileService.filterPaymentConditionsByOrderValue(
+      rules: _paymentConditionRules,
+      orderTotal: total,
+    );
+  }
+
+  void _sanitizeSelectedPaymentConditionIfNeeded({
+    bool forceClearWhenUnavailable = false,
+  }) {
+    final current = (_selectedPaymentConditionDescription ?? '').trim();
+    if (current.isEmpty) {
+      return;
+    }
+
+    final eligibleDescriptions = _eligiblePaymentConditionRules()
+        .map((rule) => rule.description.trim())
+        .where((value) => value.isNotEmpty)
+        .toSet();
+
+    if (!eligibleDescriptions.contains(current) || forceClearWhenUnavailable) {
+      _selectedPaymentConditionDescription = null;
     }
   }
 
@@ -1538,6 +1660,7 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
     }
 
     if (_boundOrderId == currentId) {
+      _sanitizeSelectedPaymentConditionIfNeeded();
       return;
     }
 
@@ -1545,11 +1668,17 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
     _boundOrderId = currentId;
     _items = List<PedidoItem>.from(widget.pedido?.itens ?? const []);
     _clienteReferenciaSelecionada = widget.pedido?.clienteReferencia;
+    _selectedSalePurpose = widget.pedido?.salePurpose ?? SalePurpose.revenda;
+    _selectedPaymentConditionDescription =
+      (widget.pedido?.formaPagamento ?? '').trim().isEmpty
+      ? null
+      : widget.pedido?.formaPagamento;
     _customerController.text = _selectedCustomerDisplayLabel();
     _customerInputError = null;
     _searchController.clear();
     _searchQuery = '';
     _quantityController.text = '1';
+    _sanitizeSelectedPaymentConditionIfNeeded();
   }
 
   Cliente? _findClienteById(String customerId) {
@@ -1684,6 +1813,7 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
       setState(() {
         _clienteReferenciaSelecionada = _toClienteReference(selected!);
         _customerController.text = _formatClienteLabel(selected);
+        _selectedSalePurpose = selected.salePurpose;
         _customerInputError = null;
       });
     }
@@ -2180,28 +2310,28 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
     });
   }
 
-  Future<void> _applyInlineItemDiscounts(
+  Future<bool> _applyInlineItemDiscounts(
     int index, {
     bool showErrors = true,
   }) async {
     if (index < 0 || index >= _items.length || widget.saving) {
-      return;
+      return false;
     }
 
     await _ensureOrderDiscountPolicyLoaded();
     if (!mounted) {
-      return;
+      return false;
     }
 
     final fields = _orderDiscountPolicy.fields;
     if (fields.isEmpty) {
-      return;
+      return true;
     }
 
     final item = _items[index];
     final activeSlots = item.appliedDiscountPercents.length;
     if (activeSlots <= 0) {
-      return;
+      return true;
     }
 
     final controllers = _ensureDiscountControllersForItem(item, activeSlots);
@@ -2223,7 +2353,7 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
             SnackBar(content: Text('Valor inválido em $fieldLabel.')),
           );
         }
-        return;
+        return false;
       }
 
       if (i < fields.length) {
@@ -2238,8 +2368,8 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
                 ),
               ),
             );
-            return;
           }
+          return false;
         }
       }
 
@@ -2251,7 +2381,7 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
       setState(() {
         _items[index] = _items[index].copyWith(appliedDiscountPercents: values);
       });
-      return;
+      return true;
     }
 
     final itemId = item.id;
@@ -2267,16 +2397,16 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
     );
 
     if (!mounted) {
-      return;
+      return false;
     }
 
     if ((_discountApplyRevisionByItemId[itemId] ?? 0) != applyRevision) {
-      return;
+      return false;
     }
 
     final refreshedIndex = _items.indexWhere((current) => current.id == itemId);
     if (refreshedIndex < 0) {
-      return;
+      return false;
     }
 
     setState(() {
@@ -2287,6 +2417,27 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
         appliedDiscountPercents: values,
       );
     });
+    return true;
+  }
+
+  Future<bool> _validateAllInlineDiscountsBeforeSave() async {
+    if (_items.isEmpty) {
+      return true;
+    }
+
+    for (var index = 0; index < _items.length; index++) {
+      final hasDiscounts = _items[index].appliedDiscountPercents.isNotEmpty;
+      if (!hasDiscounts) {
+        continue;
+      }
+
+      final valid = await _applyInlineItemDiscounts(index, showErrors: true);
+      if (!valid) {
+        return false;
+      }
+    }
+
+    return true;
   }
 
   Future<void> _removeInlineItemDiscountField(
@@ -2720,6 +2871,12 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
     }
 
     final originUf = _normalizedOriginUf();
+    final selectedCliente = _findClienteById(
+      _clienteReferenciaSelecionada?.id ?? '',
+    );
+    final customerTaxProfile =
+        selectedCliente?.taxProfile ?? CustomerTaxProfile.contribuinte;
+    final isZonaFrancaSuframa = selectedCliente?.isZfmSuframa ?? false;
 
     Future<_ComputedPedidoItemValues?> tryTable(String tableId) async {
       if (tableId.trim().isEmpty) {
@@ -2732,6 +2889,9 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
         tabelaId: tableId,
         clienteUf: destinationUf,
         quantidade: quantity,
+        salePurpose: _selectedSalePurpose,
+        customerTaxProfile: customerTaxProfile,
+        isZonaFrancaSuframa: isZonaFrancaSuframa,
         representedCompanyId: _effectiveRepresentedCompanyId,
         ufOrigem: originUf,
       );
@@ -3472,6 +3632,38 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
             const SizedBox(height: 8),
             const LinearProgressIndicator(minHeight: 2),
           ],
+          const SizedBox(height: 8),
+          DropdownButtonFormField<SalePurpose>(
+            initialValue: _selectedSalePurpose,
+            isExpanded: true,
+            decoration: _inputDecoration(
+              label: 'Finalidade da venda',
+            ).copyWith(
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: compact ? 8 : 12,
+              ),
+            ),
+            items: SalePurpose.values
+                .map(
+                  (item) => DropdownMenuItem<SalePurpose>(
+                    value: item,
+                    child: Text(item.label),
+                  ),
+                )
+                .toList(growable: false),
+            onChanged: widget.saving
+                ? null
+                : (value) async {
+                    if (value == null) {
+                      return;
+                    }
+                    setState(() {
+                      _selectedSalePurpose = value;
+                    });
+                    await _recalculateAllItemsForCustomerContext();
+                  },
+          ),
         ],
       ),
     );
@@ -3481,6 +3673,28 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
     final pedido = widget.pedido;
     if (pedido == null || widget.saving) {
       return;
+    }
+
+    await _ensurePaymentConditionRulesLoaded();
+    if (!mounted) {
+      return;
+    }
+
+    _sanitizeSelectedPaymentConditionIfNeeded(
+      forceClearWhenUnavailable: false,
+    );
+
+    final eligiblePaymentRules = _eligiblePaymentConditionRules();
+    if (eligiblePaymentRules.isNotEmpty) {
+      final selected = (_selectedPaymentConditionDescription ?? '').trim();
+      if (selected.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Selecione uma forma de pagamento.'),
+          ),
+        );
+        return;
+      }
     }
 
     if (!await _validateCustomerSelectionForSave()) {
@@ -3496,10 +3710,17 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
       return;
     }
 
+    final discountsValid = await _validateAllInlineDiscountsBeforeSave();
+    if (!discountsValid) {
+      return;
+    }
+
     await widget.onSave(
       pedido,
       List<PedidoItem>.from(_items),
       _clienteReferenciaSelecionada,
+      _selectedSalePurpose,
+      _selectedPaymentConditionDescription,
     );
   }
 
@@ -4836,6 +5057,124 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
                                                 'Total de itens: ${_items.length} · Total com impostos: R\$ ${_formatMoney(_totalGross())}',
                                               ),
                                             ),
+                                            const SizedBox(height: 8),
+                                            FutureBuilder<void>(
+                                              future: _ensurePaymentConditionRulesLoaded(),
+                                              builder: (context, paymentSnapshot) {
+                                                final loading =
+                                                    paymentSnapshot.connectionState ==
+                                                    ConnectionState.waiting;
+                                                final eligibleRules =
+                                                    _eligiblePaymentConditionRules();
+                                                final options = eligibleRules
+                                                    .map(
+                                                      (rule) => rule.description.trim(),
+                                                    )
+                                                    .where((value) => value.isNotEmpty)
+                                                    .toSet()
+                                                    .toList(growable: false)
+                                                  ..sort(
+                                                    (a, b) => a
+                                                        .toLowerCase()
+                                                        .compareTo(b.toLowerCase()),
+                                                  );
+
+                                                final selected =
+                                                    (_selectedPaymentConditionDescription ?? '')
+                                                        .trim();
+                                                final selectedInOptions =
+                                                    selected.isNotEmpty &&
+                                                    options.contains(selected);
+
+                                                if (!selectedInOptions &&
+                                                    selected.isNotEmpty) {
+                                                  WidgetsBinding.instance
+                                                      .addPostFrameCallback((_) {
+                                                        if (!mounted) {
+                                                          return;
+                                                        }
+                                                        setState(() {
+                                                          _selectedPaymentConditionDescription =
+                                                              null;
+                                                        });
+                                                      });
+                                                }
+
+                                                return Container(
+                                                  width: double.infinity,
+                                                  padding: const EdgeInsets.all(12),
+                                                  decoration: BoxDecoration(
+                                                    borderRadius:
+                                                        BorderRadius.circular(8),
+                                                    color: Theme.of(context)
+                                                        .colorScheme
+                                                        .surface,
+                                                    border: Border.all(
+                                                      color: Theme.of(context)
+                                                          .dividerColor,
+                                                    ),
+                                                  ),
+                                                  child: Column(
+                                                    crossAxisAlignment:
+                                                        CrossAxisAlignment.start,
+                                                    children: [
+                                                      Text(
+                                                        'Forma de Pagamento',
+                                                        style: Theme.of(context)
+                                                            .textTheme
+                                                            .labelLarge,
+                                                      ),
+                                                      const SizedBox(height: 6),
+                                                      if (loading)
+                                                        const LinearProgressIndicator(
+                                                          minHeight: 2,
+                                                        )
+                                                      else if (options.isEmpty)
+                                                        Text(
+                                                          'Nenhuma condição disponível para o total atual.',
+                                                          style: Theme.of(context)
+                                                              .textTheme
+                                                              .bodySmall,
+                                                        )
+                                                      else
+                                                        DropdownButtonFormField<String>(
+                                                          initialValue: selectedInOptions
+                                                              ? selected
+                                                              : null,
+                                                          decoration: _inputDecoration(
+                                                            label:
+                                                                'Selecione uma condição',
+                                                          ),
+                                                          isExpanded: true,
+                                                          items: options
+                                                              .map(
+                                                                (description) =>
+                                                                    DropdownMenuItem<String>(
+                                                                  value: description,
+                                                                  child: Text(
+                                                                    description,
+                                                                    overflow:
+                                                                        TextOverflow.ellipsis,
+                                                                  ),
+                                                                ),
+                                                              )
+                                                              .toList(growable: false),
+                                                          onChanged: widget.saving
+                                                              ? null
+                                                              : (value) {
+                                                                  setState(() {
+                                                                    _selectedPaymentConditionDescription =
+                                                                        (value ?? '').trim().isEmpty
+                                                                        ? null
+                                                                        : value;
+                                                                  });
+                                                                },
+                                                        ),
+                                                    ],
+                                                  ),
+                                                );
+                                              },
+                                            ),
                                           ],
                                         ),
                                     ],
@@ -4931,4 +5270,8 @@ class _ComputedPedidoItemValues {
   final double totalPrice;
   final PedidoItemTaxSnapshot taxSnapshot;
   final bool usedFallback;
+}
+
+class _PedidoOfflineSaveMarker {
+  const _PedidoOfflineSaveMarker();
 }

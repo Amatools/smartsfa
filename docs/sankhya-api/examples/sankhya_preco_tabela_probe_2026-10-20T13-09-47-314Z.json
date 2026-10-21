@@ -1,0 +1,701 @@
+{
+  "marker": "PRECO_TABELA_PROBE",
+  "ok": true,
+  "executedAt": "2026-10-20T13:09:47.314Z",
+  "tenantId": "self_T8oqTD0UBtWATPbITOGsqAEZt3d2_smartsfa-enterprise-teste",
+  "environment": "prod",
+  "baseUrl": "https://api.sankhya.com.br",
+  "authStatus": 200,
+  "bearerReceived": true,
+  "discovery": {
+    "productsProbeStatus": null,
+    "productsChecked": 0,
+    "productPriceChecks": [],
+    "tablesListProbeStatus": null,
+    "selectedBy": "argumento",
+    "selectedCodigoTabela": "4"
+  },
+  "request": {
+    "method": "GET",
+    "path": "/v1/precos/tabela/4?pagina=1"
+  },
+  "response": {
+    "status": 200,
+    "isJson": true,
+    "body": {
+      "codigo": "200",
+      "pagina": 1,
+      "numeroRegistros": 50,
+      "temMaisRegistros": true,
+      "tipo": "Processamento realizado",
+      "mensagem": "Consulta realizada com sucesso!",
+      "produtos": [
+        {
+          "codigoProduto": 100001,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 0
+        },
+        {
+          "codigoProduto": 100002,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 0
+        },
+        {
+          "codigoProduto": 100003,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 0
+        },
+        {
+          "codigoProduto": 100004,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 0
+        },
+        {
+          "codigoProduto": 100005,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 0
+        },
+        {
+          "codigoProduto": 100006,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 0
+        },
+        {
+          "codigoProduto": 100007,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 0
+        },
+        {
+          "codigoProduto": 100008,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 0
+        },
+        {
+          "codigoProduto": 100009,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 0
+        },
+        {
+          "codigoProduto": 100010,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 0
+        },
+        {
+          "codigoProduto": 100011,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 0
+        },
+        {
+          "codigoProduto": 100012,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 0
+        },
+        {
+          "codigoProduto": 100013,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 0
+        },
+        {
+          "codigoProduto": 100014,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 0
+        },
+        {
+          "codigoProduto": 100100,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 0
+        },
+        {
+          "codigoProduto": 200000,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 0
+        },
+        {
+          "codigoProduto": 300045,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 0
+        },
+        {
+          "codigoProduto": 489690,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "JG",
+          "valor": 0
+        },
+        {
+          "codigoProduto": 489703,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "PC",
+          "valor": 0
+        },
+        {
+          "codigoProduto": 489751,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 0
+        },
+        {
+          "codigoProduto": 489858,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 0
+        },
+        {
+          "codigoProduto": 489888,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 0
+        },
+        {
+          "codigoProduto": 490123,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 0
+        },
+        {
+          "codigoProduto": 490180,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 0
+        },
+        {
+          "codigoProduto": 490333,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 14.14
+        },
+        {
+          "codigoProduto": 490333,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "PC",
+          "valor": 14.14
+        },
+        {
+          "codigoProduto": 490333,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 14.14
+        },
+        {
+          "codigoProduto": 490334,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 16.5
+        },
+        {
+          "codigoProduto": 490334,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 16.5
+        },
+        {
+          "codigoProduto": 490335,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 80.64
+        },
+        {
+          "codigoProduto": 490335,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 80.64
+        },
+        {
+          "codigoProduto": 490336,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 1.53
+        },
+        {
+          "codigoProduto": 490336,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "PC",
+          "valor": 1.53
+        },
+        {
+          "codigoProduto": 490336,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 1.53
+        },
+        {
+          "codigoProduto": 490337,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 5.7
+        },
+        {
+          "codigoProduto": 490337,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "PC",
+          "valor": 5.7
+        },
+        {
+          "codigoProduto": 490337,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 5.7
+        },
+        {
+          "codigoProduto": 490338,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 1.96
+        },
+        {
+          "codigoProduto": 490338,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "PC",
+          "valor": 1.96
+        },
+        {
+          "codigoProduto": 490338,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 1.96
+        },
+        {
+          "codigoProduto": 490339,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 29.26
+        },
+        {
+          "codigoProduto": 490339,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "PC",
+          "valor": 29.26
+        },
+        {
+          "codigoProduto": 490339,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 29.26
+        },
+        {
+          "codigoProduto": 490340,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 5.99
+        },
+        {
+          "codigoProduto": 490340,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "PC",
+          "valor": 5.99
+        },
+        {
+          "codigoProduto": 490340,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 5.99
+        },
+        {
+          "codigoProduto": 490341,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 21.9
+        },
+        {
+          "codigoProduto": 490341,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "PC",
+          "valor": 21.9
+        },
+        {
+          "codigoProduto": 490341,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 21.9
+        },
+        {
+          "codigoProduto": 490342,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 14.72
+        },
+        {
+          "codigoProduto": 490342,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "PC",
+          "valor": 14.72
+        },
+        {
+          "codigoProduto": 490342,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 14.72
+        },
+        {
+          "codigoProduto": 490343,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 13.2
+        },
+        {
+          "codigoProduto": 490343,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "PC",
+          "valor": 13.2
+        },
+        {
+          "codigoProduto": 490343,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 13.2
+        },
+        {
+          "codigoProduto": 490344,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 7.52
+        },
+        {
+          "codigoProduto": 490344,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 7.52
+        },
+        {
+          "codigoProduto": 490345,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 3.85
+        },
+        {
+          "codigoProduto": 490345,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "PC",
+          "valor": 3.85
+        },
+        {
+          "codigoProduto": 490345,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 3.85
+        },
+        {
+          "codigoProduto": 490346,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 6.67
+        },
+        {
+          "codigoProduto": 490346,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 6.67
+        },
+        {
+          "codigoProduto": 490347,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 4.28
+        },
+        {
+          "codigoProduto": 490347,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "PC",
+          "valor": 4.28
+        },
+        {
+          "codigoProduto": 490347,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 4.28
+        },
+        {
+          "codigoProduto": 490348,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 5.94
+        },
+        {
+          "codigoProduto": 490348,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 5.94
+        },
+        {
+          "codigoProduto": 490349,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 5.76
+        },
+        {
+          "codigoProduto": 490349,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 5.76
+        },
+        {
+          "codigoProduto": 490350,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 5.04
+        },
+        {
+          "codigoProduto": 490350,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 5.04
+        },
+        {
+          "codigoProduto": 490351,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 3.38
+        },
+        {
+          "codigoProduto": 490351,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "PC",
+          "valor": 3.38
+        },
+        {
+          "codigoProduto": 490351,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 3.38
+        },
+        {
+          "codigoProduto": 490352,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 6.01
+        },
+        {
+          "codigoProduto": 490352,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "PC",
+          "valor": 6.01
+        },
+        {
+          "codigoProduto": 490352,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 6.01
+        },
+        {
+          "codigoProduto": 490353,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 15.22
+        },
+        {
+          "codigoProduto": 490353,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "PC",
+          "valor": 15.22
+        },
+        {
+          "codigoProduto": 490353,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 15.22
+        },
+        {
+          "codigoProduto": 490354,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 24.86
+        },
+        {
+          "codigoProduto": 490354,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "PC",
+          "valor": 24.86
+        },
+        {
+          "codigoProduto": 490354,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 24.86
+        },
+        {
+          "codigoProduto": 490355,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 72
+        },
+        {
+          "codigoProduto": 490355,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 72
+        },
+        {
+          "codigoProduto": 490356,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 3.87
+        },
+        {
+          "codigoProduto": 490356,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "PC",
+          "valor": 3.87
+        },
+        {
+          "codigoProduto": 490356,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 3.87
+        },
+        {
+          "codigoProduto": 490357,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 34.25
+        },
+        {
+          "codigoProduto": 490357,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "PC",
+          "valor": 34.25
+        },
+        {
+          "codigoProduto": 490357,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 34.25
+        },
+        {
+          "codigoProduto": 490358,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 7.96
+        },
+        {
+          "codigoProduto": 490358,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "PC",
+          "valor": 7.96
+        },
+        {
+          "codigoProduto": 490358,
+          "codigoLocalEstoque": 0,
+          "controle": " ",
+          "unidade": "UN",
+          "valor": 7.96
+        }
+      ]
+    }
+  },
+  "summary": {
+    "codigoTabela": "4",
+    "page": 1,
+    "numeroRegistros": 50,
+    "temMaisRegistros": true,
+    "totalItensNoArrayPrecos": 94
+  }
+}

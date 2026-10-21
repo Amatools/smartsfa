@@ -18,6 +18,7 @@ import '../../../../core/data/firestore/firestore_produto_repository.dart';
 import '../../../../core/data/firestore/firestore_tabela_preco_repository.dart';
 import '../../../../core/data/firestore/firestore_tax_rule_repository.dart';
 import '../../../../core/models/app_identity.dart';
+import '../../../../core/models/domain_types.dart';
 import '../../../../core/models/tax_rule.dart';
 import '../../../../core/models/tenant_entry_decision.dart';
 import '../../../../shared/services/tabular_spreadsheet_service.dart';
@@ -31,6 +32,7 @@ import '../../../pedidos/presentation/pages/pedidos_page.dart';
 import '../../../precos/presentation/pages/tabelas_preco_page.dart';
 import '../../../produtos/presentation/pages/produtos_page.dart';
 import '../../../tenant/presentation/pages/tenant_admin_page.dart';
+import '../../../enterprise/erp_integration/presentation/pages/enterprise_erp_integration_section.dart';
 import '../../../produtos/presentation/services/product_editor_defaults.dart';
 import '../../../produtos/presentation/services/product_unit_catalog_service.dart';
 
@@ -59,6 +61,10 @@ String _normalizeDefaultScopeKey(String? representedCompanyId) {
     return 'tenant_default';
   }
   return represented.replaceAll('.', '_').replaceAll('/', '_');
+}
+
+String _enterpriseDefaultRepresentedCompanyId(TenantEntryOption tenant) {
+  return 'enterprise_default_${tenant.tenantId}';
 }
 
 DateTime _readDateTime(Object? value) {

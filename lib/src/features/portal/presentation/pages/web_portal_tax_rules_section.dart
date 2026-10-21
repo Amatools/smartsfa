@@ -27,15 +27,29 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
   static const Color _dialogBorderColor = Color(0xFFE3E6EA);
   static const Color _dialogFocusedBorderColor = Color(0xFFD0D6DE);
   static const double _dialogFieldVerticalGap = 14;
+  static const int _rulesPageSize = 100;
 
   final FirestoreTaxRuleRepository _repository = FirestoreTaxRuleRepository(
     FirebaseFirestore.instance,
   );
 
   bool _working = false;
+  int _visibleRulesCount = _rulesPageSize;
 
   String get _selectedRepresentedCompanyId {
     return (widget.selectedRepresentedCompanyId ?? '').trim();
+  }
+
+  bool _isGlobalRuleScope(TaxRule rule) {
+    return (rule.representedCompanyId ?? '').trim().isEmpty;
+  }
+
+  bool _isSelectedRepresentedRuleScope(TaxRule rule) {
+    final selected = _selectedRepresentedCompanyId;
+    if (selected.isEmpty) {
+      return false;
+    }
+    return (rule.representedCompanyId ?? '').trim() == selected;
   }
 
   bool _matchesSelectedRepresentedScope(TaxRule rule) {
@@ -43,7 +57,81 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
     if (selected.isEmpty) {
       return false;
     }
-    return (rule.representedCompanyId ?? '').trim() == selected;
+    final scope = (rule.representedCompanyId ?? '').trim();
+    return scope == selected || scope.isEmpty;
+  }
+
+  List<TaxRule> _sortRulesForDisplay(List<TaxRule> rules) {
+    final sorted = List<TaxRule>.from(rules);
+    sorted.sort((a, b) {
+      final aIsSelectedScope = _isSelectedRepresentedRuleScope(a);
+      final bIsSelectedScope = _isSelectedRepresentedRuleScope(b);
+      if (aIsSelectedScope != bIsSelectedScope) {
+        return aIsSelectedScope ? -1 : 1;
+      }
+      return b.priority.compareTo(a.priority);
+    });
+    return sorted;
+  }
+
+  String _scopeChipLabel(TaxRule rule) {
+    return _isGlobalRuleScope(rule)
+        ? 'Escopo: Global (ERP)'
+        : 'Escopo: Representada';
+  }
+
+  String? _resolveRuleScopeForSave(TaxRule? existing) {
+    if (existing != null) {
+      final existingScope = (existing.representedCompanyId ?? '').trim();
+      return existingScope.isEmpty ? null : existingScope;
+    }
+
+    final selected = _selectedRepresentedCompanyId;
+    return selected.isEmpty ? null : selected;
+  }
+
+  void _ensureVisibleRulesCountWithin(List<TaxRule> rules) {
+    final total = rules.length;
+    if (total == 0) {
+      if (_visibleRulesCount != _rulesPageSize) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) {
+            return;
+          }
+          setState(() {
+            _visibleRulesCount = _rulesPageSize;
+          });
+        });
+      }
+      return;
+    }
+
+    final minVisible = total < _rulesPageSize ? total : _rulesPageSize;
+    final clamped = _visibleRulesCount.clamp(minVisible, total);
+    if (clamped != _visibleRulesCount) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          _visibleRulesCount = clamped;
+        });
+      });
+    }
+  }
+
+  void _loadMoreRules(List<TaxRule> rules) {
+    final total = rules.length;
+    if (total == 0 || _visibleRulesCount >= total) {
+      return;
+    }
+
+    setState(() {
+      _visibleRulesCount = (_visibleRulesCount + _rulesPageSize).clamp(
+        _rulesPageSize,
+        total,
+      );
+    });
   }
 
   @override
@@ -147,9 +235,12 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
                 }
 
                 final rules = snapshot.data ?? const <TaxRule>[];
-                final scopedRules = rules
+                final scopedRules = _sortRulesForDisplay(
+                  rules
                     .where(_matchesSelectedRepresentedScope)
-                    .toList(growable: false);
+                    .toList(growable: false),
+                );
+                _ensureVisibleRulesCountWithin(scopedRules);
                 if (snapshot.connectionState == ConnectionState.waiting &&
                     scopedRules.isEmpty) {
                   return const Padding(
@@ -160,110 +251,146 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
 
                 if (scopedRules.isEmpty) {
                   return const Text(
-                    'Nenhuma regra fiscal cadastrada ainda. Crie a primeira para começar a política tributária.',
+                    'Nenhuma regra fiscal cadastrada ainda para este contexto (representada/global). Crie a primeira para começar a política tributária.',
                   );
                 }
 
-                return ListView.separated(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: scopedRules.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 10),
-                  itemBuilder: (context, index) {
-                    final rule = scopedRules[index];
-                    return Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                          color: Theme.of(context).colorScheme.outlineVariant,
-                        ),
+                final totalRules = scopedRules.length;
+                final visibleCount = _visibleRulesCount.clamp(
+                  0,
+                  totalRules,
+                );
+                final visibleRules = scopedRules
+                    .take(visibleCount)
+                    .toList(growable: false);
+                final hasMore = visibleCount < totalRules;
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Text(
+                        'Exibindo $visibleCount de $totalRules regra(s).',
+                        style: Theme.of(context).textTheme.bodySmall,
                       ),
-                      child: ListTile(
-                        contentPadding: const EdgeInsets.fromLTRB(
-                          14,
-                          10,
-                          8,
-                          10,
-                        ),
-                        title: Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: [
-                            _ruleChip(
-                              context,
-                              'NCM ${_withFallback(rule.ncm, 'Todos')}',
+                    ),
+                    ListView.separated(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: visibleRules.length,
+                      separatorBuilder: (_, _) => const SizedBox(height: 10),
+                      itemBuilder: (context, index) {
+                        final rule = visibleRules[index];
+                        return Container(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: Theme.of(context).colorScheme.outlineVariant,
                             ),
-                            if ((rule.cest ?? '').trim().isNotEmpty)
-                              _ruleChip(context, 'CEST ${rule.cest!.trim()}'),
-                            _ruleChip(
-                              context,
-                              'UF destino ${_displayUf(rule.ufDestino)}',
+                          ),
+                          child: ListTile(
+                            contentPadding: const EdgeInsets.fromLTRB(
+                              14,
+                              10,
+                              8,
+                              10,
                             ),
-                            _ruleChip(
-                              context,
-                              _displayStType(rule.stCalculationType),
+                            title: Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                _ruleChip(
+                                  context,
+                                  'NCM ${_withFallback(rule.ncm, 'Todos')}',
+                                ),
+                                if ((rule.cest ?? '').trim().isNotEmpty)
+                                  _ruleChip(context, 'CEST ${rule.cest!.trim()}'),
+                                _ruleChip(
+                                  context,
+                                  'UF destino ${_displayUf(rule.ufDestino)}',
+                                ),
+                                _ruleChip(
+                                  context,
+                                  _displayStType(rule.stCalculationType),
+                                ),
+                                _ruleChip(
+                                  context,
+                                  rule.isActive ? 'Ativa' : 'Inativa',
+                                ),
+                                _ruleChip(context, _scopeChipLabel(rule)),
+                              ],
                             ),
-                            _ruleChip(
-                              context,
-                              rule.isActive ? 'Ativa' : 'Inativa',
+                            subtitle: Padding(
+                              padding: const EdgeInsets.only(top: 8),
+                              child: Text(
+                                _taxSummary(rule),
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
                             ),
-                          ],
-                        ),
-                        subtitle: Padding(
-                          padding: const EdgeInsets.only(top: 8),
-                          child: Text(
-                            _taxSummary(rule),
-                            style: Theme.of(context).textTheme.bodySmall,
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  tooltip: 'Mover para cima',
+                                  onPressed:
+                                      canEditSettings && !_working && index > 0
+                                      ? () => _moveRule(
+                                          rules: scopedRules,
+                                          index: index,
+                                          direction: -1,
+                                        )
+                                      : null,
+                                  icon: const Icon(Icons.keyboard_arrow_up),
+                                ),
+                                IconButton(
+                                  tooltip: 'Mover para baixo',
+                                  onPressed:
+                                      canEditSettings &&
+                                          !_working &&
+                                          index < scopedRules.length - 1
+                                      ? () => _moveRule(
+                                          rules: scopedRules,
+                                          index: index,
+                                          direction: 1,
+                                        )
+                                      : null,
+                                  icon: const Icon(Icons.keyboard_arrow_down),
+                                ),
+                                IconButton(
+                                  tooltip: 'Editar regra',
+                                  onPressed: canEditSettings && !_working
+                                      ? () => _openRuleDialog(existing: rule)
+                                      : null,
+                                  icon: const Icon(Icons.edit_outlined),
+                                ),
+                                IconButton(
+                                  tooltip: 'Excluir regra',
+                                  onPressed: canEditSettings && !_working
+                                      ? () => _deleteRule(rule)
+                                      : null,
+                                  icon: const Icon(Icons.delete_outline),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                    if (hasMore)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 12),
+                        child: OutlinedButton.icon(
+                          onPressed: _working
+                              ? null
+                              : () => _loadMoreRules(scopedRules),
+                          icon: const Icon(Icons.expand_more),
+                          label: Text(
+                            'Carregar mais (${totalRules - visibleCount} restante(s))',
                           ),
                         ),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              tooltip: 'Mover para cima',
-                              onPressed:
-                                  canEditSettings && !_working && index > 0
-                                  ? () => _moveRule(
-                                      rules: scopedRules,
-                                      index: index,
-                                      direction: -1,
-                                    )
-                                  : null,
-                              icon: const Icon(Icons.keyboard_arrow_up),
-                            ),
-                            IconButton(
-                              tooltip: 'Mover para baixo',
-                              onPressed:
-                                  canEditSettings &&
-                                      !_working &&
-                                      index < scopedRules.length - 1
-                                  ? () => _moveRule(
-                                      rules: scopedRules,
-                                      index: index,
-                                      direction: 1,
-                                    )
-                                  : null,
-                              icon: const Icon(Icons.keyboard_arrow_down),
-                            ),
-                            IconButton(
-                              tooltip: 'Editar regra',
-                              onPressed: canEditSettings && !_working
-                                  ? () => _openRuleDialog(existing: rule)
-                                  : null,
-                              icon: const Icon(Icons.edit_outlined),
-                            ),
-                            IconButton(
-                              tooltip: 'Excluir regra',
-                              onPressed: canEditSettings && !_working
-                                  ? () => _deleteRule(rule)
-                                  : null,
-                              icon: const Icon(Icons.delete_outline),
-                            ),
-                          ],
-                        ),
                       ),
-                    );
-                  },
+                  ],
                 );
               },
             ),
@@ -300,6 +427,10 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
     final cstCsosn = (rule.cstCsosn ?? '').trim();
     if (cstCsosn.isNotEmpty) {
       parts.add('CST/CSOSN: $cstCsosn');
+    }
+
+    if (rule.salePurpose != null) {
+      parts.add('Finalidade: ${rule.salePurpose!.label}');
     }
 
     if (rule.validFrom != null || rule.validUntil != null) {
@@ -367,6 +498,7 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
               _withFallback(rule.cest, ''),
               _withFallback(rule.ufOrigem, 'ANY'),
               _withFallback(rule.ufDestino, ''),
+              _withFallback(rule.salePurpose?.value, ''),
               _withFallback(rule.stCalculationType, 'mva'),
               rule.stPriceForCalculation?.toString() ?? '',
               rule.stBaseReductionPercent?.toString() ?? '',
@@ -392,6 +524,7 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
                 '00.000.00',
                 'ANY',
                 'SP',
+                'revenda',
                 'mva',
                 '100.00',
                 '0',
@@ -419,6 +552,7 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
               'CEST',
               'UF origem',
               'UF destino',
+              'Finalidade da venda',
               'Tipo ST',
               'Preco para calculo ST',
               'Reducao base ICMS ST',
@@ -460,6 +594,11 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
                 'Use sigla UF (SP, RJ, MG...) ou ANY. Vazio usa ANY.',
               ],
               <String>['UF destino', 'Sim', 'Use sigla UF (SP, RJ, MG...).'],
+              <String>[
+                'Finalidade da venda',
+                'Opcional',
+                'Uso opcional para diferenciar regras por uso/consumo, revenda ou industrializacao.',
+              ],
               <String>['Tipo ST', 'Sim', 'Aceito apenas MVA ou PMC.'],
               <String>[
                 'Preco para calculo ST',
@@ -1090,6 +1229,15 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
             'uf destino',
           ]),
         ),
+        salePurpose: _nullableSalePurpose(
+          _readTaxCell(row, const <String>[
+            'salepurpose',
+            'sale_purpose',
+            'finalidade da venda',
+            'finalidade_venda',
+            'finalidadevenda',
+          ]),
+        ),
         cstCsosn: _nullable(
           _readTaxCell(row, const <String>['cstcsosn', 'cst/csosn']),
         ),
@@ -1197,7 +1345,7 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
       final entity = TaxRule(
         id: id,
         tenantId: widget.activeTenant.tenantId,
-        representedCompanyId: _selectedRepresentedCompanyId,
+        representedCompanyId: _resolveRuleScopeForSave(existing),
         status: draft.active ? 'active' : 'inactive',
         ncm: _formatNcmMasked(_normalizeNcmDigits(draft.ncm)),
         cest: _nullable(_formatCestMasked(_normalizeCestDigits(draft.cest))),
@@ -1211,6 +1359,7 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
         grupoFiscalId: null,
         ufOrigem: _nullable(existing?.ufOrigem)?.toUpperCase() ?? 'ANY',
         ufDestino: _normalizeUfForStorage(draft.ufDestino),
+        salePurpose: draft.salePurpose,
         cstCsosn: _nullable(draft.cstCsosn),
         aliquotaIcms: _nullableDouble(draft.aliquotaCredito),
         mvaIva: _nullableDouble(draft.mvaIva),
@@ -1330,6 +1479,7 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
       aliquotaDestino: source.aliquotaDestino,
       aliquotaCredito: source.aliquotaCredito,
       grupoFiscalId: source.grupoFiscalId,
+      salePurpose: source.salePurpose,
       ufOrigem: source.ufOrigem,
       ufDestino: source.ufDestino,
       cstCsosn: source.cstCsosn,
@@ -1404,6 +1554,7 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
     final fiscalExceptionController = TextEditingController(
       text: existing?.fiscalException ?? '',
     );
+    var selectedSalePurpose = existing?.salePurpose;
     var selectedUfDestino = _normalizeUfForDropdown(existing?.ufDestino);
     var stCalculationType = _readStCalculationType(existing?.stCalculationType);
     final cstCsosnController = TextEditingController(
@@ -1577,10 +1728,30 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
                                       ),
                                       const SizedBox(width: 8),
                                       Expanded(
+                                        child: _labeledSalePurposeDropdown(
+                                          value: selectedSalePurpose,
+                                          onChanged: (value) {
+                                            setDialogState(() {
+                                              selectedSalePurpose = value;
+                                            });
+                                          },
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(
+                                    height: _dialogFieldVerticalGap,
+                                  ),
+                                  Row(
+                                    children: [
+                                      Expanded(
                                         child: _labeledTextField(
                                           label: 'Exceção fiscal',
                                           controller: fiscalExceptionController,
                                         ),
+                                      ),
+                                      const Expanded(
+                                        child: SizedBox.shrink(),
                                       ),
                                     ],
                                   ),
@@ -1825,6 +1996,7 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
                                     fiscalException:
                                         fiscalExceptionController.text,
                                     ufDestino: selectedUfDestino,
+                                    salePurpose: selectedSalePurpose,
                                     stCalculationType:
                                         _stCalculationTypeToStorage(
                                           stCalculationType,
@@ -1918,6 +2090,62 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
         ),
       ],
     );
+  }
+
+  Widget _labeledSalePurposeDropdown({
+    required SalePurpose? value,
+    required ValueChanged<SalePurpose?> onChanged,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Finalidade da venda (opcional)',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        const SizedBox(height: 6),
+        DropdownButtonFormField<SalePurpose?>(
+          initialValue: value,
+          decoration: _dialogInputDecoration(),
+          items: <DropdownMenuItem<SalePurpose?>>[
+            const DropdownMenuItem<SalePurpose?>(
+              value: null,
+              child: Text('Todas'),
+            ),
+            ...SalePurpose.values.map(
+              (item) => DropdownMenuItem<SalePurpose?>(
+                value: item,
+                child: Text(item.label),
+              ),
+            ),
+          ],
+          onChanged: onChanged,
+        ),
+      ],
+    );
+  }
+
+  SalePurpose? _nullableSalePurpose(String? raw) {
+    final normalized = (raw ?? '').trim();
+    if (normalized.isEmpty) {
+      return null;
+    }
+
+    final lowered = normalized.toLowerCase();
+    if (lowered == 'todas' || lowered == 'todos' || lowered == 'any') {
+      return null;
+    }
+    if (lowered == 'uso' || lowered == 'uso consumo' || lowered == 'uso/consumo') {
+      return SalePurpose.usoConsumo;
+    }
+    if (lowered == 'revenda') {
+      return SalePurpose.revenda;
+    }
+    if (lowered == 'industrializacao' || lowered == 'industrialização') {
+      return SalePurpose.industrializacao;
+    }
+
+    return SalePurpose.fromValue(lowered.replaceAll(' ', '_').replaceAll('/', '_'));
   }
 
   Widget _labeledDateField({
@@ -2359,6 +2587,7 @@ class _TaxRuleDraft {
     required this.cest,
     required this.fiscalException,
     required this.ufDestino,
+    required this.salePurpose,
     required this.stCalculationType,
     required this.stPriceForCalculation,
     required this.mvaIva,
@@ -2377,6 +2606,7 @@ class _TaxRuleDraft {
   final String cest;
   final String fiscalException;
   final String ufDestino;
+  final SalePurpose? salePurpose;
   final String stCalculationType;
   final String stPriceForCalculation;
   final String mvaIva;

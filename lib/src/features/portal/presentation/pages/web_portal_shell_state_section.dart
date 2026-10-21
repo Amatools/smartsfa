@@ -12,6 +12,39 @@ class _WebPortalShellState extends State<_WebPortalShell> {
   final Map<String, String?> _activeRepresentedCompanyByTenant = {};
   final Map<String, String?> _activeRepresentedCompanyNameByTenant = {};
 
+  String _enterpriseDefaultRepresentedId(TenantEntryOption tenant) {
+    return 'enterprise_default_${tenant.tenantId}';
+  }
+
+  bool _isEnterpriseWorkspace(TenantEntryOption tenant) {
+    return tenant.workspaceType == 'brand_owner_workspace';
+  }
+
+  String? _effectiveRepresentedCompanyId(TenantEntryOption tenant) {
+    final selected = (_activeRepresentedCompanyByTenant[tenant.tenantId] ?? '')
+        .trim();
+    if (selected.isNotEmpty) {
+      return selected;
+    }
+    if (_isEnterpriseWorkspace(tenant)) {
+      return _enterpriseDefaultRepresentedId(tenant);
+    }
+    return null;
+  }
+
+  String? _effectiveRepresentedCompanyName(TenantEntryOption tenant) {
+    final selected =
+        (_activeRepresentedCompanyNameByTenant[tenant.tenantId] ?? '').trim();
+    if (selected.isNotEmpty) {
+      return selected;
+    }
+    if (_isEnterpriseWorkspace(tenant)) {
+      final fallbackName = tenant.tenantName.trim();
+      return fallbackName.isEmpty ? 'Empresa do workspace' : fallbackName;
+    }
+    return null;
+  }
+
   Future<AccountContractLock> _loadAccountContractLock(String uid) async {
     final doc = await FirebaseFirestore.instance
         .collection('usuarios')
@@ -104,9 +137,11 @@ class _WebPortalShellState extends State<_WebPortalShell> {
               activeTenant,
             );
             final representedSelected =
-                (_activeRepresentedCompanyByTenant[activeTenant.tenantId] ?? '')
-                    .trim()
-                    .isNotEmpty;
+              (_effectiveRepresentedCompanyId(activeTenant) ?? '').trim().isNotEmpty;
+            final effectiveRepresentedCompanyId =
+              _effectiveRepresentedCompanyId(activeTenant);
+            final effectiveRepresentedCompanyName =
+              _effectiveRepresentedCompanyName(activeTenant);
             final tenantSectionLocked =
                 representedRequired && !representedSelected;
 
@@ -132,18 +167,24 @@ class _WebPortalShellState extends State<_WebPortalShell> {
                     child: _TenantWorkspaceModuleArea(
                       activeTenant: activeTenant,
                       activeRepresentedCompanyName:
-                          _activeRepresentedCompanyNameByTenant[activeTenant
-                              .tenantId],
+                        effectiveRepresentedCompanyName,
                       selectedRepresentedCompanyId:
-                          _activeRepresentedCompanyByTenant[activeTenant
-                              .tenantId],
+                        effectiveRepresentedCompanyId,
                       tenantItems: tenantModuleItems,
                       selectedItemLabel: tenantModuleItems.isEmpty
                           ? selectedItem.label
                           : tenantModuleItems.first.label,
                       tenantSectionLocked: tenantSectionLocked,
-                      selectedSubmenuKey:
-                          _selectedTenantSubmenuByTenant[activeTenant.tenantId],
+                      selectedSubmenuKey: (() {
+                        final selectedSubmenu = _selectedTenantSubmenuByTenant[
+                          activeTenant.tenantId
+                        ];
+                        if (selectedSubmenu != null &&
+                            selectedSubmenu.trim().isNotEmpty) {
+                          return selectedSubmenu;
+                        }
+                        return null;
+                      })(),
                       onSubmenuChanged: (submenuKey) {
                         _setSelectedTenantSubmenu(
                           tenantId: activeTenant.tenantId,
@@ -158,8 +199,7 @@ class _WebPortalShellState extends State<_WebPortalShell> {
                       child: selectedItem.builder(
                         activeTenant: activeTenant,
                         activeRepresentedCompanyName:
-                            _activeRepresentedCompanyNameByTenant[activeTenant
-                                .tenantId],
+                            effectiveRepresentedCompanyName,
                       ),
                     ),
                   );
@@ -179,8 +219,7 @@ class _WebPortalShellState extends State<_WebPortalShell> {
                             onMenuSelected: _setSelectedIndex,
                             tenantSectionLocked: tenantSectionLocked,
                             selectedRepresentedCompanyName:
-                                _activeRepresentedCompanyNameByTenant[activeTenant
-                                    .tenantId],
+                              effectiveRepresentedCompanyName,
                           ),
                           const VerticalDivider(width: 1),
                           Expanded(
@@ -190,12 +229,20 @@ class _WebPortalShellState extends State<_WebPortalShell> {
                                   identity: widget.identity,
                                   activeTenant: activeTenant,
                                   accountContractLock: accountContractLock,
-                                  selectedRepresentedCompanyId:
-                                      _activeRepresentedCompanyByTenant[activeTenant
-                                          .tenantId],
-                                  selectedRepresentedCompanyName:
-                                      _activeRepresentedCompanyNameByTenant[activeTenant
-                                          .tenantId],
+                                    selectedRepresentedCompanyId:
+                                      effectiveRepresentedCompanyId,
+                                    selectedRepresentedCompanyName:
+                                      effectiveRepresentedCompanyName,
+                                    enterpriseDefaultRepresentedCompanyId:
+                                      _isEnterpriseWorkspace(activeTenant)
+                                      ? _enterpriseDefaultRepresentedId(
+                                        activeTenant,
+                                      )
+                                      : null,
+                                    enterpriseDefaultRepresentedCompanyName:
+                                      _isEnterpriseWorkspace(activeTenant)
+                                      ? effectiveRepresentedCompanyName
+                                      : null,
                                   onRepresentedCompanySelected:
                                       (companyId, companyName) {
                                         _setActiveRepresentedCompany(
@@ -225,11 +272,17 @@ class _WebPortalShellState extends State<_WebPortalShell> {
                             activeTenant: activeTenant,
                             accountContractLock: accountContractLock,
                             selectedRepresentedCompanyId:
-                                _activeRepresentedCompanyByTenant[activeTenant
-                                    .tenantId],
+                              effectiveRepresentedCompanyId,
                             selectedRepresentedCompanyName:
-                                _activeRepresentedCompanyNameByTenant[activeTenant
-                                    .tenantId],
+                              effectiveRepresentedCompanyName,
+                            enterpriseDefaultRepresentedCompanyId:
+                              _isEnterpriseWorkspace(activeTenant)
+                              ? _enterpriseDefaultRepresentedId(activeTenant)
+                              : null,
+                            enterpriseDefaultRepresentedCompanyName:
+                              _isEnterpriseWorkspace(activeTenant)
+                              ? effectiveRepresentedCompanyName
+                              : null,
                             onRepresentedCompanySelected:
                                 (companyId, companyName) {
                                   _setActiveRepresentedCompany(
@@ -661,66 +714,99 @@ class _WebPortalShellState extends State<_WebPortalShell> {
       );
 
       if (isEnterpriseWorkspace) {
-        items.add(
-          const _PortalNavItem(
+        items.addAll(const [
+          _PortalNavItem(
+            label: 'ERP',
+            icon: Icons.integration_instructions_outlined,
+            section: _PortalSection.tenant,
+            builder: _SimpleSectionPage.erp,
+            tenantModule: true,
+            hideFromNavigation: true,
+          ),
+          _PortalNavItem(
             label: 'Clientes',
             icon: Icons.groups_outlined,
             section: _PortalSection.tenant,
             builder: _CustomersSection.new,
+            hideFromNavigation: true,
           ),
-        );
+          _PortalNavItem(
+            label: 'Produtos',
+            icon: Icons.inventory_2_outlined,
+            section: _PortalSection.tenant,
+            builder: _ProductsCatalogSection.new,
+            tenantModule: true,
+            hideFromNavigation: true,
+          ),
+          _PortalNavItem(
+            label: 'Tabelas de preço',
+            icon: Icons.price_change_outlined,
+            section: _PortalSection.tenant,
+            builder: _PricingCatalogSection.new,
+            tenantModule: true,
+            hideFromNavigation: true,
+          ),
+          _PortalNavItem(
+            label: 'Políticas',
+            icon: Icons.policy_outlined,
+            section: _PortalSection.tenant,
+            builder: _SimpleSectionPage.enterprisePoliticas,
+            tenantModule: true,
+            hideFromNavigation: false,
+          ),
+          _PortalNavItem(
+            label: 'Auditoria',
+            icon: Icons.fact_check_outlined,
+            section: _PortalSection.tenant,
+            builder: _SimpleSectionPage.auditoria,
+            tenantModule: true,
+            hideFromNavigation: true,
+          ),
+        ]);
+      } else {
+        items.addAll(const [
+          _PortalNavItem(
+            label: 'Produtos',
+            icon: Icons.inventory_2_outlined,
+            section: _PortalSection.tenant,
+            builder: _ProductsCatalogSection.new,
+            tenantModule: true,
+            hideFromNavigation: true,
+          ),
+          _PortalNavItem(
+            label: 'Tabelas de preço',
+            icon: Icons.price_change_outlined,
+            section: _PortalSection.tenant,
+            builder: _PricingCatalogSection.new,
+            tenantModule: true,
+            hideFromNavigation: true,
+          ),
+          _PortalNavItem(
+            label: 'Condições de pagamento',
+            icon: Icons.receipt_long_outlined,
+            section: _PortalSection.tenant,
+            builder: _PaymentConditionsSection.new,
+            tenantModule: true,
+            hideFromNavigation: true,
+          ),
+          _PortalNavItem(
+            label: 'Políticas',
+            icon: Icons.policy_outlined,
+            section: _PortalSection.tenant,
+            builder: _SimpleSectionPage.politicas,
+            tenantModule: true,
+            hideFromNavigation: true,
+          ),
+          _PortalNavItem(
+            label: 'Auditoria',
+            icon: Icons.fact_check_outlined,
+            section: _PortalSection.tenant,
+            builder: _SimpleSectionPage.auditoria,
+            tenantModule: true,
+            hideFromNavigation: true,
+          ),
+        ]);
       }
-
-      items.addAll(const [
-        _PortalNavItem(
-          label: 'Produtos',
-          icon: Icons.inventory_2_outlined,
-          section: _PortalSection.tenant,
-          builder: _ProductsCatalogSection.new,
-          tenantModule: true,
-          hideFromNavigation: true,
-        ),
-        _PortalNavItem(
-          label: 'Tabelas de preço',
-          icon: Icons.price_change_outlined,
-          section: _PortalSection.tenant,
-          builder: _PricingCatalogSection.new,
-          tenantModule: true,
-          hideFromNavigation: true,
-        ),
-        _PortalNavItem(
-          label: 'Condições de pagamento',
-          icon: Icons.receipt_long_outlined,
-          section: _PortalSection.tenant,
-          builder: _PaymentConditionsSection.new,
-          tenantModule: true,
-          hideFromNavigation: true,
-        ),
-        _PortalNavItem(
-          label: 'Políticas',
-          icon: Icons.policy_outlined,
-          section: _PortalSection.tenant,
-          builder: _SimpleSectionPage.politicas,
-          tenantModule: true,
-          hideFromNavigation: true,
-        ),
-        _PortalNavItem(
-          label: 'ERP',
-          icon: Icons.integration_instructions_outlined,
-          section: _PortalSection.tenant,
-          builder: _SimpleSectionPage.erp,
-          tenantModule: true,
-          hideFromNavigation: true,
-        ),
-        _PortalNavItem(
-          label: 'Auditoria',
-          icon: Icons.fact_check_outlined,
-          section: _PortalSection.tenant,
-          builder: _SimpleSectionPage.auditoria,
-          tenantModule: true,
-          hideFromNavigation: true,
-        ),
-      ]);
     } else {
       items.addAll(const [
         _PortalNavItem(
@@ -815,6 +901,19 @@ class _WebPortalShellState extends State<_WebPortalShell> {
       } else {
         tenant.add(item);
       }
+    }
+
+    if (activeTenant.workspaceType == 'brand_owner_workspace' &&
+        tenant.isNotEmpty) {
+      final ordered = List<_PortalNavItem>.from(tenant);
+      tenant.sort((a, b) {
+        final aWeight = a.label == 'ERP' ? 0 : 1;
+        final bWeight = b.label == 'ERP' ? 0 : 1;
+        if (aWeight != bWeight) {
+          return aWeight.compareTo(bWeight);
+        }
+        return ordered.indexOf(a).compareTo(ordered.indexOf(b));
+      });
     }
 
     final supportsRepresentedCompanies =

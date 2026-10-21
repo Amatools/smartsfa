@@ -1,0 +1,104 @@
+ALIQADREDRETANT	Alíquota ad rem do IBS/CBS retido anteriormente	F	P	N	S
+ALIQADREM	Alíquota ad rem do IBS/CBS	F	P	N	S
+ALIQADREMSR	Alíquota ad rem do IBS/CBS sujeito a retenção	F	P	N	S
+ALIQDESPACESS	Alíquota Despesas Acessórias	F	P	N	S
+ALIQDIFERENCIAL	Alíquota de Diferencial	F	P	N	S
+ALIQINTDEST	Alíq. Interna Destino	F	P	N	S
+ALIQPARADIFAL	Alíquota para cálculo do DIFAL	F	P	N	N
+ALIQUOTA	Alíquota	F	P	N	S
+ALIQUOTADESON	Alíquota PIS/COFINS Desonerados	F	P	N	S
+ALIQUOTAEFET	Alíquota Efetivo	F	P	N	S
+ALIQUOTANORMAL	Alíquota Normal	F	P	N	S
+BASE	Base de Cálculo	F	P	N	S
+BASEDIFAL	Base Difal	F	P	N	S
+BASEFCP	Base para Fundo Comb. Pobreza	F	P	N	S
+BASEFCPINT	Base FCP Interno	F	P	N	S
+BASENORMDIFICMS	Base Normal Diferimento ICMS	F	P	N	S
+BASERED	Base Cálc.Reduzida	F	P	N	S
+BASEREDEFET	Base Cálc.Reduzida Efetivo	F	P	N	S
+CCLASSTRIB	Código de Classificação Tributária	S	P	N	S
+CCLASSTRIBREG	Código de Classificação Tributária Regular	S	P	N	S
+CCREDPRES	Código de Class. Créd. Presumido	S	P	N	S
+CODBEN	Código de Benefício Fiscal de Crédito Presumido na UF aplicado ao item	S	P	N	S
+CODCST	Código de Situação Tributária	S	P	N	S
+CODCSTREG	Código de Situação Tributária Regular	S	P	N	S
+CODIMP	Imposto	I	P	N	S
+CODINC	Incidência	I	P	N	S
+CODLST	Tipo de Serviço	I	P	N	S
+CODNATREND	Código Natureza de Rendimento	I	P	N	N
+CODTRIBMUNISS	Cod. Trib. Município	S	P	N	S
+CODUSU	Cód. Usuário	I	P	N	S
+COMIVA	Tem IVA	S	P	N	S
+CREDPRESCOND	Valor do Crédito Pres. Cond. Susp.	F	P	N	S
+CST	Cst/Csosn	I	P	N	S
+DHALTER	Dt.Alteração	H	P	N	S
+DIGITADO	Digitado	S	P	N	S
+GERASIMULTPISCOFST	Habilitar geração simultânea dos grupos PIS/COFINS e PISST/COFINSST	S	P	N	N
+IDALIQ	Código Alíquota	I	P	N	S
+INDGIBSCBS	IBS/CBS?	S	P	S	S
+IVA	IVA	F	P	N	S
+JUSTIFICATIVASCORE	Justificativa do Score da Aliquota	S	P	N	N
+MOTREDADREM	Motivo Redução do ad rem	I	P	N	S
+NUNOTA	Nro. Único Nota	I	P	N	S
+PALIQCBSREG	Alíquota efetiva regular da CBS	F	P	N	S
+PALIQEFETREG	Alíquota Efetiva de Referência do Regime Geral CBS	F	P	N	S
+PALIQIBSMUNREG	Alíquota efetiva regular do IBS do Município	F	P	N	S
+PALIQIBSUFREG	Alíquota efetiva regular do IBS da UF	F	P	N	S
+PAUTA	Pauta	F	P	N	S
+PCREDPRES	% do Crédito Presumido	F	P	N	S
+PERCALIQADREMICMS	% Redução Alíquota ad rem ICMS	F	P	N	S
+PERCALIQEFET	Alíquota Efetiva que será aplicada a Base de Cálculo	F	P	N	S
+PERCDEVTRIB	Percentual do tributo devolvido	F	P	N	S
+PERCDIF	Percentual do diferimento	F	P	N	S
+PERCFCP	Perc. para Fundo Comb. Pobreza	F	P	N	S
+PERCFCPINT	% FCP Interno	F	P	N	S
+PERCINSSESPECIAL	% INSS Especial	F	P	N	S
+PERCISESPEC	Alíquota específica por unidade de medida apropriada	F	P	N	S
+PERCPARTDIFAL	Percentual de Partilha DIFAL	F	P	N	S
+PERCREDALIQ	Percentual da redução de alíquota	F	P	N	S
+PERCREDBASE	Perc.Red.base	F	P	N	S
+PERCREDBASEEFET	Perc. Red. base Efetivo	F	P	N	S
+PERCREDGOVALIQ	Percentual da redução de alíquota Governamental	F	P	N	S
+PERCREDPR	Percentual do Crédito Presumido	F	P	N	S
+PERCREDVLRIPI	% Redução de Vlr. IPI	F	P	N	S
+PERCVLR	Percentual / Valor	S	P	N	S
+RETEMFIN	Retém Financeiro	S	P	N	S
+SEQUENCIA	Sequência	I	P	N	S
+SOMARPISCOFINSST	Indica se o valor do PIS/COFINS ST compõe o valor total da NF-e	S	P	N	N
+TIPCALCDIFAL	Tipo de Cálculo do DIFAL	I	P	N	S
+TIPCALCFCPESPEC	Tipo de Cálculo de FCP Específico	I	P	N	S
+TIPO	Tipo Retenção	I	P	N	S
+TIPODEDISS	Tipo Ded. ISS	S	P	N	S
+TIPOINSSESPECIAL	Tipo de INSS Especial	S	P	N	S
+TOTIBSMONO	Total de IBS Monofásico	F	P	N	S
+TPALCZFM	Tipo de Aplicação da Alíquota Zero — ZFM/ALC	I	P	N	S
+TPIRRFEXT	Tributação IRRF - Exterior REINF	I	P	N	N
+VALOR	Valor	F	P	N	S
+VALORDESON	Valor PIS/COFINS Desonerados	F	P	N	S
+VALORDIFERENCIAL	Valor de Diferencial	F	P	N	S
+VALOREFET	Valor Efetivo	F	P	N	S
+VCREDPRES	Valor do Crédito Presumido	F	P	N	S
+VLRANTREDGOV	Valor do IBS/CBS sem a redução governamental	F	P	N	S
+VLRCBSREG	Valor da CBS Regular	F	P	N	S
+VLRCRED	Vlr.Crédito	F	P	N	S
+VLRCREDPR	Valor do Crédito Presumido	F	P	N	S
+VLRDEDUZCREDPRES	Valor com dedução do Crédito Presumido	F	P	N	N
+VLRDEVTRIB	Valor do tributo devolvido	F	P	N	S
+VLRDIF	Valor do Diferimento	F	P	N	S
+VLRDIFALDEST	Valor DIFAL UF Destino	F	P	N	S
+VLRDIFALREM	Valor DIFAL UF Remet.	F	P	N	S
+VLRFCP	Vlr. para Fundo Comb. Pobreza	F	P	N	S
+VLRFCPINT	Vlr. FCP Interno	F	P	N	S
+VLRIBSMUNREG	Valor do IBS Regular do Município	F	P	N	S
+VLRIBSUFREG	Valor do IBS Regular da UF	F	P	N	S
+VLRICMSMONODEV	Valor do ICMS Monofásico Devido	F	P	N	S
+VLRICMSMONODIF	Valor ICMS Monofásico Diferido	F	P	N	S
+VLRICMSPARADIFAL	Vlr. Icms Para Difal	F	P	N	N
+VLRINSSESPECIAL	Vlr. INSS Especial	F	P	N	S
+VLRMONO	Valor do IBS/CBS monofásico	F	P	N	S
+VLRMONOSR	Valor do IBS/CBS monofásico sujeito a retenção	F	P	N	S
+VLRREPDIFALFCP	Vlr. Repasse Difal e Fcp	F	P	N	S
+VLRREPRED	Vlr.Repasse de Redução	F	P	N	S
+VLRREPREDSEMDESC	Vlr. redução sem desconto	F	P	N	S
+VLRRETANT	Valor do IBS/CBS retido anteriormente	F	P	N	S
+VTRIBREG	Valor da CBS Calculado sem a Redução — ZFM/ALC	F	P	N	S

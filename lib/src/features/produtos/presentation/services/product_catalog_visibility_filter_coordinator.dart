@@ -34,7 +34,10 @@ class ProductCatalogVisibilityFilterCoordinator {
             .toList(growable: false);
 
     final visibleProducts = filteredProducts.where((produto) {
-      final hasCode = (produto.codigoFabricante ?? '').trim().isNotEmpty;
+      final hasCode =
+          produto.codigoInterno.trim().isNotEmpty ||
+          (produto.erpProductId ?? '').trim().isNotEmpty ||
+          (produto.codigoFabricante ?? '').trim().isNotEmpty;
       final hasDescription = produto.descricao.trim().isNotEmpty;
       final hasPrice = produto.valorBruto != null;
       final hasImage = (produto.fotoUrl ?? '').trim().isNotEmpty;

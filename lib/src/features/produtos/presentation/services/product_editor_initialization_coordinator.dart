@@ -21,6 +21,7 @@ class ProductEditorFormControllers {
     required this.unidade,
     required this.ncm,
     required this.cest,
+    required this.origemMercadoriaCst,
     required this.ipiBase,
     required this.peso,
     required this.comprimentoMm,
@@ -47,6 +48,7 @@ class ProductEditorFormControllers {
   final TextEditingController unidade;
   final TextEditingController ncm;
   final TextEditingController cest;
+  final TextEditingController origemMercadoriaCst;
   final TextEditingController ipiBase;
   final TextEditingController peso;
   final TextEditingController comprimentoMm;
@@ -84,6 +86,9 @@ class ProductEditorFormControllers {
       ),
       ncm: TextEditingController(text: _formatNcmMasked(produto.ncm)),
       cest: TextEditingController(text: produto.cest ?? ''),
+      origemMercadoriaCst: TextEditingController(
+        text: produto.origemMercadoriaCst ?? '',
+      ),
       ipiBase: TextEditingController(
         text: ProductFormValueCodec.toText(produto.aliquotaIpiBase),
       ),
@@ -126,6 +131,7 @@ class ProductEditorFormControllers {
     unidade.dispose();
     ncm.dispose();
     cest.dispose();
+    origemMercadoriaCst.dispose();
     ipiBase.dispose();
     peso.dispose();
     comprimentoMm.dispose();

@@ -26,6 +26,9 @@ class ClientePreCadastro implements TenantScopedEntity {
     this.pais = 'Brasil',
     this.inscricaoEstadual = '',
     this.inscricaoMunicipal = '',
+    this.salePurpose = SalePurpose.revenda,
+    this.taxProfile = CustomerTaxProfile.contribuinte,
+    this.isZfmSuframa = false,
     this.observacoes = '',
     this.origemCadastro = CustomerOrigin.manual,
     this.approvedByUid,
@@ -61,6 +64,17 @@ class ClientePreCadastro implements TenantScopedEntity {
       pais: map['pais'] as String? ?? 'Brasil',
       inscricaoEstadual: map['inscricaoEstadual'] as String? ?? '',
       inscricaoMunicipal: map['inscricaoMunicipal'] as String? ?? '',
+      salePurpose: SalePurpose.fromValue(
+        map['salePurpose'] as String? ?? SalePurpose.revenda.value,
+      ),
+      taxProfile: CustomerTaxProfile.fromValue(
+        map['taxProfile'] as String? ??
+            map['customerTaxProfile'] as String? ??
+            CustomerTaxProfile.contribuinte.value,
+      ),
+      isZfmSuframa: _readBool(
+        map['isZfmSuframa'] ?? map['zfmSuframa'] ?? map['clienteZfmSuframa'],
+      ),
       observacoes: map['observacoes'] as String? ?? '',
       origemCadastro: CustomerOrigin.fromValue(
         map['origemCadastro'] as String? ?? CustomerOrigin.manual.value,
@@ -97,6 +111,9 @@ class ClientePreCadastro implements TenantScopedEntity {
   final String pais;
   final String inscricaoEstadual;
   final String inscricaoMunicipal;
+  final SalePurpose salePurpose;
+  final CustomerTaxProfile taxProfile;
+  final bool isZfmSuframa;
   final String observacoes;
   final CustomerOrigin origemCadastro;
   final String? approvedByUid;
@@ -128,6 +145,9 @@ class ClientePreCadastro implements TenantScopedEntity {
     String? pais,
     String? inscricaoEstadual,
     String? inscricaoMunicipal,
+    SalePurpose? salePurpose,
+    CustomerTaxProfile? taxProfile,
+    bool? isZfmSuframa,
     String? observacoes,
     CustomerOrigin? origemCadastro,
     String? approvedByUid,
@@ -159,6 +179,9 @@ class ClientePreCadastro implements TenantScopedEntity {
       pais: pais ?? this.pais,
       inscricaoEstadual: inscricaoEstadual ?? this.inscricaoEstadual,
       inscricaoMunicipal: inscricaoMunicipal ?? this.inscricaoMunicipal,
+      salePurpose: salePurpose ?? this.salePurpose,
+      taxProfile: taxProfile ?? this.taxProfile,
+      isZfmSuframa: isZfmSuframa ?? this.isZfmSuframa,
       observacoes: observacoes ?? this.observacoes,
       origemCadastro: origemCadastro ?? this.origemCadastro,
       approvedByUid: approvedByUid ?? this.approvedByUid,
@@ -193,6 +216,9 @@ class ClientePreCadastro implements TenantScopedEntity {
       'pais': pais,
       'inscricaoEstadual': inscricaoEstadual,
       'inscricaoMunicipal': inscricaoMunicipal,
+      'salePurpose': salePurpose.value,
+      'taxProfile': taxProfile.value,
+      'isZfmSuframa': isZfmSuframa,
       'observacoes': observacoes,
       'origemCadastro': origemCadastro.value,
       'approvedByUid': approvedByUid,
@@ -217,4 +243,26 @@ DateTime? _readDateTime(Object? value) {
   }
 
   return null;
+}
+
+bool _readBool(Object? value) {
+  if (value is bool) {
+    return value;
+  }
+
+  if (value is num) {
+    return value != 0;
+  }
+
+  if (value is String) {
+    final normalized = value.trim().toLowerCase();
+    return normalized == 'true' ||
+        normalized == '1' ||
+        normalized == 's' ||
+        normalized == 'sim' ||
+        normalized == 'y' ||
+        normalized == 'yes';
+  }
+
+  return false;
 }

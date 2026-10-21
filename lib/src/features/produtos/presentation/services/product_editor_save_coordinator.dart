@@ -49,6 +49,7 @@ class ProductEditorSaveFormData {
     required this.quantidadeMinimaText,
     required this.ncmText,
     required this.cestText,
+    required this.origemMercadoriaCstText,
     required this.ipiBaseText,
     required this.pesoText,
     required this.erpProductIdText,
@@ -79,6 +80,7 @@ class ProductEditorSaveFormData {
   final String quantidadeMinimaText;
   final String ncmText;
   final String cestText;
+  final String origemMercadoriaCstText;
   final String ipiBaseText;
   final String pesoText;
   final String erpProductIdText;
@@ -184,6 +186,7 @@ class ProductEditorSaveCoordinator {
       quantidadeMinimaText: formData.quantidadeMinimaText,
       ncmText: formData.ncmText,
       cestText: formData.cestText,
+      origemMercadoriaCstText: formData.origemMercadoriaCstText,
       ipiBaseText: formData.ipiBaseText,
       pesoText: formData.pesoText,
       erpProductIdText: formData.erpProductIdText,

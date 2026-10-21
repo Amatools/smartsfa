@@ -1,0 +1,5 @@
+ContainerCTe
+ContratanteMDFE
+SerieProdutoConferencia
+CabecalhoConferencia
+ConferenciaPedido

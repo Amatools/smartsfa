@@ -1,0 +1,2 @@
+DTINICIO	Data Início Partilha	D	P	N	S
+PERCPARTDIFAL	Percentual de Partilha DIFAL	F	P	N	S

@@ -1,0 +1,127 @@
+{
+  "marker": "TRIBUTACAO_EXECUTE_QUERY_PROBE",
+  "ok": true,
+  "tenantId": "self_T8oqTD0UBtWATPbITOGsqAEZt3d2_smartsfa-enterprise-teste",
+  "environment": "prod",
+  "baseUrlCandidates": [
+    "https://api.sankhya.com.br"
+  ],
+  "endpointCandidates": [
+    "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+    "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+    "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+    "/gateway/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+    "/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery"
+  ],
+  "sqlFile": "G:\\smartsfa\\docs\\sankhya-api\\examples\\tributacao_query_template.sql",
+  "sqlPreview": "-- Consulta de referencia para alimentar o motor de tributacao do SFA.\r\n-- Contrato principal: colunas de importacao do tax_rules.\r\n-- Contrato estendido: colunas auxiliares de DIFAL/FCP para evolucao do motor.\r\n\r\nWITH BASE_RULES AS (\r\n    SELECT\r\n        ICM.*,\r\n        NVL(UFO.UF, 'ANY') AS UFORIGEM_RES,\r\n        NVL(UFD.UF, 'ANY') AS UFDESTINO_RES,\r\n        PRO.NCM AS NCM_PRODUTO,\r\n        PRO.CODESPECST AS CEST_PRODUTO,\r\n        NCM1.CODNCM AS NCM_RESTR_1,\r\n        NCM2.CODNCM AS NCM_RESTR_2",
+  "successfulAttempt": {
+    "baseUrl": "https://api.sankhya.com.br",
+    "endpointPath": "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+    "payloadVariant": "body_serviceName_requestBody_sql",
+    "httpStatus": 200,
+    "responseIsJson": false,
+    "rowCountDetected": 0,
+    "responseBody": {
+      "raw": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<serviceResponse serviceName=\"DbExplorerSP.executeQuery\" status=\"0\" pendingPrinting=\"false\" transactionId=\"E26F49C71203F54465599824C310E1B5\"><statusMessage><![CDATA[T1JBLTAxNzIyOiBu+m1lcm8gaW524WxpZG8=\n]]></statusMessage></serviceResponse>\n"
+    },
+    "requestPayload": {
+      "serviceName": "DbExplorerSP.executeQuery",
+      "requestBody": {
+        "sql": "-- Consulta de referencia para alimentar o motor de tributacao do SFA.\r\n-- Contrato principal: colunas de importacao do tax_rules.\r\n-- Contrato estendido: colunas auxiliares de DIFAL/FCP para evolucao do motor.\r\n\r\nWITH BASE_RULES AS (\r\n    SELECT\r\n        ICM.*,\r\n        NVL(UFO.UF, 'ANY') AS UFORIGEM_RES,\r\n        NVL(UFD.UF, 'ANY') AS UFDESTINO_RES,\r\n        PRO.NCM AS NCM_PRODUTO,\r\n        PRO.CODESPECST AS CEST_PRODUTO,\r\n        NCM1.CODNCM AS NCM_RESTR_1,\r\n        NCM2.CODNCM AS NCM_RESTR_2,\r\n\r\n        CASE\r\n            WHEN REGEXP_LIKE(REPLACE(TRIM(NVL(TO_CHAR(ICM.ALIQUOTA), '')), ',', '.'), '^-?[0-9]+(\\.[0-9]+)?$')\r\n                THEN TO_NUMBER(REPLACE(TRIM(TO_CHAR(ICM.ALIQUOTA)), ',', '.'))\r\n            ELSE 0\r\n        END AS ALIQUOTA_NUM,\r\n\r\n        CASE\r\n            WHEN REGEXP_LIKE(REPLACE(TRIM(NVL(TO_CHAR(ICM.ALIQINTDEST), '')), ',', '.'), '^-?[0-9]+(\\.[0-9]+)?$')\r\n                THEN TO_NUMBER(REPLACE(TRIM(TO_CHAR(ICM.ALIQINTDEST)), ',', '.'))\r\n            ELSE 0\r\n        END AS ALIQINTDEST_NUM,\r\n\r\n        CASE\r\n            WHEN REGEXP_LIKE(REPLACE(TRIM(NVL(TO_CHAR(ICM.ALIQSUBTRIB), '')), ',', '.'), '^-?[0-9]+(\\.[0-9]+)?$')\r\n                THEN TO_NUMBER(REPLACE(TRIM(TO_CHAR(ICM.ALIQSUBTRIB)), ',', '.'))\r\n            ELSE NULL\r\n        END AS ALIQSUBTRIB_NUM,\r\n\r\n        CASE\r\n            WHEN REGEXP_LIKE(REPLACE(TRIM(NVL(TO_CHAR(ICM.PERCICMSFCP), '')), ',', '.'), '^-?[0-9]+(\\.[0-9]+)?$')\r\n                THEN TO_NUMBER(REPLACE(TRIM(TO_CHAR(ICM.PERCICMSFCP)), ',', '.'))\r\n            ELSE NULL\r\n        END AS PERCICMSFCP_NUM,\r\n\r\n        CASE\r\n            WHEN REGEXP_LIKE(REPLACE(TRIM(NVL(TO_CHAR(ICM.PERCICMSFCPINT), '')), ',', '.'), '^-?[0-9]+(\\.[0-9]+)?$')\r\n                THEN TO_NUMBER(REPLACE(TRIM(TO_CHAR(ICM.PERCICMSFCPINT)), ',', '.'))\r\n            ELSE NULL\r\n        END AS PERCICMSFCPINT_NUM\r\n    FROM TGFICM ICM\r\n    LEFT JOIN TSIUFS UFO\r\n        ON ICM.UFORIG = UFO.CODUF\r\n    LEFT JOIN TSIUFS UFD\r\n        ON ICM.UFDEST = UFD.CODUF\r\n    LEFT JOIN TGFPRO PRO\r\n        ON TO_CHAR(ICM.TIPRESTRICAO) IN ('P', '1')\r\n       AND ICM.CODRESTRICAO = PRO.CODPROD\r\n    LEFT JOIN TGFNCM NCM1\r\n        ON TO_CHAR(ICM.TIPRESTRICAO) IN ('N', '4')\r\n       AND LTRIM(TO_CHAR(ICM.CODRESTRICAO), '0') = LTRIM(REPLACE(NCM1.CODNCM, '.', ''), '0')\r\n    LEFT JOIN TGFNCM NCM2\r\n        ON TO_CHAR(ICM.TIPRESTRICAO2) IN ('N', '4')\r\n       AND LTRIM(TO_CHAR(ICM.CODRESTRICAO2), '0') = LTRIM(REPLACE(NCM2.CODNCM, '.', ''), '0')\r\n    WHERE\r\n        ICM.DTINICIOVIGENCIA IS NULL\r\n        OR ICM.DTINICIOVIGENCIA <= SYSDATE\r\n)\r\nSELECT\r\n    'active' AS STATUS,\r\n\r\n    CASE\r\n        WHEN TO_CHAR(TIPRESTRICAO) IN ('N', '4')\r\n             AND TO_CHAR(CODRESTRICAO) NOT IN ('-1', '0')\r\n            THEN NCM_RESTR_1\r\n        WHEN TO_CHAR(TIPRESTRICAO2) IN ('N', '4')\r\n             AND TO_CHAR(CODRESTRICAO2) NOT IN ('-1', '0')\r\n            THEN NCM_RESTR_2\r\n        WHEN TO_CHAR(TIPRESTRICAO) IN ('P', '1')\r\n             AND TO_CHAR(CODRESTRICAO) NOT IN ('-1', '0')\r\n            THEN NCM_PRODUTO\r\n        ELSE NULL\r\n    END AS NCM,\r\n\r\n    CEST_PRODUTO AS CEST,\r\n    UFORIGEM_RES AS UFORIGEM,\r\n    UFDESTINO_RES AS UFDESTINO,\r\n\r\n    CASE\r\n        WHEN TRIM(NVL(TO_CHAR(PAUTAVLRSTFIXO), '')) NOT IN ('', '0', '0,0', '0,00', '0.0', '0.00', 'N') THEN 'pmc'\r\n        ELSE 'mva'\r\n    END AS TIPOST,\r\n\r\n    TO_CHAR(NULL) AS PRECOPARACALCULOST,\r\n\r\n    CASE\r\n        WHEN TRIM(NVL(TO_CHAR(REDBASEST), '')) IN ('', 'N') THEN '0'\r\n        ELSE TO_CHAR(REDBASEST)\r\n    END AS REDUCAOBASEICMSST,\r\n\r\n    CASE\r\n        WHEN TRIM(NVL(TO_CHAR(PAUTAVLRSTFIXO), '')) IN ('', 'N') THEN '0'\r\n        ELSE TO_CHAR(PAUTAVLRSTFIXO)\r\n    END AS BASECALCULOICMSST,\r\n\r\n    TO_CHAR(NVL(ALIQSUBTRIB_NUM, NVL(ALIQINTDEST_NUM, ALIQUOTA_NUM))) AS ALIQUOTADESTINO,\r\n    TO_CHAR(NVL(ALIQUOTA_NUM, ALIQINTDEST_NUM)) AS ALIQUOTACREDITO,\r\n\r\n    -- DIFAL da regra: max(aliq interna destino - aliq interestadual/propria, 0)\r\n    TO_CHAR(GREATEST(NVL(ALIQINTDEST_NUM, 0) - NVL(ALIQUOTA_NUM, 0), 0)) AS ALIQUOTADIFAL,\r\n\r\n    TO_CHAR(CSOSN) AS CST_CSOSN,\r\n\r\n    CASE\r\n        WHEN TRIM(NVL(TO_CHAR(MVAORIGINAL), '')) NOT IN ('', 'N') THEN TO_CHAR(MVAORIGINAL)\r\n        WHEN TRIM(NVL(TO_CHAR(MVASIMPLIFICADO), '')) NOT IN ('', 'N') THEN TO_CHAR(MVASIMPLIFICADO)\r\n        ELSE '0'\r\n    END AS MVA,\r\n\r\n    (\r\n        'TIPRESTRICAO=' || NVL(TO_CHAR(TIPRESTRICAO), '-') ||\r\n        ';CODRESTRICAO=' || NVL(TO_CHAR(CODRESTRICAO), '-') ||\r\n        ';TIPRESTRICAO2=' || NVL(TO_CHAR(TIPRESTRICAO2), '-') ||\r\n        ';CODRESTRICAO2=' || NVL(TO_CHAR(CODRESTRICAO2), '-') ||\r\n        ';TIPCALCDIFAL=' || NVL(TO_CHAR(TIPCALCDIFAL), '-')\r\n    ) AS EXCECAOFISCAL,\r\n\r\n    DTINICIOVIGENCIA AS VIGENCIAINICIAL,\r\n    DTFIMVIGENCIA AS VIGENCIAFINAL,\r\n\r\n    TO_CHAR(\r\n        CASE\r\n            WHEN TO_CHAR(TIPRESTRICAO) IN ('P', '1')\r\n                 AND TO_CHAR(CODRESTRICAO) NOT IN ('-1', '0')\r\n                THEN 300000 + NVL(SEQUENCIA, 0)\r\n            WHEN TO_CHAR(TIPRESTRICAO) IN ('N', '4')\r\n                 AND TO_CHAR(CODRESTRICAO) NOT IN ('-1', '0')\r\n                THEN 200000 + NVL(SEQUENCIA, 0)\r\n            WHEN TO_CHAR(TIPRESTRICAO2) IN ('N', '4')\r\n                 AND TO_CHAR(CODRESTRICAO2) NOT IN ('-1', '0')\r\n                THEN 190000 + NVL(SEQUENCIA, 0)\r\n            ELSE 100000 + NVL(SEQUENCIA, 0)\r\n        END\r\n    ) AS PRIORIDADE,\r\n\r\n    -- Colunas estendidas para evolucao do motor e reconciliacao.\r\n    TO_CHAR(CODTRIB) AS GRUPOFISCALID,\r\n    TO_CHAR(CODTAB) AS CODTAB,\r\n    TO_CHAR(SEQUENCIA) AS SEQUENCIA,\r\n    TO_CHAR(IDALIQ) AS IDALIQ,\r\n    TO_CHAR(TIPCALCDIFAL) AS TIPOCALCULODIFAL,\r\n    TO_CHAR(NVL(PERCICMSFCPINT_NUM, PERCICMSFCP_NUM)) AS PERCENTUALFCP,\r\n    TO_CHAR(FORMCALFCPDIFAL) AS FORMULAFCPDIFAL,\r\n    TO_CHAR(CODFORMCALCDIFAL) AS FORMULADIFAL\r\n\r\nFROM BASE_RULES\r\nORDER BY\r\n    UFORIGEM,\r\n    UFDESTINO,\r\n    PRIORIDADE DESC,\r\n    NCM,\r\n    CEST"
+      }
+    }
+  },
+  "attempts": [
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_serviceName_requestBody_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_requestBody_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_requestBody_query",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_only_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+      "payloadVariant": "body_serviceName_requestBody_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+      "payloadVariant": "body_requestBody_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+      "payloadVariant": "body_requestBody_query",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+      "payloadVariant": "body_only_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_serviceName_requestBody_sql",
+      "httpStatus": 200,
+      "ok": true,
+      "rowCountDetected": 0,
+      "responseIsJson": false,
+      "responseBodyPreview": "{\"raw\":\"<?xml version=\\\"1.0\\\" encoding=\\\"utf-8\\\"?>\\n<serviceResponse serviceName=\\\"DbExplorerSP.executeQuery\\\" status=\\\"0\\\" pendingPrinting=\\\"false\\\" transactionId=\\\"E26F49C71203F54465599824C310E1B5\\\"><statusMessage><![CDATA[T1JBLTAxNzIyOiBu+m1lcm8gaW524WxpZG8=\\n]]></statusMessage></serviceResponse>\\n\"}"
+    }
+  ]
+}

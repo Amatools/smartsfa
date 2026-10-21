@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import '../../../core/models/product_base_price.dart';
 import '../../../core/models/tax_rule.dart';
+import '../../../core/models/domain_types.dart';
 import '../../../core/repositories/product_base_price_repository.dart';
 import '../../../core/repositories/produto_repository.dart';
 import '../../../core/repositories/tax_rule_repository.dart';
@@ -59,6 +60,9 @@ class ProductTaxEngineService {
     required String tabelaId,
     required String clienteUf,
     required double quantidade,
+    SalePurpose salePurpose = SalePurpose.revenda,
+    CustomerTaxProfile customerTaxProfile = CustomerTaxProfile.contribuinte,
+    bool isZonaFrancaSuframa = false,
     String? representedCompanyId,
     String ufOrigem = 'SP',
   }) async {
@@ -104,6 +108,9 @@ class ProductTaxEngineService {
     final scopedRules = regras
         .where((rule) {
           final scope = (rule.representedCompanyId ?? '').trim();
+          if (scope.isEmpty) {
+            return true;
+          }
           return scope == normalizedRepresentedCompanyId;
         })
         .toList(growable: false);
@@ -113,21 +120,48 @@ class ProductTaxEngineService {
       cest: produto.cest,
       ufOrigem: normalizedUfOrigem,
       ufDestino: normalizedUfDestino,
+      salePurpose: salePurpose,
     );
 
-    final precoBase = precoBaseRegistro.basePrice * quantidade;
+    final precoBaseOriginal = precoBaseRegistro.basePrice * quantidade;
     final precoUnitario = precoBaseRegistro.basePrice;
+
+    // For ZFM/SUFRAMA, instead of adding tax over the item total, we discount
+    // the product value by the configured ICMS destination rate.
+    final zfmDiscountRate = isZonaFrancaSuframa
+      ? (regra?.aliquotaDestino ??
+          regra?.aliquotaSt ??
+          regra?.aliquotaIcms ??
+          regra?.aliquotaCredito ??
+          0.0)
+      : 0.0;
+    final zfmDiscountValue = isZonaFrancaSuframa
+      ? precoBaseOriginal * (zfmDiscountRate / 100)
+      : 0.0;
+    final precoBase = isZonaFrancaSuframa
+      ? math.max(precoBaseOriginal - zfmDiscountValue, 0.0)
+      : precoBaseOriginal;
+
     final aliquotaIpi = produto.aliquotaIpiBase ?? 0;
     final valorIpi = precoBase * (aliquotaIpi / 100);
 
-    final aliquotaCredito = regra?.aliquotaCredito ?? regra?.aliquotaIcms ?? 0;
-    final aliquotaDestino = regra?.aliquotaDestino ?? regra?.aliquotaSt ?? 0;
-    final mvaIva = regra?.mvaIva ?? 0;
+    final double aliquotaCredito =
+      regra?.aliquotaCredito ?? regra?.aliquotaIcms ?? 0.0;
+    final double aliquotaDestino =
+      regra?.aliquotaDestino ?? regra?.aliquotaSt ?? 0.0;
+    final double mvaIva = regra?.mvaIva ?? 0.0;
     final tipoSt = (regra?.stCalculationType ?? 'mva').trim().toLowerCase();
     final isMva = tipoSt != 'pmc';
+    final isUsoConsumo = salePurpose == SalePurpose.usoConsumo;
+    final applySt = !isZonaFrancaSuframa &&
+      (!isUsoConsumo ||
+          customerTaxProfile == CustomerTaxProfile.contribuinte);
+    final applyDifal = !isZonaFrancaSuframa &&
+      (!isUsoConsumo ||
+          customerTaxProfile == CustomerTaxProfile.naoContribuinte);
 
     double valorSt = 0;
-    if (aliquotaDestino > 0) {
+    if (applySt && aliquotaDestino > 0) {
       final baseSt = _resolveStBase(
         isMva: isMva,
         precoBase: precoBase,
@@ -140,11 +174,11 @@ class ProductTaxEngineService {
       );
       final icmsProprio = precoBase * (aliquotaCredito / 100);
       final icmsStCheio = baseSt * (aliquotaDestino / 100);
-      valorSt = math.max(icmsStCheio - icmsProprio, 0);
+      valorSt = math.max(icmsStCheio - icmsProprio, 0.0);
     }
 
-    final aliquotaDifal = regra?.aliquotaDifal ?? 0;
-    final valorDifal = precoBase * (aliquotaDifal / 100);
+    final double aliquotaDifal = regra?.aliquotaDifal ?? 0.0;
+    final valorDifal = applyDifal ? precoBase * (aliquotaDifal / 100) : 0.0;
 
     final valorLiquido = precoBase;
     final valorTotalItem = valorLiquido + valorIpi + valorSt + valorDifal;
@@ -205,6 +239,7 @@ class ProductTaxEngineService {
     required String? cest,
     required String ufOrigem,
     required String ufDestino,
+    required SalePurpose salePurpose,
   }) {
     final normalizedNcm = _normalizeNcm(ncm);
     if (normalizedNcm.isEmpty) {
@@ -235,6 +270,10 @@ class ProductTaxEngineService {
 
       final destino = regra.ufDestino.trim().toUpperCase();
       if (destino.isNotEmpty && destino != 'ANY' && destino != ufDestino) {
+        continue;
+      }
+
+      if (regra.salePurpose != null && regra.salePurpose != salePurpose) {
         continue;
       }
 

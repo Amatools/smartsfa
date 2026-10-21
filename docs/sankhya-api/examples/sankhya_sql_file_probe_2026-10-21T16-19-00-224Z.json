@@ -1,0 +1,119 @@
+{
+  "marker": "SQL_FILE_PROBE",
+  "ok": true,
+  "tenantId": "self_T8oqTD0UBtWATPbITOGsqAEZt3d2_smartsfa-enterprise-teste",
+  "environment": "prod",
+  "sqlFile": "G:\\smartsfa\\docs\\sankhya-api\\examples\\difal_missing_factors_probe.sql",
+  "baseUrl": "https://api.sankhya.com.br",
+  "endpointPath": "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+  "status": 200,
+  "responseIsJson": true,
+  "rowCount": 2,
+  "fields": [
+    {
+      "name": "TOP_CALCDIFALPART",
+      "order": 1,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "TOTAL_ITENS",
+      "order": 2,
+      "userType": "I",
+      "precision": null
+    },
+    {
+      "name": "ITENS_COM_BASEDIFAL",
+      "order": 3,
+      "userType": "I",
+      "precision": null
+    },
+    {
+      "name": "ITENS_COM_DIFAL_DEST",
+      "order": 4,
+      "userType": "I",
+      "precision": null
+    },
+    {
+      "name": "ITENS_COM_PERCPART",
+      "order": 5,
+      "userType": "I",
+      "precision": null
+    }
+  ],
+  "rows": [
+    [
+      "N",
+      66884,
+      0,
+      0,
+      0
+    ],
+    [
+      "S",
+      3391021,
+      0,
+      0,
+      0
+    ]
+  ],
+  "responseBody": {
+    "serviceName": "DbExplorerSP.executeQuery",
+    "status": "1",
+    "pendingPrinting": "false",
+    "transactionId": "675E181639D62A58606EB283EA8EC961",
+    "responseBody": {
+      "fieldsMetadata": [
+        {
+          "name": "TOP_CALCDIFALPART",
+          "description": "TOP_CALCDIFALPART",
+          "order": 1,
+          "userType": "S"
+        },
+        {
+          "name": "TOTAL_ITENS",
+          "description": "TOTAL_ITENS",
+          "order": 2,
+          "userType": "I"
+        },
+        {
+          "name": "ITENS_COM_BASEDIFAL",
+          "description": "ITENS_COM_BASEDIFAL",
+          "order": 3,
+          "userType": "I"
+        },
+        {
+          "name": "ITENS_COM_DIFAL_DEST",
+          "description": "ITENS_COM_DIFAL_DEST",
+          "order": 4,
+          "userType": "I"
+        },
+        {
+          "name": "ITENS_COM_PERCPART",
+          "description": "ITENS_COM_PERCPART",
+          "order": 5,
+          "userType": "I"
+        }
+      ],
+      "rows": [
+        [
+          "N",
+          66884,
+          0,
+          0,
+          0
+        ],
+        [
+          "S",
+          3391021,
+          0,
+          0,
+          0
+        ]
+      ],
+      "burstLimit": false,
+      "timeQuery": "5,39s",
+      "timeResultSet": "1ms"
+    }
+  }
+}

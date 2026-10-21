@@ -100,6 +100,8 @@ class ProductEditorTabsContent extends StatelessWidget {
           status: payload.status,
           eanController: payload.controllers.ean,
           marcaController: payload.controllers.marca,
+          origemMercadoriaCstController:
+              payload.controllers.origemMercadoriaCst,
           descricaoLongaController: payload.controllers.descricaoLonga,
           availableBrands: payload.availableBrands,
           labelStyle: payload.labelStyle,

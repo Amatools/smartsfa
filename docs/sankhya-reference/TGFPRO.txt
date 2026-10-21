@@ -1,0 +1,48 @@
+ALIQGERAL	Alíquota Geral	F	P	N	S
+ALIQICMSINTEFD	Alíquota Interna de ICMS	F	P	N	S
+CALCDIFAL	Calcular DIFAL ?	S	P	N	S
+CAT1799SPRES	Ressarcimento de ST (CAT-17/99)	S	P	S	S
+CODCTACTBEFD	Conta Contábil para EFD	I	P	S	S
+CODEMP	Empresa	I	P	S	S
+CODENQIPIENT	Código Enq. Legal IPI Entrada	I	P	N	S
+CODENQIPISAI	Código Enq. Legal IPI Saída	I	P	N	S
+CODESPECST	Código Especificador ST	I	P	S	S
+CODFCI	Código da FCI	S	P	S	S
+CODICMSFAST	Alíquota ICMS do Fast Service	F	P	N	S
+CODLOCALPAD	Local Padrão	I	P	S	S
+CODPROD	Produto	I	P	N	S
+CODPRODROI	Produto	S	P	N	S
+CSTIPIENT	Código Sit.Trib.IPI Entrada	I	P	N	S
+CSTIPISAI	Código Sit.Trib.IPI Saída	I	P	N	S
+DESCMAX	Descrição	F	P	N	S
+ENQREINTEGRA	Enquadrado no Reintegra/Prev.	I	P	N	S
+ESTMAX	Estoque Máximo	F	P	S	S
+ESTMIN	Estoque Mínimo	F	P	S	S
+GRADEPADRAO	Grade Padrão	C	P	N	S
+GRUPOICMS	Grupo de ICMS	I	P	N	S
+GRUPOICMS2	Grupo de ICMS 2	I	P	N	S
+IDGRADE	Grade Produto	I	P	S	S
+LEADTIME	Lead time de compra	I	P	N	S
+LOCALIZACAO	Localização	S	P	S	S
+MVAPADRAO	MVA Padrão	F	P	N	S
+OBTSTANTMEDENT	Obtém ST Anterior pela média das entradas?	S	P	N	S
+ORIGPROD	Origem do Produto	S	P	N	S
+PERCCMTEST	% Carga Média Trib. Estadual	F	P	N	S
+PERCCMTFED	% Carga Média Trib. Federal	F	P	N	S
+PERCCMTIMP	% Carga Média Trib. Importação	F	P	N	S
+PERCCMTNAC	% Carga Média Trib. Nacional	F	P	N	S
+PERCREDBASEICMSEFET	Perc. Red. Base Icms Efetivo	F	P	N	S
+RASTSTULTENTRADA	Usa Rastro/ST pela Ult. Entrada	S	P	S	S
+TEMICMS	Tem ICMS	S	P	N	S
+TEMIPICOMPRA	IPI na Entrada	S	P	N	S
+TEMIPIVENDA	IPI na Saída	S	P	N	S
+TEMRASTROLOTE	Tem Rastro do Lote	S	P	S	S
+TIPCONTEST	Tipo de Controle de Estoque	S	P	S	S
+TIPOITEMSPED	Tipo do item p/ SPED	S	P	N	S
+TIPSUBST	Tipo de substituição	S	P	N	S
+USAIDPALETE	Usa Pálete Identificado	S	P	S	S
+USALOTEDTFAB	Usa Data de Fabricação	S	P	S	S
+USALOTEDTVAL	Usa Data de Validade	S	P	S	S
+USOPROD	Uso do Produto	S	P	N	S
+VLRCOMERC	Valor de Comercialização - (R$)	F	P	N	S
+VLRPARCIMPEXT	Valor da Parcela Importada do Exterior - (R$)	F	P	N	S

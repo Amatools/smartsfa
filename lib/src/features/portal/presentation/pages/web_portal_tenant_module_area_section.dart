@@ -59,9 +59,12 @@ class _TenantWorkspaceModuleAreaState
               legacyField: 'advancedPricingEnabled',
             ) &&
             canUseAdvancedPricing;
+        final isEnterpriseWorkspace =
+            widget.activeTenant.workspaceType == 'brand_owner_workspace';
         final modules = _buildTenantCommercialModules(
           widget.tenantItems,
           advancedPricingEnabled: advancedPricingEnabled,
+          isEnterpriseWorkspace: isEnterpriseWorkspace,
         );
         if (modules.isEmpty) {
           return const SizedBox.shrink();
@@ -407,6 +410,7 @@ class _TenantCommercialSubmenu {
 List<_TenantCommercialModule> _buildTenantCommercialModules(
   List<_PortalNavItem> tenantItems, {
   required bool advancedPricingEnabled,
+  required bool isEnterpriseWorkspace,
 }) {
   bool hasItem(String label) => tenantItems.any((item) => item.label == label);
 
@@ -479,6 +483,10 @@ List<_TenantCommercialModule> _buildTenantCommercialModules(
           linkedItemLabel: linkIfExists('Condições de pagamento'),
         ),
         const _TenantCommercialSubmenu(
+          key: 'tributacoes',
+          label: 'Tributações',
+        ),
+        const _TenantCommercialSubmenu(
           key: 'acrescimos_descontos',
           label: 'Acréscimos ou descontos',
         ),
@@ -496,23 +504,22 @@ List<_TenantCommercialModule> _buildTenantCommercialModules(
       key: 'configuracoes',
       label: 'Configurações',
       icon: Icons.settings_outlined,
-      submenus: const [
-        _TenantCommercialSubmenu(
+      submenus: [
+        const _TenantCommercialSubmenu(
           key: 'parametros_workspace',
           label: 'Parâmetros',
         ),
-        _TenantCommercialSubmenu(key: 'categorias', label: 'Categorias'),
-        _TenantCommercialSubmenu(key: 'unidades', label: 'Unidades'),
-        _TenantCommercialSubmenu(key: 'fotos', label: 'Fotos'),
-        _TenantCommercialSubmenu(
+        const _TenantCommercialSubmenu(key: 'categorias', label: 'Categorias'),
+        const _TenantCommercialSubmenu(key: 'unidades', label: 'Unidades'),
+        const _TenantCommercialSubmenu(key: 'fotos', label: 'Fotos'),
+        const _TenantCommercialSubmenu(
           key: 'variacoes_produto',
           label: 'Variação de produtos',
         ),
-        _TenantCommercialSubmenu(
+        const _TenantCommercialSubmenu(
           key: 'periodo_inatividade',
           label: 'Período de inatividade',
         ),
-        _TenantCommercialSubmenu(key: 'tributacoes', label: 'Tributações'),
       ],
     ),
   ];

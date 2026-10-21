@@ -151,7 +151,11 @@ class ProductsTable extends StatelessWidget {
   }) {
     final theme = Theme.of(context);
     final isActive = produto.status == ProductStatus.active;
-    final codigo = (produto.codigoFabricante ?? '').trim();
+    final codigoErp = (produto.erpProductId ?? '').trim();
+    final codigoSaas = produto.codigoInterno.trim();
+    final codigo = codigoErp.isNotEmpty
+        ? codigoErp
+        : (codigoSaas.isNotEmpty ? codigoSaas : (produto.codigoFabricante ?? '').trim());
 
     Widget tappableCell(Widget child, {bool alignRight = false}) {
       return InkWell(

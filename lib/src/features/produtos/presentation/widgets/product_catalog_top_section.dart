@@ -7,31 +7,25 @@ class ProductCatalogTopSection extends StatelessWidget {
     super.key,
     required this.creatingNewProduct,
     required this.canCreateOrImportProducts,
-    required this.availableBrands,
-    required this.effectiveBrandFilter,
+    required this.representedCompanyName,
     required this.showEnterpriseSyncSwitchCard,
     required this.erpSyncEnabled,
     required this.erpSyncChangeEnabled,
-    required this.showErpManagedInfoCard,
     required this.onImportExcel,
     required this.onDownloadExcelModel,
     required this.onCreateProduct,
-    required this.onBrandFilterChanged,
     required this.onErpSyncChanged,
   });
 
   final bool creatingNewProduct;
   final bool canCreateOrImportProducts;
-  final List<String> availableBrands;
-  final String effectiveBrandFilter;
+  final String? representedCompanyName;
   final bool showEnterpriseSyncSwitchCard;
   final bool erpSyncEnabled;
   final bool erpSyncChangeEnabled;
-  final bool showErpManagedInfoCard;
   final VoidCallback onImportExcel;
   final VoidCallback onDownloadExcelModel;
   final VoidCallback onCreateProduct;
-  final ValueChanged<String> onBrandFilterChanged;
   final ValueChanged<bool> onErpSyncChanged;
 
   Widget _buildHeaderActions() {
@@ -89,79 +83,52 @@ class ProductCatalogTopSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final representedName = (representedCompanyName ?? '').trim();
+    final subtitle = representedName.isEmpty
+        ? 'Cadastro de Produtos da Empresa'
+        : 'Cadastro de Produtos da $representedName';
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (!creatingNewProduct)
           HeaderCard(
             title: 'Produtos',
-            subtitle: 'Cadastro dos Produtos da Representada ativa',
+            subtitle: subtitle,
             actions: [
               if (canCreateOrImportProducts) ...[_buildHeaderActions()],
             ],
           ),
-        if (availableBrands.isNotEmpty) ...[
-          const SizedBox(height: 12),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Row(
-                children: [
-                  const Icon(Icons.filter_alt_outlined),
-                  const SizedBox(width: 12),
-                  const Text('Marca'),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: DropdownButtonFormField<String>(
-                      initialValue: effectiveBrandFilter,
-                      decoration: const InputDecoration(
-                        isDense: true,
-                        border: OutlineInputBorder(),
-                      ),
-                      items: <String>['todas', ...availableBrands]
-                          .map(
-                            (brand) => DropdownMenuItem<String>(
-                              value: brand,
-                              child: Text(
-                                brand == 'todas' ? 'Todas as marcas' : brand,
-                              ),
-                            ),
-                          )
-                          .toList(growable: false),
-                      onChanged: (value) {
-                        if (value == null) {
-                          return;
-                        }
-                        onBrandFilterChanged(value);
-                      },
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
         if (showEnterpriseSyncSwitchCard) ...[
           const SizedBox(height: 12),
           Card(
-            child: SwitchListTile(
-              title: const Text('Sincronizar produtos do ERP'),
-              subtitle: const Text(
-                'Quando ativado, o ERP vira fonte da verdade e o cadastro manual/importacao de produtos fica bloqueado.',
-              ),
-              value: erpSyncEnabled,
-              onChanged: erpSyncChangeEnabled ? onErpSyncChanged : null,
-            ),
-          ),
-        ],
-        if (showErpManagedInfoCard) ...[
-          const SizedBox(height: 12),
-          const Card(
-            child: ListTile(
-              leading: Icon(Icons.sync_lock_outlined),
-              title: Text('Produtos gerenciados pela integração ERP'),
-              subtitle: Text(
-                'Neste contexto, a criação manual e a importação por arquivo ficam ocultas para preservar o ERP como fonte única.',
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  const Icon(Icons.sync_lock_outlined),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: const [
+                        Text(
+                          'Sincronizar Produtos do ERP',
+                          style: TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          'Quando ativado desativa o cadastro manual e sincroniza produtos do ERP.',
+                        ),
+                      ],
+                    ),
+                  ),
+                  Switch(
+                    value: erpSyncEnabled,
+                    onChanged: erpSyncChangeEnabled ? onErpSyncChanged : null,
+                  ),
+                ],
               ),
             ),
           ),

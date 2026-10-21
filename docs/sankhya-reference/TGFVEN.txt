@@ -1,0 +1,43 @@
+PROVACRESCCAC	Provisão do carrinho	F	P	N	N
+CODVEND	Código	I	P	S	S
+SALDODISPCAC	Saldo Diponivel do Carrinho	F	P	N	N
+APELIDO	Apelido	S	P	S	S
+TIPOCERTIF	Tipo p/ certificação	S	P	N	N
+ATIVO	Ativo	S	P	N	S
+CODREG	Região	I	P	S	S
+COMVENDA	Comissão venda	F	P	N	S
+COMGER	Comissão gerência	F	P	N	S
+VLRHORA	Valor hora p/ comissão de O.S.	F	P	N	S
+CODFORM	Fórmula Comissão	I	P	S	S
+CODCARGAHOR	Carga Horária	I	P	S	S
+DIACOM	Dia inicial p/período de comissão	I	P	N	S
+CODEMP	Empresa	I	P	S	S
+CODGER	Gerente	I	P	N	S
+CODPARC	Parceiro	I	P	N	S
+CODFUNC	Funcionário	I	P	N	S
+CODCENCUSPAD	Centro Resultado Padrão	I	P	N	S
+PERCCUSVAR	% Custo Variável	F	P	N	S
+EMAIL	Email	S	P	N	S
+SALDODISP	Saldo Disponível	F	P	N	S
+PROVACRESC	Provisão acréscimo	F	P	N	S
+DESCMAX	Desconto máximo	F	P	N	S
+TIPVALOR	Usar valor p/ comissão de OS	S	P	N	S
+ACRESCMAX	Acréscimo máximo	F	P	N	S
+TIPVEND	Tipo	S	P	S	S
+GRUPORETENCAO	Grupo de retenção	S	P	N	S
+CODUSU	Cód. Usuário	I	P	N	S
+DTALTER	Data de alteração	H	P	N	S
+PARTICMETA	Participação na meta	F	P	N	S
+SENHA	Senha	I	P	N	S
+ATUACOMPRADOR	Atua também como comprador	S	P	N	S
+TIPCALC	Pagamento de Comissão por data de	S	P	N	S
+GRUPODESCVEND	Grupo Desc. Vendedor	S	P	N	S
+COMCM	Recebe comissão em CM	S	P	N	S
+RECHREXTRA	Recebe Hora Dobrada	S	P	N	S
+TIPFECHCOM	Tipo de fechamento de comissão	S	P	N	S
+AD_SIMPLESNAC	Optante Simples Nacional?	S	O	S	S
+AD_EQUIPE	Equipe	S	O	S	S
+AD_IMPBILHETE	Imprimir Bilhete em Lote?	S	O	S	S
+AD_RESTRCARTEIRA	Restringe Carteira?	S	O	S	S
+AD_IDEXTERNO	ID EXTERNO	S	P	N	S
+AD_COMPLEMENTO	COMPLEMENTO	S	P	S	S

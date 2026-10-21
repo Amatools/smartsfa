@@ -39,6 +39,7 @@ class ProductEditorEntityMapper {
     required String quantidadeMinimaText,
     required String ncmText,
     required String cestText,
+    required String origemMercadoriaCstText,
     required String ipiBaseText,
     required String pesoText,
     required String erpProductIdText,
@@ -111,6 +112,9 @@ class ProductEditorEntityMapper {
       ),
       ncm: ProductFormValueCodec.nullableText(ncmText),
       cest: ProductFormValueCodec.nullableText(cestText),
+      origemMercadoriaCst: _normalizeOrigemMercadoriaCst(
+        origemMercadoriaCstText,
+      ),
       aliquotaIpiBase: ProductFormValueCodec.parseDecimal(ipiBaseText),
       pesoKg: ProductFormValueCodec.parseDecimal(pesoText),
       erpProductId: isEnterprise
@@ -140,5 +144,19 @@ class ProductEditorEntityMapper {
     }
 
     return normalized;
+  }
+
+  static String? _normalizeOrigemMercadoriaCst(String rawValue) {
+    final normalized = rawValue.trim();
+    if (normalized.isEmpty) {
+      return null;
+    }
+
+    final parsed = int.tryParse(normalized);
+    if (parsed == null || parsed < 0 || parsed > 8) {
+      return null;
+    }
+
+    return parsed.toString();
   }
 }

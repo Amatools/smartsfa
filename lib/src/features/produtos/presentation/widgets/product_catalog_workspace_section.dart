@@ -29,12 +29,15 @@ class ProductCatalogWorkspaceSection extends StatelessWidget {
     final selectedRepresentedCompanyId = (payload.representedCompanyId ?? '')
         .trim();
     if (selectedRepresentedCompanyId.isEmpty) {
-      return const <Produto>[];
+      return produtos;
     }
 
     return produtos
         .where((produto) {
           final productScope = (produto.representedCompanyId ?? '').trim();
+          if (productScope.isEmpty) {
+            return true;
+          }
           return productScope == selectedRepresentedCompanyId;
         })
         .toList(growable: false);

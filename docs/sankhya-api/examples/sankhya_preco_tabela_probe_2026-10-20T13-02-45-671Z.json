@@ -1,0 +1,41 @@
+{
+  "marker": "PRECO_TABELA_PROBE",
+  "ok": false,
+  "executedAt": "2026-10-20T13:02:45.671Z",
+  "tenantId": "self_T8oqTD0UBtWATPbITOGsqAEZt3d2_smartsfa-enterprise-teste",
+  "environment": "prod",
+  "baseUrl": "https://api.sankhya.com.br",
+  "authStatus": 200,
+  "bearerReceived": true,
+  "discovery": {
+    "productsProbeStatus": null,
+    "productsChecked": 0,
+    "productPriceChecks": [],
+    "tablesListProbeStatus": null,
+    "selectedBy": "argumento",
+    "selectedCodigoTabela": "10"
+  },
+  "request": {
+    "method": "GET",
+    "path": "/v1/precos/tabela/10?pagina=1"
+  },
+  "response": {
+    "status": 400,
+    "isJson": true,
+    "body": {
+      "statusCode": 400,
+      "error": {
+        "code": "INVALID_REQUEST",
+        "message": "Ocorreu um erro inesperado!",
+        "details": "Acesso negado ao serviço: /precos/tabela/10 método: GET para o usuario: 43 - SMART.SFA"
+      }
+    }
+  },
+  "summary": {
+    "codigoTabela": "10",
+    "page": 1,
+    "numeroRegistros": 0,
+    "temMaisRegistros": false,
+    "totalItensNoArrayPrecos": 0
+  }
+}

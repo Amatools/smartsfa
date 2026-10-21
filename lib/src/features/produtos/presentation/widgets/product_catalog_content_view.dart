@@ -23,6 +23,8 @@ class ProductCatalogContentView extends StatelessWidget {
               children: [
                 _buildTopSection(),
                 const SizedBox(height: 14),
+                _buildBrandFilterSection(),
+                const SizedBox(height: 12),
                 _buildMainSection(),
               ],
             ),
@@ -36,17 +38,60 @@ class ProductCatalogContentView extends StatelessWidget {
     return ProductCatalogTopSection(
       creatingNewProduct: payload.projection.creatingNewProduct,
       canCreateOrImportProducts: payload.policy.canCreateOrImportProducts,
-      availableBrands: payload.projection.availableBrands,
-      effectiveBrandFilter: payload.projection.effectiveBrandFilter,
+      representedCompanyName: payload.representedCompanyName,
       showEnterpriseSyncSwitchCard: payload.policy.showEnterpriseSyncSwitchCard,
       erpSyncEnabled: payload.policy.erpSyncEnabled,
       erpSyncChangeEnabled: payload.erpSyncChangeEnabled,
-      showErpManagedInfoCard: payload.policy.showErpManagedInfoCard,
       onImportExcel: payload.onImportExcel,
       onDownloadExcelModel: payload.onDownloadExcelModel,
       onCreateProduct: payload.onCreateProduct,
-      onBrandFilterChanged: payload.onBrandFilterChanged,
       onErpSyncChanged: payload.onErpSyncChanged,
+    );
+  }
+
+  Widget _buildBrandFilterSection() {
+    final availableBrands = payload.projection.availableBrands;
+    if (availableBrands.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            const Icon(Icons.filter_alt_outlined),
+            const SizedBox(width: 12),
+            const Text('Marca'),
+            const SizedBox(width: 12),
+            Expanded(
+              child: DropdownButtonFormField<String>(
+                initialValue: payload.projection.effectiveBrandFilter,
+                decoration: const InputDecoration(
+                  isDense: true,
+                  border: OutlineInputBorder(),
+                ),
+                items: <String>['todas', ...availableBrands]
+                    .map(
+                      (brand) => DropdownMenuItem<String>(
+                        value: brand,
+                        child: Text(
+                          brand == 'todas' ? 'Todas as marcas' : brand,
+                        ),
+                      ),
+                    )
+                    .toList(growable: false),
+                onChanged: (value) {
+                  if (value == null) {
+                    return;
+                  }
+                  payload.onBrandFilterChanged(value);
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

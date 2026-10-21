@@ -1,0 +1,41 @@
+{
+  "marker": "PRECO_TABELA_PROBE",
+  "ok": false,
+  "executedAt": "2026-10-20T13:09:10.971Z",
+  "tenantId": "self_T8oqTD0UBtWATPbITOGsqAEZt3d2_smartsfa-enterprise-teste",
+  "environment": "prod",
+  "baseUrl": "https://api.sankhya.com.br",
+  "authStatus": 200,
+  "bearerReceived": true,
+  "discovery": {
+    "productsProbeStatus": null,
+    "productsChecked": 0,
+    "productPriceChecks": [],
+    "tablesListProbeStatus": null,
+    "selectedBy": "argumento",
+    "selectedCodigoTabela": "17"
+  },
+  "request": {
+    "method": "GET",
+    "path": "/v1/precos/tabela/17?pagina=1"
+  },
+  "response": {
+    "status": 404,
+    "isJson": true,
+    "body": {
+      "statusCode": 404,
+      "error": {
+        "code": "RESOURCE_NOT_FOUND",
+        "message": "Recurso solicitado não foi encontrado!",
+        "details": "Nenhum registro da entidade NomeTabelasPreco com o identificador informado!"
+      }
+    }
+  },
+  "summary": {
+    "codigoTabela": "17",
+    "page": 1,
+    "numeroRegistros": 0,
+    "temMaisRegistros": false,
+    "totalItensNoArrayPrecos": 0
+  }
+}

@@ -37,6 +37,13 @@ class ClientesPage extends StatefulWidget {
 class _ClientesPageState extends State<ClientesPage> {
   int _preCadastroRefreshTick = 0;
   late Future<_ClienteLocalState> _localClientesFuture;
+  String? _currentUserUid;
+  String _currentRole = '';
+  String _scopeOwnerId = '';
+  String _scopeGerenteId = '';
+  String _scopeRepresentanteId = '';
+  String _scopeVendedorId = '';
+  bool _scopeResolved = false;
   int _pendingSyncCount = 0;
   bool _syncingAll = false;
 
@@ -44,7 +51,154 @@ class _ClientesPageState extends State<ClientesPage> {
   void initState() {
     super.initState();
     _localClientesFuture = _loadLocalClientes();
+    _resolveViewerScope();
     _refreshPendingSyncCount();
+  }
+
+  Future<void> _resolveViewerScope() async {
+    final uid = (FirebaseAuth.instance.currentUser?.uid ?? '').trim();
+    final role = widget.identity.role.trim().toLowerCase();
+
+    String ownerId = uid;
+    String gerenteId = '';
+    String representanteId = '';
+    String vendedorId = '';
+
+    try {
+      final membership = await TenantMembershipService(
+        FirebaseFirestore.instance,
+      ).loadActiveByTenantAndUid(tenantId: widget.identity.tenantId, uid: uid);
+
+      if (membership != null) {
+        ownerId = membership.ownerId.trim().isEmpty
+            ? ownerId
+            : membership.ownerId.trim();
+        gerenteId = membership.gerenteId.trim();
+        representanteId = membership.representanteId.trim();
+        vendedorId = membership.vendedorId.trim();
+      }
+    } catch (_) {
+      // Keep role/uid fallback if membership lookup fails.
+    }
+
+    if (role == 'gerente' && gerenteId.isEmpty) {
+      gerenteId = uid;
+    }
+    if (role == 'representante') {
+      if (gerenteId.isEmpty) {
+        gerenteId = uid;
+      }
+      if (representanteId.isEmpty) {
+        representanteId = uid;
+      }
+    }
+    if (role == 'vendedor') {
+      if (gerenteId.isEmpty) {
+        gerenteId = uid;
+      }
+      if (representanteId.isEmpty) {
+        representanteId = uid;
+      }
+      if (vendedorId.isEmpty) {
+        vendedorId = uid;
+      }
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _currentUserUid = uid;
+      _currentRole = role;
+      _scopeOwnerId = ownerId;
+      _scopeGerenteId = gerenteId;
+      _scopeRepresentanteId = representanteId;
+      _scopeVendedorId = vendedorId;
+      _scopeResolved = true;
+    });
+  }
+
+  bool _canViewClienteByHierarchy(Cliente cliente) {
+    if (widget.identity.isPersonalWorkspace) {
+      return true;
+    }
+
+    if (!_scopeResolved) {
+      return true;
+    }
+
+    final role = _currentRole;
+    final clienteOwner = (cliente.ownerId ?? '').trim();
+    final clienteGerente = (cliente.gerenteId ?? '').trim();
+    final clienteRepresentante = (cliente.representanteId ?? '').trim();
+    final clienteVendedor = (cliente.vendedorId ?? '').trim();
+
+    if (role == 'owner' || role == 'platform_admin') {
+      if (_scopeOwnerId.isEmpty) {
+        return true;
+      }
+      if (clienteOwner.isNotEmpty) {
+        return clienteOwner == _scopeOwnerId;
+      }
+      return true;
+    }
+
+    if (role == 'gerente') {
+      if (_scopeGerenteId.isNotEmpty && clienteGerente.isNotEmpty) {
+        return clienteGerente == _scopeGerenteId;
+      }
+      final uid = (_currentUserUid ?? '').trim();
+      if (uid.isEmpty) {
+        return false;
+      }
+      return clienteGerente == uid;
+    }
+
+    if (role == 'representante') {
+      if (_scopeRepresentanteId.isNotEmpty &&
+          clienteRepresentante.isNotEmpty) {
+        return clienteRepresentante == _scopeRepresentanteId;
+      }
+      final uid = (_currentUserUid ?? '').trim();
+      if (uid.isEmpty) {
+        return false;
+      }
+      return clienteRepresentante == uid;
+    }
+
+    if (role == 'vendedor') {
+      if (_scopeVendedorId.isNotEmpty && clienteVendedor.isNotEmpty) {
+        return clienteVendedor == _scopeVendedorId;
+      }
+      final uid = (_currentUserUid ?? '').trim();
+      if (uid.isEmpty) {
+        return false;
+      }
+      return clienteVendedor == uid;
+    }
+
+    return true;
+  }
+
+  String _buildHierarchySubtitle() {
+    if (widget.identity.isPersonalWorkspace) {
+      return '';
+    }
+    final role = widget.identity.role.trim().toLowerCase();
+    if (role == 'owner' || role == 'platform_admin') {
+      return 'Visao completa da carteira de clientes do workspace.';
+    }
+    if (role == 'gerente') {
+      return 'Voce visualiza os clientes da sua hierarquia (gerente > representantes > vendedores).';
+    }
+    if (role == 'representante') {
+      return 'Voce visualiza os clientes da sua carteira e dos seus vendedores.';
+    }
+    if (role == 'vendedor') {
+      return 'Voce visualiza apenas os seus proprios clientes.';
+    }
+    return 'Visao de clientes conforme permissao da sua hierarquia.';
   }
 
   /// Local-first records plus the tombstone set of ids deleted here. The
@@ -274,7 +428,9 @@ class _ClientesPageState extends State<ClientesPage> {
             final remote = (snapshot.data ?? const <Cliente>[])
                 .where((cliente) => !localState.deletedIds.contains(cliente.id))
                 .toList();
-            final clientes = _mergeClientes(remote, localState.records);
+            final clientes = _mergeClientes(remote, localState.records)
+                .where((entry) => _canViewClienteByHierarchy(entry.item))
+                .toList(growable: false);
 
             return SingleChildScrollView(
               child: Padding(
@@ -284,7 +440,7 @@ class _ClientesPageState extends State<ClientesPage> {
                   children: [
                     _HeaderCard(
                       title: 'Clientes',
-                      subtitle: '',
+                      subtitle: _buildHierarchySubtitle(),
                       actionLabel: 'Novo pré-cadastro',
                       onAction: () {
                         _openPreCadastro(context);
@@ -760,6 +916,9 @@ class _PreCadastroSectionState extends State<_PreCadastroSection> {
       pais: item.pais,
       inscricaoEstadual: item.inscricaoEstadual,
       inscricaoMunicipal: item.inscricaoMunicipal,
+      salePurpose: item.salePurpose,
+      taxProfile: item.taxProfile,
+      isZfmSuframa: item.isZfmSuframa,
       observacoes: item.observacoes,
       createdAt: item.createdAt ?? now,
       updatedAt: now,
@@ -838,7 +997,7 @@ class _PreCadastroSectionState extends State<_PreCadastroSection> {
         content: Text(
           result.clienteSyncedRemotely
               ? '${result.merged.nome} aprovado e cadastrado como cliente oficial.'
-              : '${result.merged.nome} aprovado e cadastrado localmente; sera sincronizado assim que houver conexao.',
+              : 'Salvo no dispositivo Local (off-line)',
         ),
       ),
     );

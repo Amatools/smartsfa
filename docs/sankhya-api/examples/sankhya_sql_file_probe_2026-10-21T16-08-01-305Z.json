@@ -1,0 +1,64 @@
+{
+  "marker": "SQL_FILE_PROBE",
+  "ok": true,
+  "tenantId": "self_T8oqTD0UBtWATPbITOGsqAEZt3d2_smartsfa-enterprise-teste",
+  "environment": "prod",
+  "sqlFile": "G:\\smartsfa\\docs\\sankhya-api\\examples\\tgfpdi_probe.sql",
+  "baseUrl": "https://api.sankhya.com.br",
+  "endpointPath": "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+  "status": 200,
+  "responseIsJson": true,
+  "rowCount": 1,
+  "fields": [
+    {
+      "name": "DTINICIO",
+      "order": 1,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "PERCPARTDIFAL",
+      "order": 2,
+      "userType": "F",
+      "precision": 2
+    }
+  ],
+  "rows": [
+    [
+      "2022-01-01",
+      100
+    ]
+  ],
+  "responseBody": {
+    "serviceName": "DbExplorerSP.executeQuery",
+    "status": "1",
+    "pendingPrinting": "false",
+    "transactionId": "14DCFF6F06E7709725E794C8545B07E3",
+    "responseBody": {
+      "fieldsMetadata": [
+        {
+          "name": "DTINICIO",
+          "description": "DTINICIO",
+          "order": 1,
+          "userType": "S"
+        },
+        {
+          "name": "PERCPARTDIFAL",
+          "description": "PERCPARTDIFAL",
+          "order": 2,
+          "userType": "F",
+          "precision": 2
+        }
+      ],
+      "rows": [
+        [
+          "2022-01-01",
+          100
+        ]
+      ],
+      "burstLimit": false,
+      "timeQuery": "26ms",
+      "timeResultSet": "1ms"
+    }
+  }
+}

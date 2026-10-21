@@ -108,6 +108,10 @@ class _AppShellPageState extends State<AppShellPage> {
   void _updateViewState(
     AppShellViewState Function(AppShellViewState state) update,
   ) {
+    if (!mounted) {
+      return;
+    }
+
     setState(() {
       _viewState = update(_viewState);
     });
@@ -695,6 +699,11 @@ class _AppShellPageState extends State<AppShellPage> {
       final workspace = await _workspaceProfileService
           .watchWorkspace(tenantId)
           .first;
+      final workspaceType = (workspace?['workspaceType'] ?? '')
+        .toString()
+        .trim()
+        .toLowerCase();
+      final isEnterpriseWorkspace = workspaceType == 'brand_owner_workspace';
       final favoriteId = (workspace?['favoriteRepresentedCompanyId'] ?? '')
           .toString()
           .trim();
@@ -741,6 +750,32 @@ class _AppShellPageState extends State<AppShellPage> {
           }
         }
       }
+
+      if (isEnterpriseWorkspace) {
+        final enterpriseName = (workspace?['nomeFantasia'] ??
+                widget.identity.tenantName)
+            .toString()
+            .trim();
+        final enterpriseUf =
+            (workspace?['uf'] ?? '').toString().trim().toUpperCase();
+        final fallbackOption = _RepresentedScopeOption(
+          representedCompanyId: '',
+          representedCompanyName: enterpriseName.isEmpty
+              ? 'Empresa do workspace'
+              : enterpriseName,
+          originCompanyUnitId: tenantId,
+          originCompanyUnitLabel: enterpriseName.isEmpty
+              ? 'Empresa do workspace'
+              : enterpriseName,
+          originCompanyUf: enterpriseUf,
+        );
+
+        selected ??= fallbackOption;
+        if (options.isEmpty) {
+          options.add(fallbackOption);
+        }
+      }
+
       selected ??= options.isEmpty ? null : options.first;
 
       if (!mounted) {
@@ -780,7 +815,13 @@ class _AppShellPageState extends State<AppShellPage> {
     }
 
     final tenantId = widget.identity.tenantId.trim();
-    if (tenantId.isEmpty || options.isEmpty) {
+    final activeRepresentedCompanyIds = options
+      .map((option) => option.representedCompanyId.trim())
+      .where((id) => id.isNotEmpty)
+      .toList(growable: false);
+    final preferredRepresentedCompanyId =
+      selected?.representedCompanyId.trim() ?? '';
+    if (tenantId.isEmpty || activeRepresentedCompanyIds.isEmpty) {
       return;
     }
 
@@ -788,10 +829,10 @@ class _AppShellPageState extends State<AppShellPage> {
     try {
       final result = await _representedScopeBackfillService.runForTenant(
         tenantId: tenantId,
-        activeRepresentedCompanyIds: options
-            .map((option) => option.representedCompanyId)
-            .toList(growable: false),
-        preferredRepresentedCompanyId: selected?.representedCompanyId,
+        activeRepresentedCompanyIds: activeRepresentedCompanyIds,
+        preferredRepresentedCompanyId: preferredRepresentedCompanyId.isEmpty
+            ? null
+            : preferredRepresentedCompanyId,
       );
 
       _representedScopeBackfillDone = true;
@@ -941,6 +982,10 @@ class _AppShellPageState extends State<AppShellPage> {
   }
 
   Future<void> _syncOfflineQueueIfOnline() async {
+    if (!mounted) {
+      return;
+    }
+
     final repositoryBundle = _repositoryBundle;
     if (repositoryBundle == null || _viewState.syncInProgress) {
       return;
@@ -1077,7 +1122,11 @@ class _AppShellPageState extends State<AppShellPage> {
           !_usingLocalFallback &&
           (_supportsRepresentedScope() || _representedScopeOptions.isNotEmpty),
       onRepresentedScopeTap: _supportsRepresentedScope()
-          ? _openRepresentedScopePicker
+          ? ((_selectedRepresentedScope?.representedCompanyId ?? '')
+                .trim()
+                .isEmpty
+              ? null
+              : _openRepresentedScopePicker)
           : null,
     );
   }

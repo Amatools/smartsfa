@@ -51,6 +51,9 @@ class _ClienteDetailPageState extends State<ClienteDetailPage> {
   late final TextEditingController _observacoesController;
 
   late String _tipoPessoa;
+  late SalePurpose _salePurpose;
+  late CustomerTaxProfile _taxProfile;
+  late bool _isZfmSuframa;
   late Cliente _cliente;
   bool _isEditing = false;
   bool _saving = false;
@@ -106,6 +109,9 @@ class _ClienteDetailPageState extends State<ClienteDetailPage> {
     );
     _observacoesController = TextEditingController(text: cliente.observacoes);
     _tipoPessoa = cliente.tipoPessoa;
+    _salePurpose = cliente.salePurpose;
+    _taxProfile = cliente.taxProfile;
+    _isZfmSuframa = cliente.isZfmSuframa;
   }
 
   @override
@@ -165,6 +171,9 @@ class _ClienteDetailPageState extends State<ClienteDetailPage> {
         pais: _paisController.text.trim(),
         inscricaoEstadual: _inscricaoEstadualController.text.trim(),
         inscricaoMunicipal: _inscricaoMunicipalController.text.trim(),
+        salePurpose: _salePurpose,
+        taxProfile: _taxProfile,
+        isZfmSuframa: _isZfmSuframa,
         observacoes: _observacoesController.text.trim(),
         updatedAt: now,
       );
@@ -638,6 +647,76 @@ class _ClienteDetailPageState extends State<ClienteDetailPage> {
                                             ),
                                             _buildLabeledField(
                                               context: context,
+                                              label: 'Finalidade da venda',
+                                              child: DropdownButtonFormField<SalePurpose>(
+                                                initialValue: _salePurpose,
+                                                items: SalePurpose.values
+                                                    .map(
+                                                      (item) => DropdownMenuItem<SalePurpose>(
+                                                        value: item,
+                                                        child: Text(item.label),
+                                                      ),
+                                                    )
+                                                    .toList(growable: false),
+                                                onChanged: (value) {
+                                                  if (value != null) {
+                                                    setState(
+                                                      () => _salePurpose = value,
+                                                    );
+                                                  }
+                                                },
+                                                decoration:
+                                                    _formInputDecoration(),
+                                              ),
+                                            ),
+                                            _buildLabeledField(
+                                              context: context,
+                                              label: 'Perfil fiscal do cliente',
+                                              child: DropdownButtonFormField<CustomerTaxProfile>(
+                                                initialValue: _taxProfile,
+                                                items: CustomerTaxProfile.values
+                                                    .map(
+                                                      (item) => DropdownMenuItem<CustomerTaxProfile>(
+                                                        value: item,
+                                                        child: Text(item.label),
+                                                      ),
+                                                    )
+                                                    .toList(growable: false),
+                                                onChanged: (value) {
+                                                  if (value != null) {
+                                                    setState(
+                                                      () => _taxProfile = value,
+                                                    );
+                                                  }
+                                                },
+                                                decoration:
+                                                    _formInputDecoration(),
+                                              ),
+                                            ),
+                                            _buildLabeledField(
+                                              context: context,
+                                              label: 'Zona Franca / SUFRAMA',
+                                              child: CheckboxListTile(
+                                                value: _isZfmSuframa,
+                                                dense: true,
+                                                contentPadding:
+                                                    EdgeInsets.zero,
+                                                controlAffinity:
+                                                    ListTileControlAffinity
+                                                        .leading,
+                                                title: const Text(
+                                                  'Cliente enquadrado em ZFM-SUFRAMA',
+                                                ),
+                                                onChanged: (value) {
+                                                  setState(
+                                                    () => _isZfmSuframa =
+                                                        value ?? false,
+                                                  );
+                                                },
+                                              ),
+                                            ),
+                                            _buildLabeledField(
+                                              context: context,
                                               label: 'Inscrição estadual',
                                               child: TextFormField(
                                                 controller:
@@ -892,6 +971,14 @@ class _ClienteDetailPageState extends State<ClienteDetailPage> {
                                               cliente.tipoPessoa == 'pf'
                                               ? 'Pessoa física'
                                               : 'Pessoa jurídica',
+                                          'Perfil fiscal':
+                                              cliente.taxProfile.label,
+                                            'ZFM / SUFRAMA':
+                                              cliente.isZfmSuframa
+                                              ? 'Sim'
+                                              : 'Não',
+                                          'Finalidade da venda':
+                                              cliente.salePurpose.label,
                                           'CPF / CNPJ': cliente.documento,
                                           'Inscrição estadual':
                                               cliente.inscricaoEstadual,

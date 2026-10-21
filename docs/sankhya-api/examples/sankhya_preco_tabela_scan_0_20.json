@@ -1,0 +1,170 @@
+﻿[
+    {
+        "codigoTabela":  0,
+        "ok":  true,
+        "status":  200,
+        "requestPath":  "/v1/precos/tabela/0?pagina=1",
+        "details":  "",
+        "savedFile":  "G:\\smartsfa\\docs\\sankhya-api\\examples\\sankhya_preco_tabela_probe_2026-10-20T13-08-16-688Z.json"
+    },
+    {
+        "codigoTabela":  1,
+        "ok":  true,
+        "status":  200,
+        "requestPath":  "/v1/precos/tabela/1?pagina=1",
+        "details":  "",
+        "savedFile":  "G:\\smartsfa\\docs\\sankhya-api\\examples\\sankhya_preco_tabela_probe_2026-10-20T13-08-20-463Z.json"
+    },
+    {
+        "codigoTabela":  2,
+        "ok":  true,
+        "status":  200,
+        "requestPath":  "/v1/precos/tabela/2?pagina=1",
+        "details":  "",
+        "savedFile":  "G:\\smartsfa\\docs\\sankhya-api\\examples\\sankhya_preco_tabela_probe_2026-10-20T13-08-24-073Z.json"
+    },
+    {
+        "codigoTabela":  3,
+        "ok":  true,
+        "status":  200,
+        "requestPath":  "/v1/precos/tabela/3?pagina=1",
+        "details":  "",
+        "savedFile":  "G:\\smartsfa\\docs\\sankhya-api\\examples\\sankhya_preco_tabela_probe_2026-10-20T13-08-27-805Z.json"
+    },
+    {
+        "codigoTabela":  4,
+        "ok":  true,
+        "status":  200,
+        "requestPath":  "/v1/precos/tabela/4?pagina=1",
+        "details":  "",
+        "savedFile":  "G:\\smartsfa\\docs\\sankhya-api\\examples\\sankhya_preco_tabela_probe_2026-10-20T13-08-31-249Z.json"
+    },
+    {
+        "codigoTabela":  5,
+        "ok":  true,
+        "status":  200,
+        "requestPath":  "/v1/precos/tabela/5?pagina=1",
+        "details":  "",
+        "savedFile":  "G:\\smartsfa\\docs\\sankhya-api\\examples\\sankhya_preco_tabela_probe_2026-10-20T13-08-34-785Z.json"
+    },
+    {
+        "codigoTabela":  6,
+        "ok":  false,
+        "status":  404,
+        "requestPath":  "/v1/precos/tabela/6?pagina=1",
+        "details":  "Nenhum registro da entidade NomeTabelasPreco com o identificador informado!",
+        "savedFile":  "G:\\smartsfa\\docs\\sankhya-api\\examples\\sankhya_preco_tabela_probe_2026-10-20T13-08-38-307Z.json"
+    },
+    {
+        "codigoTabela":  7,
+        "ok":  false,
+        "status":  404,
+        "requestPath":  "/v1/precos/tabela/7?pagina=1",
+        "details":  "Nenhum registro da entidade NomeTabelasPreco com o identificador informado!",
+        "savedFile":  "G:\\smartsfa\\docs\\sankhya-api\\examples\\sankhya_preco_tabela_probe_2026-10-20T13-08-41-553Z.json"
+    },
+    {
+        "codigoTabela":  8,
+        "ok":  false,
+        "status":  404,
+        "requestPath":  "/v1/precos/tabela/8?pagina=1",
+        "details":  "Nenhum registro da entidade NomeTabelasPreco com o identificador informado!",
+        "savedFile":  "G:\\smartsfa\\docs\\sankhya-api\\examples\\sankhya_preco_tabela_probe_2026-10-20T13-08-44-385Z.json"
+    },
+    {
+        "codigoTabela":  9,
+        "ok":  false,
+        "status":  404,
+        "requestPath":  "/v1/precos/tabela/9?pagina=1",
+        "details":  "Nenhum registro da entidade NomeTabelasPreco com o identificador informado!",
+        "savedFile":  "G:\\smartsfa\\docs\\sankhya-api\\examples\\sankhya_preco_tabela_probe_2026-10-20T13-08-47-341Z.json"
+    },
+    {
+        "codigoTabela":  10,
+        "ok":  false,
+        "status":  404,
+        "requestPath":  "/v1/precos/tabela/10?pagina=1",
+        "details":  "Nenhum registro da entidade NomeTabelasPreco com o identificador informado!",
+        "savedFile":  "G:\\smartsfa\\docs\\sankhya-api\\examples\\sankhya_preco_tabela_probe_2026-10-20T13-08-50-419Z.json"
+    },
+    {
+        "codigoTabela":  11,
+        "ok":  false,
+        "status":  404,
+        "requestPath":  "/v1/precos/tabela/11?pagina=1",
+        "details":  "Nenhum registro da entidade NomeTabelasPreco com o identificador informado!",
+        "savedFile":  "G:\\smartsfa\\docs\\sankhya-api\\examples\\sankhya_preco_tabela_probe_2026-10-20T13-08-53-328Z.json"
+    },
+    {
+        "codigoTabela":  12,
+        "ok":  false,
+        "status":  404,
+        "requestPath":  "/v1/precos/tabela/12?pagina=1",
+        "details":  "Nenhum registro da entidade NomeTabelasPreco com o identificador informado!",
+        "savedFile":  "G:\\smartsfa\\docs\\sankhya-api\\examples\\sankhya_preco_tabela_probe_2026-10-20T13-08-56-284Z.json"
+    },
+    {
+        "codigoTabela":  13,
+        "ok":  false,
+        "status":  404,
+        "requestPath":  "/v1/precos/tabela/13?pagina=1",
+        "details":  "Nenhum registro da entidade NomeTabelasPreco com o identificador informado!",
+        "savedFile":  "G:\\smartsfa\\docs\\sankhya-api\\examples\\sankhya_preco_tabela_probe_2026-10-20T13-08-59-430Z.json"
+    },
+    {
+        "codigoTabela":  14,
+        "ok":  false,
+        "status":  404,
+        "requestPath":  "/v1/precos/tabela/14?pagina=1",
+        "details":  "Nenhum registro da entidade NomeTabelasPreco com o identificador informado!",
+        "savedFile":  "G:\\smartsfa\\docs\\sankhya-api\\examples\\sankhya_preco_tabela_probe_2026-10-20T13-09-02-348Z.json"
+    },
+    {
+        "codigoTabela":  15,
+        "ok":  false,
+        "status":  404,
+        "requestPath":  "/v1/precos/tabela/15?pagina=1",
+        "details":  "Nenhum registro da entidade NomeTabelasPreco com o identificador informado!",
+        "savedFile":  "G:\\smartsfa\\docs\\sankhya-api\\examples\\sankhya_preco_tabela_probe_2026-10-20T13-09-05-330Z.json"
+    },
+    {
+        "codigoTabela":  16,
+        "ok":  false,
+        "status":  404,
+        "requestPath":  "/v1/precos/tabela/16?pagina=1",
+        "details":  "Nenhum registro da entidade NomeTabelasPreco com o identificador informado!",
+        "savedFile":  "G:\\smartsfa\\docs\\sankhya-api\\examples\\sankhya_preco_tabela_probe_2026-10-20T13-09-08-568Z.json"
+    },
+    {
+        "codigoTabela":  17,
+        "ok":  false,
+        "status":  404,
+        "requestPath":  "/v1/precos/tabela/17?pagina=1",
+        "details":  "Nenhum registro da entidade NomeTabelasPreco com o identificador informado!",
+        "savedFile":  "G:\\smartsfa\\docs\\sankhya-api\\examples\\sankhya_preco_tabela_probe_2026-10-20T13-09-10-971Z.json"
+    },
+    {
+        "codigoTabela":  18,
+        "ok":  false,
+        "status":  404,
+        "requestPath":  "/v1/precos/tabela/18?pagina=1",
+        "details":  "Nenhum registro da entidade NomeTabelasPreco com o identificador informado!",
+        "savedFile":  "G:\\smartsfa\\docs\\sankhya-api\\examples\\sankhya_preco_tabela_probe_2026-10-20T13-09-14-039Z.json"
+    },
+    {
+        "codigoTabela":  19,
+        "ok":  false,
+        "status":  404,
+        "requestPath":  "/v1/precos/tabela/19?pagina=1",
+        "details":  "Nenhum registro da entidade NomeTabelasPreco com o identificador informado!",
+        "savedFile":  "G:\\smartsfa\\docs\\sankhya-api\\examples\\sankhya_preco_tabela_probe_2026-10-20T13-09-17-460Z.json"
+    },
+    {
+        "codigoTabela":  20,
+        "ok":  false,
+        "status":  404,
+        "requestPath":  "/v1/precos/tabela/20?pagina=1",
+        "details":  "Nenhum registro da entidade NomeTabelasPreco com o identificador informado!",
+        "savedFile":  "G:\\smartsfa\\docs\\sankhya-api\\examples\\sankhya_preco_tabela_probe_2026-10-20T13-09-20-482Z.json"
+    }
+]

@@ -12,6 +12,7 @@ class ProductInformationTabSection extends StatefulWidget {
     required this.status,
     required this.eanController,
     required this.marcaController,
+    required this.origemMercadoriaCstController,
     required this.descricaoLongaController,
     required this.availableBrands,
     required this.labelStyle,
@@ -27,6 +28,7 @@ class ProductInformationTabSection extends StatefulWidget {
   final ProductStatus status;
   final TextEditingController eanController;
   final TextEditingController marcaController;
+  final TextEditingController origemMercadoriaCstController;
   final TextEditingController descricaoLongaController;
   final List<String> availableBrands;
   final TextStyle labelStyle;
@@ -46,6 +48,21 @@ class _ProductInformationTabSectionState
   static const double _fieldGap = 10;
   static const double _descriptionMinHeight = 96;
   static const double _descriptionMaxHeight = 320;
+  static const List<MapEntry<String, String>>
+  _origemMercadoriaOptions = <MapEntry<String, String>>[
+    MapEntry(
+      '0',
+      '0 - Nacional: Produto fabricado no Brasil, exceto codigos 3, 4 e 5.',
+    ),
+    MapEntry('1', '1 - Estrangeira (Importacao direta)'),
+    MapEntry('2', '2 - Estrangeira (Mercado interno)'),
+    MapEntry('3', '3 - Nacional (Conteudo de Importacao > 40%)'),
+    MapEntry('4', '4 - Nacional (Producao conforme PPB)'),
+    MapEntry('5', '5 - Nacional (Conteudo de Importacao <= 40%)'),
+    MapEntry('6', '6 - Estrangeira (Importacao direta, sem similar nacional)'),
+    MapEntry('7', '7 - Estrangeira (Mercado interno, sem similar nacional)'),
+    MapEntry('8', '8 - Nacional (Conteudo de Importacao > 70%)'),
+  ];
 
   double _descriptionHeight = 116;
 
@@ -118,10 +135,61 @@ class _ProductInformationTabSectionState
               ),
             ),
             SizedBox(width: fieldWidth, child: _buildStatusField()),
+            SizedBox(
+              width: fieldWidth,
+              child: AppMediumLabeledControl(
+                label: 'Origem da mercadoria (0-8)',
+                labelStyle: widget.labelStyle,
+                height: widget.fieldHeight,
+                child: AppMediumDropdown<String>(
+                  value: _normalizeOrigemMercadoriaCst(
+                    widget.origemMercadoriaCstController.text,
+                  ),
+                  style: widget.inputTextStyle,
+                  icon: const Icon(Icons.expand_more, size: 16),
+                  hint: const Text('Selecione'),
+                  items: _origemMercadoriaOptions
+                      .map((option) {
+                        return DropdownMenuItem<String>(
+                          value: option.key,
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              option.value,
+                              textAlign: TextAlign.left,
+                            ),
+                          ),
+                        );
+                      })
+                      .toList(growable: false),
+                  onChanged: widget.readOnly
+                      ? null
+                      : (value) {
+                          widget.origemMercadoriaCstController.text =
+                              (value ?? '').trim();
+                          setState(() {});
+                        },
+                ),
+              ),
+            ),
           ],
         );
       },
     );
+  }
+
+  String? _normalizeOrigemMercadoriaCst(String rawValue) {
+    final normalized = rawValue.trim();
+    if (normalized.isEmpty) {
+      return null;
+    }
+
+    final parsed = int.tryParse(normalized);
+    if (parsed == null || parsed < 0 || parsed > 8) {
+      return null;
+    }
+
+    return parsed.toString();
   }
 
   Widget _buildResizableDescriptionField(BuildContext context) {
@@ -204,27 +272,6 @@ class _ProductInformationTabSectionState
         const SizedBox(height: 8),
         _buildMainFields(),
         const SizedBox(height: 8),
-        if (widget.availableBrands.isNotEmpty)
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: widget.availableBrands
-                .where(
-                  (item) =>
-                      item.toLowerCase() !=
-                      widget.marcaController.text.trim().toLowerCase(),
-                )
-                .take(12)
-                .map(
-                  (brand) => ActionChip(
-                    label: Text(brand),
-                    onPressed: widget.readOnly
-                        ? null
-                        : () => widget.onBrandSelected(brand),
-                  ),
-                )
-                .toList(growable: false),
-          ),
         const SizedBox(height: 10),
         _buildResizableDescriptionField(context),
       ],

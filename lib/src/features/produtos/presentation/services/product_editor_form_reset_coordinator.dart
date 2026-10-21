@@ -37,6 +37,7 @@ class ProductEditorFormResetCoordinator {
     controllers.unidade.text = unidadePadrao;
     controllers.ncm.clear();
     controllers.cest.clear();
+    controllers.origemMercadoriaCst.clear();
     controllers.ipiBase.clear();
     controllers.peso.clear();
     controllers.comprimentoMm.clear();

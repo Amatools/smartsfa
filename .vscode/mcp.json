@@ -1,0 +1,15 @@
+{
+  "servers": {
+    "sankhya-ajuda-local": {
+      "type": "http",
+      "url": "http://127.0.0.1:3105/mcp",
+      "headers": {
+        "Authorization": "Bearer bc8aa45b2cc710abe8094e1d62b5dc8d9c1b9257e99f252b0a44631fd835aca1"
+      }
+    },
+    "sankhya-openapi-local": {
+      "type": "http",
+      "url": "http://127.0.0.1:3110/mcp"
+    }
+  }
+}

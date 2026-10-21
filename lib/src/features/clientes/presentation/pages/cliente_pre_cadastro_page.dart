@@ -57,6 +57,9 @@ class _ClientePreCadastroPageState extends State<ClientePreCadastroPage> {
   final _observacoesController = TextEditingController();
 
   String _tipoPessoa = 'pj';
+  SalePurpose _salePurpose = SalePurpose.revenda;
+  CustomerTaxProfile _taxProfile = CustomerTaxProfile.contribuinte;
+  bool _isZfmSuframa = false;
   final String _canal = 'vendedor';
   bool _saving = false;
   bool _buscandoCep = false;
@@ -414,6 +417,9 @@ class _ClientePreCadastroPageState extends State<ClientePreCadastroPage> {
       pais: _paisController.text.trim(),
       inscricaoEstadual: _inscricaoEstadualController.text.trim(),
       inscricaoMunicipal: _inscricaoMunicipalController.text.trim(),
+      salePurpose: _salePurpose,
+      taxProfile: _taxProfile,
+      isZfmSuframa: _isZfmSuframa,
       observacoes: _observacoesController.text.trim(),
       origemCadastro: CustomerOrigin.manual,
       status: PreRegistrationStatus.pending,
@@ -436,11 +442,7 @@ class _ClientePreCadastroPageState extends State<ClientePreCadastroPage> {
 
       if (result.savedLocalOnly) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Sem internet: pré-cadastro salvo localmente e enviado quando houver conexão.',
-            ),
-          ),
+          const SnackBar(content: Text('Salvo no dispositivo Local (off-line)')),
         );
         return;
       }
@@ -661,6 +663,71 @@ class _ClientePreCadastroPageState extends State<ClientePreCadastroPage> {
                                   if (value != null) {
                                     setState(() => _tipoPessoa = value);
                                   }
+                                },
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            labeledField(
+                              label: 'Finalidade da venda',
+                              child: DropdownButtonFormField<SalePurpose>(
+                                initialValue: _salePurpose,
+                                isExpanded: true,
+                                decoration: formInputDecoration(),
+                                items: SalePurpose.values
+                                    .map(
+                                      (item) => DropdownMenuItem<SalePurpose>(
+                                        value: item,
+                                        child: Text(item.label),
+                                      ),
+                                    )
+                                    .toList(growable: false),
+                                onChanged: (value) {
+                                  if (value != null) {
+                                    setState(() => _salePurpose = value);
+                                  }
+                                },
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            labeledField(
+                              label: 'Perfil fiscal do cliente',
+                              child:
+                                  DropdownButtonFormField<CustomerTaxProfile>(
+                                    initialValue: _taxProfile,
+                                    isExpanded: true,
+                                    decoration: formInputDecoration(),
+                                    items: CustomerTaxProfile.values
+                                        .map(
+                                          (item) =>
+                                              DropdownMenuItem<CustomerTaxProfile>(
+                                                value: item,
+                                                child: Text(item.label),
+                                              ),
+                                        )
+                                        .toList(growable: false),
+                                    onChanged: (value) {
+                                      if (value != null) {
+                                        setState(() => _taxProfile = value);
+                                      }
+                                    },
+                                  ),
+                            ),
+                            const SizedBox(height: 8),
+                            labeledField(
+                              label: 'Zona Franca / SUFRAMA',
+                              child: CheckboxListTile(
+                                value: _isZfmSuframa,
+                                dense: true,
+                                contentPadding: EdgeInsets.zero,
+                                controlAffinity:
+                                    ListTileControlAffinity.leading,
+                                title: const Text(
+                                  'Cliente enquadrado em ZFM-SUFRAMA',
+                                ),
+                                onChanged: (value) {
+                                  setState(
+                                    () => _isZfmSuframa = value ?? false,
+                                  );
                                 },
                               ),
                             ),

@@ -57,14 +57,6 @@ class TabelasPrecoPage extends StatelessWidget {
           selectedRepresentedCompanyId: selectedRepresentedCompanyId,
           activeRepresentedCompanyName: activeRepresentedCompanyName,
         );
-        DefaultPriceTableGuard.queueSyncDefaultPriceTableRowCount(
-          identity: identity,
-          activeTenant: activeTenant,
-          repository: repository,
-          allTables: tabelas,
-          selectedRepresentedCompanyId: selectedRepresentedCompanyId,
-          activeRepresentedCompanyName: activeRepresentedCompanyName,
-        );
         final workspaceType = activeTenant.workspaceType.trim().toLowerCase();
         final hasRepresentedContext = representedName.isNotEmpty;
         final selectedRepresented = (selectedRepresentedCompanyId ?? '').trim();
@@ -96,106 +88,156 @@ class TabelasPrecoPage extends StatelessWidget {
           scopedTables,
           collapseRepresentedDefaults: hasRepresentedContext,
         );
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Tabelas de preco', style: Theme.of(context).textTheme.headlineMedium),
-            const SizedBox(height: 8),
-            Text(
-              'Cadastro de tabelas por tenant para $representedLabel.',
-              style: Theme.of(context).textTheme.bodyLarge,
-            ),
-            const SizedBox(height: 16),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'As tabelas sao separadas do modulo de produtos e a vinculacao por cliente/regiao sera feita em tela dedicada.',
-                    ),
-                    const SizedBox(height: 12),
-                    Wrap(
-                      spacing: 12,
-                      runSpacing: 12,
+        return StreamBuilder<List<ProductBasePrice>>(
+          stream: basePriceRepository.watchAll(tenantId: identity.tenantId),
+          initialData: const [],
+          builder: (context, basePricesSnapshot) {
+            final allBasePrices =
+                basePricesSnapshot.data ?? const <ProductBasePrice>[];
+            final uniqueItemCountByTableId = _buildUniqueItemCountByTableId(
+              allBasePrices,
+            );
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Tabelas de preco', style: Theme.of(context).textTheme.headlineMedium),
+                const SizedBox(height: 8),
+                Text(
+                  'Cadastro de tabelas por tenant para $representedLabel.',
+                  style: Theme.of(context).textTheme.bodyLarge,
+                ),
+                const SizedBox(height: 16),
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        OutlinedButton.icon(
-                          onPressed: policy.canManage
-                              ? () => _downloadPriceTableTemplate(
-                                    context,
-                                    identity: identity,
-                                    productRepository: productRepository,
-                                  )
-                              : null,
-                          icon: const Icon(Icons.download_outlined),
-                          label: const Text('Baixar modelo XLSX'),
+                        const Text(
+                          'As tabelas sao separadas do modulo de produtos e a vinculacao por cliente/regiao sera feita em tela dedicada.',
                         ),
-                        FilledButton.icon(
-                          onPressed: policy.canManage
-                              ? () => _openImportSheet(
-                                    context,
-                                    identity: identity,
-                                    repository: repository,
-                                    productRepository: productRepository,
-                                    basePriceRepository: basePriceRepository,
-                                  )
-                              : null,
-                          icon: const Icon(Icons.upload_file_outlined),
-                          label: const Text('Importar planilha'),
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 12,
+                          runSpacing: 12,
+                          children: [
+                            OutlinedButton.icon(
+                              onPressed: policy.canManage
+                                  ? () => _downloadPriceTableTemplate(
+                                        context,
+                                        identity: identity,
+                                        productRepository: productRepository,
+                                      )
+                                  : null,
+                              icon: const Icon(Icons.download_outlined),
+                              label: const Text('Baixar modelo XLSX'),
+                            ),
+                            FilledButton.icon(
+                              onPressed: policy.canManage
+                                  ? () => _openImportSheet(
+                                        context,
+                                        identity: identity,
+                                        repository: repository,
+                                        productRepository: productRepository,
+                                        basePriceRepository: basePriceRepository,
+                                      )
+                                  : null,
+                              icon: const Icon(Icons.upload_file_outlined),
+                              label: const Text('Importar planilha'),
+                            ),
+                            OutlinedButton.icon(
+                              onPressed: policy.canManage
+                                  ? () => _openCreateTableDialog(
+                                        context,
+                                        identity: identity,
+                                        repository: repository,
+                                      )
+                                  : null,
+                              icon: const Icon(Icons.add),
+                              label: const Text('Nova tabela'),
+                            ),
+                          ],
                         ),
-                        OutlinedButton.icon(
-                          onPressed: policy.canManage
-                              ? () => _openCreateTableDialog(
-                                    context,
-                                    identity: identity,
-                                    repository: repository,
-                                  )
-                              : null,
-                          icon: const Icon(Icons.add),
-                          label: const Text('Nova tabela'),
-                        ),
+                        if (!policy.canManage) ...[
+                          const SizedBox(height: 12),
+                          const ListTile(
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
+                            leading: Icon(Icons.info_outline),
+                            title: Text('Somente owner/gerente podem alterar tabelas no workspace enterprise.'),
+                          ),
+                        ],
                       ],
                     ),
-                    if (!policy.canManage) ...[
-                      const SizedBox(height: 12),
-                      const ListTile(
-                        dense: true,
-                        contentPadding: EdgeInsets.zero,
-                        leading: Icon(Icons.info_outline),
-                        title: Text('Somente owner/gerente podem alterar tabelas no workspace enterprise.'),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            if (visibleTabelas.isEmpty)
-              const Card(
-                child: ListTile(
-                  title: Text('Nenhuma tabela cadastrada'),
-                  subtitle: Text('Use importacao de planilha ou cadastro manual para iniciar.'),
-                ),
-              )
-            else
-              ...visibleTabelas.map(
-                (tabela) => _PriceTableCard(
-                  tabela: tabela,
-                  canManage: policy.canManage,
-                  onDelete: () => _deleteTable(
-                    context,
-                    identity: identity,
-                    repository: repository,
-                    tabela: tabela,
                   ),
                 ),
-              ),
-          ],
+                const SizedBox(height: 12),
+                if (visibleTabelas.isEmpty)
+                  const Card(
+                    child: ListTile(
+                      title: Text('Nenhuma tabela cadastrada'),
+                      subtitle: Text('Use importacao de planilha ou cadastro manual para iniciar.'),
+                    ),
+                  )
+                else
+                  ...visibleTabelas.map(
+                    (tabela) => _PriceTableCard(
+                      tabela: tabela,
+                      displayItemCount: _resolveDisplayItemCount(
+                        tabela: tabela,
+                        uniqueItemCountByTableId: uniqueItemCountByTableId,
+                      ),
+                      canManage: policy.canManage,
+                      onDelete: () => _deleteTable(
+                        context,
+                        identity: identity,
+                        repository: repository,
+                        tabela: tabela,
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          },
         );
       },
     );
   }
+}
+
+Map<String, int> _buildUniqueItemCountByTableId(
+  List<ProductBasePrice> prices,
+) {
+  final byTable = <String, Set<String>>{};
+  for (final item in prices) {
+    if (!item.isActive) {
+      continue;
+    }
+    final tableId = item.priceTableId.trim();
+    final productId = item.productId.trim();
+    if (tableId.isEmpty || productId.isEmpty) {
+      continue;
+    }
+    (byTable[tableId] ??= <String>{}).add(productId);
+  }
+
+  final counts = <String, int>{};
+  for (final entry in byTable.entries) {
+    counts[entry.key] = entry.value.length;
+  }
+  return counts;
+}
+
+int? _resolveDisplayItemCount({
+  required TabelaPreco tabela,
+  required Map<String, int> uniqueItemCountByTableId,
+}) {
+  final fromBasePrices = uniqueItemCountByTableId[tabela.id];
+  if (fromBasePrices != null) {
+    return fromBasePrices;
+  }
+  return tabela.rowCount;
 }
 
 class _PriceTablePolicy {
@@ -241,11 +283,13 @@ class _PriceTablePolicy {
 class _PriceTableCard extends StatelessWidget {
   const _PriceTableCard({
     required this.tabela,
+    required this.displayItemCount,
     required this.canManage,
     required this.onDelete,
   });
 
   final TabelaPreco tabela;
+  final int? displayItemCount;
   final bool canManage;
   final Future<void> Function() onDelete;
 
@@ -257,6 +301,7 @@ class _PriceTableCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final deleteEnabled = canManage && !_isSystemDefault;
+    final itemCount = displayItemCount;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -266,7 +311,7 @@ class _PriceTableCard extends StatelessWidget {
           title: Text(tabela.nome),
           subtitle: Text(
             'Origem: ${tabela.origem} · Status: ${tabela.status}'
-            '${tabela.rowCount != null ? ' · Itens: ${tabela.rowCount}' : ''}',
+            '${itemCount != null ? ' · Itens: $itemCount' : ''}',
           ),
           trailing: Wrap(
             crossAxisAlignment: WrapCrossAlignment.center,

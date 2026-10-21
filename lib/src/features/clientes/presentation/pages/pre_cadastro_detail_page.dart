@@ -67,6 +67,9 @@ class PreCadastroDetailPage extends StatelessWidget {
                           ? 'Pessoa física'
                           : 'Pessoa jurídica',
                       'CPF / CNPJ': item.documento,
+                      'Perfil fiscal': item.taxProfile.label,
+                      'ZFM / SUFRAMA': item.isZfmSuframa ? 'Sim' : 'Não',
+                      'Finalidade da venda': item.salePurpose.label,
                       'Inscrição estadual': item.inscricaoEstadual,
                       'Inscrição municipal': item.inscricaoMunicipal,
                     },

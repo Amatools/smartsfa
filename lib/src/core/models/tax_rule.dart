@@ -1,4 +1,5 @@
 import '../contracts/tenant_scoped_entity.dart';
+import 'domain_types.dart';
 
 class TaxRule implements TenantScopedEntity {
   const TaxRule({
@@ -18,6 +19,7 @@ class TaxRule implements TenantScopedEntity {
     this.aliquotaDestino,
     this.aliquotaCredito,
     this.grupoFiscalId,
+    this.salePurpose,
     this.cstCsosn,
     this.aliquotaIcms,
     this.mvaIva,
@@ -55,6 +57,7 @@ class TaxRule implements TenantScopedEntity {
       grupoFiscalId: (map['grupoFiscalId'] as String?)?.trim(),
       ufOrigem: (map['ufOrigem'] as String? ?? '').trim().toUpperCase(),
       ufDestino: (map['ufDestino'] as String? ?? '').trim().toUpperCase(),
+      salePurpose: _readSalePurpose(map['salePurpose']),
       cstCsosn: (map['cstCsosn'] as String?)?.trim(),
       aliquotaIcms:
           _readDouble(map['aliquotaIcms']) ??
@@ -90,6 +93,7 @@ class TaxRule implements TenantScopedEntity {
   final double? aliquotaDestino;
   final double? aliquotaCredito;
   final String? grupoFiscalId;
+  final SalePurpose? salePurpose;
   final String ufOrigem;
   final String ufDestino;
   final String? cstCsosn;
@@ -123,6 +127,7 @@ class TaxRule implements TenantScopedEntity {
       'aliquotaDestino': aliquotaDestino,
       'aliquotaCredito': aliquotaCredito,
       'grupoFiscalId': grupoFiscalId,
+      'salePurpose': salePurpose?.value,
       'ufOrigem': ufOrigem,
       'ufDestino': ufDestino,
       'cstCsosn': cstCsosn,
@@ -140,6 +145,17 @@ class TaxRule implements TenantScopedEntity {
       'updatedAt': updatedAt?.toIso8601String(),
     };
   }
+}
+
+SalePurpose? _readSalePurpose(Object? value) {
+  if (value is String) {
+    final normalized = value.trim();
+    if (normalized.isEmpty) {
+      return null;
+    }
+    return SalePurpose.fromValue(normalized);
+  }
+  return null;
 }
 
 DateTime? _readDateTime(Object? value) {

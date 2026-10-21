@@ -1,0 +1,375 @@
+ACEITAFATACIMA	Aceitar faturar quantidade maior que a da origem?	S	P	N	S
+AD_APLICADESCMANGA	Aplica Desconto de Manga	S	O	N	S
+AD_APLICADESCONTOFOB	Aplica Desconto FOB	S	O	N	S
+AD_BLOQUEIATROCA	Bloqueia troca de parceiro	S	O	N	S
+AD_LOTECTB	Lote de Contabilização	S	P	N	S
+ADIARATUALEST	Atualizar Estoq.a partir da Confirmação	S	P	N	N
+AGRUPAPRODNFE	Agrupar produtos semelhantes na NF-e?	S	P	N	N
+AGRUPASERVFAT	Agrupa serviços faturamento	S	P	N	N
+AJUSTAVP	Ajusta Valor Presente	S	P	N	S
+ALTITEMPARCFAT	Permite alterar itens após faturar parcialmente	S	P	N	N
+ALTNFCONF	Permitir Alteração após confirmar	S	P	N	N
+ANALISEGIRO	Análise de Giro	I	P	N	N
+APLICLEITRANSP	Aplicar a lei da transparência	S	P	N	S
+APLICTABIRFINSS	Aplicar tabela de IRPF/INSS	S	P	N	S
+ARMAZENAGEM	Armazenagem	S	P	N	S
+ARMTIPAPU	Tipo de Movimento Armazenagem	S	P	N	N
+ARREDQTDUNALT	Arredonda Qtd. unid. alternativa?	S	P	N	N
+ATIVO	Ativo	S	P	N	S
+ATUALACDC	Atualizar Acréscimos/Decréscimos	S	P	N	N
+ATUALBEM	Atualização do Bem	S	P	N	N
+ATUALCOM	Comissão	S	P	N	N
+ATUALCOMOS	Calcular comissão para O.S.	S	P	N	N
+ATUALCTB	Atualiza Contabilidade	S	P	N	N
+ATUALDATRECWMS	Atualização Data Rec. no WMS	S	P	N	N
+ATUALEST	Atualização do Estoque	S	P	N	S
+ATUALESTMP	Atualiza estoque MP	I	P	N	N
+ATUALESTTERC	Estoque com/de Terceiros	S	P	N	N
+ATUALESTWMSTERC	Atualiza Estoque de Terceiros WMS?	S	P	N	S
+ATUALFIN	Financeiro	I	P	N	S
+ATUALFINTERC	Soma itens com/de Terceiros ao Financeiro	S	P	N	N
+ATUALINDENIZ	Saldo de Indenização	I	P	N	N
+ATUALIZARATEIO	Atualiza Rateio	S	P	N	N
+ATUALLIVFIS	Atualização de Livro ICMS	S	P	N	N
+ATUALLIVISS	Atualização livros de ISS	S	P	N	N
+ATUALPRECOFAT	Recalcular preço prod. ao faturar	S	P	N	N
+ATUALTRANSG	Saldo de Transgênico	I	P	N	N
+ATUALULTIMACOMP	Atualizar Última Compra	S	P	N	N
+ATUALULTIMAVEND	Atualizar Última Venda	S	P	N	N
+ATUSALDOCONT	Atualização do saldo dos contratos	S	P	N	S
+AUTDIGITAL	Autorização por Digital	S	P	N	N
+AVISARCOMP	Avisar sobre componentes	S	P	N	N
+BASEICMSFRETECALCST	Usar base ICMS Frete Extra Nota p/calc.ST	S	P	N	N
+BASENUMERACAO	Base numeração	S	P	N	N
+BLOQESTVENC	Bloqueia saída de estoque vencido	S	P	N	N
+BONIFICACAO	Bonificação	S	P	N	N
+BUSCMPTERC	Apoio p/Devolução de Produtos de Terceiros	S	P	N	N
+CALCDIFALPART	Calcular DIFAL Partilhado	S	P	S	S
+CALCDIFICMS	Calcular diferença de ICMS	S	P	N	N
+CALCFCPINT	Calcular FCP (ICMS/ST) Interno?	S	P	N	S
+CALCFETHAB	Calcular FETHAB	S	P	N	N
+CALCFUNTTELTOP	Calcular FUNTTEL?	S	P	N	S
+CALCFUSTTOP	Calcular FUST?	S	P	N	S
+CALCICMS	Cálculo de ICMS, IPI, ISS, IBS, CBS e IS	S	P	N	N
+CALCICMSREGTTS	Calcular ICMS Regime TTS E-Commerce Vinculado?	S	P	N	S
+CALCPESOCONFIRM	Calcular Peso na Confirmação?	S	P	N	S
+CALCPISCFSFIN	Calcula PIS/COFINS por percentual das notas	S	P	S	S
+CALCSTFRTXTNOTPROP	Calc. ICMS/ST extra nota p/ frete extra nota proporcional aos itens	S	P	N	N
+CAMGEREDICONF	Caminho para geração de EDI na confirmação	S	P	N	S
+CAT1799SPCCO	Cód.Complem.Oper. (CAT-17/99)	I	P	S	S
+CLASSIFICMS	Classificação ICMS	S	P	N	N
+CODCFO_COMBUST_LUBRIF	CFOP p/Combustíveis e Lubrificantes	I	P	N	S
+CODCFO_ENTRADA	Entrada	I	P	N	S
+CODCFO_ENTRADA_FORA	Entrada	I	P	N	S
+CODCFO_SAIDA	Saída	I	P	N	S
+CODCFO_SAIDA_FORA	Saída	I	P	N	S
+CODCFO_TERC	CFOP p/Produtos de Terceiros	I	P	N	N
+CODCFPS	Código. CFPS	I	P	N	N
+CODCONTARURAL	Classificação da conta Produtor Rural	S	P	N	S
+CODCTACTBEFD	Conta Contábil para EFD	I	P	S	S
+CODENQIPIENT	Código Enq. Legal IPI Entrada	I	P	N	S
+CODENQIPISAI	Código Enq. Legal IPI Saída	I	P	N	S
+CODINDOPER	Código Indicador de Operação de Fornecimento	S	P	S	S
+CODINTERM	Intermediador da Transação	I	P	N	N
+CODLOCALIMPXML	Local padrão para importar XML	I	P	N	N
+CODMODCFECANC	Modelo de impressão de cancelamento CF-e	I	P	N	N
+CODMODDAD	Modelo para Dados Adicionais de NF-e	I	P	N	N
+CODMODDOC	Modelo do Documento	I	P	N	S
+CODMODDOCISS	Modelo Documento ISS	S	P	N	N
+CODMODNF	Modelo de impressão de nota fiscal	I	P	N	N
+CODMODNFSE	Mod. Imp. NFS-e	I	P	N	N
+CODMODRO	Modelo de impressão de romaneio	I	P	N	N
+CODMODRPS	Mod. Imp. RPS	I	P	N	N
+CODMOEDAVP	Cód. Moeda Ajusta Valor Presente	I	P	N	S
+CODNATOPERISS	Cód. Natureza Oper. ISS (NFS-e)	S	P	N	S
+CODREMEDI	Modelo p/geração de EDI na confirmação	I	P	N	N
+CODTIPOPER	Cód.Tipo Operação	I	P	S	S
+CODTIPOPERDENEG	Tipo Operação NF-e Denegada	I	P	N	S
+CODTIPOPERDESTINO	Cód.Tipo Operação Faturamento	I	P	N	N
+CODTIPOPERPENRET	Tipo Operação NF-e Pendente de Retorno	I	P	N	S
+CODTIPOPERREM	Tipo Operação Remessa	I	P	N	S
+CODTIPOPERSEPARACAO	Tipo Operação Separação	I	P	N	N
+CODTOPDENEGCTE	Tipo Operação CT-e Denegado	I	P	N	N
+CODTRIB	Tributação	I	P	N	N
+CODUSU	Cód. Usuário	I	P	N	N
+COFINSPROPDESTAQUE	COFINS proporcional para Destaque	S	P	N	N
+COFINSPROPEMBALAGEM	COFINS proporcional para Embalagem	S	P	N	N
+COFINSPROPFRETE	COFINS proporcional para Frete	S	P	N	N
+COFINSPROPJURO	COFINS proporcional para Juro	S	P	N	N
+COFINSPROPSEG	COFINS proporcional para Seguro	S	P	N	N
+COFINSSTPROPDESTAQUE	COFINS ST Prop. Destaque	S	P	N	N
+COFINSSTPROPEMBALAGEM	COFINS ST Prop. Embalagem	S	P	N	N
+COFINSSTPROPFRETE	COFINS ST Prop. Frete	S	P	N	N
+COFINSSTPROPJURO	COFINS ST Prop. Juro	S	P	N	N
+COFINSSTPROPSEG	COFINS ST Prop. Seguro	S	P	N	N
+COMPLEMENTO	Tipo de Emissão	S	P	N	N
+CONFCFOP	Exige Conferência de CFOP	S	P	N	N
+CONFIMPOSTO	Exige Conferência de Impostos	S	P	N	N
+CONFVALEVENT68	Validar diferença para	I	P	N	S
+CONFVLREVENT68	Valor para validar o evento 68	S	P	N	N
+CONSAUXILIAR	Consultas Auxiliares	S	P	N	S
+CONSDISBAIXEST	Considerar estoque real na baixa de estoque	S	P	N	S
+CONSIGNACAO	Consignação	S	P	N	N
+CONSNFERELCANCEFD	Considerar NFe relacionada como cancelada no EFD Contribuições	S	P	S	S
+CONSTOPAPURSIMP	Considerar na Apuração do Simples?	S	P	N	S
+CONSVLRREMRETIND	Considerar o valor da remessa, no retorno de industrialização como	I	P	S	S
+CONTLAUDOSINT	Participa da contagem de laudos internos	S	P	N	N
+COPIADTPREVORIG	Copiar prev. entrega da origem	S	P	N	N
+COPIARLIBER	Copiar liberações quando faturando individualmente	S	P	N	N
+CSTIPIENT	Código Sit.Trib.IPI Entrada	I	P	N	N
+CSTIPISAI	Código Sit.Trib.IPI Saída	I	P	N	N
+CTE	CT-e	S	P	N	S
+CUPOMFISCAL	TOP de Cupom Fiscal	S	P	N	N
+DATARETROFAT	Permitir Data Retroativa no Faturamento	S	P	N	S
+DEDFCPBCPISCOFINS	Deduzir valor de FCP na BC do PIS e COFINS?	S	P	N	S
+DENTROESTADO	Top trabalha com CFOP para	S	P	N	N
+DESCCSTBCPISCF	Desconsiderar CST’s de ICMS da BC do PIS/COFINS?	S	P	N	S
+DESCONNFSE	Desconto Condicionado para NFS-e	S	P	N	S
+DESCONSIDNFEORIGEM	Desconsidera Nfe de orig. referenciada? (Importação de XML)	S	P	N	S
+DESCONSIDPEDXML	Desconsiderar pedido na geração do XML?	S	P	N	S
+DESCONSLCDPR	Desconsiderar Top na Geração do Livro Caixa Digital do Produtor Rural	S	P	N	S
+DESCQTDGRUDESCPRO	Aplica Desc. Promocional por Qtd/Grupo de Desc. Prod?	S	P	N	S
+DESCREMAIL	Descrição do e-mail	S	P	N	S
+DESCROPER	Descrição	S	P	S	S
+DESTOPADRCST1400	Desconsiderar TOP na geração da ADRC-ST no R1400?	S	P	N	S
+DEVSEMDESTAQUEIPI	Devolver sem destacar IPI	S	P	N	N
+DEVSEMDESTAQUEST	Devolver sem destacar ST	S	P	N	N
+DHALTER	Data e hora alteração	H	P	N	N
+DIGINFIMPORTA	Digitar informações sobre Importação	S	P	N	N
+DIGPUREZA	Digitar % Pureza e % Germinação	S	P	N	N
+DISTSTVLRUNITFAT	Distribuir valor do ST no preço unitário ao faturar	S	P	N	S
+EDITANALISERENTAB	Permite edição de análise de rentabilidade	S	P	N	N
+EMITEBOLETA	Imprimir Pix/Boleto/Duplicata	S	P	N	N
+EMITENOTA	Imprimir	S	P	N	N
+EMPFUNCDIF	Permitir Req. Func. de outra Empresa	S	P	N	N
+ENVGARANTIA	Envio em Garantia?	S	P	N	S
+ENVIARWMSCONF	Enviar automaticamente para o WMS na Confirmação	S	P	N	N
+ENVWMSCONFIRMADA	Permite confirmação antes do envio para o WMS?	S	P	S	S
+ESTOQUEMPTERCEIRO	Estoque MP de Terceiros	S	P	N	S
+EXECITE	Exige executante nos itens	S	P	N	N
+EXIGANALITENS	Exigir liberação com análise dos itens antes da confirmação	S	P	N	N
+EXIGEAGENDAWMS	Exige agendamento p/Carga e Descarga no WMS	S	P	N	N
+EXIGEANALISECRED	Exige análise de crédito	S	P	N	S
+EXIGECONF	Exige conferência	S	P	N	N
+EXIGECONFIRMACAOMDE	Exigir confirmação do MD-e antes da confirmação	S	P	N	S
+EXIGECOTACAO	Exige Cotação	S	P	N	N
+EXIGEDTVAL	Exige data de validade	S	P	N	N
+EXIGEGAR	Exige garantia	S	P	N	N
+EXIGELAUDO	Exige Laudo de análise	S	P	N	N
+EXIGELIB	Exigir Liberação antes da Confirmação	S	P	N	N
+EXIGELIBSEMPRE	Sempre exigir Liberação	S	P	N	N
+EXIGEPEDFRET	Exige Pedido de Frete p/Frete Extra Nota	S	P	N	N
+EXIGETRANSP	Exige Transportadora	S	P	N	N
+EXPGRS	Exportação para GRS	I	P	N	N
+EXPORTA	Exporta Replicação	S	P	N	N
+EXPTES	Exportação para tesouraria	S	P	N	N
+FATCONTPORPESO	Faturar contrato por peso	S	P	N	N
+FATENTPROD	Na Entrada de Produtos	S	P	N	N
+FATESTCONF	Fatura Produtos com Estoque na Confirmação	S	P	N	N
+FATFORAPLANENT	Permitir faturamento fora do planejamento de entrega	S	P	N	S
+FORMRECISS	Forma de Recolhimento ISS	S	P	N	S
+GERAAMOSTRALAUDO	Gerar amostras para laudo	S	P	N	N
+GERABONPRE	Gera Bonificação/Premiação	S	P	N	N
+GERADEMANDAMPS	Gerar demanda para MPS	S	P	N	S
+GERAENDENTRNFE	Gerar endereço de entrega no XML da NF-e	S	P	N	S
+GERAGNRE	Gerar GNRE?	S	P	N	N
+GERAPLANPROD	Gerar plano de produção	S	P	N	N
+GERAR1400SPED	Gerar Registro 1400 no SPED Fiscal ?	S	P	N	N
+GERARPARCDEST	Gerar se parc.destinatário preenchido	S	P	N	N
+GERARTAGJNFE	Gerar tag na NFe para Negociação de Veículos Novos	S	P	N	N
+GERC100CODCIT08	Gerar C100 com Cód. Situação 08 (EFD ICMS/IPI)	S	P	N	S
+GERCORAPON	Gerar Correção de Apontamento (K280)	S	P	N	N
+GERINFOEFDPAG	Gerar informações do EFD Reinf Grupo 4000?	S	P	N	N
+GOLDEV	Identificador de Devolução	I	P	N	N
+GOLMPSINAL	Tipo para análise de MP	I	P	N	N
+GOLSINAL	Tipo para análise	I	P	N	N
+GRAHISALTPED	Gravar histórico de alterações do pedido	S	P	N	N
+GRUPO	Grupo	S	P	S	S
+ICMSORIGESTPED	Calcular ICMS de Origem Estrangeira	S	P	N	S
+ICMSPROPDESTAQUE	ICMS proporcional para Destaque	S	P	N	N
+ICMSPROPEMBALAGEM	ICMS proporcional para Embalagem	S	P	N	N
+ICMSPROPFRETE	ICMS proporcional para Frete	S	P	N	N
+ICMSPROPJURO	ICMS proporcional para Juro	S	P	N	N
+ICMSPROPSEG	ICMS proporcional para Seguro	S	P	N	N
+IGNEXPAUTLOT	Ignorar explosão automática de lotes nesta TOP	S	P	N	S
+IGNOBSORIGREM	Ignorar Observação da Nota de Origem	S	P	N	N
+IGNORACOMPLITEM	Ignorar complemento dos itens nas informações adicionais dos produtos?	S	P	N	N
+IGNORAMPPVPA	Ignora MP no preço de venda do PA	S	P	N	N
+IGNORARAGRUPMINDEV	Ignorar agrupamento mínimo de compra	S	P	N	S
+IMPNAOCONF	Imprimir nota adicional antes de confirmada	S	P	N	N
+IMPNOTAADICIONAL	Imprimir Nota Adicional	S	P	N	N
+IMPXMLMANTDESPACES	Importar o XML mantendo as despesas acessórias com os valores do XML	S	P	N	S
+INDCONSFINAL	Operação de Uso/Consumo Próprio	S	P	N	N
+INDLOCBENSMOVEIS	Operação de Locação de Bens Móveis	S	P	N	N
+INDNATFRT	Indicador da Natureza do Frete Contratado	S	P	N	N
+INDPRESNFCE	Indicador de Presença para NF-e/NFC-e/CF-e	S	P	N	S
+INDTERC	Industrialização efetuada por terceiros	S	P	N	S
+INDTIPREC	Indicador do Tipo de Receita	S	P	N	S
+INFCONTRATO	Informar Contrato na Nota	S	P	N	N
+INTEGRAEVENTO	Integra evento	S	P	N	N
+INTEGSERCON	Integ. Série ao Contrato	S	P	N	N
+INTERMED	Indicador de Intermediador/Marketplace	S	P	N	S
+IPIEMBUT	IPI Embutido	S	P	N	N
+IPIINCICMS	IPI Incide na base de ICMS	S	P	N	N
+IPIPROPDESTAQUE	IPI proporcional para Destaque	S	P	N	N
+IPIPROPEMBALAGEM	IPI proporcional para Embalagem	S	P	N	N
+IPIPROPFRETE	IPI proporcional para Frete	S	P	N	N
+IPIPROPJURO	IPI proporcional para Juro	S	P	N	N
+IPIPROPSEG	IPI proporcional para Seguro	S	P	N	N
+LAUDOITEM	Laudo por item	S	P	N	N
+LIGORIGORIG	Ligar com a Origem da Origem com quantidade negativa?	S	P	N	N
+MARCARNAOPENDENTE	Deixar pedido como NÃO pendente quando faturar com corte	S	P	N	N
+MOVENDFLUTUANTE	Movimentação de Endereços Flutuantes?	S	P	N	S
+MPNUMAUTLOTE	Numerar automaticamente MP por Lote	S	P	N	N
+NADCALCTOTREF	Impedir adiantamento do cálculo dos totalizadores de IBS/CBS?	S	P	N	N
+NAOINCCONF	Nunca incluir Confirmada	S	P	N	N
+NATBCCRED	Natureza da Base de Cálculo do Crédito de Pis/Cofins	S	P	N	N
+NATEFDCONTM410M810	Cód. Natureza (PIS/COFINS M410/M810)	I	P	N	S
+NATOPERSPED	Natureza da Operação (SPED)	S	P	N	N
+NFCOM	NFCom	S	P	N	S
+NFE	NF-e	S	P	N	S
+NFEESTORNO	NF-e de estorno	S	P	N	N
+NFESEMDTENTSAI	Imprimir NF-e sem Data de Entrada/Saída	S	P	N	N
+NFSE	NFS-e	S	P	N	S
+NFSEPORNAT	NFS-e por natureza	S	P	N	N
+NFSETIPOPER	Tipo de Operação	S	P	N	N
+NUCCO	Configuração p/ conferência	I	P	N	N
+NUFOP	Finalidade da Operação	I	P	N	S
+NULAYOUT	Nro. Layout	I	P	N	N
+NULAYOUTCVR	Nro. Layout CVR	I	P	N	N
+NUMPROCESSO	Número do processo	S	P	N	N
+NUMSOMAUT	Numeração somente automática	S	P	N	N
+NUNOTAMODELO	Nro único modelo	I	P	N	S
+OBTERVLRMOEDAFAT	Obter valor da moeda ao faturar	S	P	N	N
+OC	Tipo de Ordem de Carga	S	P	N	N
+OPERACAOAMOSTRA	TOP de Amostra Grátis	S	P	N	N
+OPERCOMMOEDA	Operação em Moeda	S	P	N	S
+OPERESSACOMP	Operação com Ressarcimento/Complemento de ST	S	P	N	S
+ORCAMENTO	Orçamento	S	P	N	S
+OUTDESPSTEXTNOTA	Frete/Seguro/Outras Despesas para ST extra nota	S	P	N	S
+PEDFRETE	Pedido de Frete	S	P	N	N
+PENDENTE	A nota fica como pendente	S	P	N	N
+PERCMINBASEINSS	% Mín. da Base de INSS sobre o Total da Nota	F	P	N	S
+PERCTOLVARVLRUNIT	% Tolerância na variação do Vlr. unitário	F	P	N	S
+PERMCONFPARCIALWMS	Permite conferência parcial no WMS?	S	P	N	S
+PERMDESTVBATPREBCUS	Permite destinação de Verba do tipo de Rebaixa de Custo	S	P	N	S
+PERMFINMENORVLRNOTA	Permite financeiro menor que o valor total da nota	S	P	N	S
+PERMITECNAEDIFNOTA	Possibilita emissão de NFS-e com múltiplos CNAEs	S	P	N	S
+PERMTRANSGALPAO	Permite transferência entre galpões	S	P	N	N
+PESAITEM	Pesagem por item	S	P	N	N
+PISPROPDESTAQUE	PIS proporcional para Destaque	S	P	N	N
+PISPROPEMBALAGEM	PIS proporcional para Embalagem	S	P	N	N
+PISPROPFRETE	PIS proporcional para Frete	S	P	N	N
+PISPROPJURO	PIS proporcional para Juro	S	P	N	N
+PISPROPSEG	PIS proporcional para Seguro	S	P	N	N
+PISSTPROPDESTAQUE	PIS ST Prop. Destaque	S	P	N	N
+PISSTPROPEMBALAGEM	PIS ST Prop. Embalagem	S	P	N	N
+PISSTPROPFRETE	PIS ST Prop. Frete	S	P	N	N
+PISSTPROPJURO	PIS ST Prop. Juro	S	P	N	N
+PISSTPROPSEG	PIS ST Prop. Seguro	S	P	N	N
+PODEAJUSTARORIGPRODWMS	Permite Ajustar Nota Origem quando ligada a Produção	S	P	N	N
+PODEFIXAR	Pode Fixar Preço	S	P	N	N
+PODEPESAGEM	Tipo de Pesagem	S	P	N	N
+PODETRANSFENT	Pode Transformar Entradas	S	P	N	N
+PRECIFICA	Precifica	S	P	N	N
+PRODREP	Aceitar Produto Repetido	S	P	N	N
+PRODUETLOC	Produção por Etapa e Local?	S	P	N	N
+PROVISENTREGA	Exige previsão de entregas	S	P	N	S
+RATAUTPROD	Ratear automaticamente por produto	S	P	N	N
+RECBRUTACIAP	Receita Bruta p/ CIAP	S	P	N	S
+REDICMSBCPISCONFINS	Deduzir valor do ICMS na BC do PIS e COFINS?	S	P	N	S
+REDPISBCPISCOFINS	Deduzir valor do PIS/COFINS da BC do PIS e COFINS?	S	P	N	S
+REDSTBCPISCOFINS	Deduzir valor do ICMS/ST na BC do PIS e COFINS?	S	P	N	S
+REFNFE	Buscar NF de origem p/ referenciar na NFe	S	P	N	N
+RESERVASEMLOTE	Permitir reserva de estoque sem lote?	S	P	N	S
+SALVARCONFSEMPERG	Salvar doc. confirmado sem perguntar	S	P	N	N
+SEMCREDIPIST	Operação sem direito a crédito IPI/ST	S	P	N	S
+SEMMOEDAFIN	Não preencher moeda para Financeiro	S	P	N	S
+SEPBALCAO	Separação em Balcão	S	P	N	N
+SIMULACAUTOFRETE	Simulação de frete automática	S	P	N	S
+SOLCOMPRA	Gera Solicitação de Compra na Confirmação	S	P	N	N
+SOMARCOFINSST	Somar COFINS ST ao Total da Nota	S	P	N	N
+SOMARIPI	Somar IPI ao total da nota	S	P	N	N
+SOMARPISST	Somar PIS ST ao Total da Nota	S	P	N	N
+SOMASUBST	Soma ST no total da nota	S	P	N	N
+STATUSBAIXAEST	Status para Baixa no estoque	S	P	N	S
+STATUSLOTE	Exige Status para o Lote na Compra	S	P	N	N
+STPROPDESTAQUE	S.T.proporcional para Destaque	S	P	N	N
+STPROPEMBALAGEM	S.T.proporcional para Embalagem	S	P	N	N
+STPROPFRETE	S.T.proporcional para Frete	S	P	N	N
+STPROPFRETEEXT	para Frete Extra	S	P	N	N
+STPROPJURO	S.T.proporcional para Juro	S	P	N	N
+STPROPSEG	S.T.proporcional para Seguro	S	P	N	N
+SUGERELOCALPARC	Sugerir local padrão do parceiro?	S	P	N	N
+TEMCBS	Tem CBS	S	P	N	N
+TEMCOFINS	Tem COFINS	S	P	N	N
+TEMCSL	Tem CSLL	S	P	N	N
+TEMFINORIGEM	Permite Atualização de Financeiro na TOP de Origem	S	P	N	N
+TEMFUNRURAL	Tem FUNRURAL/INSS	S	P	N	N
+TEMIBS	Tem IBS	S	P	N	N
+TEMIBSCBSMONO	Tem IBS/CBS Monofásico	S	P	N	N
+TEMICMS	Tem ICMS	S	P	N	N
+TEMII	Tem II	S	P	N	N
+TEMINDEX	Utiliza Indexação	S	P	N	N
+TEMIPI	Tem IPI	S	P	N	N
+TEMIRF	Tem IRF	S	P	N	N
+TEMIS	Tem IS	S	P	N	N
+TEMISS	Tem ISS	S	P	N	N
+TEMPIS	Tem PIS	S	P	N	N
+TEMREAICMS	Tem Convênio REA/ICMS	S	P	N	N
+TEMVAVTCON	Tem VA e/ou VT no contrato	S	P	N	S
+TIPALTDTVENC	Tipo de Alteração da Data de Vencimento	S	P	N	S
+TIPATUALFIN	Atualização do financeiro	S	P	N	S
+TIPATUALWMS	Atualização no WMS	S	P	N	N
+TIPCOMPLCUST	Tipo complemento custo	I	P	N	N
+TIPFATSERV	Faturamento relacionado a Ordem de Serviço	S	P	N	N
+TIPICMS	Tipo de ICMS	S	P	N	N
+TIPIPI	Tipo de IPI	S	P	N	N
+TIPIVASUBST	Tipo de Calculo IVA ponderado	S	P	N	N
+TIPMODALCTE	Modal CT-e	S	P	N	S
+TIPMOV	Tipo de movimento	S	P	S	S
+TIPMOVBEMSPED	Tipo de Mov. do  Bem (SPED)	S	P	N	S
+TIPOCTE	Tipo de emissão CT-e	S	P	S	S
+TIPOEMISSAONFCOM	Tipo de Emissão	S	P	N	N
+TIPOIMPKIT	Kit/Componentes - Impressão e Livro Fiscal	S	P	N	S
+TIPONUMERACAO	Tipo de Numeração	S	P	N	N
+TIPSERVCTE	Tipo de serviço CT-e	I	P	S	S
+TOPATENDIMENTO	Top de Atendimento	I	P	S	S
+TOPBACKORDER	Top Back Order	I	P	S	S
+TOPPISCOFREDAQUIS	Calcula PIS/COFINS red. pela aquisição	S	P	N	S
+TPNFCRED	Tipo de Nota Fiscal de Crédito	S	P	N	S
+TPNFDEB	Tipo de Nota Fiscal de Débito	S	P	N	N
+TPOPERGOV	Tipo de operação com o ente governamental	S	P	N	S
+TPOPERGOVCTE	Tipo de operação com o ente governamental do CT-e	S	P	N	S
+TPOPERGOVNFCOM	Tipo de operação com o ente governamental	S	P	N	S
+TRANSFCBGLOBAL	Número de Série Global - Transferência	S	P	N	N
+TRANSFWMS	Transferência no WMS	S	P	N	N
+TRAVAFIMIMP	Travar até terminar a impressão	S	P	N	N
+USAALIQNATRATF100	Usar Alíq.da Nat. do Rateio p/registro F100 do SPED PIS/COFINS ?	S	P	N	N
+USACUSMEDBASEST	Usa Cus. Méd. Base ST?	S	P	N	N
+USARCONFCEGA	Usa conferência Cega	S	P	N	N
+USARECPARCIAL	Utiliza recebimento parcial?	S	P	N	S
+USARPRECOCUSTO	Usar como Preço	S	P	N	S
+USASERVTABIRFINSS	Usar serviço p/ cálculo com tabela de IRPF/INSS	S	P	N	S
+USATABALTEMP	Usar tabela de preço alternativa da empresa?	S	P	N	S
+USAVENDAMAIS	Utilizar no Sankhya Venda Mais	S	P	N	N
+USOPRODSEPARACAO	Uso da Separação	S	P	N	N
+UTILIZAWMS	Endereçamento no WMS	S	P	N	N
+VALDISPESTDEV	Valida disponibilidade de estoque na devolução?	S	P	S	S
+VALEST	Validar Estoque p/ Reservar	S	P	N	N
+VALESTMAXIMO	Valida Estoque Máximo	S	P	N	N
+VALIDAAGRUPMIN	Valida agrupamento mínimo	S	P	N	N
+VALIDAATRASO	Atraso	S	P	N	N
+VALIDADATA	Reiniciar numeração por data	S	P	N	N
+VALIDAMEDIANEGOC	Validar Média de Negociações Mensais	S	P	N	N
+VALNUM	Valida Numeração por	S	P	N	N
+VALSITCADRF	Valida situação cadastro na ReceitaWS ?	S	P	N	S
+VALSITCADSEFAZ	Valida situação cadastro na SEFAZ ?	S	P	N	S
+VALTBCOMPCR	Validar Tabela de compra por CR?	S	P	N	N
+VALTOTNOTAGERLIV	Validar Totais da Nota na Geração do Livro?	S	P	N	N
+VALVARIACVLRUNIT	Validar variações do vlr. unit. orig./dest.	S	P	N	S
+VALVCTLAUDOEST	Valida laudo vencido na baixa de estoque	S	P	N	N
+VENDITE	Exige vendedor nos itens	S	P	N	N
+VLRBASEPGTO	Valor Base Pagamento	F	P	N	N
+VLRLIQITEMNFE	Considera valor líquido do item na NF-e ou NFC-e ou CF-e(geração do XML e imp.Danfe)	S	P	N	S
+VLRMINAP	Valor mínimo p/Autorização de Pagamento	F	P	N	N

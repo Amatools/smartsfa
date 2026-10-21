@@ -67,21 +67,21 @@ class _SimpleSectionPage extends StatelessWidget {
     );
   }
 
-  factory _SimpleSectionPage.erp({
+  static Widget enterprisePoliticas({
     required TenantEntryOption activeTenant,
     String? activeRepresentedCompanyName,
   }) {
-    return _SimpleSectionPage._(
-      title: 'ERP e integrações',
-      subtitle: 'Conectores e status da empresa ativa.',
-      items: const [
-        'Conector por tenant',
-        'Mapeamento de pedidos e cadastros',
-        'Fila de erros e reprocessamento',
-      ],
+    return _EnterprisePoliciesSection(
       activeTenant: activeTenant,
       activeRepresentedCompanyName: activeRepresentedCompanyName,
     );
+  }
+
+  static Widget erp({
+    required TenantEntryOption activeTenant,
+    String? activeRepresentedCompanyName,
+  }) {
+    return EnterpriseErpIntegrationSection(activeTenant: activeTenant);
   }
 
   factory _SimpleSectionPage.convites({
@@ -173,6 +173,190 @@ class _ProductsCatalogSection extends StatelessWidget {
       selectedRepresentedCompanyId: selectedRepresentedCompanyId,
       activeRepresentedCompanyName: activeRepresentedCompanyName,
     );
+  }
+}
+
+enum _EnterprisePolicySubmenu {
+  tributacoes,
+  condicoesPagamento,
+  descontosPontuais,
+  acrescimosDescontos,
+}
+
+class _EnterprisePoliciesSection extends StatefulWidget {
+  const _EnterprisePoliciesSection({
+    required this.activeTenant,
+    this.activeRepresentedCompanyName,
+  });
+
+  final TenantEntryOption activeTenant;
+  final String? activeRepresentedCompanyName;
+
+  @override
+  State<_EnterprisePoliciesSection> createState() =>
+      _EnterprisePoliciesSectionState();
+}
+
+class _EnterprisePoliciesSectionState extends State<_EnterprisePoliciesSection> {
+  static final Map<String, _EnterprisePolicySubmenu>
+  _submenuByTenantId = <String, _EnterprisePolicySubmenu>{};
+
+  _EnterprisePolicySubmenu _activeSubmenu =
+      _EnterprisePolicySubmenu.tributacoes;
+
+  String get _tenantId => widget.activeTenant.tenantId;
+
+  @override
+  void initState() {
+    super.initState();
+    _activeSubmenu =
+        _submenuByTenantId[_tenantId] ?? _EnterprisePolicySubmenu.tributacoes;
+  }
+
+  @override
+  void didUpdateWidget(covariant _EnterprisePoliciesSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.activeTenant.tenantId != widget.activeTenant.tenantId) {
+      _activeSubmenu =
+          _submenuByTenantId[_tenantId] ?? _EnterprisePolicySubmenu.tributacoes;
+    }
+  }
+
+  String get _representedCompanyId {
+    return _enterpriseDefaultRepresentedCompanyId(widget.activeTenant);
+  }
+
+  String get _representedCompanyName {
+    final name = (widget.activeRepresentedCompanyName ?? '').trim();
+    if (name.isNotEmpty) {
+      return name;
+    }
+    final tenantName = widget.activeTenant.tenantName.trim();
+    return tenantName.isEmpty ? 'Empresa ativa' : tenantName;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final canAccessPolicies = _canEditRepresentedModuleSettings(
+      role: widget.activeTenant.role,
+      workspaceType: widget.activeTenant.workspaceType,
+    );
+
+    if (!canAccessPolicies) {
+      return const _SimpleCardSection(
+        title: 'Políticas comerciais',
+        subtitle: 'Acesso restrito ao owner da empresa no workspace enterprise.',
+        items: ['Tributações', 'Condições de pagamento', 'Descontos pontuais', 'Acréscimos ou descontos'],
+      );
+    }
+
+    final textTheme = Theme.of(context).textTheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Políticas comerciais', style: textTheme.headlineMedium),
+        const SizedBox(height: 8),
+        Text(
+          'Configure as políticas da empresa ativa. Escopo: $_representedCompanyName.',
+          style: textTheme.bodyLarge,
+        ),
+        const SizedBox(height: 14),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
+          color: Theme.of(context).colorScheme.surfaceContainerHighest
+              .withValues(alpha: 0.45),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                _buildSubmenuChip(
+                  context,
+                  submenu: _EnterprisePolicySubmenu.tributacoes,
+                  label: 'Tributações',
+                ),
+                _buildSubmenuChip(
+                  context,
+                  submenu: _EnterprisePolicySubmenu.condicoesPagamento,
+                  label: 'Condições de pagamento',
+                ),
+                _buildSubmenuChip(
+                  context,
+                  submenu: _EnterprisePolicySubmenu.descontosPontuais,
+                  label: 'Descontos pontuais',
+                ),
+                _buildSubmenuChip(
+                  context,
+                  submenu: _EnterprisePolicySubmenu.acrescimosDescontos,
+                  label: 'Acréscimos ou descontos',
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        _buildSubmenuContent(),
+      ],
+    );
+  }
+
+  Widget _buildSubmenuChip(
+    BuildContext context, {
+    required _EnterprisePolicySubmenu submenu,
+    required String label,
+  }) {
+    return FilterChip(
+      label: Text(
+        label,
+        style: const TextStyle(fontWeight: FontWeight.w600),
+      ),
+      side: BorderSide.none,
+      shape: const StadiumBorder(),
+      selectedColor: Theme.of(context)
+          .colorScheme
+          .primaryContainer
+          .withValues(alpha: 0.8),
+      backgroundColor: Colors.white,
+      selected: _activeSubmenu == submenu,
+      onSelected: (_) {
+        setState(() {
+          _activeSubmenu = submenu;
+          _submenuByTenantId[_tenantId] = submenu;
+        });
+      },
+    );
+  }
+
+  Widget _buildSubmenuContent() {
+    switch (_activeSubmenu) {
+      case _EnterprisePolicySubmenu.tributacoes:
+        return _TaxRulesSection(
+          activeTenant: widget.activeTenant,
+          selectedRepresentedCompanyId: _representedCompanyId,
+          activeRepresentedCompanyName: _representedCompanyName,
+        );
+      case _EnterprisePolicySubmenu.condicoesPagamento:
+        return _PaymentConditionsSection(
+          activeTenant: widget.activeTenant,
+          selectedRepresentedCompanyId: null,
+          activeRepresentedCompanyName: null,
+        );
+      case _EnterprisePolicySubmenu.descontosPontuais:
+        return _OrderDiscountPoliciesSection(
+          activeTenant: widget.activeTenant,
+          selectedRepresentedCompanyId: null,
+          activeRepresentedCompanyName: null,
+        );
+      case _EnterprisePolicySubmenu.acrescimosDescontos:
+        return _CommercialAdjustmentsSection(
+          activeTenant: widget.activeTenant,
+          selectedRepresentedCompanyId: null,
+          activeRepresentedCompanyName: null,
+        );
+    }
   }
 }
 

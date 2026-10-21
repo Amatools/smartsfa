@@ -1,0 +1,255 @@
+CODPARC	Cód. Parceiro	I	P	S	S
+PROVACRESCCAC	Provisão do carrinho	F	P	N	N
+SALDODISPCAC	Saldo disponivel do carrinho	F	P	N	N
+DESCRROTA	Descrição da Rota	S	P	N	N
+NOMEPARC	Nome Parceiro	S	P	S	S
+RAZAOSOCIAL	Razão social	S	P	S	S
+ATIVO	Ativo	S	P	N	N
+TIPPESSOA	Tipo de pessoa	S	P	N	S
+CLIENTE	Cliente	S	P	N	S
+FORNECEDOR	Fornecedor	S	P	N	N
+VENDEDOR	Vendedor	S	P	N	N
+USUARIO	Usuário	S	P	N	N
+TRANSPORTADORA	Transportadora	S	P	N	N
+AGENCIA	Agência	S	P	N	N
+CTAADIANT	Conta Adiantamento	S	P	N	N
+MOTORISTA	Motorista	S	P	N	S
+MEDICO	Médico	S	P	N	N
+AGRONOMO	Agrônomo	S	P	N	N
+CODPARCGRUECONOMICO	Cód. Grupo Econômico	I	P	N	S
+CODPARCMATRIZ	Matriz	I	P	N	S
+CODVEND	Vend. Preferencial	I	P	S	S
+CODGRUPO	Grupo Cobrança	I	P	S	S
+CODASSESSOR	Assessor do Parceiro	I	P	N	N
+CODBCO	Banco	I	P	N	S
+CODAGE	Agência bancária	S	P	N	S
+NOMEAGE	Nome da agência	S	P	N	N
+CODCTABCO	Conta bancária parceiro	S	P	N	S
+AGRUPAR	Agrupar Pagamentos na geração p/Banco	S	P	N	N
+CODCTABCOINT	Conta bancária empresa	I	P	N	N
+CGC_CPF	CNPJ / CPF	S	P	S	S
+CODTIPPARC	Perfil Principal	I	P	N	N
+IDENTINSCESTAD	Insc. Estadual / Identidade	S	P	S	S
+INSCESTADNAUF	Insc. Estadual na UF	S	P	N	S
+TIMDATACI	Dt. Cart. Identidade	D	P	N	S
+CEI	Cad. Específico do INSS - CEI	S	P	N	S
+TIMMAE	Mãe	S	P	N	S
+TIMPAI	Pai	S	P	N	S
+DIASEM	Dia Visita	I	P	N	N
+TIMPROFISSAO	Prof. / Ramo Atividade	I	P	S	S
+SELECIONADO	Seleção	S	P	N	N
+TIMSENHASITE	Senha do Site	S	P	N	S
+INSCMUN	Cad.Mun.Contribuintes	S	P	N	N
+CODUNIMED	Cód. Unimed	S	P	N	N
+TIMSENHADESC	Conf. Senha	S	P	N	S
+CEP	CEP	S	P	N	S
+TIMREFERENCIA01	Referência 01	S	P	N	S
+CODEND	Endereço	I	P	N	S
+TIMREFERENCIA02	Referência 02	S	P	N	S
+NUMEND	Número	S	P	N	S
+COMPLEMENTO	Complemento	S	P	N	N
+CODBAI	Bairro	I	P	N	S
+CODCID	Cód. Cidade	I	P	S	S
+CODREG	Região	I	P	N	S
+CAIXAPOSTAL	Caixa Postal	S	P	N	N
+TELEFONE	Telefone	S	P	S	S
+RAMAL	Ramal	I	P	N	N
+ENVIPEDEMAILTOP	Envio email de pedido / nota	S	P	N	S
+FAX	Celular/Fax	S	P	N	S
+EMAIL	Email	S	P	S	S
+EVENDA	Email p/ pedido de venda	S	P	N	S
+ECOMPRA	Email p/ pedido de compra	S	P	N	S
+DTCAD	Data cadastramento	D	P	N	S
+CODUSU	Cód. Usuário Alteração	I	P	N	N
+DTALTER	Data alteração	H	P	N	N
+DTNASC	Data nascimento/Fundação	D	P	N	N
+IMPLAUDOLOTE	Imprime laudo lote	S	P	N	N
+TIMTELEFONE01	Telefone 01	S	P	N	S
+SITUACAO	Situação	S	P	N	N
+DTULTCONTATO	Dt. Último contato	H	P	N	N
+TIMTELEFONE02	Telefone 02	S	P	N	S
+PRAZOCONTATO	Prazo p/ contato	I	P	N	N
+PRAZOPAG	Prazo médio pagamento	I	P	N	N
+TOLERINADIMP	Tolerância p/ inadimplência	I	P	N	N
+CODTAB	Tabela de Preço	I	P	N	S
+GRUPOAUTOR	Grupo de autorização	S	P	N	N
+LIMCRED	Limite de crédito	F	P	N	N
+LIMCREDMENSAL	Limite crédito mensal	F	P	N	N
+BLOQUEAR	Bloquear venda a prazo	S	P	N	N
+MOTBLOQ	Motivo de Bloqueio	S	P	N	N
+DESCBONIF	Desconto bonificado	S	P	N	N
+DESCFIN	% Desc. Financeiro	F	P	N	N
+TIPOFATUR	Tipo de faturamento	S	P	N	N
+PERCCUSVAR	% de Custo Variável	F	P	N	N
+DIASVARPAGTO	Antecipação/Atraso recebimento(em dias)	I	P	N	N
+CONTACESSO	Informações adicionais	S	P	N	N
+QTDMAXTITVENCIDOS	Qtd. máx. de títulos vencidos	I	P	N	N
+CLASSIFICMS	Classificação ICMS	S	P	N	N
+CSTIPIENT	Código Sit.Trib.IPI Entrada	I	P	N	N
+CSTIPISAI	Código Sit.Trib.IPI Saída	I	P	N	N
+CODENQIPIENT	Código Enq. Legal IPI Entrada	I	P	N	S
+CODENQIPISAI	Código Enq. Legal IPI Saída	I	P	N	S
+INDNATRET	Natureza da Retenção na Fonte	S	P	N	N
+CODCTACTB	Conta contábil 1	I	P	N	N
+CODCTACTB2	Conta contábil 2	I	P	N	N
+CODCTACTB3	Conta contábil 3	I	P	N	N
+CODCTACTB4	Conta contábil 4	I	P	N	N
+CODTABST	Tabela c/base p/S.T.na venda	I	P	N	N
+MODELONFDES	Modelo da nota fiscal	S	P	N	N
+SERIENFDES	Série da Nota Fiscal	S	P	N	S
+NATUREZAOPERDES	Tipo de Negócio	S	P	N	S
+IPIINCICMS	IPI incide no cálculo do ICMS	S	P	N	N
+TEMIPI	Tem IPI	S	P	N	N
+CALCINSS	Calcula FUNRURAL/INSS	S	P	N	N
+PERCREDINSS	% a ser subtraído da Alíquota do FUNRURAL/INSS	F	P	S	S
+INDCOMERCIALIZACAO	Indicador de Comercialização	S	P	N	S
+INDAQUISICAO	Indicador de Aquisição	S	P	N	S
+RETEMINSS	Calcula IRF	S	P	N	N
+RETEMISS	Retém ISS	S	P	N	N
+TARE	Tare	S	P	N	N
+INTEGRAECONECT	Integração EConect	S	P	N	S
+CALCFETHAB	Calcular FETHAB	S	P	N	N
+INAPLICPRODEPE	Parceiro elegível à inaplicabilidade do PRODEPE?	S	P	N	N
+DESCSTIVA	Considera desconto no cálculo de ST por IVA	S	P	N	N
+SENHAECONECT	Senha	S	P	N	S
+PRODUTORTEMNF	Produtor tem NF	S	P	N	S
+PRAZOPARCECONECT	Prazos	S	P	N	S
+CODEMP	Empresa	I	P	N	N
+TIPGERBOLCENT	Geração de boleto nas centrais	S	P	N	S
+TIMPROPRIETA	Proprietário	S	P	N	S
+DESCONSIDESCBASE	Desconsiderar desconto da nota/item na base de cálculo dos impostos ISS e IRF	S	P	N	N
+PARCSUBSTISS	Substituto Tributário - ISS	S	P	N	S
+ARREDPRIMEIRAPARC	Ajusta arredondamento na 1ª parcela	S	P	N	N
+CODCONTATOPADCOT	Contato padrão para cotação	I	P	N	S
+ENQART227	Enquadro no Art. 227. para cálculo de IPI?	S	P	N	S
+NUFOP	Finalidade da Operação	I	P	N	S
+TIMCARTREGIMEBENSV	Regime de Casamento	S	P	S	S
+TIMCORRESPBANCARIO	Corr. Bancário	S	P	N	S
+TIMFAIXASALARIAL	Faixa Salarial	S	P	N	S
+TRUNCPARCELA	Truncar valores no parcelamento	S	P	N	N
+NUVERSAO	Versão	I	P	S	S
+ATUNUVERSAO	Atualizar versão	S	P	N	S
+TIPANEXONFE	Tipo do anexo	S	P	N	S
+VENDAMIN	Venda Mínima	F	P	N	S
+INTERVANALISCRED	Intervalo p/ análise de crédito	I	P	N	S
+EXIGENOMEPARC	Usar razão social no Boleto Rápido	S	P	S	S
+TIPLOTACAO	Tipo de Lotação	S	P	N	N
+BASEPRAZOECONECT	Partir de	I	P	N	S
+TRANSPPROPRIA	Transportadora própria	S	P	S	S
+DTULTNEGOC	Última negociação	H	P	N	N
+PARCELAMECONECT	Parcelamentos	S	P	N	S
+RETEMCOFINS	Retém COFINS	S	P	N	N
+EMAILNOTIFENTREGA	E-mail p/ notificação de entrega	S	P	N	S
+BASEPARCELECONECT	Partir de	I	P	N	S
+OBSERVACOES	Observações	S	P	N	N
+VLRLIQITEMNFE	Considera valor líquido do item na NF-e (geração do XML e imp.Danfe)	S	P	N	S
+DIAFECHAECONECT	Dia Fechamento	I	P	N	S
+RETEMCSL	Retém CSL	S	P	N	N
+VLRLIQITEMNFCE	Considera valor líquido do item na NFC-e (geração do XML e imp.Danfe)	S	P	N	S
+DIAPAGTOECONECT	Dia Pagamento	I	P	N	S
+RETEMPIS	Retém PIS	S	P	N	N
+TIMCORRETOR	Corretor	S	P	N	S
+PERFILECONECT	Perfil	S	P	N	S
+TIPOSPARC	Tipo	S	P	N	N
+TIMTIPOMORADIA	Tipo de Moradia	S	P	N	S
+MOTNAORETERISSQN	Motivo de não Retenção ISSQN	S	P	N	S
+TIMFIADOR	Fiador	S	P	N	S
+SITESPECIALRESP	Situação Especial de Responsabilidade	S	P	N	S
+TIMQUERCOMPRAR	Quer Comprar	S	P	N	S
+DTEMISNFEFORN	Data de Inicio para Emissão de NFe	D	P	S	S
+TIMCOMPRADOR	Comprador	S	P	N	S
+CODANT	Código no SGE	I	P	N	S
+TIMPROPVENDA	Prop. Venda	S	P	N	S
+EMAILDANFE	Enviar DANFE por e-mail?	S	P	N	N
+TIMINQUILINO	Inquilino	S	P	N	S
+ENVIADANFEREDESPACHO	Enviar DANFE/XML por e-mail para Redespacho (Recebedor)?	S	P	N	N
+TIMCARTORIO	Cartório	I	P	S	S
+HOMEPAGE	HomePage	S	P	S	N
+ALUNO	Aluno	S	P	N	N
+TIMBAIRROCOMPRA	Bairro da Compra	I	P	N	S
+PROFESSOR	Professor	S	P	N	N
+TIMORGAO	Orgão	S	P	N	S
+TERMACORD	Tem Termo de Acordo p/ CT-e?	S	P	S	S
+CONSIDTOTITENSTRIB	Considerar valor total dos itens mais valor total tributado para tags vTprest e vRec?	S	P	S	S
+EMAILNFE	E-mail p/ envio NF-e/NFS-e/CT-e	S	P	N	S
+IDESTRANGEIRO	Identificação de Estrangeiro	S	P	N	S
+TIMESTADOCIVIL	Estado Civil	S	P	N	S
+CHAVEPIX	Chave Pix	S	P	N	N
+SITCADSEFAZ	Situação Cadastral SEFAZ	I	P	N	S
+DHCADSEFAZ	Data/Hora da Última Consulta SEFAZ	H	P	N	S
+TIMAINVESTIR	Investimento	F	P	N	S
+COMOCONHECEU	Como nos conheceu	S	P	N	S
+CODCRED	Crédito	I	P	N	N
+TIMOUTTELS	Outras Informações de Contato	S	P	N	S
+QTDMAXPEDCPA	Qtd máx itens por pedido	I	P	N	N
+TIMNACIONALIDAD	Nacionalidade	I	P	N	S
+CODROTA	Rota	I	P	N	N
+SIMPLES	Optante pelo Simples Nacional?	S	P	N	N
+SEXO	Sexo	S	P	N	S
+VALDESCGRDCAR	Validar Desc. Grande Carga?	S	P	N	N
+FLEX	Usar Créd.Flex?	S	P	N	N
+SALDODISP	Saldo Disponível	F	P	N	S
+RETSTVENDA	Retirar ST do preço de venda do item	S	P	N	N
+CODEMPPREF	Empresa Preferencial	I	P	N	S
+ENTREGAENDCONTATO	Utiliza endereço de entrega do contato	S	P	N	N
+VLRMINPEDCPA	Vlr mín por pedido	F	P	N	N
+EXIGCONTATOENTCAB	Exigir Contato de Entrega no cabeçalho	S	P	N	N
+CODLOCALPADRAO	Local padrão para produtos	I	P	N	N
+CPFPRODRURAL	CPF Prod. Rural	S	P	S	S
+USATABCRFORN	Usa Tabela p/ compra por CR?	S	P	N	N
+TIPJURO	Tipo de juro	S	P	N	N
+PERCMULTA	% de multa	F	P	N	N
+PERCJURO	% de juro (diário)	F	P	N	N
+TIPOGERBOLETO	Tipo geração boleto	S	P	N	N
+ALIQISSRETSIMPLES	Alíquota ISS Ret/Simples	F	P	N	N
+POTENCIALNEG	Potencial de compra	F	P	N	S
+LATITUDE	Latitude	S	P	N	N
+IMPAGRUPFIN	Impedir agrupamento de boletos	S	P	N	N
+LONGITUDE	Longitude	S	P	N	N
+PERCDESCESPECIAL	% Desc. Especial	F	P	N	S
+MEIRJ	Micro empresário individual	S	P	N	S
+SITCCF	Situação no CCF	S	P	N	S
+SITRECEITA	Situação na Receita Federal	S	P	N	S
+SITSINTEGRA	Situação no Sintegra	S	P	N	S
+STATUSEDZ	Status envio EDZ	S	P	N	S
+OPERLOGIST	Operador logístico	S	P	N	S
+CODUSUCOBR	Cód. Usuário Cobrador	I	P	N	S
+APLICLEITRANSP	Aplicar a lei da transparência	S	P	N	S
+ESTABTRANSP	Estabelecimento para conversão de CFOP	S	P	N	S
+SITCADRF	Situação Cadastral ReceitaWS	I	P	N	S
+DHCADRF	Data/Hora da Última Consulta ReceitaWS	H	P	N	S
+UNIDIMPORT	Unidade para considerar na importação	I	P	N	S
+ORGPUBLNFSE	Orgão público (NFS-e)	S	P	N	N
+ASSOCIACAODESP	Associação Desportiva	S	P	N	N
+MODELONOTACOMPRA	Modelo para Importação de XML Compra	I	P	N	S
+PARCINTER	Parceiro com Interdependência	S	P	N	S
+PROVACRESC	Provisão acréscimo	F	P	N	S
+EMAILNFSE	E-mail específico p/ envio NFS-e	S	P	N	S
+EMAILCTE	E-mail específico p/ envio CT-e	S	P	N	S
+CNAE	CNAE principal do contribuinte	S	P	N	N
+INDCREDNFE	Contribuinte credenciado a emitir NF-e	I	P	N	N
+INDCREDCTE	Contribuinte credenciado a emitir CTe	I	P	N	N
+DTINIATIV	Início da Atividade do Contribuinte	D	P	N	N
+DTULTSIT	Última mod. da situação cadastral	D	P	N	N
+DTBAIXA	Data da baixa do contribuinte	D	P	N	N
+INDOPCCP	Tributação Contr.Previdenciária (Prod.Rural)	I	P	N	S
+REGAPUR	Regime de apuração	S	P	N	N
+CODIDENTCONS	Código de identificação do consumidor ou assinante	S	P	N	S
+UTILIZANUCADPARC	Utilizar código de identificação do consumidor ou assinante?	S	P	N	S
+TIPCLIENTESERVCOM	Tipo Cliente de Serviços de Comunicação	I	P	N	N
+DESCONSDESCINSS	Desconsiderar desconto da nota/item na base de cálculo do INSS	S	P	N	S
+CONSPARCADRCST	Considerar parceiro no registro 1210 e 1220 da ADRC-ST (PR)	S	P	N	N
+DEDUZIPIBCPISCF	Deduzir valor de IPI da BC do PIS e COFINS	S	P	N	S
+REGISTROANS	Registro ANS	I	P	N	N
+GRUPOPISCOFINS	Grupo PIS/COFINS	I	P	N	N
+REDE	Nome da Rede na operação com TEF	S	P	S	S
+AD_IDEXTERNO	Cód. Sistema Anterior	S	P	N	S
+ORGAOPUB	Órgão Público	S	P	S	S
+GRUPOIBSCBS	Grupo IBS/CBS	S	P	N	S
+GRUPOIS	Grupo IS	S	P	N	S
+PREDUTORGOV	% Redução Alíquota (Gov.)	F	P	N	N
+TPCOMPRAGOV	Tipo de Ente Governamental	S	P	N	N
+TIPTRANSP	Tipo de Transportador	S	P	N	S
+TIPOIMUNIDADEISS	Tipo de Imunidade ISS	I	P	N	S
+REGIMEESPTRIBISS	Regime esp. tributação ISS (NFS-e)	S	P	N	S
+AD_REGUADECOBRANCA	Desativar régua de cobrança	S	O	N	S

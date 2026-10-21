@@ -1,0 +1,26 @@
+{
+  "marker": "TRIBUTACAO_EXECUTE_QUERY_PROBE",
+  "ok": false,
+  "tenantId": "self_T8oqTD0UBtWATPbITOGsqAEZt3d2_smartsfa-enterprise-teste",
+  "environment": "prod",
+  "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+  "httpStatus": 404,
+  "sqlFile": "G:\\smartsfa\\docs\\sankhya-api\\examples\\tributacao_query_template.sql",
+  "sqlPreview": "-- Cole aqui a consulta SQL validada no Construtor de Componentes BI (Sankhya).\r\n-- Recomendacoes:\r\n-- 1) Sempre alias explícito para as colunas esperadas no motor de tributação.\r\n-- 2) Preferir filtros por vigência/status para reduzir volume.\r\n-- 3) Ordenar por chaves de negócio para facilitar diff entre execuções.\r\n--\r\n-- Exemplo de estrutura (substitua completamente pelo seu SQL real):\r\n-- SELECT\r\n--   CAMPO_A AS coluna_a,\r\n--   CAMPO_B AS coluna_b\r\n-- FROM ALGUMA_TABELA\r\n-- WHERE 1 = 1;\r\n\r\nS",
+  "responseIsJson": true,
+  "rowCountDetected": 0,
+  "requestPayload": {
+    "serviceName": "DbExplorerSP.executeQuery",
+    "requestBody": {
+      "sql": "-- Cole aqui a consulta SQL validada no Construtor de Componentes BI (Sankhya).\r\n-- Recomendacoes:\r\n-- 1) Sempre alias explícito para as colunas esperadas no motor de tributação.\r\n-- 2) Preferir filtros por vigência/status para reduzir volume.\r\n-- 3) Ordenar por chaves de negócio para facilitar diff entre execuções.\r\n--\r\n-- Exemplo de estrutura (substitua completamente pelo seu SQL real):\r\n-- SELECT\r\n--   CAMPO_A AS coluna_a,\r\n--   CAMPO_B AS coluna_b\r\n-- FROM ALGUMA_TABELA\r\n-- WHERE 1 = 1;\r\n\r\nSELECT \r\n    'active' AS Status,\r\n    \r\n    -- Se for restrição, mas o código for -1 ou 0, é uma regra geral (ANY)\r\n    CASE \r\n        WHEN TO_CHAR(ICM.TIPRESTRICAO) IN ('N', '4') AND TO_CHAR(ICM.CODRESTRICAO) NOT IN ('-1', '0') THEN NVL(NCM1.CODNCM, 'ANY')\r\n        WHEN TO_CHAR(ICM.TIPRESTRICAO2) IN ('N', '4') AND TO_CHAR(ICM.CODRESTRICAO2) NOT IN ('-1', '0') THEN NVL(NCM2.CODNCM, 'ANY')\r\n        WHEN TO_CHAR(ICM.TIPRESTRICAO) IN ('P', '1') AND TO_CHAR(ICM.CODRESTRICAO) NOT IN ('-1', '0') THEN NVL(PRO.NCM, 'ANY') \r\n        ELSE 'ANY' \r\n    END AS NCM,\r\n    \r\n    NVL(UFO.UF, 'ANY') AS UfOrigem,\r\n    NVL(UFD.UF, 'ANY') AS UfDestino,\r\n    \r\n    CASE \r\n        WHEN ICM.MVAORIGINAL IS NOT NULL AND ICM.MVAORIGINAL NOT IN ('N', '0') THEN 'mva'\r\n        WHEN ICM.MVASIMPLIFICADO IS NOT NULL AND TO_CHAR(ICM.MVASIMPLIFICADO) NOT IN ('N', '0') THEN 'mva'\r\n        WHEN ICM.PAUTAVLRSTFIXO IS NOT NULL AND TO_CHAR(ICM.PAUTAVLRSTFIXO) NOT IN ('N', '0') THEN 'pauta'\r\n        ELSE 'nenhum'\r\n    END AS TipoST,\r\n    \r\n    '0' AS PrecoCalculoST,\r\n    TO_CHAR(ICM.REDBASEST) AS ReducaoBaseIcmsST,\r\n    TO_CHAR(ICM.ALIQUOTA) AS AliquotaDestino,\r\n    TO_CHAR(ICM.ALIQINTDEST) AS AliquotaCredito,\r\n    TO_CHAR(ICM.CSOSN) AS CST_CSOSN,\r\n    \r\n    CASE \r\n        WHEN ICM.MVAORIGINAL IS NOT NULL AND ICM.MVAORIGINAL <> 'N' THEN ICM.MVAORIGINAL\r\n        WHEN ICM.MVASIMPLIFICADO IS NOT NULL AND TO_CHAR(ICM.MVASIMPLIFICADO) <> 'N' THEN TO_CHAR(ICM.MVASIMPLIFICADO)\r\n        ELSE '0'\r\n    END AS MVA,\r\n    \r\n    ICM.DTINICIOVIGENCIA AS VigenciaInicial,\r\n    ICM.DTFIMVIGENCIA AS VigenciaFinal,\r\n    \r\n    -- Ajuste de prioridade: Regras com -1 passam a ser prioridade 2 (Geral)\r\n    CASE \r\n        WHEN TO_CHAR(ICM.TIPRESTRICAO) IN ('N', 'P', '1', '4') AND TO_CHAR(ICM.CODRESTRICAO) NOT IN ('-1', '0') THEN '1' \r\n        ELSE '2' \r\n    END AS Prioridade\r\n\r\nFROM TGFICM ICM\r\nLEFT JOIN TSIUFS UFO ON ICM.UFORIG = UFO.CODUF\r\nLEFT JOIN TSIUFS UFD ON ICM.UFDEST = UFD.CODUF\r\nLEFT JOIN TGFPRO PRO ON TO_CHAR(ICM.TIPRESTRICAO) IN ('P', '1') AND ICM.CODRESTRICAO = PRO.CODPROD\r\nLEFT JOIN TGFNCM NCM1 ON TO_CHAR(ICM.TIPRESTRICAO) IN ('N', '4') AND LTRIM(TO_CHAR(ICM.CODRESTRICAO), '0') = LTRIM(REPLACE(NCM1.CODNCM, '.', ''), '0')\r\nLEFT JOIN TGFNCM NCM2 ON TO_CHAR(ICM.TIPRESTRICAO2) IN ('N', '4') AND LTRIM(TO_CHAR(ICM.CODRESTRICAO2), '0') = LTRIM(REPLACE(NCM2.CODNCM, '.', ''), '0')\r\nWHERE \r\n    (ICM.DTFIMVIGENCIA IS NULL OR ICM.DTFIMVIGENCIA >= SYSDATE)"
+    }
+  },
+  "responseBody": {
+    "statusCode": 404,
+    "error": {
+      "code": "NOT_FOUND",
+      "message": "Item não encontrado!",
+      "details": "O path solicitado não existe!"
+    }
+  }
+}

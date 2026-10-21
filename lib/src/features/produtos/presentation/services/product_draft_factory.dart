@@ -26,6 +26,7 @@ class ProductDraftFactory {
       quantidadeMinima: 1,
       ncm: '0000.00.00',
       cest: '',
+      origemMercadoriaCst: '0',
       aliquotaIpiBase: 0,
       pesoKg: 0,
       erpProductId: '',

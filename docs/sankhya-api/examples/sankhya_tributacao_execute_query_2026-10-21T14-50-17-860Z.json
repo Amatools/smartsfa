@@ -1,0 +1,127 @@
+{
+  "marker": "TRIBUTACAO_EXECUTE_QUERY_PROBE",
+  "ok": true,
+  "tenantId": "self_T8oqTD0UBtWATPbITOGsqAEZt3d2_smartsfa-enterprise-teste",
+  "environment": "prod",
+  "baseUrlCandidates": [
+    "https://api.sankhya.com.br"
+  ],
+  "endpointCandidates": [
+    "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+    "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+    "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+    "/gateway/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+    "/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery"
+  ],
+  "sqlFile": "G:\\smartsfa\\docs\\sankhya-api\\examples\\tributacao_query_template.sql",
+  "sqlPreview": "-- Consulta de referencia para alimentar o motor de tributacao do SFA.\r\n-- Objetivo: entregar todas as colunas do contrato de importacao de tax rules,\r\n-- mesmo que algumas estejam sem preenchimento no ambiente durante o rollout.\r\n\r\nSELECT\r\n    'active' AS STATUS,\r\n\r\n    -- NCM prioriza restricao por NCM; se nao houver, usa NCM do produto\r\n    -- quando a restricao for por produto.\r\n    CASE\r\n        WHEN TO_CHAR(ICM.TIPRESTRICAO) IN ('N', '4')\r\n             AND TO_CHAR(ICM.CODRESTRICAO) NOT IN ",
+  "successfulAttempt": {
+    "baseUrl": "https://api.sankhya.com.br",
+    "endpointPath": "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+    "payloadVariant": "body_serviceName_requestBody_sql",
+    "httpStatus": 200,
+    "responseIsJson": false,
+    "rowCountDetected": 0,
+    "responseBody": {
+      "raw": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<serviceResponse serviceName=\"DbExplorerSP.executeQuery\" status=\"0\" pendingPrinting=\"false\" transactionId=\"12247B1B141A7D87ECBED9379BC630FC\"><statusMessage><![CDATA[T1JBLTAwOTMzOiBjb21hbmRvIFNRTCBu428gZW5jZXJyYWRvIGFkZXF1YWRhbWVudGU=\n]]></statusMessage></serviceResponse>\n"
+    },
+    "requestPayload": {
+      "serviceName": "DbExplorerSP.executeQuery",
+      "requestBody": {
+        "sql": "-- Consulta de referencia para alimentar o motor de tributacao do SFA.\r\n-- Objetivo: entregar todas as colunas do contrato de importacao de tax rules,\r\n-- mesmo que algumas estejam sem preenchimento no ambiente durante o rollout.\r\n\r\nSELECT\r\n    'active' AS STATUS,\r\n\r\n    -- NCM prioriza restricao por NCM; se nao houver, usa NCM do produto\r\n    -- quando a restricao for por produto.\r\n    CASE\r\n        WHEN TO_CHAR(ICM.TIPRESTRICAO) IN ('N', '4')\r\n             AND TO_CHAR(ICM.CODRESTRICAO) NOT IN ('-1', '0')\r\n            THEN NCM1.CODNCM\r\n        WHEN TO_CHAR(ICM.TIPRESTRICAO2) IN ('N', '4')\r\n             AND TO_CHAR(ICM.CODRESTRICAO2) NOT IN ('-1', '0')\r\n            THEN NCM2.CODNCM\r\n        WHEN TO_CHAR(ICM.TIPRESTRICAO) IN ('P', '1')\r\n             AND TO_CHAR(ICM.CODRESTRICAO) NOT IN ('-1', '0')\r\n            THEN PRO.NCM\r\n        ELSE NULL\r\n    END AS NCM,\r\n\r\n    -- CEST vem do produto quando a regra estiver atrelada a item.\r\n    PRO.CODESPECST AS CEST,\r\n\r\n    NVL(UFO.UF, 'ANY') AS UFORIGEM,\r\n    NVL(UFD.UF, 'ANY') AS UFDESTINO,\r\n\r\n    -- O importador do SFA aceita apenas MVA ou PMC.\r\n    CASE\r\n        WHEN NVL(ICM.PAUTAVLRSTFIXO, 0) > 0 THEN 'pmc'\r\n        ELSE 'mva'\r\n    END AS TIPOST,\r\n\r\n    -- Opcional: preco de referencia para calculo ST por MVA.\r\n    TO_CHAR(NULL) AS PRECOPARACALCULOST,\r\n\r\n    -- Para MVA, o importador exige reducao base (0 quando nao houver).\r\n    TO_CHAR(NVL(ICM.REDBASEST, 0)) AS REDUCAOBASEICMSST,\r\n\r\n    -- Para PMC, o importador usa base fixa da pauta.\r\n    TO_CHAR(NVL(ICM.PAUTAVLRSTFIXO, 0)) AS BASECALCULOICMSST,\r\n\r\n    -- Aliquota destino: prefere ST explicita e depois internas da regra.\r\n    TO_CHAR(\r\n        NVL(\r\n            ICM.ALIQSUBTRIB,\r\n            NVL(ICM.ALIQINTDEST, NVL(ICM.ALIQUOTA, 0))\r\n        )\r\n    ) AS ALIQUOTADESTINO,\r\n\r\n    -- Aliquota credito/propria.\r\n    TO_CHAR(NVL(ICM.ALIQUOTA, NVL(ICM.ALIQINTDEST, 0))) AS ALIQUOTACREDITO,\r\n\r\n    -- DIFAL: formula base por diferenca entre aliquota interna e interestadual.\r\n    TO_CHAR(\r\n        GREATEST(\r\n            NVL(ICM.ALIQINTDEST, 0) - NVL(ICM.ALIQUOTA, 0),\r\n            0\r\n        )\r\n    ) AS ALIQUOTADIFAL,\r\n\r\n    TO_CHAR(ICM.CSOSN) AS CST_CSOSN,\r\n\r\n    -- MVA efetiva: prioriza original e fallback para simplificada.\r\n    TO_CHAR(\r\n        NVL(\r\n            ICM.MVAORIGINAL,\r\n            NVL(ICM.MVASIMPLIFICADO, 0)\r\n        )\r\n    ) AS MVA,\r\n\r\n    -- Campo livre para observacao da origem da regra no Sankhya.\r\n    (\r\n        'TIPRESTRICAO=' || NVL(TO_CHAR(ICM.TIPRESTRICAO), '-') ||\r\n        ';CODRESTRICAO=' || NVL(TO_CHAR(ICM.CODRESTRICAO), '-') ||\r\n        ';TIPRESTRICAO2=' || NVL(TO_CHAR(ICM.TIPRESTRICAO2), '-') ||\r\n        ';CODRESTRICAO2=' || NVL(TO_CHAR(ICM.CODRESTRICAO2), '-')\r\n    ) AS EXCECAOFISCAL,\r\n\r\n    ICM.DTINICIOVIGENCIA AS VIGENCIAINICIAL,\r\n    ICM.DTFIMVIGENCIA AS VIGENCIAFINAL,\r\n\r\n    -- Prioridade maior para regra mais especifica.\r\n    TO_CHAR(\r\n        CASE\r\n            WHEN TO_CHAR(ICM.TIPRESTRICAO) IN ('P', '1')\r\n                 AND TO_CHAR(ICM.CODRESTRICAO) NOT IN ('-1', '0')\r\n                THEN 300000 + NVL(ICM.SEQUENCIA, 0)\r\n            WHEN TO_CHAR(ICM.TIPRESTRICAO) IN ('N', '4')\r\n                 AND TO_CHAR(ICM.CODRESTRICAO) NOT IN ('-1', '0')\r\n                THEN 200000 + NVL(ICM.SEQUENCIA, 0)\r\n            WHEN TO_CHAR(ICM.TIPRESTRICAO2) IN ('N', '4')\r\n                 AND TO_CHAR(ICM.CODRESTRICAO2) NOT IN ('-1', '0')\r\n                THEN 190000 + NVL(ICM.SEQUENCIA, 0)\r\n            ELSE 100000 + NVL(ICM.SEQUENCIA, 0)\r\n        END\r\n    ) AS PRIORIDADE,\r\n\r\n    -- Colunas extras (nao usadas no importador) para rastreio e auditoria.\r\n    TO_CHAR(ICM.CODTRIB) AS GRUPOFISCALID,\r\n    TO_CHAR(ICM.CODTAB) AS CODTAB,\r\n    TO_CHAR(ICM.SEQUENCIA) AS SEQUENCIA,\r\n    TO_CHAR(ICM.IDALIQ) AS IDALIQ\r\n\r\nFROM TGFICM ICM\r\nLEFT JOIN TSIUFS UFO\r\n    ON ICM.UFORIG = UFO.CODUF\r\nLEFT JOIN TSIUFS UFD\r\n    ON ICM.UFDEST = UFD.CODUF\r\nLEFT JOIN TGFPRO PRO\r\n    ON TO_CHAR(ICM.TIPRESTRICAO) IN ('P', '1')\r\n   AND ICM.CODRESTRICAO = PRO.CODPROD\r\nLEFT JOIN TGFNCM NCM1\r\n    ON TO_CHAR(ICM.TIPRESTRICAO) IN ('N', '4')\r\n   AND LTRIM(TO_CHAR(ICM.CODRESTRICAO), '0') = LTRIM(REPLACE(NCM1.CODNCM, '.', ''), '0')\r\nLEFT JOIN TGFNCM NCM2\r\n    ON TO_CHAR(ICM.TIPRESTRICAO2) IN ('N', '4')\r\n   AND LTRIM(TO_CHAR(ICM.CODRESTRICAO2), '0') = LTRIM(REPLACE(NCM2.CODNCM, '.', ''), '0')\r\n\r\nWHERE\r\n    ICM.DTINICIOVIGENCIA IS NULL\r\n    OR ICM.DTINICIOVIGENCIA <= SYSDATE\r\n\r\nORDER BY\r\n    UFORIGEM,\r\n    UFDESTINO,\r\n    PRIORIDADE DESC,\r\n    NCM NULLS LAST,\r\n    CEST NULLS LAST;"
+      }
+    }
+  },
+  "attempts": [
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_serviceName_requestBody_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_requestBody_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_requestBody_query",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_only_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+      "payloadVariant": "body_serviceName_requestBody_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+      "payloadVariant": "body_requestBody_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+      "payloadVariant": "body_requestBody_query",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+      "payloadVariant": "body_only_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_serviceName_requestBody_sql",
+      "httpStatus": 200,
+      "ok": true,
+      "rowCountDetected": 0,
+      "responseIsJson": false,
+      "responseBodyPreview": "{\"raw\":\"<?xml version=\\\"1.0\\\" encoding=\\\"utf-8\\\"?>\\n<serviceResponse serviceName=\\\"DbExplorerSP.executeQuery\\\" status=\\\"0\\\" pendingPrinting=\\\"false\\\" transactionId=\\\"12247B1B141A7D87ECBED9379BC630FC\\\"><statusMessage><![CDATA[T1JBLTAwOTMzOiBjb21hbmRvIFNRTCBu428gZW5jZXJyYWRvIGFkZXF1YWRhbWVudGU=\\n]]></statusMessage></serviceResponse>\\n\"}"
+    }
+  ]
+}

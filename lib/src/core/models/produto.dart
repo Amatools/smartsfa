@@ -36,6 +36,7 @@ class Produto implements TenantScopedEntity {
     this.quantidadeMinima,
     this.ncm,
     this.cest,
+    this.origemMercadoriaCst,
     this.aliquotaIpiBase,
     this.pesoKg,
     this.erpProductId,
@@ -87,6 +88,16 @@ class Produto implements TenantScopedEntity {
       quantidadeMinima: _readDouble(map['quantidadeMinima']),
       ncm: map['ncm'] as String?,
       cest: map['cest'] as String?,
+      origemMercadoriaCst: _readOrigemMercadoriaCst(
+        map['origemMercadoriaCst'] ??
+            map['origemMercadoria'] ??
+            map['origem_mercadoria'] ??
+            map['cstOrigem'] ??
+            map['cst_origem'] ??
+            map['origemProduto'] ??
+            map['origem_produto'] ??
+            map['ORIGPROD'],
+      ),
       aliquotaIpiBase: _readDouble(map['aliquotaIpiBase']),
       pesoKg: _readDouble(map['pesoKg']),
       erpProductId: map['erpProductId'] as String?,
@@ -133,6 +144,7 @@ class Produto implements TenantScopedEntity {
   final double? quantidadeMinima;
   final String? ncm;
   final String? cest;
+  final String? origemMercadoriaCst;
   final double? aliquotaIpiBase;
   final double? pesoKg;
   final String? erpProductId;
@@ -176,6 +188,7 @@ class Produto implements TenantScopedEntity {
     double? quantidadeMinima,
     String? ncm,
     String? cest,
+    String? origemMercadoriaCst,
     double? aliquotaIpiBase,
     double? pesoKg,
     String? erpProductId,
@@ -219,6 +232,7 @@ class Produto implements TenantScopedEntity {
       quantidadeMinima: quantidadeMinima ?? this.quantidadeMinima,
       ncm: ncm ?? this.ncm,
       cest: cest ?? this.cest,
+      origemMercadoriaCst: origemMercadoriaCst ?? this.origemMercadoriaCst,
       aliquotaIpiBase: aliquotaIpiBase ?? this.aliquotaIpiBase,
       pesoKg: pesoKg ?? this.pesoKg,
       erpProductId: erpProductId ?? this.erpProductId,
@@ -265,6 +279,7 @@ class Produto implements TenantScopedEntity {
       'quantidadeMinima': quantidadeMinima,
       'ncm': ncm,
       'cest': cest,
+      'origemMercadoriaCst': origemMercadoriaCst,
       'aliquotaIpiBase': aliquotaIpiBase,
       'pesoKg': pesoKg,
       'erpProductId': erpProductId,
@@ -323,4 +338,18 @@ double? _readDouble(Object? value) {
   }
 
   return null;
+}
+
+String? _readOrigemMercadoriaCst(Object? value) {
+  final raw = (value ?? '').toString().trim();
+  if (raw.isEmpty) {
+    return null;
+  }
+
+  final numeric = int.tryParse(raw);
+  if (numeric == null || numeric < 0 || numeric > 8) {
+    return null;
+  }
+
+  return numeric.toString();
 }

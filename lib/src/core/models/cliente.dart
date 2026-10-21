@@ -30,6 +30,9 @@ class Cliente implements TenantScopedEntity {
     this.pais = 'Brasil',
     this.inscricaoEstadual = '',
     this.inscricaoMunicipal = '',
+    this.salePurpose = SalePurpose.revenda,
+    this.taxProfile = CustomerTaxProfile.contribuinte,
+    this.isZfmSuframa = false,
     this.observacoes = '',
     this.syncVersion = 0,
     this.deletedAt,
@@ -70,6 +73,17 @@ class Cliente implements TenantScopedEntity {
       pais: map['pais'] as String? ?? 'Brasil',
       inscricaoEstadual: map['inscricaoEstadual'] as String? ?? '',
       inscricaoMunicipal: map['inscricaoMunicipal'] as String? ?? '',
+      salePurpose: SalePurpose.fromValue(
+        map['salePurpose'] as String? ?? SalePurpose.revenda.value,
+      ),
+      taxProfile: CustomerTaxProfile.fromValue(
+        map['taxProfile'] as String? ??
+            map['customerTaxProfile'] as String? ??
+            CustomerTaxProfile.contribuinte.value,
+      ),
+      isZfmSuframa: _readBool(
+        map['isZfmSuframa'] ?? map['zfmSuframa'] ?? map['clienteZfmSuframa'],
+      ),
       observacoes: map['observacoes'] as String? ?? '',
       syncVersion: _readInt(map['syncVersion']) ?? 0,
       deletedAt: _readDateTime(map['deletedAt']),
@@ -107,6 +121,9 @@ class Cliente implements TenantScopedEntity {
   final String pais;
   final String inscricaoEstadual;
   final String inscricaoMunicipal;
+  final SalePurpose salePurpose;
+  final CustomerTaxProfile taxProfile;
+  final bool isZfmSuframa;
   final String observacoes;
   final int syncVersion;
   final DateTime? deletedAt;
@@ -141,6 +158,9 @@ class Cliente implements TenantScopedEntity {
     String? pais,
     String? inscricaoEstadual,
     String? inscricaoMunicipal,
+    SalePurpose? salePurpose,
+    CustomerTaxProfile? taxProfile,
+    bool? isZfmSuframa,
     String? observacoes,
     int? syncVersion,
     DateTime? deletedAt,
@@ -175,6 +195,9 @@ class Cliente implements TenantScopedEntity {
       pais: pais ?? this.pais,
       inscricaoEstadual: inscricaoEstadual ?? this.inscricaoEstadual,
       inscricaoMunicipal: inscricaoMunicipal ?? this.inscricaoMunicipal,
+      salePurpose: salePurpose ?? this.salePurpose,
+      taxProfile: taxProfile ?? this.taxProfile,
+      isZfmSuframa: isZfmSuframa ?? this.isZfmSuframa,
       observacoes: observacoes ?? this.observacoes,
       syncVersion: syncVersion ?? this.syncVersion,
       deletedAt: deletedAt ?? this.deletedAt,
@@ -212,6 +235,9 @@ class Cliente implements TenantScopedEntity {
       'pais': pais,
       'inscricaoEstadual': inscricaoEstadual,
       'inscricaoMunicipal': inscricaoMunicipal,
+      'salePurpose': salePurpose.value,
+      'taxProfile': taxProfile.value,
+      'isZfmSuframa': isZfmSuframa,
       'observacoes': observacoes,
       'syncVersion': syncVersion,
       'deletedAt': deletedAt?.toIso8601String(),
@@ -251,4 +277,26 @@ int? _readInt(Object? value) {
   }
 
   return null;
+}
+
+bool _readBool(Object? value) {
+  if (value is bool) {
+    return value;
+  }
+
+  if (value is num) {
+    return value != 0;
+  }
+
+  if (value is String) {
+    final normalized = value.trim().toLowerCase();
+    return normalized == 'true' ||
+        normalized == '1' ||
+        normalized == 's' ||
+        normalized == 'sim' ||
+        normalized == 'y' ||
+        normalized == 'yes';
+  }
+
+  return false;
 }

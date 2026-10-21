@@ -1,0 +1,230 @@
+AD_CODTAB	Nome Tab. Preco	I	P	N	S
+AD_PERCDESCFOB	Percentual de Desconto FOB	F	P	N	S
+AD_PERCMANGA1	% Manga 1	F	P	N	S
+AD_PERCMANGA2	% Manga 2	F	P	N	S
+AD_PERCMANGA3	% Manga 3	F	P	N	S
+AD_PERCMANGA4	% Manga 4	F	P	N	S
+ALIQFETHAB	Alíquota FETHAB	F	P	N	S
+ALIQFUNTTEL	Alíquota FUNTTEL	F	P	N	S
+ALIQFUST	Alíquota FUST	F	P	N	S
+ALIQICMS	Alíq. ICMS	F	P	N	N
+ALIQICMSAT	Alíquota ICMS AT	F	P	N	S
+ALIQICMSRED	Alíq. ICMS Reduzida	F	P	N	N
+ALIQINTERICMSAT	Alíquota ICMS Interna AT	F	P	N	S
+ALIQIPI	Alíq. IPI	F	P	N	N
+ALIQISS	Alíq. ISS	F	P	N	N
+ALIQSTEXTRANOTA	Alíquota ST Extra Nota	F	P	N	S
+ALIQSTFCPSTANT	Alíquota da ST de oper. ant.	F	P	N	S
+ALTPRECO	Alt. Preço Igual	S	P	N	S
+ALTURA	Altura	F	P	N	N
+ATUALESTOQUE	Atualiza estoque	I	P	N	N
+ATUALESTTERC	Estoque terc.	S	P	N	S
+BASECALCSTEXTRANOTA	Base de Cálculo ST Extra Nota	F	P	N	S
+BASEFUNTTEL	Base FUNTTEL	F	P	N	S
+BASEFUST	Base FUST	F	P	N	S
+BASEICMS	Base ICMS	F	P	N	N
+BASEICMSAT	Base de ICMS AT	F	P	N	S
+BASEICMSSTFRETE	Base do ICMS/ST do Frete	F	P	N	N
+BASEIPI	Base do IPI	F	P	N	N
+BASEISS	Base do ISS	F	P	N	N
+BASESTANT	Base ST ant.	F	P	N	N
+BASESTEXTRANOTA	Base ST Extra Nota	F	P	N	S
+BASESTFCPINTANT	Base ST FCP Interno Anterior	F	P	N	S
+BASESTUFDEST	Base ST UF Destino	F	P	N	N
+BASESUBSTIT	Base substituição	F	P	N	N
+BASESUBSTITANT	Base de Cálc. da ST de oper. ant.	F	P	N	N
+BASESUBSTITUNITORIG	Base ST unitária do pedido de origem	F	P	N	S
+BASESUBSTSEMRED	Base ST S/Redução	F	P	N	N
+BASICMMOD	Mod. Base ICMS	I	P	N	N
+BASICMSTMOD	Mod. Base ICMS ST	I	P	N	N
+CNPJFABRICANTE	CNPJ do Fabricante da Mercadoria	S	P	N	S
+CODAGREGACAO	Cód. de Agregação	S	P	N	S
+CODANTECIPST	Cód.Antecipação ST	S	P	N	N
+CODBARRAPDV	Cód. de Barras	S	P	N	S
+CODBENEFNAUF	Cód. de Benefício Fiscal na UF	S	P	N	S
+CODCAV	Cód. cavalete	I	P	N	S
+CODCFO	CFOP	I	P	N	S
+CODCFPS	Cód. CFPS	I	P	N	S
+CODDOCARRECAD	Cód. Mod. Documento de arrecadação	I	P	N	S
+CODEMP	Cód.Empresa	I	P	S	S
+CODEND	Endereço WMS	I	P	S	S
+CODENQIPI	Cód. Enq. Legal IPI	I	P	N	S
+CODESPECST	Código Especificador ST	I	P	N	N
+CODEXEC	Executante	I	P	N	S
+CODFCI	Código da FCI	S	P	N	S
+CODIGONFCOM	Cod. Item NFCom	S	P	S	S
+CODINDOPERITEM	Cód. Ind. Oper. Forn. (IndOper) - Serviço	S	P	N	S
+CODIPI	Código do IPI	I	P	S	S
+CODLOCALDEST	Local destino	I	P	S	S
+CODLOCALORIG	Local origem	I	P	N	S
+CODLOCALTERC	Local terceiros	I	P	N	S
+CODMOTDESONERAICMS	Cód.Mot.Desoneração ICMS	I	P	N	N
+CODMOTDESONERAST	Cód. Mot. Desoneração do ICMS ST	I	P	N	S
+CODNATREND	Código Natureza de Rendimento	I	P	N	N
+CODOBSPADRAO	Obs Padrão	I	P	N	N
+CODPARCEXEC	Cód. Parceiro Exec	I	P	N	S
+CODPROC	Cód. processo	I	P	N	N
+CODPROD	Produto	I	P	S	S
+CODPROMO	Cód. promoção	I	P	N	N
+CODSIT08EFD	Considerar a situação do documento '08' nos EFDs	S	P	N	N
+CODTPA	Tipo Atendimento	I	P	N	S
+CODTRIB	Tributação	I	P	N	N
+CODTRIBISS	Cód. trib. ISS	I	P	N	N
+CODUSU	Cód. Usuário	I	P	N	N
+CODVEND	Vendedor	I	P	N	S
+CODVOL	Unidade	S	P	N	S
+CODVOLPAD	Unidade padrão	S	P	N	N
+CODVOLPARC	Cód. Volume Parceiro	S	P	N	S
+COMPLDESC	Complemento	S	P	N	N
+CONTROLE	Controle	S	P	N	S
+CONTROLEDEST	Controle destino	S	P	N	N
+CSOSN	Cód. situação op. Simples nacional (CSON)	I	P	N	S
+CSTIPI	C.S.T IPI	I	P	N	N
+CUSTO	Custo	F	P	N	S
+DTALTER	Dt. Alteração	H	P	N	N
+DTINICIO	Dt.Prev.Entrega	D	P	N	S
+DTVIGOR	Última Dt. Vigor	D	P	N	N
+ENDIMAGEM	End. imagem	S	P	N	N
+ESPESSURA	Espessura	F	P	N	N
+ESTOQUE	Estoque	F	P	N	N
+FATURAR	Faturar	S	P	N	N
+GERAPRODUCAO	Necessidade de Produção	S	P	N	S
+GRUPOTRANSG	Grupo transg.	I	P	N	S
+GTINNFE	GTINNFE	S	P	N	S
+GTINTRIBNFE	GTINTRIBNFE	S	P	N	S
+ICMSSTFRETE	Vlr. ICMS/ST sobre o frete	F	P	N	N
+IDALIQICMS	Cód. Alíq. ICMS	I	P	N	S
+IDALIQICMSAT	Cod. Aliq. ICMS AT	I	P	N	S
+IDALIQICMSDIFICMS	Cód. Alíq. Dif. ICMS	I	P	N	S
+IDALIQISS	Código Alíquota ISS	I	P	N	S
+IDDESCPARCERIA	Id de desconto da parceria	F	P	N	N
+IMPXML	Impostos Provenientes do Xml	S	P	N	N
+INDDEVOLUCAONFCOM	Indicador de devolução	S	P	N	N
+INDESCALA	Indicador de Escala Relevante	S	P	N	S
+INDREPDES	Indicador Repasse Desoneração	S	P	N	S
+INDTOT	Não compõe total NF-e	S	P	N	N
+LARGURA	Largura	F	P	N	N
+M3	Metro Cúbico	F	P	N	N
+MARCA	Marca	S	P	N	N
+MARGLUCRO	Margem de Lucro	F	P	N	S
+NCM	NCM	S	P	N	N
+NPROCSUFRAMA	Número do Processo na Suframa	S	P	N	S
+NROPROCESSO	Nro do Processo Judicial/Adm (ISS)	S	P	N	S
+NRSERIERESERVA	Nro série	S	P	N	S
+NUFOP	Finalidade da Operação	I	P	N	S
+NUMCONTRATO	Contrato	I	P	N	S
+NUMDOCARRECAD	Número Documento de arrecadação	S	P	N	S
+NUMEROOS	Número OS Gub.	I	P	N	S
+NUMPEDIDO2	Número Pedido	S	P	N	S
+NUNOTA	Nro único	I	P	S	S
+NUPROMOCAO	Nro. Promoção	I	P	N	N
+NUTAB	Tabela	I	P	N	N
+OBSERVACAO	Observação	S	P	N	N
+OPERATUAL	Operação Atual da Produção	S	P	N	N
+ORIGEMBUSCA	Origem da busca	S	P	N	S
+ORIGPROD	Origem do Produto	S	P	N	S
+PENDENTE	Pendente	S	P	N	N
+PERCCOM	% comissão	F	P	N	N
+PERCCOMGER	% comiss. Gerente	F	P	N	N
+PERCDESC	% desconto	F	P	N	N
+PERCDESCBASE	Desc. p/ Preço Base	F	P	N	N
+PERCDESCBONIF	% desc. bonif.	F	P	N	N
+PERCDESCDIGITADO	% desc. digitado	F	P	N	N
+PERCDESCFORNECEDOR	% Desconto Fornecedor	F	P	N	S
+PERCDESCPROM	% desc. promoção	F	P	N	N
+PERCDESCTGFDES	% desc. promoção	F	P	N	N
+PERCGERMIN	% Germinação	F	P	N	N
+PERCPUREZA	% Pureza	F	P	N	N
+PERCREDVLRIPI	% Redução de Vlr. IPI	F	P	N	S
+PERCSTFCPINTANT	% ST FCP Interno Anterior	F	P	N	S
+PERCUSAQUDECPE	Percentual/Coeficiente sobre Custo Aquisição - PE	F	P	N	S
+PERCUSAQUDECPEEST	Percentual/Coeficiente sobre Custo Aquisição - PE - Origem Estrangeira	F	P	N	S
+PESOBRUTO	Peso bruto	F	P	N	N
+PESOLIQ	Peso líq.	F	P	N	N
+PRECOBASE	Preço base	F	P	S	S
+PRECOBASEQTD	Preço base qtd.	F	P	N	S
+PRODUTONFE	Produto para NF-e	S	P	N	S
+PRODUTOPESQUISADO	Produto pesquisado	I	P	N	S
+QTDCONFERIDA	Qtd. corte	F	P	N	S
+QTDENTREGUE	Qtd. entregue	F	P	N	S
+QTDFAT	Qtd. faturada	F	P	N	S
+QTDFIXADA	Qtd. fixada	F	P	N	S
+QTDFORMULA	Qtd. fórmula	F	P	N	S
+QTDNEG	Quantidade	F	P	N	S
+QTDPECA	Qtd. peça	F	P	N	S
+QTDPENDENTE	Qtd. pendente	F	P	N	S
+QTDTRIBEXPORT	Qtd. tributação para exportação	F	P	N	S
+QTDUNIDPAD	Qtd. unid. padrão	F	P	N	N
+QTDVOL	Base Cálc. Amostragem	I	P	N	S
+QTDWMS	Qtd. WMS	F	P	N	S
+REDBASEST	Redução da Base ST	F	P	N	S
+REFERENCIA	Referência do produto	S	P	S	S
+REFFORN	Referência do Fornecedor	S	P	S	S
+REPASSECLI	Repassar para o Cliente	S	P	N	N
+RESERVA	Reserva	S	P	N	N
+RESERVADO	Qtd. Reservada	F	P	N	N
+SEQFISCALAGRUP	Seq. Fiscal (Agrupado)	I	P	N	N
+SEQPEDIDO2	Seq. no Pedido	S	P	N	N
+SEQUENCIA	Sequência	I	P	S	S
+SEQUENCIAFISCAL	Sequência Fiscal	I	P	N	S
+SOLCOMPRA	Solic. compra	S	P	N	N
+STATUSLOTE	Status do Lote	S	P	N	S
+STATUSNOTA	Status da Nota	S	P	N	S
+STATUSPROC	Situação Atual da Produção	S	P	N	N
+TERCEIROS	Terceiros	S	P	N	N
+TIPENTREGA	Tipo entrega	S	P	S	S
+TIPOSEPARACAO	Tipo de separação	S	P	N	S
+TIPUTILCOM	Tipo de Utilização	I	P	N	S
+UNIDADE	Unidade do Parceiro	S	P	N	S
+USOPROD	Uso do Produto	S	P	N	S
+VARIACAOFCP	Variação da Fórmula	I	P	N	N
+VITEM_IBSCBS	Valor Total do Item da NF-e	F	P	N	S
+VLRACRESCDESC	Vlr. acresc./desc.	F	P	N	N
+VLRCOM	Vlr. comissão	F	P	N	N
+VLRCOMGER	Comiss. gerente	F	P	N	N
+VLRCREDPRES	Valor do Crédito Presumido de ICMS no CT-e (vCred)	F	P	N	S
+VLRCUS	Vlr. custos	F	P	N	N
+VLRCUSAQUDECPE	Valor Custo Aquisição - PE	F	P	N	S
+VLRDESC	Vlr. desconto	F	P	N	N
+VLRDESCBONIF	Bonificação	F	P	N	N
+VLRDESCDIGITADO	Vlr. desc. digitado	F	P	N	N
+VLRDESCMOE	Vlr. Desc. Moeda	F	P	N	S
+VLRDESCPARCERIA	Valor cupom desconto parceria	F	P	N	N
+VLRFETHAB	Vlr. FETHAB	F	P	N	S
+VLRFUNTTEL	Valor FUNTTEL	F	P	N	S
+VLRFUST	Valor FUST	F	P	N	S
+VLRICMS	Vlr. ICMS	F	P	N	N
+VLRICMSANT	Vlr ICMS destacado da oper. própria de oper. ant.	F	P	N	N
+VLRICMSAT	Valor de ICMS AT	F	P	N	S
+VLRICMSDIFERIDO	Vlr. ICMS Diferido	F	P	N	S
+VLRICMSUFDEST	Vlr. ICMS UF Destino	F	P	N	N
+VLRIPI	Vlr. IPI	F	P	N	N
+VLRISS	Vlr. ISS	F	P	N	N
+VLRLIQPROM	Vlr. liq. promoção	F	P	N	N
+VLROUTROITEM	Vlr. Outros	F	P	N	S
+VLRPROMO	Vlr. Promoção	F	P	N	N
+VLRPTOPUREZA	Vlr.Ponto Pureza	F	P	N	N
+VLRREPRED	Vlr. redução	F	P	N	N
+VLRREPREDSEMDESC	Vlr. redução sem desconto	F	P	N	S
+VLRREPREDST	Vlr. redução ST	F	P	N	N
+VLRRETENCAO	Vlr. retenção	F	P	N	N
+VLRSTEXTRANOTA	Valor ST Extra Nota	F	P	N	N
+VLRSTFCPINTANT	Vlr. ST FCP Interno Anterior	F	P	N	S
+VLRSUBST	Vlr. substituição	F	P	N	N
+VLRSUBSTANT	Vlr. do ICMS da  ST da oper. ant.	F	P	N	N
+VLRSUBSTUNITORIG	Vlr. ST unitário do pedido de origem	F	P	N	S
+VLRSUGERIDO	Vlr. Sugerido	F	P	N	N
+VLRTOT	Vlr. total	F	P	N	N
+VLRTOTLIQ	Total líq.	F	P	N	N
+VLRTOTLIQMOE	Total líq. Moeda	F	P	N	N
+VLRTOTLIQREF	Vlr. Tot.Líq. Desejado	F	P	N	N
+VLRTOTMOE	Vlr. Tot. Moeda	F	P	N	S
+VLRTROCA	Vlr. Troca	F	P	N	N
+VLRUNIDPAD	Vlr. unid. padrão	F	P	N	N
+VLRUNIT	Vlr. unitário	F	P	N	N
+VLRUNITDOLAR	Vlr.Unitário em Dólar	F	P	N	N
+VLRUNITLIQ	Preço líq.	F	P	N	N
+VLRUNITLIQMOE	Preço Líq. Moeda	F	P	N	N
+VLRUNITLOC	Vlr. Unit. Locação	F	P	N	S
+VLRUNITMOE	Vlr. Unit. Moeda	F	P	N	S
+VLRVENDAPROMO	Vlr. Venda Promoção	F	P	N	N

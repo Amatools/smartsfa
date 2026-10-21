@@ -1,0 +1,130 @@
+AD_REGRAUT	Regra Automática?	S	O	N	S
+ALIQADREMICMS	Alíquota ad rem ICMS	F	P	N	S
+ALIQCONSFIN	Alíquota suportada pelo Consumidor Final	F	P	N	S
+ALIQESTRANGEIRA	Alíquota de Origem Estrangeira	F	P	N	S
+ALIQFRETE	Alíquota do Frete	F	P	N	S
+ALIQICMSAT	Alíquota ICMS AT (%)	F	P	S	S
+ALIQICMSATIMP	Alíquota ICMS AT produto importado (%)	F	P	S	S
+ALIQICMSATINT	Alíquota de ICMS Interna (%)	F	P	S	S
+ALIQICMSCARGTRIBRED	Alíquota da Carga Tributária Reduzida (ICMS) (%)	F	P	S	S
+ALIQICMSEFET	Alíquota Interna (CST 60)	F	P	N	S
+ALIQICMSESPST	Alíquota de ICMS Específico para o cálculo de ST	F	P	N	S
+ALIQICMSLIMITECALCST	Alíq. Limite créd. ICMS p/ dedução no Valor ST	F	P	N	S
+ALIQINTDEST	Alíq. Interna Destino	F	P	S	S
+ALIQSTCARGTRIBRED	Alíquota da Carga Tributária Reduzida (ST) (%)	F	P	S	S
+ALIQSUBTRIB	Aliquota Débito de ST	F	P	N	S
+ALIQUFDEST	Alíquota Estado Destino	F	P	N	S
+ALIQUOTA	Alíquota	F	P	N	S
+BASEFCPINT	Base para cálculo do FCP Interno	S	P	N	S
+BASESTRED	Base ST Redução	S	P	N	S
+BASESTUFDEST	Base ST UF Destino por	S	P	N	S
+BASICMMOD	Modalidade BC ICMS	I	P	N	S
+BASICMSTMOD	Modalidade BC ICMS ST	I	P	N	S
+CALCALIFCPST	Aplicar a aliquota de FCP no cálculo de Desoneração ICMS/ST por Dentro	S	P	N	S
+CALCDIFICMSDENTRO	Cálculo Diferimento Por Dentro	S	P	N	S
+CALCMVAAJUSTADO	Calcular MVA Ajustado	S	P	N	S
+CALCREDPREICMCON	Calcular % de Crédito Presumido de ICMS ST Convênio ICMS 106/1996	S	P	N	S
+CALCREPREDDENTRO	Calculo Desoneração ICMS por dentro	S	P	N	S
+CALCREPREDST	Cálculo de Desoneração ICMS/ST por Dentro, conforme Resolução SEFAZ nº 13/2019	S	P	N	S
+CALCSTCONSUTRI	Calcular ST Conforme Portaria Sutri860	S	P	N	S
+CALCSTDECPR	Calcular ST conforme Decreto 4.520/2020 - PR	S	P	N	S
+CALCSTEXTRANOTA	Calcula ST extra nota com base em MVA na VENDA (Não utilizar em compras)	S	P	N	S
+CALCSTLIVRECOM	Calcular ICMS ST Zona Franca/Ýrea de livre comércio	S	P	N	S
+CALPERREDBASEICMS	Calcular % de Redução BC ICMS Lei 9.025/2020	S	P	N	S
+CALPERREDBASEST	Calcular % de Redução BC ICMS ST Lei 9.025/2020	S	P	N	S
+CARACTRIB	Característica tributável	S	P	N	S
+CODANTECIPST	Cód.Antecipação ST	S	P	N	S
+CODBEN	Código do Benefício	S	P	N	S
+CODFORMBASDIFAL	Fórmula para Cálculo da Base do DIFAL e do FCP	I	P	N	S
+CODFORMBASICM	Fórmula para cálculo da base de ICMS	I	P	N	S
+CODFORMBCICMSAT	Fórmula para Cálculo da Base do ICMS AT	I	P	N	S
+CODFORMCALCDIFAL	Fórmula para Cálculo do DIFAL	I	P	N	S
+CODFORMVA	Fórmula para calcular MVA Ajustada	I	P	S	S
+CODMOTDESONERAICMS	Cód.Mot.Desoneração ICMS	I	P	N	S
+CODMOTDESONERAST	Cód. Mot. Desoneração do ICMS ST	I	P	N	S
+CODOBSPADRAO	Observação Padrão	I	P	S	S
+CODRESTRICAO	Cód. restrição	I	P	N	S
+CODRESTRICAO2	Cód. restrição 2	I	P	N	S
+CODTAB	Tabela	I	P	S	S
+CODTABICMS	Tabela c/base p/ICMS	I	P	N	S
+CODTABSTANT	Tabela c/Base ST Operação Anterior:	I	P	N	S
+CODTABSTFARPOP	Tabela p/ Base ST - Farmácia Popular	I	P	N	S
+CODTABSTPMPF	Tabela p/ Base ST - PMPF	I	P	N	S
+CODTABSTUFDEST	Tabela c/Base ST em Favor da UF de Destino	I	P	N	S
+CODTRIB	Tributação	I	P	N	S
+CONSIDIPIVLROPPROP	Considerar IPI na comparação conforme portaria Sutri860	S	P	N	S
+CONSPMVABCICM	Considera Pauta + MVA para a base de cálculo do ICMS ST	S	P	N	S
+CONVPRODUZ	Convênio Produzir	S	P	N	S
+CREDPRESDECPR	% Crédito Presumido Decreto 4.520/2020 - PR	F	P	S	S
+CSOSN	Cód. situação op. Simples nacional (CSON)	I	P	N	S
+CUSCOMICMSBASEST	Usar último custo de entrada com ICMS como base p/ST	S	P	N	S
+DESCONSIDERAREDBASE	Para redução da base de cálculo p/ produtos de origem estrangeira	S	P	N	S
+DESCREDBST	Desconsiderar redução da base na desoneração ICMS/ST por dentro	S	P	N	S
+DESCRRESTRICAO	Descrição Restrição	S	P	N	N
+DESCRRESTRICAO2	Descrição Restrição 2	S	P	N	N
+DESICMSSN	Desonera ICMS do Simples Nacional	S	P	N	S
+DTFIMVIGENCIA	Fecha de Fin de Vigencia	D	P	N	N
+DTINICIOVIGENCIA	Fecha de Vigencia	D	P	N	N
+FINALIDADE	Destinação da mercadoria adquirida	S	P	N	S
+FORMAREPICMS	FORMAREPICMS	S	P	N	S
+FORMCALFCPDIFAL	Fórmula para o Cálculo do FCP do DIFAL	I	P	N	S
+GERADIFZERADO	Gerar tags de Diferimento Zerado	S	P	N	N
+ICMSDIFPOSITIVA	Utilizar diferença positiva	S	P	N	S
+ICMSUFORIGDIFEMIT	ICMS devido à UF de origem da prestação, quando diferente da UF do emitente	S	P	N	S
+IDALIQ	Cód. Alíq. ICMS	I	P	N	S
+MAIORBASEICMS	Usar a maior base para ICMS	S	P	N	S
+MAIORBASEST	Maior Base ST	S	P	N	S
+MARGLUCRO	Margem de Lucro	F	P	N	S
+MARGLUCROEST	Margem Lucro (MVA) para origem estrangeira	F	P	N	S
+MOTREDADREM	Motivo Redução do ad rem	I	P	N	S
+MVAORIGINAL	Usar MVA original quando carga trib. inferior à alíq. interestadual?	S	P	N	S
+MVASIMPLIFICADO	MVA Simplificado	S	P	N	S
+MVASTUFDEST	Margem Lucro (MVA) UF Destino	F	P	N	S
+NAOCONSIDMVA	Considera Pauta para a base de cálculo do ICMS ST	S	P	N	N
+OUTORGA	Outorga	F	P	N	S
+PAUTAVLRSTFIXO	Pauta de Valor Fixo do Item - CE	S	P	N	S
+PERCALIQADREMICMS	% Redução Alíquota ad rem ICMS	F	P	N	S
+PERCCARGATRIBMEDIA	Percentual Carga Trib. Média	F	P	N	S
+PERCICMSFCP	% ICMS FCP	F	P	S	S
+PERCICMSFCPINT	% ICMS FCP Interno	F	P	N	S
+PERCICMSMONORET	% Destino ICMS Monofásico Retido	F	P	N	S
+PERCICMSPART	% da BC operação própria (tag ICMSPart)	F	P	N	S
+PERCMINSUBTRIB	Percentual Mínimo ST (RIOLOG)	F	P	N	S
+PERCMULTCALCDP	% Diferença Positiva	F	P	N	S
+PERCPMPF	Percentual PMPF	F	P	N	S
+PERCREDBASEDEST	% Redução Base Destino	F	P	N	S
+PERCREDBASEICMSEFET	Perc. Red. Base	F	P	N	S
+PERCREDPR	Percentual do Crédito Presumido	F	P	N	S
+PERCREDPREICMCON	Percentual de Crédito Presumido de ICMS ST Convênio ICMS 106/1996	F	P	N	S
+PERCSTFCPINT	% ST FCP Interno	F	P	N	S
+PERCTRAVAMED	Porcentagem de trava para medicamentos	F	P	N	S
+PERCUSAQUDECPE	Percentual/Coeficiente sobre Custo Aquisição - PE	F	P	S	S
+PERCUSAQUDECPEEST	Percentual/Coeficiente sobre Custo Aquisição - PE - Origem Estrangeira	F	P	S	S
+PROEMPREGO	Optante pelo Regime Especial do Pró-Emprego (Resolução n° 257/2008 - SEF)	S	P	N	S
+REDBASE	Redução da Base	F	P	N	S
+REDBASEESTRANGEIRA	Redução da Base para Origem Estrangeira	F	P	N	S
+REDBASEFRETE	Redução da Base do Frete	F	P	N	S
+REDBASEST	Redução de Base ST	F	P	N	S
+REDICMS	Redução ICMS	S	P	N	S
+REGRACALCBCICMSAT	Regra p/ cálculo da base ICMS AT	S	P	N	S
+REGRADEDICMSAT	Deduzir do ICMS AT	S	P	N	S
+REPDIFALFCP	ICMS DIFAL (Não Contribuinte)	S	P	N	S
+REPICMS	Repassar ICMS	S	P	N	S
+REPPERCBASEICMS	% da Base ICMS	F	P	N	S
+REPREDBASE	Repassar Redução do Imposto para o cliente?	S	P	N	S
+REPREDBASE2	Redução da BASE	S	P	N	S
+SEQUENCIA	Sequência	I	P	S	S
+STCAT137SP	Calcular ST p/ Medicamentos - CAT-SP	S	P	S	S
+STSUTRI4302014MG	Calcular ST conforme portaria Sutri 430/2014 - MG	S	P	N	S
+TABCFOP	Tabela de CFOPs	S	P	N	S
+TIPCALCDIFAL	Tipo de Cálculo do DIFAL	I	P	N	S
+TIPCALCFCPSTESPEC	Tipo de Cálculo de FCP Específico	I	P	N	S
+TIPCALCSTESPEC	Tipo de Cálculo de ST Específico	I	P	N	S
+TIPCUSAQUDECPE	Tipo de custo Custo Decreto 38.296/PE	S	P	S	S
+TIPRESTRICAO	Tipo de Restrição	S	P	N	S
+TIPRESTRICAO2	Tipo de Restrição 2	S	P	N	S
+UFDEST	UF destino	I	P	S	S
+UFORIG	UF origem	I	P	S	S
+ZERAR	Usar Vlr.ICMS na ST, anotar Base/Vlr na Obs.item e zerar Base/Vlr do ICMS?	S	P	N	S
+ZERARDIFALREM	Zerar Valor do ICMS DIFAL do Remetente	S	P	N	S
+ZERARSTNEG	Zerar valor da substituição tributária quando negativo	S	P	N	S

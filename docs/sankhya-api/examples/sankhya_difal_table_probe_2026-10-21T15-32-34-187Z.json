@@ -1,0 +1,168 @@
+{
+  "marker": "DIFAL_TABLE_PROBE",
+  "ok": true,
+  "tenantId": "self_T8oqTD0UBtWATPbITOGsqAEZt3d2_smartsfa-enterprise-teste",
+  "environment": "prod",
+  "baseUrl": "https://api.sankhya.com.br",
+  "endpointPath": "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+  "smoke": {
+    "status": 200,
+    "ok": true,
+    "responseIsJson": true,
+    "rowCount": 1,
+    "fields": [
+      "OK"
+    ],
+    "responseBody": {
+      "serviceName": "DbExplorerSP.executeQuery",
+      "status": "1",
+      "pendingPrinting": "false",
+      "transactionId": "491125AEFF5D2C2A889504ED95BE677D",
+      "responseBody": {
+        "fieldsMetadata": [
+          {
+            "name": "OK",
+            "description": "OK",
+            "order": 1,
+            "userType": "F",
+            "precision": 2
+          }
+        ],
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "burstLimit": false,
+        "timeQuery": "2ms",
+        "timeResultSet": "1ms"
+      }
+    }
+  },
+  "results": {
+    "tgfcusite": {
+      "status": 200,
+      "ok": true,
+      "responseIsJson": true,
+      "rowCount": 1,
+      "fields": [
+        "TOTAL_LINHAS",
+        "LINHAS_COM_PRODUTO"
+      ],
+      "responseBody": {
+        "serviceName": "DbExplorerSP.executeQuery",
+        "status": "1",
+        "pendingPrinting": "false",
+        "transactionId": "7749E12BC0A2B272E168F839CF80BF97",
+        "responseBody": {
+          "fieldsMetadata": [
+            {
+              "name": "TOTAL_LINHAS",
+              "description": "TOTAL_LINHAS",
+              "order": 1,
+              "userType": "I"
+            },
+            {
+              "name": "LINHAS_COM_PRODUTO",
+              "description": "LINHAS_COM_PRODUTO",
+              "order": 2,
+              "userType": "I"
+            }
+          ],
+          "rows": [
+            [
+              25057,
+              25057
+            ]
+          ],
+          "burstLimit": false,
+          "timeQuery": "26ms",
+          "timeResultSet": "1ms"
+        }
+      }
+    },
+    "tgfdin_difal": {
+      "status": 200,
+      "ok": true,
+      "responseIsJson": true,
+      "rowCount": 1,
+      "fields": [
+        "TOTAL_LINHAS",
+        "LINHAS_BASEDIFAL",
+        "LINHAS_VLRDIFALDEST",
+        "LINHAS_VLRDIFALREM",
+        "LINHAS_PERCPARTDIFAL",
+        "LINHAS_TIPCALCDIFAL"
+      ],
+      "responseBody": {
+        "serviceName": "DbExplorerSP.executeQuery",
+        "status": "1",
+        "pendingPrinting": "false",
+        "transactionId": "1AD71C8952652243637B52DB3AEE7487",
+        "responseBody": {
+          "fieldsMetadata": [
+            {
+              "name": "TOTAL_LINHAS",
+              "description": "TOTAL_LINHAS",
+              "order": 1,
+              "userType": "I"
+            },
+            {
+              "name": "LINHAS_BASEDIFAL",
+              "description": "LINHAS_BASEDIFAL",
+              "order": 2,
+              "userType": "I"
+            },
+            {
+              "name": "LINHAS_VLRDIFALDEST",
+              "description": "LINHAS_VLRDIFALDEST",
+              "order": 3,
+              "userType": "I"
+            },
+            {
+              "name": "LINHAS_VLRDIFALREM",
+              "description": "LINHAS_VLRDIFALREM",
+              "order": 4,
+              "userType": "I"
+            },
+            {
+              "name": "LINHAS_PERCPARTDIFAL",
+              "description": "LINHAS_PERCPARTDIFAL",
+              "order": 5,
+              "userType": "I"
+            },
+            {
+              "name": "LINHAS_TIPCALCDIFAL",
+              "description": "LINHAS_TIPCALCDIFAL",
+              "order": 6,
+              "userType": "I"
+            }
+          ],
+          "rows": [
+            [
+              16914128,
+              0,
+              0,
+              0,
+              0,
+              16914128
+            ]
+          ],
+          "burstLimit": false,
+          "timeQuery": "3,966s",
+          "timeResultSet": "1ms"
+        }
+      }
+    },
+    "tgfdin_samples": {
+      "status": 200,
+      "ok": true,
+      "responseIsJson": false,
+      "rowCount": 0,
+      "fields": [],
+      "responseBody": {
+        "raw": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<serviceResponse serviceName=\"DbExplorerSP.executeQuery\" status=\"0\" pendingPrinting=\"false\" transactionId=\"AB1F73DBA7FE0D9BAAFDB982E42FE10C\"><statusMessage><![CDATA[T1JBLTAwOTA0OiAiRElOIi4iQ09EUFJPRCI6IGlkZW50aWZpY2Fkb3IgaW524WxpZG8=\n]]></statusMessage></serviceResponse>\n"
+      }
+    }
+  }
+}

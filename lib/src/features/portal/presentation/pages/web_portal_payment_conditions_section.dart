@@ -23,6 +23,7 @@ class _PaymentConditionsSectionState extends State<_PaymentConditionsSection> {
   final List<_PaymentConditionDraftRow> _rows = [];
   bool _initialized = false;
   bool _saving = false;
+  bool _dirty = false;
   String? _loadedScope;
 
   String _currentScopeKey() {
@@ -142,10 +143,11 @@ class _PaymentConditionsSectionState extends State<_PaymentConditionsSection> {
 
                 final rules = snapshot.data ?? const <PaymentConditionRule>[];
                 final currentScope = _currentScopeKey();
-                if (!_initialized || _loadedScope != currentScope) {
+                if (!_initialized || _loadedScope != currentScope || !_dirty) {
                   _syncControllers(rules);
                   _initialized = true;
                   _loadedScope = currentScope;
+                  _dirty = false;
                 }
 
                 return Card(
@@ -272,6 +274,9 @@ class _PaymentConditionsSectionState extends State<_PaymentConditionsSection> {
                                               TextField(
                                                 controller: _rows[index]
                                                     .descriptionController,
+                                                onChanged: (_) {
+                                                  _dirty = true;
+                                                },
                                                 enabled:
                                                     canEditRules && !_saving,
                                                 decoration: _fieldDecoration(
@@ -305,12 +310,17 @@ class _PaymentConditionsSectionState extends State<_PaymentConditionsSection> {
                                                           _rows[index]
                                                               .minimumValueController,
                                                         );
+                                                        _dirty = true;
                                                       },
                                                       onTapOutside: (_) {
                                                         _normalizeMoneyController(
                                                           _rows[index]
                                                               .minimumValueController,
                                                         );
+                                                        _dirty = true;
+                                                      },
+                                                      onChanged: (_) {
+                                                        _dirty = true;
                                                       },
                                                       textAlign:
                                                           TextAlign.right,
@@ -364,6 +374,9 @@ class _PaymentConditionsSectionState extends State<_PaymentConditionsSection> {
                                               child: TextField(
                                                 controller: _rows[index]
                                                     .descriptionController,
+                                                onChanged: (_) {
+                                                  _dirty = true;
+                                                },
                                                 enabled:
                                                     canEditRules && !_saving,
                                                 decoration: _fieldDecoration(
@@ -396,12 +409,17 @@ class _PaymentConditionsSectionState extends State<_PaymentConditionsSection> {
                                                     _rows[index]
                                                         .minimumValueController,
                                                   );
+                                                  _dirty = true;
                                                 },
                                                 onTapOutside: (_) {
                                                   _normalizeMoneyController(
                                                     _rows[index]
                                                         .minimumValueController,
                                                   );
+                                                  _dirty = true;
+                                                },
+                                                onChanged: (_) {
+                                                  _dirty = true;
                                                 },
                                                 textAlign: TextAlign.right,
                                                 decoration: _fieldDecoration(
@@ -496,6 +514,7 @@ class _PaymentConditionsSectionState extends State<_PaymentConditionsSection> {
   void _addRule() {
     setState(() {
       _rows.add(_createDraftRow());
+      _dirty = true;
     });
   }
 
@@ -519,11 +538,13 @@ class _PaymentConditionsSectionState extends State<_PaymentConditionsSection> {
     if (_rows.length == 1) {
       _rows.first.descriptionController.clear();
       _rows.first.minimumValueController.text = '0,00';
+      _dirty = true;
       return;
     }
 
     setState(() {
       _rows.removeAt(index).dispose();
+      _dirty = true;
     });
   }
 
@@ -579,6 +600,8 @@ class _PaymentConditionsSectionState extends State<_PaymentConditionsSection> {
       );
 
       _initialized = false;
+      _dirty = false;
+      _loadedScope = null;
 
       if (!mounted) {
         return;

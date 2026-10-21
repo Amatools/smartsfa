@@ -1,0 +1,126 @@
+{
+  "marker": "PRECO_TABELA_PROBE",
+  "ok": false,
+  "tenantId": "self_T8oqTD0UBtWATPbITOGsqAEZt3d2_smartsfa-enterprise-teste",
+  "environment": "prod",
+  "authStatus": 200,
+  "bearerReceived": true,
+  "error": "codigo_tabela_not_found",
+  "discovery": {
+    "productsProbeStatus": 200,
+    "productsChecked": 12,
+    "productPriceChecks": [
+      {
+        "codigoProduto": "0",
+        "path": "/v1/precos/produto/0?pagina=1",
+        "status": 400,
+        "registros": 0,
+        "errorCode": "INVALID_REQUEST",
+        "errorDetails": "Acesso negado ao serviço: /precos/produto/0 método: GET para o usuario: 43 - SMART.SFA",
+        "codigoTabelaEncontrado": null
+      },
+      {
+        "codigoProduto": "490454",
+        "path": "/v1/precos/produto/490454?pagina=1",
+        "status": 400,
+        "registros": 0,
+        "errorCode": "INVALID_REQUEST",
+        "errorDetails": "Acesso negado ao serviço: /precos/produto/490454 método: GET para o usuario: 43 - SMART.SFA",
+        "codigoTabelaEncontrado": null
+      },
+      {
+        "codigoProduto": "490446",
+        "path": "/v1/precos/produto/490446?pagina=1",
+        "status": 400,
+        "registros": 0,
+        "errorCode": "INVALID_REQUEST",
+        "errorDetails": "Acesso negado ao serviço: /precos/produto/490446 método: GET para o usuario: 43 - SMART.SFA",
+        "codigoTabelaEncontrado": null
+      },
+      {
+        "codigoProduto": "490447",
+        "path": "/v1/precos/produto/490447?pagina=1",
+        "status": 400,
+        "registros": 0,
+        "errorCode": "INVALID_REQUEST",
+        "errorDetails": "Acesso negado ao serviço: /precos/produto/490447 método: GET para o usuario: 43 - SMART.SFA",
+        "codigoTabelaEncontrado": null
+      },
+      {
+        "codigoProduto": "490453",
+        "path": "/v1/precos/produto/490453?pagina=1",
+        "status": 400,
+        "registros": 0,
+        "errorCode": "INVALID_REQUEST",
+        "errorDetails": "Acesso negado ao serviço: /precos/produto/490453 método: GET para o usuario: 43 - SMART.SFA",
+        "codigoTabelaEncontrado": null
+      },
+      {
+        "codigoProduto": "490455",
+        "path": "/v1/precos/produto/490455?pagina=1",
+        "status": 400,
+        "registros": 0,
+        "errorCode": "INVALID_REQUEST",
+        "errorDetails": "Acesso negado ao serviço: /precos/produto/490455 método: GET para o usuario: 43 - SMART.SFA",
+        "codigoTabelaEncontrado": null
+      },
+      {
+        "codigoProduto": "490456",
+        "path": "/v1/precos/produto/490456?pagina=1",
+        "status": 400,
+        "registros": 0,
+        "errorCode": "INVALID_REQUEST",
+        "errorDetails": "Acesso negado ao serviço: /precos/produto/490456 método: GET para o usuario: 43 - SMART.SFA",
+        "codigoTabelaEncontrado": null
+      },
+      {
+        "codigoProduto": "490457",
+        "path": "/v1/precos/produto/490457?pagina=1",
+        "status": 400,
+        "registros": 0,
+        "errorCode": "INVALID_REQUEST",
+        "errorDetails": "Acesso negado ao serviço: /precos/produto/490457 método: GET para o usuario: 43 - SMART.SFA",
+        "codigoTabelaEncontrado": null
+      },
+      {
+        "codigoProduto": "490458",
+        "path": "/v1/precos/produto/490458?pagina=1",
+        "status": 400,
+        "registros": 0,
+        "errorCode": "INVALID_REQUEST",
+        "errorDetails": "Acesso negado ao serviço: /precos/produto/490458 método: GET para o usuario: 43 - SMART.SFA",
+        "codigoTabelaEncontrado": null
+      },
+      {
+        "codigoProduto": "490459",
+        "path": "/v1/precos/produto/490459?pagina=1",
+        "status": 400,
+        "registros": 0,
+        "errorCode": "INVALID_REQUEST",
+        "errorDetails": "Acesso negado ao serviço: /precos/produto/490459 método: GET para o usuario: 43 - SMART.SFA",
+        "codigoTabelaEncontrado": null
+      },
+      {
+        "codigoProduto": "490575",
+        "path": "/v1/precos/produto/490575?pagina=1",
+        "status": 400,
+        "registros": 0,
+        "errorCode": "INVALID_REQUEST",
+        "errorDetails": "Acesso negado ao serviço: /precos/produto/490575 método: GET para o usuario: 43 - SMART.SFA",
+        "codigoTabelaEncontrado": null
+      },
+      {
+        "codigoProduto": "490576",
+        "path": "/v1/precos/produto/490576?pagina=1",
+        "status": 400,
+        "registros": 0,
+        "errorCode": "INVALID_REQUEST",
+        "errorDetails": "Acesso negado ao serviço: /precos/produto/490576 método: GET para o usuario: 43 - SMART.SFA",
+        "codigoTabelaEncontrado": null
+      }
+    ],
+    "tablesListProbeStatus": 404,
+    "selectedBy": null,
+    "selectedCodigoTabela": null
+  }
+}

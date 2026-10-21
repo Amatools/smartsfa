@@ -709,14 +709,26 @@ class _PartnersSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _SimpleCardSection(
-      title: 'Parceiros',
-      subtitle: 'Contexto enterprise: o workspace é focado na própria empresa. Parceiros comerciais serão administrados aqui.',
-      items: const [
-        'Distribuidores e revendas homologadas',
-        'Políticas por parceiro',
-        'Status comercial e operacional',
-      ],
+    final userLabel = FirebaseAuth.instance.currentUser?.displayName?.trim();
+    final identity = AppIdentity(
+      tenantId: activeTenant.tenantId,
+      userLabel: (userLabel == null || userLabel.isEmpty)
+          ? 'Portal'
+          : userLabel,
+      role: activeTenant.role,
+      tenantName: activeTenant.tenantName,
+      isMock: false,
+      membershipId: activeTenant.membershipId,
+      isPersonalWorkspace:
+          activeTenant.workspaceType == 'seller_solo_workspace',
+    );
+
+    return ClientesPage(
+      identity: identity,
+      repository: FirestoreClienteRepository(FirebaseFirestore.instance),
+      preCadastroRepository: FirestoreClientePreCadastroRepository(
+        FirebaseFirestore.instance,
+      ),
     );
   }
 }

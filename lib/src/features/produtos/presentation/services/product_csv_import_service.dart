@@ -51,6 +51,7 @@ class ProductCsvImportService {
     'quantidadeMinima',
     'ncm',
     'cest',
+    'origemMercadoriaCst',
     'aliquotaIpiBase',
     'pesoKg',
     'comprimentoMm',
@@ -85,6 +86,7 @@ class ProductCsvImportService {
               '1',
               '0000.00.00',
               '00.000.00',
+              '0',
               '0',
               '0.15',
               '100',
@@ -168,6 +170,11 @@ class ProductCsvImportService {
             ],
             <String>['ncm', 'Nao', 'Formato recomendado: 0000.00.00.'],
             <String>['cest', 'Nao', 'Formato recomendado: 00.000.00.'],
+            <String>[
+              'origemMercadoriaCst',
+              'Nao',
+              'Origem da mercadoria no padrão CST (0 a 8).',
+            ],
             <String>[
               'aliquotaIpiBase',
               'Nao',
@@ -385,6 +392,10 @@ class ProductCsvImportService {
         ], existing?.quantidadeMinima),
         ncm: _pickString(row, const <String>['ncm'], existing?.ncm),
         cest: _pickString(row, const <String>['cest'], existing?.cest),
+        origemMercadoriaCst: _pickOrigemMercadoriaCst(
+          row,
+          existing?.origemMercadoriaCst,
+        ),
         aliquotaIpiBase: _pickDouble(row, const <String>[
           'aliquotaipibase',
           'aliquota_ipi_base',
@@ -493,6 +504,41 @@ class ProductCsvImportService {
   ) {
     final incoming = _readDoubleFromRow(row, aliases);
     return incoming ?? fallback;
+  }
+
+  String? _pickOrigemMercadoriaCst(Map<String, String> row, String? fallback) {
+    final incoming = _readRowValue(row, const <String>[
+      'origemmercadoriacst',
+      'origem_mercadoria_cst',
+      'origemmercadoria',
+      'origem_mercadoria',
+      'origemproduto',
+      'origem_produto',
+      'cstorigem',
+      'cst_origem',
+      'origprod',
+    ]).trim();
+
+    if (incoming.isEmpty) {
+      return _normalizeOrigemMercadoriaCstValue(fallback);
+    }
+
+    final normalized = _normalizeOrigemMercadoriaCstValue(incoming);
+    return normalized ?? _normalizeOrigemMercadoriaCstValue(fallback);
+  }
+
+  String? _normalizeOrigemMercadoriaCstValue(Object? value) {
+    final raw = (value ?? '').toString().trim();
+    if (raw.isEmpty) {
+      return null;
+    }
+
+    final parsed = int.tryParse(raw);
+    if (parsed == null || parsed < 0 || parsed > 8) {
+      return null;
+    }
+
+    return parsed.toString();
   }
 
   String _normalizeHeader(String value) {

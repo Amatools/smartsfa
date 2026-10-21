@@ -35,6 +35,7 @@ class ProductEditorSaveFormDataBuilder {
       quantidadeMinimaText: controllers.quantidadeMinima.text,
       ncmText: controllers.ncm.text,
       cestText: controllers.cest.text,
+      origemMercadoriaCstText: controllers.origemMercadoriaCst.text,
       ipiBaseText: controllers.ipiBase.text,
       pesoText: controllers.peso.text,
       erpProductIdText: controllers.erpProductId.text,
