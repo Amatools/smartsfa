@@ -33,6 +33,7 @@ class ProductEditorSaveFormDataBuilder {
       unidadeText: controllers.unidade.text,
       multiploVendaText: controllers.multiploVenda.text,
       quantidadeMinimaText: controllers.quantidadeMinima.text,
+      grupoTributarioIdText: controllers.grupoTributarioId.text,
       ncmText: controllers.ncm.text,
       cestText: controllers.cest.text,
       origemMercadoriaCstText: controllers.origemMercadoriaCst.text,

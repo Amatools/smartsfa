@@ -35,6 +35,7 @@ class ProductEditorFormResetCoordinator {
     controllers.subcategoria.clear();
     controllers.bitola.clear();
     controllers.unidade.text = unidadePadrao;
+    controllers.grupoTributarioId.clear();
     controllers.ncm.clear();
     controllers.cest.clear();
     controllers.origemMercadoriaCst.clear();

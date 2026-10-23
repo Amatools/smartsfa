@@ -47,6 +47,7 @@ class ProductEditorSaveFormData {
     required this.unidadeText,
     required this.multiploVendaText,
     required this.quantidadeMinimaText,
+    required this.grupoTributarioIdText,
     required this.ncmText,
     required this.cestText,
     required this.origemMercadoriaCstText,
@@ -78,6 +79,7 @@ class ProductEditorSaveFormData {
   final String unidadeText;
   final String multiploVendaText;
   final String quantidadeMinimaText;
+  final String grupoTributarioIdText;
   final String ncmText;
   final String cestText;
   final String origemMercadoriaCstText;
@@ -184,6 +186,7 @@ class ProductEditorSaveCoordinator {
       unidadeText: formData.unidadeText,
       multiploVendaText: formData.multiploVendaText,
       quantidadeMinimaText: formData.quantidadeMinimaText,
+      grupoTributarioIdText: formData.grupoTributarioIdText,
       ncmText: formData.ncmText,
       cestText: formData.cestText,
       origemMercadoriaCstText: formData.origemMercadoriaCstText,

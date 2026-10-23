@@ -27,6 +27,49 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
     _anyUfOption,
     ...brazilStates,
   ];
+  static const List<MapEntry<String, String>> _operationProfileOptions =
+      <MapEntry<String, String>>[
+        MapEntry('revenda_same_uf', 'Revenda - operacao estadual (mesma UF)'),
+        MapEntry('revenda_interstate', 'Revenda - operacao interestadual'),
+        MapEntry(
+          'uso_consumo_contribuinte_same_uf',
+          'Uso/consumo contribuinte - operacao estadual (mesma UF)',
+        ),
+        MapEntry(
+          'uso_consumo_contribuinte_interstate',
+          'Uso/consumo contribuinte - operacao interestadual',
+        ),
+        MapEntry(
+          'uso_consumo_nao_contribuinte_same_uf',
+          'Uso/consumo nao contribuinte - operacao estadual (mesma UF)',
+        ),
+        MapEntry(
+          'uso_consumo_nao_contribuinte_interstate',
+          'Uso/consumo nao contribuinte - operacao interestadual',
+        ),
+        MapEntry(
+          'industrializacao_same_uf',
+          'Industrializacao - operacao estadual (mesma UF)',
+        ),
+        MapEntry(
+          'industrializacao_interstate',
+          'Industrializacao - operacao interestadual',
+        ),
+        MapEntry('zfm_industrializacao', 'ZFM/SUFRAMA - Industrializacao'),
+        MapEntry(
+          'zfm_comercializacao_revenda',
+          'ZFM/SUFRAMA - Comercializacao/Revenda',
+        ),
+      ];
+  static final Map<String, String> _operationProfileLabelByKey =
+      Map<String, String>.fromEntries(_operationProfileOptions);
+  static final Map<String, String> _operationProfileLookup =
+      <String, String>{
+        for (final item in _operationProfileOptions)
+          _normalizeOperationProfileToken(item.key): item.key,
+        for (final item in _operationProfileOptions)
+          _normalizeOperationProfileToken(item.value): item.key,
+      };
 
   static const Color _dialogChromeColor = Color(0xFFF5F6F8);
   static const Color _dialogBodyColor = Colors.white;
@@ -91,6 +134,44 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
     return _isGlobalRuleScope(rule)
         ? 'Escopo: Global (ERP)'
         : 'Escopo: Representada';
+  }
+
+  static String _normalizeOperationProfileToken(String value) {
+    final normalized = value
+        .trim()
+        .toLowerCase()
+        .replaceAll(RegExp(r'[áàâãä]'), 'a')
+        .replaceAll(RegExp(r'[éèêë]'), 'e')
+        .replaceAll(RegExp(r'[íìîï]'), 'i')
+        .replaceAll(RegExp(r'[óòôõö]'), 'o')
+        .replaceAll(RegExp(r'[úùûü]'), 'u')
+        .replaceAll('ç', 'c')
+        .replaceAll(RegExp(r'[^a-z0-9]+'), '_')
+        .replaceAll(RegExp(r'_+'), '_')
+        .replaceAll(RegExp(r'^_|_$'), '');
+    return normalized;
+  }
+
+  String? _normalizeOperationProfileKey(String? value) {
+    final source = (value ?? '').trim();
+    if (source.isEmpty) {
+      return null;
+    }
+
+    final token = _normalizeOperationProfileToken(source);
+    if (token.isEmpty) {
+      return null;
+    }
+
+    return _operationProfileLookup[token];
+  }
+
+  String _operationProfileLabel(String? key) {
+    final normalizedKey = _normalizeOperationProfileKey(key);
+    if (normalizedKey == null) {
+      return '';
+    }
+    return _operationProfileLabelByKey[normalizedKey] ?? normalizedKey;
   }
 
   String? _resolveRuleScopeForSave(TaxRule? existing) {
@@ -529,6 +610,18 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
                                   context,
                                   'UF destino ${_displayUf(rule.ufDestino)}',
                                 ),
+                                if ((rule.operationProfileKey ?? '')
+                                    .trim()
+                                    .isNotEmpty)
+                                  _ruleChip(
+                                    context,
+                                    'Perfil ${_operationProfileLabel(rule.operationProfileKey)}',
+                                  ),
+                                if ((rule.taxGroupId ?? '').trim().isNotEmpty)
+                                  _ruleChip(
+                                    context,
+                                    'Grupo tributario ${rule.taxGroupId!.trim()}',
+                                  ),
                                 _ruleChip(
                                   context,
                                   _displayStType(rule.stCalculationType),
@@ -652,6 +745,18 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
       parts.add('Finalidade: ${rule.salePurpose!.label}');
     }
 
+    final operationProfileLabel = _operationProfileLabel(
+      rule.operationProfileKey,
+    );
+    if (operationProfileLabel.isNotEmpty) {
+      parts.add('Perfil de operacao: $operationProfileLabel');
+    }
+
+    final taxGroupId = (rule.taxGroupId ?? '').trim();
+    if (taxGroupId.isNotEmpty) {
+      parts.add('Grupo tributario: $taxGroupId');
+    }
+
     if (rule.validFrom != null || rule.validUntil != null) {
       parts.add(
         'Vigência ${_formatDate(rule.validFrom)} a ${_formatDate(rule.validUntil)}',
@@ -718,6 +823,8 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
               _withFallback(rule.ufOrigem, 'ANY'),
               _withFallback(rule.ufDestino, ''),
               _withFallback(rule.salePurpose?.value, ''),
+              _operationProfileLabel(rule.operationProfileKey),
+              _withFallback(rule.taxGroupId, ''),
               _withFallback(rule.stCalculationType, 'mva'),
               rule.stPriceForCalculation?.toString() ?? '',
               rule.stBaseReductionPercent?.toString() ?? '',
@@ -744,6 +851,8 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
                 'ANY',
                 'SP',
                 'revenda',
+                'Revenda - operacao estadual (mesma UF)',
+                '',
                 'mva',
                 '100.00',
                 '0',
@@ -772,6 +881,8 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
               'UF origem',
               'UF destino',
               'Finalidade da venda',
+              'Perfil de operacao',
+              'Grupo tributario',
               'Tipo ST',
               'Preco para calculo ST',
               'Reducao base ICMS ST',
@@ -817,6 +928,16 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
                 'Finalidade da venda',
                 'Opcional',
                 'Uso opcional para diferenciar regras por uso/consumo, revenda ou industrializacao.',
+              ],
+              <String>[
+                'Perfil de operacao',
+                'Opcional',
+                'Pode informar o nome do perfil (ex.: Revenda - operacao estadual (mesma UF)) ou a chave tecnica.',
+              ],
+              <String>[
+                'Grupo tributario',
+                'Opcional',
+                'ID do grupo cadastrado no modulo Grupos tributarios.',
               ],
               <String>['Tipo ST', 'Sim', 'Aceito apenas MVA ou PMC.'],
               <String>[
@@ -1545,6 +1666,26 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
         grupoFiscalId: _nullable(
           _readTaxCell(row, const <String>['grupofiscalid', 'grupo_fiscal_id']),
         ),
+        taxGroupId: _nullable(
+          _readTaxCell(row, const <String>[
+            'taxgroupid',
+            'tax_group_id',
+            'grupotributarioid',
+            'grupo_tributario_id',
+            'grupo tributario',
+            'grupo tributario id',
+          ]),
+        ),
+        operationProfileKey: _normalizeOperationProfileKey(
+          _readTaxCell(row, const <String>[
+            'operationprofilekey',
+            'operation_profile_key',
+            'profilekey',
+            'perfildeoperacao',
+            'perfil de operacao',
+            'perfil',
+          ]),
+        ),
         ufOrigem: _normalizeUfOrigem(
           _readTaxCell(row, const <String>[
             'uforigem',
@@ -1716,6 +1857,10 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
         aliquotaDestino: _nullableDouble(draft.aliquotaDestino),
         aliquotaCredito: _nullableDouble(draft.aliquotaCredito),
         grupoFiscalId: null,
+        taxGroupId: _nullable(draft.taxGroupId),
+        operationProfileKey: _normalizeOperationProfileKey(
+          draft.operationProfileKey,
+        ),
         ufOrigem: _nullable(existing?.ufOrigem)?.toUpperCase() ?? 'ANY',
         ufDestino: _normalizeUfForStorage(draft.ufDestino),
         salePurpose: draft.salePurpose,
@@ -1838,6 +1983,8 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
       aliquotaDestino: source.aliquotaDestino,
       aliquotaCredito: source.aliquotaCredito,
       grupoFiscalId: source.grupoFiscalId,
+      taxGroupId: source.taxGroupId,
+      operationProfileKey: source.operationProfileKey,
       salePurpose: source.salePurpose,
       ufOrigem: source.ufOrigem,
       ufDestino: source.ufDestino,
@@ -1913,6 +2060,12 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
     final fiscalExceptionController = TextEditingController(
       text: existing?.fiscalException ?? '',
     );
+    final operationProfileKeyController = TextEditingController(
+      text: _operationProfileLabel(existing?.operationProfileKey),
+    );
+    final taxGroupIdController = TextEditingController(
+      text: existing?.taxGroupId ?? '',
+    );
     var selectedSalePurpose = existing?.salePurpose;
     var selectedUfDestino = _normalizeUfForDropdown(existing?.ufDestino);
     var stCalculationType = _readStCalculationType(existing?.stCalculationType);
@@ -1959,7 +2112,10 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
                 vertical: 24,
               ),
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 680),
+                constraints: BoxConstraints(
+                  maxWidth: 680,
+                  maxHeight: MediaQuery.of(context).size.height * 0.9,
+                ),
                 child: Container(
                   decoration: BoxDecoration(
                     color: _dialogBodyColor,
@@ -1968,7 +2124,7 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
                   ),
                   clipBehavior: Clip.antiAlias,
                   child: Column(
-                    mainAxisSize: MainAxisSize.min,
+                    mainAxisSize: MainAxisSize.max,
                     children: [
                       Container(
                         width: double.infinity,
@@ -1981,17 +2137,18 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
                           style: Theme.of(context).textTheme.titleMedium,
                         ),
                       ),
-                      Container(
-                        color: _dialogBodyColor,
-                        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-                        child: SizedBox(
-                          width: 620,
-                          child: Form(
-                            key: formKey,
-                            child: SingleChildScrollView(
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
+                      Expanded(
+                        child: Container(
+                          color: _dialogBodyColor,
+                          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                          child: SizedBox(
+                            width: 620,
+                            child: Form(
+                              key: formKey,
+                              child: SingleChildScrollView(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
                                   Material(
                                     color: Colors.transparent,
                                     child: SwitchListTile.adaptive(
@@ -2111,6 +2268,31 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
                                       ),
                                       const Expanded(
                                         child: SizedBox.shrink(),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(
+                                    height: _dialogFieldVerticalGap,
+                                  ),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: _labeledTextField(
+                                          label: 'Perfil de operacao',
+                                          controller:
+                                              operationProfileKeyController,
+                                          hintText:
+                                              'Ex.: Revenda - operacao estadual (mesma UF)',
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: _labeledTextField(
+                                          label: 'Grupo tributario',
+                                          controller: taxGroupIdController,
+                                          hintText:
+                                              'ID do grupo cadastrado em Grupos tributarios',
+                                        ),
                                       ),
                                     ],
                                   ),
@@ -2305,7 +2487,8 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
                                       ),
                                     ],
                                   ),
-                                ],
+                                  ],
+                                ),
                               ),
                             ),
                           ),
@@ -2354,6 +2537,9 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
                                     cest: cestController.text,
                                     fiscalException:
                                         fiscalExceptionController.text,
+                                    operationProfileKey:
+                                      operationProfileKeyController.text,
+                                    taxGroupId: taxGroupIdController.text,
                                     ufDestino: selectedUfDestino,
                                     salePurpose: selectedSalePurpose,
                                     stCalculationType:
@@ -2409,7 +2595,7 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: Theme.of(context).textTheme.bodySmall),
+        Text(label),
         const SizedBox(height: 6),
         TextFormField(
           controller: controller,
@@ -2431,7 +2617,7 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: Theme.of(context).textTheme.bodySmall),
+        Text(label),
         const SizedBox(height: 6),
         DropdownButtonFormField<String>(
           initialValue: value,
@@ -2460,7 +2646,7 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
       children: [
         Text(
           'Finalidade da venda (opcional)',
-          style: Theme.of(context).textTheme.bodySmall,
+          style: const TextStyle(),
         ),
         const SizedBox(height: 6),
         DropdownButtonFormField<SalePurpose?>(
@@ -2516,7 +2702,7 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: Theme.of(context).textTheme.bodySmall),
+        Text(label),
         const SizedBox(height: 6),
         InkWell(
           onTap: onPick,
@@ -2557,7 +2743,7 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
       children: [
         Text(
           'Tipo de subs. tributária',
-          style: Theme.of(context).textTheme.bodySmall,
+          style: const TextStyle(),
         ),
         const SizedBox(height: 6),
         DropdownButtonFormField<_StCalculationType>(
@@ -2591,7 +2777,7 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: Theme.of(context).textTheme.bodySmall),
+        Text(label),
         const SizedBox(height: 6),
         TextFormField(
           controller: controller,
@@ -2663,7 +2849,7 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
               ),
               child: Text(
                 prefixText,
-                style: Theme.of(context).textTheme.bodyMedium,
+                style: const TextStyle(),
               ),
             ),
       suffixIcon: suffixText == null
@@ -2683,7 +2869,7 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
               ),
               child: Text(
                 suffixText,
-                style: Theme.of(context).textTheme.bodyMedium,
+                style: const TextStyle(),
               ),
             ),
     );
@@ -2886,6 +3072,10 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
     final ufDestino = rule.ufDestino.trim().toUpperCase();
     final fiscalException = (rule.fiscalException ?? '').trim().toLowerCase();
     final grupoFiscalId = (rule.grupoFiscalId ?? '').trim().toLowerCase();
+    final taxGroupId = (rule.taxGroupId ?? '').trim().toLowerCase();
+    final operationProfileKey = (rule.operationProfileKey ?? '')
+      .trim()
+      .toLowerCase();
     final cstCsosn = (rule.cstCsosn ?? '').trim().toLowerCase();
     final validFrom = rule.validFrom?.toUtc().toIso8601String() ?? '';
     final validUntil = rule.validUntil?.toUtc().toIso8601String() ?? '';
@@ -2908,6 +3098,8 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
       numberKey(rule.mvaIva),
       fiscalException,
       grupoFiscalId,
+      taxGroupId,
+      operationProfileKey,
       cstCsosn,
       validFrom,
       validUntil,
@@ -2991,6 +3183,8 @@ class _TaxRuleDraft {
     required this.ncm,
     required this.cest,
     required this.fiscalException,
+    required this.operationProfileKey,
+    required this.taxGroupId,
     required this.ufDestino,
     required this.salePurpose,
     required this.stCalculationType,
@@ -3010,6 +3204,8 @@ class _TaxRuleDraft {
   final String ncm;
   final String cest;
   final String fiscalException;
+  final String operationProfileKey;
+  final String taxGroupId;
   final String ufDestino;
   final SalePurpose? salePurpose;
   final String stCalculationType;

@@ -76,7 +76,7 @@ void main() {
       );
     });
 
-    test('applies ST and suppresses DIFAL for contribuinte on uso/consumo', () async {
+    test('suppresses ST and DIFAL for contribuinte on uso/consumo same UF', () async {
       final result = await service.calcularTotaisItem(
         tenantId: tenantId,
         produtoId: produtoId,
@@ -90,12 +90,13 @@ void main() {
       );
 
       expect(result.precoBase, 100);
-      expect(result.valorSt, closeTo(13.2, 0.0001));
+      expect(result.valorSt, 0);
       expect(result.valorDifal, 0);
-      expect(result.valorTotalItem, closeTo(113.2, 0.0001));
+      expect(result.valorTotalItem, closeTo(100, 0.0001));
+      expect(result.operationProfileKey, 'uso_consumo_contribuinte_same_uf');
     });
 
-    test('suppresses ST and applies DIFAL for nao contribuinte on uso/consumo', () async {
+    test('suppresses ST and DIFAL for nao contribuinte on uso/consumo same UF', () async {
       final result = await service.calcularTotaisItem(
         tenantId: tenantId,
         produtoId: produtoId,
@@ -110,8 +111,9 @@ void main() {
 
       expect(result.precoBase, 100);
       expect(result.valorSt, 0);
-      expect(result.valorDifal, closeTo(5, 0.0001));
-      expect(result.valorTotalItem, closeTo(105, 0.0001));
+      expect(result.valorDifal, 0);
+      expect(result.valorTotalItem, closeTo(100, 0.0001));
+      expect(result.operationProfileKey, 'uso_consumo_nao_contribuinte_same_uf');
     });
 
     test('applies ZFM discount on product value and suppresses ST/DIFAL', () async {
@@ -133,6 +135,7 @@ void main() {
       expect(result.valorSt, 0);
       expect(result.valorDifal, 0);
       expect(result.valorTotalItem, closeTo(82, 0.0001));
+      expect(result.operationProfileKey, 'zfm_comercializacao_revenda');
     });
 
     test('keeps ZFM total at zero when discount rate would exceed item base', () async {
@@ -270,7 +273,8 @@ void main() {
 
       expect(result.regraFiscalId, 'global-rule');
       expect(result.valorSt, closeTo(13.2, 0.0001));
-      expect(result.valorDifal, closeTo(5, 0.0001));
+      expect(result.valorDifal, 0);
+      expect(result.operationProfileKey, 'revenda_same_uf');
     });
   });
 }

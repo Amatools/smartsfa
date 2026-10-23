@@ -6,7 +6,7 @@ O projeto atual deve ser tratado como ambiente de desenvolvimento/prototipo.
 
 ### Infraestrutura atual
 
-- Projeto Firebase atual: smartsfa-f20a0
+- Projeto Firebase atual: smart-sfa
 - Conta dona do projeto atual: conta ligada ao contexto Amatools
 - Uso correto neste momento: desenvolvimento, prova de conceito e validacao de arquitetura
 - Uso incorreto neste momento: considerar esse projeto como ambiente definitivo de producao do SaaS

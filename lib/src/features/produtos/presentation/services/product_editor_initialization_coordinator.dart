@@ -19,6 +19,7 @@ class ProductEditorFormControllers {
     required this.subcategoria,
     required this.bitola,
     required this.unidade,
+    required this.grupoTributarioId,
     required this.ncm,
     required this.cest,
     required this.origemMercadoriaCst,
@@ -46,6 +47,7 @@ class ProductEditorFormControllers {
   final TextEditingController subcategoria;
   final TextEditingController bitola;
   final TextEditingController unidade;
+  final TextEditingController grupoTributarioId;
   final TextEditingController ncm;
   final TextEditingController cest;
   final TextEditingController origemMercadoriaCst;
@@ -83,6 +85,9 @@ class ProductEditorFormControllers {
       bitola: TextEditingController(text: produto.bitola ?? ''),
       unidade: TextEditingController(
         text: produto.unidade ?? ProductEditorDefaults.defaultStandardUnit,
+      ),
+      grupoTributarioId: TextEditingController(
+        text: produto.grupoTributarioId ?? '',
       ),
       ncm: TextEditingController(text: _formatNcmMasked(produto.ncm)),
       cest: TextEditingController(text: produto.cest ?? ''),
@@ -129,6 +134,7 @@ class ProductEditorFormControllers {
     subcategoria.dispose();
     bitola.dispose();
     unidade.dispose();
+    grupoTributarioId.dispose();
     ncm.dispose();
     cest.dispose();
     origemMercadoriaCst.dispose();

@@ -54,7 +54,7 @@ bool _canEditRepresentedModuleSettings({
     return normalizedRole == 'owner';
   }
 
-   if (normalizedWorkspaceType == 'brand_owner_workspace') {
+  if (normalizedWorkspaceType == 'brand_owner_workspace') {
     return normalizedRole == 'owner';
   }
 
@@ -220,6 +220,10 @@ List<_WorkspaceInfoItem> _buildWorkspaceInfoItems({
     addEditable('Responsável principal', 'contatoResponsavel');
     addEditable('Telefone comercial', 'telefoneComercial');
     addEditable('E-mail comercial', 'emailComercial');
+    addReadonly(
+      'Regime tributário',
+      _taxRegimeLabel(workspaceData['taxRegime']),
+    );
     addEditable('Website', 'website');
     addEditable('Logradouro', 'logradouro');
     addEditable('Número', 'numero');
@@ -361,6 +365,7 @@ class _WorkspaceProfileEditorDialogState
   late final TextEditingController _cepController;
   late final TextEditingController _cidadeController;
   late final TextEditingController _ufController;
+  late String _taxRegime;
   bool _saving = false;
   bool _buscandoCep = false;
 
@@ -411,6 +416,10 @@ class _WorkspaceProfileEditorDialogState
       text: (data['cidade'] ?? '').toString(),
     );
     _ufController = TextEditingController(text: (data['uf'] ?? '').toString());
+    _taxRegime = _normalizeTaxRegimeValue(data['taxRegime']);
+    if (_taxRegime.isEmpty) {
+      _taxRegime = _defaultTaxRegime;
+    }
   }
 
   @override
@@ -513,6 +522,41 @@ class _WorkspaceProfileEditorDialogState
       );
     }
 
+    Widget taxRegimeField() {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Regime tributário',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 6),
+          DropdownButtonFormField<String>(
+            key: ValueKey<String>(_taxRegime),
+            initialValue: _taxRegime,
+            isExpanded: true,
+            decoration: dialogInputDecoration(),
+            items: _taxRegimeOptions
+                .map(
+                  (value) => DropdownMenuItem<String>(
+                    value: value,
+                    child: Text(_taxRegimeLabel(value)),
+                  ),
+                )
+                .toList(growable: false),
+            onChanged: (value) {
+              setState(() {
+                final normalized = _normalizeTaxRegimeValue(value);
+                _taxRegime = normalized.isEmpty
+                    ? _defaultTaxRegime
+                    : normalized;
+              });
+            },
+          ),
+        ],
+      );
+    }
+
     final maxDialogHeight = MediaQuery.sizeOf(context).height - 36;
 
     return Dialog(
@@ -565,6 +609,8 @@ class _WorkspaceProfileEditorDialogState
                           keyboardType: TextInputType.emailAddress,
                         ),
                         if (isEnterprise) ...[
+                          const SizedBox(height: 12),
+                          taxRegimeField(),
                           const SizedBox(height: 12),
                           field(_websiteController, 'Website'),
                           const SizedBox(height: 12),
@@ -721,6 +767,7 @@ class _WorkspaceProfileEditorDialogState
               'cep': _cepController.text,
               'cidade': _cidadeController.text,
               'uf': _ufController.text.toUpperCase(),
+              'taxRegime': _taxRegime,
             },
           );
 

@@ -27,6 +27,7 @@ import '../services/product_editor_thumbnail_preview_builder.dart';
 import '../services/product_editor_title_builder.dart';
 import '../services/product_editor_view_state.dart';
 import '../services/product_media_editor_coordinator.dart';
+import '../services/product_tax_group_catalog_service.dart';
 import '../services/product_media_upload_service.dart';
 import '../services/product_unit_catalog_service.dart';
 import 'product_category_dropdown_field.dart';
@@ -108,6 +109,8 @@ class _ProductEditorSheetState extends State<ProductEditorSheet>
       const ProductMediaUploadService();
   late final ProductUnitCatalogService _unitCatalogService =
       ProductUnitCatalogService(FirebaseFirestore.instance);
+  late final ProductTaxGroupCatalogService _taxGroupCatalogService =
+      ProductTaxGroupCatalogService(FirebaseFirestore.instance);
 
   late final Produto _emptyDraft;
   late final ProductEditorFormControllers _formControllers;
@@ -332,6 +335,7 @@ class _ProductEditorSheetState extends State<ProductEditorSheet>
       onClearImage: _clearImageSelectionInState,
       editorFieldBuilder: editorFieldBuilder,
       unitCatalogService: _unitCatalogService,
+      taxGroupCatalogService: _taxGroupCatalogService,
     );
   }
 

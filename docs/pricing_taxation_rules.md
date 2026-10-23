@@ -1,183 +1,259 @@
-# SmartSFA - Regras de Negocio de Precificacao e Tributacao (Estado Atual)
+# SmartSFA - Pricing and Taxation Rules (handoff de continuidade)
 
-## Objetivo
+## 1) Objetivo deste documento
 
-Este documento consolida as regras ja decididas e o comportamento implementado no codigo para:
+Este arquivo e a base de continuidade do modulo de tributacao/precificacao.
+Use este documento como entrada principal quando abrir uma nova conversa no VS Code.
 
-- tabelas de preco
-- calculo de preco final por cliente/produto
-- regras de tributacao por NCM/UF
+Ele descreve:
+- decisoes arquiteturais fixas
+- estado implementado no codigo
+- backlog faltante, em ordem recomendada
+- regras de acoplamento com Sankhya
 
-Escopo atual: descricao do estado implementado em codigo e pontos ainda pendentes de integracao.
+## 2) Decisoes arquiteturais fixas (nao negociar sem decisao explicita)
 
-## Decisoes de produto ja aplicadas
+1. O dominio de tributacao do SmartSFA e nativo do produto.
+2. O acoplamento com ERP deve ser unilateral no modulo do ERP (Sankhya), nao no core de tributacao.
+3. Tributacao no portal e dividida em 3 frentes:
+   - Matriz tributaria (regras fiscais)
+   - Grupos tributarios
+   - Perfis de operacao (10 tipos nativos)
+4. Produto tem campo `grupo_tributario_id` para classificar mercadorias.
+5. Escopo multi-tenant permanece com heranca global + representada.
 
-- O produto continua sendo cadastro mestre, incluindo base para tributacao.
-- A aba Tributacao do produto foi simplificada para campos base: NCM, CEST e aliquota de IPI base.
-- O portal suporta os dois modos comerciais: tabela e politica.
-- O motor de tributacao foi iniciado como modulo desacoplado, sem acoplamento obrigatorio ao fluxo de pedido neste momento.
+## 3) Projeto e ambiente
 
-## Entidades e colecoes relevantes
+- Projeto Firebase oficial: `smart-sfa`
+- Nao usar mais referencias ao projeto Firebase antigo.
+- Regras Firestore de tributacao ja publicadas no projeto `smart-sfa`.
 
-### Tabelas de preco
+## 4) Estado implementado no codigo
 
-- Colecao: tabelas_preco
-- Modelo: core/models/tabela_preco.dart
-- Campos principais:
-  - id, tenantId
-  - nome
-  - scopeType, scopeLabel, scopeIndex
-  - origem (manual/system), status
-  - linkedEntityId (quando escopo e representada)
-  - rowCount, validFrom, validUntil
+## 4.1 Portal de Tributacoes
 
-### Precos base por produto
+Arquivo principal de navegacao da area:
+- `lib/src/features/portal/presentation/pages/web_portal_taxation_section.dart`
 
-- Colecao: product_base_prices
-- Uso: armazenar preco bruto por produto/tabela/regiao, com status e validade.
+Submenus ativos:
+- `Matriz tributaria` -> `_TaxRulesSection`
+- `Grupos tributarios` -> `_TaxRuleGroupsSection`
+- `Perfis de operacao` -> `_TaxOperationProfilesSection`
 
-### Vinculo cliente -> tabela
+Entrada da funcionalidade no portal:
+- `lib/src/features/portal/presentation/pages/web_portal_catalog_sections.dart`
+- `lib/src/features/portal/presentation/pages/web_portal_tenant_module_area_section.dart`
 
-- Colecao: customer_price_table_assignments
-- Uso: definir qual tabela deve ser usada por cliente e regiao (com prioridade e validade).
+### 4.1.1 Matriz tributaria (implementado)
 
-### Regras cliente/produto -> politica de desconto
+Arquivo:
+- `lib/src/features/portal/presentation/pages/web_portal_tax_rules_section.dart`
 
-- Colecao: customer_product_rules
-- Uso: escolher politica de desconto por cliente + produto.
+Capacidades implementadas:
+- CRUD completo de regras fiscais
+- filtros por NCM, CEST e UF destino
+- ordenacao por prioridade com mover para cima/baixo
+- importacao via planilha (XLSX/CSV) com validacao forte
+- exportacao de template com instrucoes
+- limpeza de regras sem NCM (acao assistida)
+- suporte a `salePurpose` e tipo de ST (`mva`/`pmc`)
+- suporte inicial a campos normalizados na regra:
+   - `operationProfileKey`
+   - `taxGroupId`
+   - exibicao desses campos em chips na lista da matriz
 
-### Politicas de desconto
+Nomes de tela para o usuario (matriz):
+- `Perfil de operacao` (aceita nome de negocio do perfil ou chave tecnica)
+- `Grupo tributario` (ID do grupo cadastrado no modulo Grupos tributarios)
 
-- Colecao: discount_policies
-- Uso: percentual aplicado sobre preco base selecionado.
+Persistencia:
+- colecao `tax_rules`
+- repositorio: `lib/src/core/data/firestore/firestore_tax_rule_repository.dart`
 
-### Regras fiscais
+Observacao importante:
+- O repositorio foi ajustado para ignorar documentos com `docType=operation_profile` caso existam registros legados.
 
-- Colecao: tax_rules
-- Modelo: core/models/tax_rule.dart
-- Campos principais:
-  - id, tenantId, status
-  - ncm (opcional)
-  - ufOrigem, ufDestino (aceita ANY)
-  - cstCsosn (opcional)
-  - aliquotaIcms, aliquotaIpi, mvaIva, aliquotaSt, aliquotaDifal
-  - priority
-  - validFrom, validUntil
+### 4.1.2 Grupos tributarios (implementado)
 
-## Regra implementada: calculo de preco final
+Arquivo:
+- `lib/src/features/portal/presentation/pages/web_portal_taxation_section.dart`
 
-Servico: features/precos/services/product_price_calculator_service.dart
+Capacidades implementadas:
+- CRUD manual
+- escopo global ou representada
+- prioridade, status, descricao
+- metadados de mapeamento ERP (`externalCode`, `erpProvider`)
+- importacao de planilha com idempotencia por fingerprint (escopo + nome normalizado)
+- download de template
+- placeholder de sincronizacao ERP (dialog informativo)
 
-Ordem de resolucao:
+Persistencia:
+- colecao `tax_rule_groups`
 
-1. Buscar vinculos ativos do cliente em customer_price_table_assignments.
-2. Filtrar por janela de validade.
-3. Selecionar vinculo por regiao:
-   - primeiro: match exato de regiao
-   - fallback: regionId vazio ou isDefault = true
-   - desempate: maior prioridade
-4. Definir tabela alvo:
-   - assignment.priceTableId
-   - fallbackPriceTableId (quando informado)
-5. Buscar preco base em product_base_prices:
-   - match por productId + priceTableId + ativo + validade
-   - primeiro: regiao exata
-   - fallback: regionId vazio, ALL ou BR
-6. Buscar regra customer_product_rule ativa/valida por cliente+produto.
-7. Resolver politica de desconto:
-   - discountPolicyId da regra
-   - fallbackDiscountPolicyId (quando informado)
-8. Aplicar desconto percentual da policy ativa.
+### 4.1.3 Perfis de operacao (implementado - fase 1)
 
-Formula:
+Arquivo:
+- `lib/src/features/portal/presentation/pages/web_portal_taxation_section.dart`
 
-- netPrice = basePrice * (1 - discountPercentage/100)
+Capacidades implementadas:
+- seed idempotente dos 10 perfis nativos
+- botao "Reaplicar 10 perfis"
+- edicao por perfil:
+  - ativo/inativo
+  - prioridade
+  - switches fiscais
+  - provider ERP e codigo externo
+- escopo global/representada
 
-Retorno atual inclui:
+Persistencia atual:
+- colecao `tax_operation_profiles` (dedicada)
 
-- basePrice, discountPercentage, netPrice
-- priceTableId, regionId
-- source (fallback ou customer_product_rule)
+10 perfis nativos canonicos:
+- `revenda_same_uf`
+- `revenda_interstate`
+- `uso_consumo_contribuinte_same_uf`
+- `uso_consumo_contribuinte_interstate`
+- `uso_consumo_nao_contribuinte_same_uf`
+- `uso_consumo_nao_contribuinte_interstate`
+- `industrializacao_same_uf`
+- `industrializacao_interstate`
+- `zfm_industrializacao`
+- `zfm_comercializacao_revenda`
 
-## Regra implementada: calculo tributario por item
+## 4.2 Produto e grupo tributario
 
-Servico: features/precos/services/product_tax_engine_service.dart
+Modelo:
+- `lib/src/core/models/produto.dart`
 
-Entradas:
+Campo implementado:
+- `grupoTributarioId` <-> `grupo_tributario_id`
 
-- tenantId, produtoId, tabelaId, clienteUf, quantidade
-- ufOrigem (padrao: SP)
+Editor de produto:
+- dropdown de grupo tributario antes de NCM na aba fiscal
+- arquivo UI: `lib/src/features/produtos/presentation/widgets/product_editor_tabs_sections.dart`
+- catalogo de grupos: `lib/src/features/produtos/presentation/services/product_tax_group_catalog_service.dart`
 
-Passos:
+Importacao de produtos:
+- aceita `grupoTributarioId` e aliases equivalentes
+- arquivo: `lib/src/features/produtos/presentation/services/product_csv_import_service.dart`
 
-1. Validar parametros obrigatorios e quantidade > 0.
-2. Buscar produto por tenantId + produtoId.
-3. Resolver preco base por produto+tabela+UF (com fallback de regiao).
-4. Carregar tax_rules e selecionar regra fiscal aplicavel:
-   - status ativo
-   - validade atual
-   - ncm exato quando regra define ncm
-   - ufOrigem/ufDestino com match exato ou ANY
-   - desempate por maior priority
-5. Calcular base:
-   - precoBase = basePrice * quantidade
-6. Calcular IPI:
-   - aliquotaIpi = regra.aliquotaIpi ou produto.aliquotaIpiBase ou 0
-   - valorIpi = precoBase * aliquotaIpi/100
-7. Calcular ST (quando houver MVA e aliquota ST):
-   - baseSt = precoBase * (1 + mvaIva/100)
-   - icmsProprio = precoBase * aliquotaIcms/100
-   - icmsStCheio = baseSt * aliquotaSt/100
-   - valorSt = max(icmsStCheio - icmsProprio, 0)
-8. Calcular DIFAL:
-   - valorDifal = precoBase * aliquotaDifal/100
-9. Consolidar:
-   - valorLiquido = precoBase
-   - valorTotalItem = valorLiquido + valorIpi + valorSt + valorDifal
+## 4.3 Engine de calculo tributario atual (fase de transicao)
 
-## Regras de fallback importantes
+Arquivo:
+- `lib/src/features/precos/services/product_tax_engine_service.dart`
+- `lib/src/features/precos/services/tax_operation_classifier_service.dart`
 
-- Tabela de preco: fallback para assignment/regiao default quando nao houver match exato.
-- Preco base: fallback para regionId vazio, ALL ou BR.
-- Regra fiscal: pode cair para regra mais generica (ncm vazio e/or UF ANY), respeitando prioridade.
-- IPI: sem regra fiscal, usa aliquotaIpiBase do produto.
+Status:
+- classificador nativo dos 10 perfis implementado no dominio
+- calculo de ST/DIFAL/IPI/ZFM agora segue switches do perfil classificado
+- calcula IPI, ST, DIFAL e ajuste ZFM
+- usa NCM/CEST/UF origem-destino e janela de vigencia
+- retorna `operationProfileKey` no resultado do calculo
 
-## Permissoes no portal (estado atual)
+Limitacao atual:
+- o classificador ainda usa default nativo em memoria; falta leitura dinamica de overrides da colecao `tax_operation_profiles`
+- o matcher ainda prioriza NCM/CEST/UF/finalidade; falta cadeia completa Produto > Grupo > NCM > regra geral UF
 
-No menu Configuracoes da area comercial:
+## 4.4 Seguranca Firestore
 
-- Unidades: edicao restrita a owner (seller_solo_workspace e rep_workspace).
-- Tributacoes: mesma restricao (owner) para criar/editar/excluir.
-- Perfis sem permissao recebem modo somente leitura.
+Arquivo:
+- `firestore.rules`
 
-## Importacao e exportacao por planilha (estado atual)
+Colecoes cobertas com controle de escrita tributaria:
+- `tax_rules`
+- `tax_rule_groups`
+- `tax_operation_profiles`
+- `produtos` (aceita opcional `grupo_tributario_id` string)
 
-Implementado no fluxo atual:
+Controle de escrita usa funcao:
+- `canManageTaxRulesWrite(tenantId)`
 
-- Download de template XLSX para produtos, tabelas de preco e tributacao.
-- Templates com abas de dados e instrucoes para preenchimento.
-- Validacao de cabecalho e validacao por linha com retorno previsivel de erro.
-- Importacao de tabela de preco com regra de integridade por codigo interno existente.
-- Importacao tributaria com validacoes condicionais por tipo (MVA/PMC).
+## 4.5 Integracao Sankhya (estado atual)
 
-Direcao de negocio aplicada:
+- Existem 10 campos de TOP no modulo de integracao ERP.
+- Mapeamento atual esta em:
+  - `lib/src/features/enterprise/erp_integration/domain/models/enterprise_erp_integration_data.dart`
+  - `lib/src/features/enterprise/erp_integration/services/enterprise_erp_integration_service.dart`
+  - `lib/src/features/auth/services/workspace_profile_service.dart`
 
-- importacao deve ser idempotente quando houver chave consistente;
-- planilha nao deve criar entidades invalidas por inferencia;
-- validacao deve falhar cedo em lote quando regra critica nao for atendida.
+Decisao de acoplamento (importante):
+- O modulo Sankhya deve consumir os perfis de operacao do core para resolver TOP.
+- O core de tributacao nao deve depender de contratos internos do Sankhya.
 
-## Limites atuais e proximos passos
+## 5) O que falta implementar (backlog recomendado)
 
-- O tax engine ainda nao esta plugado no fluxo de pedido (decisao intencional desta fase).
-- Ainda faltam testes unitarios dedicados para cenarios de ST/DIFAL/fallback de regra.
-- Integracao com politicas comerciais avancadas (mangas/travas) segue em evolucao separada.
-- Catalogos grandes ainda precisam migrar para sincronizacao incremental por delta (updatedAt/version) para reduzir leituras recorrentes no Firestore.
+## 5.1 Prioridade alta (proximo ciclo)
 
-## Fonte da verdade tecnica
+1. Tax matcher da matriz com fallback em cadeia
+   - Produto especifico > Grupo tributario > NCM > regra geral UF
+   - manter prioridade e vigencia
 
-Para comportamento efetivo, considerar sempre o codigo como fonte primaria e este documento como consolidacao de leitura:
+2. Adaptar `ProductTaxEngineService` para usar:
+   - `tax_operation_profiles` (switches por perfil, carregados da base)
+   - `tax_rule_groups` + `grupo_tributario_id` no matcher
+   - `tax_rules` como matriz final
 
-- features/precos/services/product_price_calculator_service.dart
-- features/precos/services/product_tax_engine_service.dart
-- core/models/tax_rule.dart
-- core/models/tabela_preco.dart
+3. Testes unitarios dedicados do novo fluxo
+   - cenarios com contribuinte/nao contribuinte
+   - cenarios ZFM
+   - cenarios com e sem grupo tributario
+
+## 5.2 Prioridade media
+
+1. Sincronizacao ERP real para `tax_rule_groups`
+2. Sincronizacao ERP ou assistente de mapeamento para `tax_operation_profiles`
+3. Tela de auditoria de decisao tributaria (explicar por que regra/perfil foi escolhido)
+
+## 5.3 Prioridade baixa
+
+1. Importacao/exportacao de perfis de operacao por planilha
+2. Catalogo de versoes de matriz por vigencia
+3. Otimizacao de leituras para catalogos grandes (delta por `updatedAt`)
+
+## 6) Estrategia de implementacao sugerida para proxima conversa
+
+Sequencia sugerida para continuar sem regressao:
+
+1. Criar servico `TaxRuleMatcherService` (dominio puro)
+2. Conectar `TaxOperationClassifierService` aos overrides de `tax_operation_profiles`
+3. Integrar matcher + classifier no `ProductTaxEngineService`
+4. Ajustar testes existentes + criar novos testes de regressao
+5. So depois acoplar modulo Sankhya para resolver TOP a partir de `profileKey`
+
+## 7) Definicao de pronto da nova fase do motor
+
+O novo motor e considerado pronto quando:
+
+1. Para um item de pedido, o sistema gera o `profileKey` nativo corretamente.
+2. O match da regra fiscal segue cadeia de fallback definida.
+3. Os switches do perfil afetam o calculo final (ST, DIFAL, IPI base/total, ZFM).
+4. O resultado do calculo retorna trilha de decisao (perfil + regra + justificativa).
+5. Testes cobrindo os cenarios principais passam localmente.
+
+## 8) Riscos e cuidados
+
+1. Nao misturar novamente documentos de perfis com `tax_rules`.
+2. Manter idempotencia em importacoes por fingerprint/chave estavel.
+3. Evitar fallback silencioso que esconda erro de cadastro obrigatorio.
+4. Preservar regras de permissao owner/read-only no portal.
+
+## 9) Comandos uteis de validacao
+
+- `flutter analyze`
+- `flutter test test/features/precos/services/product_tax_engine_service_test.dart`
+- `flutter test test/features/precos/services/tax_operation_classifier_service_test.dart`
+- hot reload via DTD apos ajustes de UI
+
+## 10) Fonte primaria de verdade
+
+Mesmo com este documento, o codigo e a fonte final.
+Sempre validar comportamento pelos arquivos abaixo:
+
+- `lib/src/features/portal/presentation/pages/web_portal_taxation_section.dart`
+- `lib/src/features/portal/presentation/pages/web_portal_tax_rules_section.dart`
+- `lib/src/core/data/firestore/firestore_tax_rule_repository.dart`
+- `lib/src/features/precos/services/tax_operation_classifier_service.dart`
+- `lib/src/core/models/produto.dart`
+- `lib/src/features/produtos/presentation/widgets/product_editor_tabs_sections.dart`
+- `lib/src/features/precos/services/product_tax_engine_service.dart`
+- `firestore.rules`

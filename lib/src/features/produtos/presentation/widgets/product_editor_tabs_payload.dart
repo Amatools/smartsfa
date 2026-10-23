@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/models/domain_types.dart';
 import '../services/product_editor_initialization_coordinator.dart';
+import '../services/product_tax_group_catalog_service.dart';
 import '../services/product_unit_catalog_service.dart';
 import 'product_editor_field_builder.dart';
 
@@ -33,6 +34,7 @@ class ProductEditorTabsPayload {
     required this.onClearImage,
     required this.editorFieldBuilder,
     required this.unitCatalogService,
+    required this.taxGroupCatalogService,
   });
 
   final bool readOnly;
@@ -61,4 +63,5 @@ class ProductEditorTabsPayload {
   final VoidCallback onClearImage;
   final ProductEditorFieldBuilder editorFieldBuilder;
   final ProductUnitCatalogService unitCatalogService;
+  final ProductTaxGroupCatalogService taxGroupCatalogService;
 }

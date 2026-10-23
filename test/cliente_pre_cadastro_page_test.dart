@@ -55,6 +55,7 @@ void main() {
       tipoPessoa: 'pj',
       canal: 'vendedor',
       celular: '11999999999',
+      taxRegime: defaultTaxRegime,
       origemCadastro: CustomerOrigin.manual,
       status: PreRegistrationStatus.pending,
       requestedByUid: 'test-uid',

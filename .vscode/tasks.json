@@ -53,7 +53,7 @@
 			"command": "C:/Users/Aureo.Filho/AppData/Local/Pub/Cache/bin/flutterfire.bat",
 			"args": [
 				"configure",
-				"--project=smartsfa-f20a0",
+				"--project=smart-sfa",
 				"--platforms=android,ios,web"
 			],
 			"options": {
@@ -68,7 +68,7 @@
 			"command": "C:/Users/Aureo.Filho/AppData/Roaming/npm/firebase.cmd",
 			"args": [
 				"deploy",
-				"--project=smartsfa-f20a0",
+				"--project=smart-sfa",
 				"--only",
 				"firestore:rules"
 			],

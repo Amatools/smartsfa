@@ -132,6 +132,11 @@ class WorkspaceProfileService {
       _firestore.collection('tenant_represented_companies');
 
   static const String _defaultPriceRegionId = 'default';
+  static const Set<String> _validTaxRegimes = <String>{
+    'simples_nacional',
+    'lucro_presumido',
+    'lucro_real',
+  };
 
   Stream<Map<String, dynamic>?> watchWorkspace(String tenantId) {
     final normalizedTenantId = tenantId.trim();
@@ -755,6 +760,10 @@ class WorkspaceProfileService {
       'updatedAt': FieldValue.serverTimestamp(),
     };
 
+    if (!values.containsKey('taxRegime')) {
+      throw StateError('Regime tributário é obrigatório.');
+    }
+
     void writeIfPresent(String key, Object? value) {
       if (value == null) {
         return;
@@ -786,6 +795,7 @@ class WorkspaceProfileService {
     writeIfPresent('cep', _normalize(values['cep']));
     writeIfPresent('cidade', _normalize(values['cidade']));
     writeIfPresent('uf', _normalize(values['uf']));
+    writeIfPresent('taxRegime', _normalizeTaxRegime(values['taxRegime']));
 
     if (normalizedWorkspaceType == 'seller_solo_workspace') {
       payload.remove('regiaoAtuacao');
@@ -1235,6 +1245,7 @@ class WorkspaceProfileService {
       'cidade': _normalize(values['cidade']),
       'uf': normalizedUf,
       'segmento': _normalize(values['segmento']),
+      'taxRegime': _normalizeTaxRegime(values['taxRegime']),
       'ativo': values['ativo'] != false,
       'companyUnits': FieldValue.delete(),
       'defaultOrderOriginUnitId': FieldValue.delete(),
@@ -1433,6 +1444,14 @@ class WorkspaceProfileService {
 
   String _digitsOnly(Object? value) {
     return _normalize(value).replaceAll(RegExp(r'\D'), '');
+  }
+
+  String _normalizeTaxRegime(Object? value) {
+    final normalized = _normalize(value).toLowerCase();
+    if (_validTaxRegimes.contains(normalized)) {
+      return normalized;
+    }
+    throw StateError('Regime tributário inválido.');
   }
 
   bool _isConnectivityLimitedError(FirebaseException error) {

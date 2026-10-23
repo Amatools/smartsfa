@@ -38,6 +38,7 @@ import '../../../produtos/presentation/services/product_unit_catalog_service.dar
 
 part 'web_portal_units_section.dart';
 part 'web_portal_tax_rules_section.dart';
+part 'web_portal_taxation_section.dart';
 part 'web_portal_commercial_adjustments_section.dart';
 part 'web_portal_order_discounts_section.dart';
 part 'web_portal_payment_conditions_section.dart';
@@ -65,6 +66,21 @@ String _normalizeDefaultScopeKey(String? representedCompanyId) {
 
 String _enterpriseDefaultRepresentedCompanyId(TenantEntryOption tenant) {
   return 'enterprise_default_${tenant.tenantId}';
+}
+
+const String _defaultTaxRegime = defaultTaxRegime;
+const List<String> _taxRegimeOptions = taxRegimeValues;
+
+String _normalizeTaxRegimeValue(Object? value) {
+  final normalized = normalizeTaxRegimeValue(value?.toString() ?? '');
+  if (isValidTaxRegimeValue(normalized)) {
+    return normalized;
+  }
+  return '';
+}
+
+String _taxRegimeLabel(Object? value) {
+  return taxRegimeLabel(_normalizeTaxRegimeValue(value));
 }
 
 DateTime _readDateTime(Object? value) {

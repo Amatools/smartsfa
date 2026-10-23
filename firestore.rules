@@ -175,6 +175,10 @@ service cloud.firestore {
       ]);
     }
 
+    function validTaxRegime(value) {
+      return value in ['simples_nacional', 'lucro_presumido', 'lucro_real'];
+    }
+
     function canReadTenantDocument(tenantId) {
       return isPlatformAdmin() || hasTenantAccessContext(tenantId);
     }
@@ -367,6 +371,8 @@ service cloud.firestore {
         && data.ativo is bool
         && data.operationMode in ['manual', 'sankhya', 'custom']
         && data.erpProvider in ['none', 'sankhya', 'custom']
+        && (!('taxRegime' in data)
+          || (data.taxRegime is string && validTaxRegime(data.taxRegime)))
         && validOptionalTenantPolicy(data);
     }
 
@@ -780,6 +786,8 @@ service cloud.firestore {
         && data.cidade is string
         && validRepresentedCompanyUf(data.uf)
         && data.segmento is string
+        && data.taxRegime is string
+        && validTaxRegime(data.taxRegime)
         && data.parentCompanyId is string
         && data.parentCompanyId != data.companyId
         && validRepresentedCompanyParentLink(data)
@@ -1353,9 +1361,13 @@ service cloud.firestore {
       allow read: if canReadTenantBoundDocument(resource.data);
 
       allow create: if hasScopeFields(request.resource.data)
+        && request.resource.data.taxRegime is string
+        && validTaxRegime(request.resource.data.taxRegime)
         && canWriteScopedData(request.resource.data);
 
       allow update: if hasScopeFields(request.resource.data)
+        && request.resource.data.taxRegime is string
+        && validTaxRegime(request.resource.data.taxRegime)
         && immutableScopeOnUpdate()
         && canWriteScopedData(request.resource.data);
 
@@ -1369,6 +1381,8 @@ service cloud.firestore {
         && data.nome is string
         && data.documento is string
         && data.status is string
+        && data.taxRegime is string
+        && validTaxRegime(data.taxRegime)
         && data.requestedByUid is string;
     }
 
@@ -1391,9 +1405,13 @@ service cloud.firestore {
       allow read: if canReadTenantBoundDocument(resource.data);
 
       allow create: if hasTenantField(request.resource.data)
+        && (!('grupo_tributario_id' in request.resource.data)
+          || request.resource.data.grupo_tributario_id is string)
         && canManageProductCatalogWrite(request.resource.data.tenantId);
 
       allow update: if hasTenantField(request.resource.data)
+        && (!('grupo_tributario_id' in request.resource.data)
+          || request.resource.data.grupo_tributario_id is string)
         && resource.data.tenantId == request.resource.data.tenantId
         && canManageProductCatalogWrite(request.resource.data.tenantId);
 
@@ -1447,6 +1465,44 @@ service cloud.firestore {
     }
 
     match /tax_rules/{ruleId} {
+      allow read: if hasTenantField(resource.data)
+        && (
+          isPlatformAdmin()
+          || isPersonalWorkspaceTenant(resource.data.tenantId)
+          || hasTenantAccessContext(resource.data.tenantId)
+        );
+
+      allow create: if hasTenantField(request.resource.data)
+        && canManageTaxRulesWrite(request.resource.data.tenantId);
+
+      allow update: if hasTenantField(request.resource.data)
+        && resource.data.tenantId == request.resource.data.tenantId
+        && canManageTaxRulesWrite(request.resource.data.tenantId);
+
+      allow delete: if hasTenantField(resource.data)
+        && canManageTaxRulesWrite(resource.data.tenantId);
+    }
+
+    match /tax_rule_groups/{groupId} {
+      allow read: if hasTenantField(resource.data)
+        && (
+          isPlatformAdmin()
+          || isPersonalWorkspaceTenant(resource.data.tenantId)
+          || hasTenantAccessContext(resource.data.tenantId)
+        );
+
+      allow create: if hasTenantField(request.resource.data)
+        && canManageTaxRulesWrite(request.resource.data.tenantId);
+
+      allow update: if hasTenantField(request.resource.data)
+        && resource.data.tenantId == request.resource.data.tenantId
+        && canManageTaxRulesWrite(request.resource.data.tenantId);
+
+      allow delete: if hasTenantField(resource.data)
+        && canManageTaxRulesWrite(resource.data.tenantId);
+    }
+
+    match /tax_operation_profiles/{profileId} {
       allow read: if hasTenantField(resource.data)
         && (
           isPlatformAdmin()

@@ -53,6 +53,7 @@ class _ClienteDetailPageState extends State<ClienteDetailPage> {
   late String _tipoPessoa;
   late SalePurpose _salePurpose;
   late CustomerTaxProfile _taxProfile;
+  late String _taxRegime;
   late bool _isZfmSuframa;
   late Cliente _cliente;
   bool _isEditing = false;
@@ -111,6 +112,9 @@ class _ClienteDetailPageState extends State<ClienteDetailPage> {
     _tipoPessoa = cliente.tipoPessoa;
     _salePurpose = cliente.salePurpose;
     _taxProfile = cliente.taxProfile;
+    _taxRegime = isValidTaxRegimeValue(cliente.taxRegime)
+        ? normalizeTaxRegimeValue(cliente.taxRegime)
+        : defaultTaxRegime;
     _isZfmSuframa = cliente.isZfmSuframa;
   }
 
@@ -173,6 +177,7 @@ class _ClienteDetailPageState extends State<ClienteDetailPage> {
         inscricaoMunicipal: _inscricaoMunicipalController.text.trim(),
         salePurpose: _salePurpose,
         taxProfile: _taxProfile,
+        taxRegime: _taxRegime,
         isZfmSuframa: _isZfmSuframa,
         observacoes: _observacoesController.text.trim(),
         updatedAt: now,
@@ -648,44 +653,101 @@ class _ClienteDetailPageState extends State<ClienteDetailPage> {
                                             _buildLabeledField(
                                               context: context,
                                               label: 'Finalidade da venda',
-                                              child: DropdownButtonFormField<SalePurpose>(
-                                                initialValue: _salePurpose,
-                                                items: SalePurpose.values
-                                                    .map(
-                                                      (item) => DropdownMenuItem<SalePurpose>(
-                                                        value: item,
-                                                        child: Text(item.label),
-                                                      ),
-                                                    )
-                                                    .toList(growable: false),
-                                                onChanged: (value) {
-                                                  if (value != null) {
-                                                    setState(
-                                                      () => _salePurpose = value,
-                                                    );
-                                                  }
-                                                },
-                                                decoration:
-                                                    _formInputDecoration(),
-                                              ),
+                                              child:
+                                                  DropdownButtonFormField<
+                                                    SalePurpose
+                                                  >(
+                                                    initialValue: _salePurpose,
+                                                    items: SalePurpose.values
+                                                        .map(
+                                                          (item) =>
+                                                              DropdownMenuItem<
+                                                                SalePurpose
+                                                              >(
+                                                                value: item,
+                                                                child: Text(
+                                                                  item.label,
+                                                                ),
+                                                              ),
+                                                        )
+                                                        .toList(
+                                                          growable: false,
+                                                        ),
+                                                    onChanged: (value) {
+                                                      if (value != null) {
+                                                        setState(
+                                                          () => _salePurpose =
+                                                              value,
+                                                        );
+                                                      }
+                                                    },
+                                                    decoration:
+                                                        _formInputDecoration(),
+                                                  ),
                                             ),
                                             _buildLabeledField(
                                               context: context,
                                               label: 'Perfil fiscal do cliente',
-                                              child: DropdownButtonFormField<CustomerTaxProfile>(
-                                                initialValue: _taxProfile,
-                                                items: CustomerTaxProfile.values
+                                              child:
+                                                  DropdownButtonFormField<
+                                                    CustomerTaxProfile
+                                                  >(
+                                                    initialValue: _taxProfile,
+                                                    items: CustomerTaxProfile
+                                                        .values
+                                                        .map(
+                                                          (item) =>
+                                                              DropdownMenuItem<
+                                                                CustomerTaxProfile
+                                                              >(
+                                                                value: item,
+                                                                child: Text(
+                                                                  item.label,
+                                                                ),
+                                                              ),
+                                                        )
+                                                        .toList(
+                                                          growable: false,
+                                                        ),
+                                                    onChanged: (value) {
+                                                      if (value != null) {
+                                                        setState(
+                                                          () => _taxProfile =
+                                                              value,
+                                                        );
+                                                      }
+                                                    },
+                                                    decoration:
+                                                        _formInputDecoration(),
+                                                  ),
+                                            ),
+                                            _buildLabeledField(
+                                              context: context,
+                                              label: 'Regime tributário',
+                                              child: DropdownButtonFormField<String>(
+                                                initialValue: _taxRegime,
+                                                items: taxRegimeValues
                                                     .map(
-                                                      (item) => DropdownMenuItem<CustomerTaxProfile>(
-                                                        value: item,
-                                                        child: Text(item.label),
-                                                      ),
+                                                      (item) =>
+                                                          DropdownMenuItem<
+                                                            String
+                                                          >(
+                                                            value: item,
+                                                            child: Text(
+                                                              taxRegimeLabel(
+                                                                item,
+                                                              ),
+                                                            ),
+                                                          ),
                                                     )
                                                     .toList(growable: false),
                                                 onChanged: (value) {
                                                   if (value != null) {
                                                     setState(
-                                                      () => _taxProfile = value,
+                                                      () => _taxRegime =
+                                                          normalizeTaxRegimeValue(
+                                                            value,
+                                                          ),
                                                     );
                                                   }
                                                 },
@@ -696,23 +758,26 @@ class _ClienteDetailPageState extends State<ClienteDetailPage> {
                                             _buildLabeledField(
                                               context: context,
                                               label: 'Zona Franca / SUFRAMA',
-                                              child: CheckboxListTile(
-                                                value: _isZfmSuframa,
-                                                dense: true,
-                                                contentPadding:
-                                                    EdgeInsets.zero,
-                                                controlAffinity:
-                                                    ListTileControlAffinity
-                                                        .leading,
-                                                title: const Text(
-                                                  'Cliente enquadrado em ZFM-SUFRAMA',
+                                              child: Material(
+                                                color: Colors.transparent,
+                                                child: CheckboxListTile(
+                                                  value: _isZfmSuframa,
+                                                  dense: true,
+                                                  contentPadding:
+                                                      EdgeInsets.zero,
+                                                  controlAffinity:
+                                                      ListTileControlAffinity
+                                                          .leading,
+                                                  title: const Text(
+                                                    'Cliente enquadrado em ZFM-SUFRAMA',
+                                                  ),
+                                                  onChanged: (value) {
+                                                    setState(
+                                                      () => _isZfmSuframa =
+                                                          value ?? false,
+                                                    );
+                                                  },
                                                 ),
-                                                onChanged: (value) {
-                                                  setState(
-                                                    () => _isZfmSuframa =
-                                                        value ?? false,
-                                                  );
-                                                },
                                               ),
                                             ),
                                             _buildLabeledField(
@@ -973,8 +1038,10 @@ class _ClienteDetailPageState extends State<ClienteDetailPage> {
                                               : 'Pessoa jurídica',
                                           'Perfil fiscal':
                                               cliente.taxProfile.label,
-                                            'ZFM / SUFRAMA':
-                                              cliente.isZfmSuframa
+                                          'Regime tributário': taxRegimeLabel(
+                                            cliente.taxRegime,
+                                          ),
+                                          'ZFM / SUFRAMA': cliente.isZfmSuframa
                                               ? 'Sim'
                                               : 'Não',
                                           'Finalidade da venda':

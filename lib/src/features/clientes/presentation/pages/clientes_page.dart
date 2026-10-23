@@ -56,7 +56,14 @@ class _ClientesPageState extends State<ClientesPage> {
   }
 
   Future<void> _resolveViewerScope() async {
-    final uid = (FirebaseAuth.instance.currentUser?.uid ?? '').trim();
+    var uid = '';
+    try {
+      if (Firebase.apps.isNotEmpty) {
+        uid = (FirebaseAuth.instance.currentUser?.uid ?? '').trim();
+      }
+    } catch (_) {
+      uid = '';
+    }
     final role = widget.identity.role.trim().toLowerCase();
 
     String ownerId = uid;
@@ -156,8 +163,7 @@ class _ClientesPageState extends State<ClientesPage> {
     }
 
     if (role == 'representante') {
-      if (_scopeRepresentanteId.isNotEmpty &&
-          clienteRepresentante.isNotEmpty) {
+      if (_scopeRepresentanteId.isNotEmpty && clienteRepresentante.isNotEmpty) {
         return clienteRepresentante == _scopeRepresentanteId;
       }
       final uid = (_currentUserUid ?? '').trim();
@@ -918,6 +924,7 @@ class _PreCadastroSectionState extends State<_PreCadastroSection> {
       inscricaoMunicipal: item.inscricaoMunicipal,
       salePurpose: item.salePurpose,
       taxProfile: item.taxProfile,
+      taxRegime: item.taxRegime,
       isZfmSuframa: item.isZfmSuframa,
       observacoes: item.observacoes,
       createdAt: item.createdAt ?? now,

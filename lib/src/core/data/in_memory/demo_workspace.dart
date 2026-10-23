@@ -36,6 +36,7 @@ class DemoWorkspace {
             gerenteId: 'ger-001',
             representanteId: 'rep-001',
             vendedorId: 'vnd-001',
+            taxRegime: defaultTaxRegime,
             createdAt: now,
           ),
           Cliente(
@@ -49,6 +50,7 @@ class DemoWorkspace {
             gerenteId: 'ger-001',
             representanteId: 'rep-002',
             vendedorId: 'vnd-002',
+            taxRegime: defaultTaxRegime,
             createdAt: now,
           ),
         ],
@@ -64,6 +66,7 @@ class DemoWorkspace {
             requestedByUid: 'user-001',
             email: 'contato@mecanica.com.br',
             celular: '(11) 99999-1234',
+            taxRegime: defaultTaxRegime,
             origemCadastro: CustomerOrigin.manual,
             createdAt: now,
             updatedAt: now,

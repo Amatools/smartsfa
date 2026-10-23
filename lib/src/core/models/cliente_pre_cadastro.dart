@@ -28,6 +28,7 @@ class ClientePreCadastro implements TenantScopedEntity {
     this.inscricaoMunicipal = '',
     this.salePurpose = SalePurpose.revenda,
     this.taxProfile = CustomerTaxProfile.contribuinte,
+    this.taxRegime = defaultTaxRegime,
     this.isZfmSuframa = false,
     this.observacoes = '',
     this.origemCadastro = CustomerOrigin.manual,
@@ -72,6 +73,7 @@ class ClientePreCadastro implements TenantScopedEntity {
             map['customerTaxProfile'] as String? ??
             CustomerTaxProfile.contribuinte.value,
       ),
+      taxRegime: normalizeTaxRegimeValue(map['taxRegime'] as String? ?? ''),
       isZfmSuframa: _readBool(
         map['isZfmSuframa'] ?? map['zfmSuframa'] ?? map['clienteZfmSuframa'],
       ),
@@ -113,6 +115,7 @@ class ClientePreCadastro implements TenantScopedEntity {
   final String inscricaoMunicipal;
   final SalePurpose salePurpose;
   final CustomerTaxProfile taxProfile;
+  final String taxRegime;
   final bool isZfmSuframa;
   final String observacoes;
   final CustomerOrigin origemCadastro;
@@ -147,6 +150,7 @@ class ClientePreCadastro implements TenantScopedEntity {
     String? inscricaoMunicipal,
     SalePurpose? salePurpose,
     CustomerTaxProfile? taxProfile,
+    String? taxRegime,
     bool? isZfmSuframa,
     String? observacoes,
     CustomerOrigin? origemCadastro,
@@ -181,6 +185,7 @@ class ClientePreCadastro implements TenantScopedEntity {
       inscricaoMunicipal: inscricaoMunicipal ?? this.inscricaoMunicipal,
       salePurpose: salePurpose ?? this.salePurpose,
       taxProfile: taxProfile ?? this.taxProfile,
+      taxRegime: taxRegime ?? this.taxRegime,
       isZfmSuframa: isZfmSuframa ?? this.isZfmSuframa,
       observacoes: observacoes ?? this.observacoes,
       origemCadastro: origemCadastro ?? this.origemCadastro,
@@ -218,6 +223,7 @@ class ClientePreCadastro implements TenantScopedEntity {
       'inscricaoMunicipal': inscricaoMunicipal,
       'salePurpose': salePurpose.value,
       'taxProfile': taxProfile.value,
+      'taxRegime': taxRegime,
       'isZfmSuframa': isZfmSuframa,
       'observacoes': observacoes,
       'origemCadastro': origemCadastro.value,

@@ -19,6 +19,8 @@ class TaxRule implements TenantScopedEntity {
     this.aliquotaDestino,
     this.aliquotaCredito,
     this.grupoFiscalId,
+    this.taxGroupId,
+    this.operationProfileKey,
     this.salePurpose,
     this.cstCsosn,
     this.aliquotaIcms,
@@ -55,6 +57,12 @@ class TaxRule implements TenantScopedEntity {
           _readDouble(map['aliquotaCredito']) ??
           _readDouble(map['aliquotaIcms']),
       grupoFiscalId: (map['grupoFiscalId'] as String?)?.trim(),
+      taxGroupId: _readTrimmedStringOrNull(
+        map['taxGroupId'] ?? map['tax_group_id'] ?? map['grupoTributarioId'],
+      ),
+      operationProfileKey: _readTrimmedStringOrNull(
+        map['operationProfileKey'] ?? map['operation_profile_key'],
+      ),
       ufOrigem: (map['ufOrigem'] as String? ?? '').trim().toUpperCase(),
       ufDestino: (map['ufDestino'] as String? ?? '').trim().toUpperCase(),
       salePurpose: _readSalePurpose(map['salePurpose']),
@@ -93,6 +101,8 @@ class TaxRule implements TenantScopedEntity {
   final double? aliquotaDestino;
   final double? aliquotaCredito;
   final String? grupoFiscalId;
+  final String? taxGroupId;
+  final String? operationProfileKey;
   final SalePurpose? salePurpose;
   final String ufOrigem;
   final String ufDestino;
@@ -127,6 +137,8 @@ class TaxRule implements TenantScopedEntity {
       'aliquotaDestino': aliquotaDestino,
       'aliquotaCredito': aliquotaCredito,
       'grupoFiscalId': grupoFiscalId,
+      'taxGroupId': taxGroupId,
+      'operationProfileKey': operationProfileKey,
       'salePurpose': salePurpose?.value,
       'ufOrigem': ufOrigem,
       'ufDestino': ufDestino,
@@ -156,6 +168,14 @@ SalePurpose? _readSalePurpose(Object? value) {
     return SalePurpose.fromValue(normalized);
   }
   return null;
+}
+
+String? _readTrimmedStringOrNull(Object? value) {
+  final normalized = (value ?? '').toString().trim();
+  if (normalized.isEmpty) {
+    return null;
+  }
+  return normalized;
 }
 
 DateTime? _readDateTime(Object? value) {

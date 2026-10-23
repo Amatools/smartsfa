@@ -457,6 +457,9 @@ class _RepresentedCompaniesSection extends StatelessWidget {
                                                     Text(
                                                       'Segmento: ${company.segmento}',
                                                     ),
+                                                  Text(
+                                                    'Regime tributário: ${_taxRegimeLabel(company.taxRegime)}',
+                                                  ),
                                                 ],
                                               ),
                                             ),
@@ -1030,6 +1033,10 @@ class _RepresentedDetailsSection extends StatelessWidget {
                                 selectedCompany.segmento,
                               ),
                               _profileLabelValue(
+                                'Regime tributário',
+                                _taxRegimeLabel(selectedCompany.taxRegime),
+                              ),
+                              _profileLabelValue(
                                 'Relação empresarial',
                                 _companyRelationshipSummary(
                                   company: selectedCompany,
@@ -1195,6 +1202,7 @@ class _RepresentedCompany {
     required this.cidade,
     required this.uf,
     required this.segmento,
+    required this.taxRegime,
     required this.ativo,
     required this.parentCompanyId,
   });
@@ -1213,6 +1221,7 @@ class _RepresentedCompany {
   final String cidade;
   final String uf;
   final String segmento;
+  final String taxRegime;
   final bool ativo;
   final String parentCompanyId;
 }
@@ -1261,6 +1270,7 @@ _RepresentedCompany? _representedCompanyFromMap(Map<String, Object?> map) {
     cidade: cidade,
     uf: uf,
     segmento: (map['segmento'] ?? '').toString(),
+    taxRegime: _normalizeTaxRegimeValue(map['taxRegime']),
     ativo: map['ativo'] == true,
     parentCompanyId: (map['parentCompanyId'] ?? '').toString().trim(),
   );
@@ -1400,6 +1410,10 @@ Future<Map<String, Object?>?> _openRepresentedCompanyEditor(
   final segmentoController = TextEditingController(
     text: initial?.segmento ?? '',
   );
+  var taxRegime = _normalizeTaxRegimeValue(initial?.taxRegime);
+  if (taxRegime.isEmpty) {
+    taxRegime = _defaultTaxRegime;
+  }
   var ativo = initial?.ativo ?? true;
   var logoData = initial?.logoUrl ?? '';
   var buscandoCep = false;
@@ -1499,6 +1513,44 @@ Future<Map<String, Object?>?> _openRepresentedCompanyEditor(
                 (uf) => DropdownMenuItem<String>(
                   value: uf,
                   child: Text(uf, style: dropdownTextStyle),
+                ),
+              )
+              .toList(growable: false),
+          onChanged: onChanged,
+        ),
+      ],
+    );
+  }
+
+  Widget labeledTaxRegimeDropdown({
+    required BuildContext fieldContext,
+    required String value,
+    required ValueChanged<String?> onChanged,
+  }) {
+    final dropdownTextStyle = Theme.of(fieldContext).textTheme.bodyMedium
+        ?.copyWith(fontWeight: FontWeight.w400);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Regime tributário',
+          style: Theme.of(fieldContext).textTheme.bodySmall,
+        ),
+        const SizedBox(height: 6),
+        DropdownButtonFormField<String>(
+          key: ValueKey<String>(value),
+          initialValue: value,
+          style: dropdownTextStyle,
+          decoration: dialogInputDecoration(),
+          items: _taxRegimeOptions
+              .map(
+                (regime) => DropdownMenuItem<String>(
+                  value: regime,
+                  child: Text(
+                    _taxRegimeLabel(regime),
+                    style: dropdownTextStyle,
+                  ),
                 ),
               )
               .toList(growable: false),
@@ -1855,6 +1907,25 @@ Future<Map<String, Object?>?> _openRepresentedCompanyEditor(
                                   const SizedBox(
                                     height: dialogFieldVerticalGap,
                                   ),
+                                  labeledTaxRegimeDropdown(
+                                    fieldContext: dialogContext,
+                                    value: taxRegime,
+                                    onChanged: (value) {
+                                      if (value == null) {
+                                        return;
+                                      }
+                                      setDialogState(() {
+                                        final normalized =
+                                            _normalizeTaxRegimeValue(value);
+                                        taxRegime = normalized.isEmpty
+                                            ? _defaultTaxRegime
+                                            : normalized;
+                                      });
+                                    },
+                                  ),
+                                  const SizedBox(
+                                    height: dialogFieldVerticalGap,
+                                  ),
                                   Row(
                                     children: [
                                       _RepresentedCompanyAvatar(
@@ -1875,6 +1946,7 @@ Future<Map<String, Object?>?> _openRepresentedCompanyEditor(
                                           cidade: cidadeController.text,
                                           uf: selectedUf,
                                           segmento: segmentoController.text,
+                                          taxRegime: taxRegime,
                                           ativo: ativo,
                                           parentCompanyId: isBranchCompany
                                               ? selectedParentCompanyId
@@ -2186,6 +2258,7 @@ Future<Map<String, Object?>?> _openRepresentedCompanyEditor(
   final cidade = cidadeController.text.trim();
   final uf = selectedUf.trim();
   final segmento = segmentoController.text.trim();
+  final normalizedTaxRegime = _normalizeTaxRegimeValue(taxRegime);
   final parentCompanyId = isBranchCompany ? selectedParentCompanyId.trim() : '';
 
   if (shouldSave != true) {
@@ -2193,6 +2266,10 @@ Future<Map<String, Object?>?> _openRepresentedCompanyEditor(
   }
 
   if (nomeFantasia.isEmpty) {
+    return null;
+  }
+
+  if (normalizedTaxRegime.isEmpty) {
     return null;
   }
 
@@ -2210,6 +2287,7 @@ Future<Map<String, Object?>?> _openRepresentedCompanyEditor(
     'cidade': cidade,
     'uf': uf,
     'segmento': segmento,
+    'taxRegime': normalizedTaxRegime,
     'ativo': ativo,
     'parentCompanyId': parentCompanyId,
   };

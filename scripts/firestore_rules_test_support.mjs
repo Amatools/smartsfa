@@ -1,4 +1,3 @@
-import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -6,10 +5,61 @@ import { initializeTestEnvironment } from '@firebase/rules-unit-testing';
 import { doc, setDoc } from 'firebase/firestore';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const rules = await fs.readFile(path.resolve(__dirname, '../firestore.rules'), 'utf8');
-const emulatorHost = process.env.FIRESTORE_EMULATOR_HOST || '127.0.0.1:8080';
-const [host, portValue] = emulatorHost.split(':');
-const port = Number.parseInt(portValue, 10);
+
+// Force direct local emulator traffic. Some environments inject HTTP(S)
+// proxies that redirect localhost fetches and break rules loading.
+process.env.NO_PROXY = '127.0.0.1,localhost,::1';
+process.env.no_proxy = process.env.NO_PROXY;
+process.env.HTTP_PROXY = '';
+process.env.HTTPS_PROXY = '';
+process.env.ALL_PROXY = '';
+if (!process.env.NODE_TLS_REJECT_UNAUTHORIZED) {
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED = '1';
+}
+
+function resolveEmulatorHostAndPort() {
+  const raw = String(process.env.FIRESTORE_EMULATOR_HOST || '').trim();
+  if (!raw) {
+    return { host: '127.0.0.1', port: 8080 };
+  }
+
+  let host = '';
+  let port = Number.NaN;
+
+  try {
+    if (raw.startsWith('http://') || raw.startsWith('https://')) {
+      const parsed = new URL(raw);
+      host = parsed.hostname;
+      port = Number.parseInt(parsed.port || '8080', 10);
+    } else {
+      const idx = raw.lastIndexOf(':');
+      if (idx > 0) {
+        host = raw.slice(0, idx).trim();
+        port = Number.parseInt(raw.slice(idx + 1).trim(), 10);
+      } else {
+        host = raw;
+      }
+    }
+  } catch (_) {
+    host = '';
+    port = Number.NaN;
+  }
+
+  if (!host) {
+    host = '127.0.0.1';
+  }
+  const localHosts = new Set(['127.0.0.1', 'localhost', '::1']);
+  if (!localHosts.has(host.toLowerCase())) {
+    host = '127.0.0.1';
+  }
+  if (!Number.isFinite(port) || port <= 0) {
+    port = 8080;
+  }
+
+  return { host, port };
+}
+
+const { host, port } = resolveEmulatorHostAndPort();
 
 export async function createTestContext() {
   const testEnv = await initializeTestEnvironment({
@@ -17,7 +67,6 @@ export async function createTestContext() {
     firestore: {
       host,
       port,
-      rules,
     },
   });
 

@@ -34,6 +34,7 @@ class Produto implements TenantScopedEntity {
     this.unidade,
     this.multiploVenda,
     this.quantidadeMinima,
+    this.grupoTributarioId,
     this.ncm,
     this.cest,
     this.origemMercadoriaCst,
@@ -86,6 +87,9 @@ class Produto implements TenantScopedEntity {
       unidade: map['unidade'] as String?,
       multiploVenda: _readDouble(map['multiploVenda']),
       quantidadeMinima: _readDouble(map['quantidadeMinima']),
+      grupoTributarioId: _readNullableTrimmedString(
+        map['grupo_tributario_id'] ?? map['grupoTributarioId'],
+      ),
       ncm: map['ncm'] as String?,
       cest: map['cest'] as String?,
       origemMercadoriaCst: _readOrigemMercadoriaCst(
@@ -142,6 +146,7 @@ class Produto implements TenantScopedEntity {
   final String? unidade;
   final double? multiploVenda;
   final double? quantidadeMinima;
+  final String? grupoTributarioId;
   final String? ncm;
   final String? cest;
   final String? origemMercadoriaCst;
@@ -186,6 +191,7 @@ class Produto implements TenantScopedEntity {
     String? unidade,
     double? multiploVenda,
     double? quantidadeMinima,
+    String? grupoTributarioId,
     String? ncm,
     String? cest,
     String? origemMercadoriaCst,
@@ -230,6 +236,7 @@ class Produto implements TenantScopedEntity {
       unidade: unidade ?? this.unidade,
       multiploVenda: multiploVenda ?? this.multiploVenda,
       quantidadeMinima: quantidadeMinima ?? this.quantidadeMinima,
+      grupoTributarioId: grupoTributarioId ?? this.grupoTributarioId,
       ncm: ncm ?? this.ncm,
       cest: cest ?? this.cest,
       origemMercadoriaCst: origemMercadoriaCst ?? this.origemMercadoriaCst,
@@ -277,6 +284,7 @@ class Produto implements TenantScopedEntity {
       'unidade': unidade,
       'multiploVenda': multiploVenda,
       'quantidadeMinima': quantidadeMinima,
+      'grupo_tributario_id': grupoTributarioId,
       'ncm': ncm,
       'cest': cest,
       'origemMercadoriaCst': origemMercadoriaCst,
@@ -352,4 +360,9 @@ String? _readOrigemMercadoriaCst(Object? value) {
   }
 
   return numeric.toString();
+}
+
+String? _readNullableTrimmedString(Object? value) {
+  final normalized = (value ?? '').toString().trim();
+  return normalized.isEmpty ? null : normalized;
 }

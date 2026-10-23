@@ -348,12 +348,12 @@ Objetivo: validar onboarding, entrada por convite/membership e permissao por pap
 - 2026-09-09: Criados docs/firebase/acesso_hierarquia.md, firestore.rules e scripts/bootstrap_owner/create_owner.js.
 - 2026-09-09: FlutterFire CLI instalada localmente (dart pub global activate flutterfire_cli).
 - 2026-09-09: Firebase CLI autenticada com aureo@amatools.com.br.
-- 2026-09-09: FlutterFire configure concluido para android, ios e web (projeto smartsfa-f20a0).
+- 2026-09-09: FlutterFire configure concluido para android, ios e web (projeto smart-sfa).
 - 2026-09-09: Fluxo inicial de login Google + solicitacao de liberacao interna implementado em lib/main.dart.
 - 2026-09-09: Regras Firestore reforcadas com usuario ativo e solicitacoes_acesso.
-- 2026-09-09: Regras publicadas com sucesso em smartsfa-f20a0 (firestore deploy).
+- 2026-09-09: Regras publicadas com sucesso em smart-sfa (firestore deploy).
 - 2026-09-09: Criados templates legais em docs/legal para uso no Branding OAuth.
-- 2026-09-09: Paginas legais publicadas em https://smartsfa-f20a0.web.app.
+- 2026-09-09: Paginas legais publicadas em https://smart-sfa.web.app.
 - 2026-09-09: Direcao do produto alterada para plataforma SaaS multi-tenant com modo manual sem ERP.
 - 2026-09-09: Firebase atual mantido como ambiente dev/prototipo e login real movido para etapa posterior.
 - 2026-09-09: Documento de transicao criado em docs/architecture_transition.md.

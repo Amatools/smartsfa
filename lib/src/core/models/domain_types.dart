@@ -108,6 +108,86 @@ enum CustomerTaxProfile {
   }
 }
 
+enum TaxOperationProfileKey {
+  revendaSameUf('revenda_same_uf', 'Revenda mesma UF'),
+  revendaInterstate('revenda_interstate', 'Revenda interestadual'),
+  usoConsumoContribuinteSameUf(
+    'uso_consumo_contribuinte_same_uf',
+    'Uso/consumo contribuinte mesma UF',
+  ),
+  usoConsumoContribuinteInterstate(
+    'uso_consumo_contribuinte_interstate',
+    'Uso/consumo contribuinte interestadual',
+  ),
+  usoConsumoNaoContribuinteSameUf(
+    'uso_consumo_nao_contribuinte_same_uf',
+    'Uso/consumo nao contribuinte mesma UF',
+  ),
+  usoConsumoNaoContribuinteInterstate(
+    'uso_consumo_nao_contribuinte_interstate',
+    'Uso/consumo nao contribuinte interestadual',
+  ),
+  industrializacaoSameUf(
+    'industrializacao_same_uf',
+    'Industrializacao mesma UF',
+  ),
+  industrializacaoInterstate(
+    'industrializacao_interstate',
+    'Industrializacao interestadual',
+  ),
+  zfmIndustrializacao('zfm_industrializacao', 'ZFM industrializacao'),
+  zfmComercializacaoRevenda(
+    'zfm_comercializacao_revenda',
+    'ZFM comercializacao/revenda',
+  );
+
+  const TaxOperationProfileKey(this.value, this.label);
+
+  final String value;
+  final String label;
+
+  static TaxOperationProfileKey fromValue(String value) {
+    return TaxOperationProfileKey.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => TaxOperationProfileKey.revendaSameUf,
+    );
+  }
+}
+
+const String defaultTaxRegime = 'simples_nacional';
+const List<String> taxRegimeValues = <String>[
+  'simples_nacional',
+  'lucro_presumido',
+  'lucro_real',
+];
+
+bool isValidTaxRegimeValue(String value) {
+  final normalized = value.trim().toLowerCase();
+  for (final option in taxRegimeValues) {
+    if (normalized == option) {
+      return true;
+    }
+  }
+  return false;
+}
+
+String normalizeTaxRegimeValue(String value) {
+  return value.trim().toLowerCase();
+}
+
+String taxRegimeLabel(String value) {
+  switch (normalizeTaxRegimeValue(value)) {
+    case 'simples_nacional':
+      return 'Simples Nacional';
+    case 'lucro_presumido':
+      return 'Lucro Presumido';
+    case 'lucro_real':
+      return 'Lucro Real';
+    default:
+      return 'Nao definido';
+  }
+}
+
 enum PreRegistrationStatus {
   draft('rascunho', 'Rascunho'),
   pending('pendente', 'Pendente'),

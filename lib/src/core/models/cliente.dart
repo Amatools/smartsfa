@@ -32,6 +32,7 @@ class Cliente implements TenantScopedEntity {
     this.inscricaoMunicipal = '',
     this.salePurpose = SalePurpose.revenda,
     this.taxProfile = CustomerTaxProfile.contribuinte,
+    this.taxRegime = defaultTaxRegime,
     this.isZfmSuframa = false,
     this.observacoes = '',
     this.syncVersion = 0,
@@ -81,6 +82,7 @@ class Cliente implements TenantScopedEntity {
             map['customerTaxProfile'] as String? ??
             CustomerTaxProfile.contribuinte.value,
       ),
+      taxRegime: normalizeTaxRegimeValue(map['taxRegime'] as String? ?? ''),
       isZfmSuframa: _readBool(
         map['isZfmSuframa'] ?? map['zfmSuframa'] ?? map['clienteZfmSuframa'],
       ),
@@ -123,6 +125,7 @@ class Cliente implements TenantScopedEntity {
   final String inscricaoMunicipal;
   final SalePurpose salePurpose;
   final CustomerTaxProfile taxProfile;
+  final String taxRegime;
   final bool isZfmSuframa;
   final String observacoes;
   final int syncVersion;
@@ -160,6 +163,7 @@ class Cliente implements TenantScopedEntity {
     String? inscricaoMunicipal,
     SalePurpose? salePurpose,
     CustomerTaxProfile? taxProfile,
+    String? taxRegime,
     bool? isZfmSuframa,
     String? observacoes,
     int? syncVersion,
@@ -197,6 +201,7 @@ class Cliente implements TenantScopedEntity {
       inscricaoMunicipal: inscricaoMunicipal ?? this.inscricaoMunicipal,
       salePurpose: salePurpose ?? this.salePurpose,
       taxProfile: taxProfile ?? this.taxProfile,
+      taxRegime: taxRegime ?? this.taxRegime,
       isZfmSuframa: isZfmSuframa ?? this.isZfmSuframa,
       observacoes: observacoes ?? this.observacoes,
       syncVersion: syncVersion ?? this.syncVersion,
@@ -237,6 +242,7 @@ class Cliente implements TenantScopedEntity {
       'inscricaoMunicipal': inscricaoMunicipal,
       'salePurpose': salePurpose.value,
       'taxProfile': taxProfile.value,
+      'taxRegime': taxRegime,
       'isZfmSuframa': isZfmSuframa,
       'observacoes': observacoes,
       'syncVersion': syncVersion,

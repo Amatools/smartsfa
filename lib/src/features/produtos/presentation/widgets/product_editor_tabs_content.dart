@@ -136,6 +136,9 @@ class ProductEditorTabsContent extends StatelessWidget {
       children: [
         ProductTaxationTabSection(
           readOnly: payload.readOnly,
+          tenantId: payload.tenantId,
+          taxGroupCatalogService: payload.taxGroupCatalogService,
+          grupoTributarioIdController: payload.controllers.grupoTributarioId,
           ncmController: payload.controllers.ncm,
           cestController: payload.controllers.cest,
           ipiBaseController: payload.controllers.ipiBase,

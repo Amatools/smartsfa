@@ -14,6 +14,11 @@ class FirestoreTaxRuleRepository implements TaxRuleRepository {
   CollectionReference<Map<String, dynamic>> get _collection =>
       _firestore.collection('tax_rules');
 
+  bool _isOperationProfileDoc(Map<String, dynamic> data) {
+    final docType = (data['docType'] ?? '').toString().trim().toLowerCase();
+    return docType == 'operation_profile';
+  }
+
   @override
   Stream<List<TaxRule>> watchAll({required String tenantId}) {
     final normalizedTenantId = tenantId.trim();
@@ -29,8 +34,12 @@ class FirestoreTaxRuleRepository implements TaxRuleRepository {
               .map((doc) {
                 final data = normalizeFirestoreMap(doc.data());
                 data.putIfAbsent('id', () => doc.id);
+                if (_isOperationProfileDoc(data)) {
+                  return null;
+                }
                 return TaxRule.fromMap(data);
               })
+              .whereType<TaxRule>()
               .where((rule) {
                 final deletedAt = rule.deletedAt;
                 return deletedAt == null;
@@ -61,8 +70,12 @@ class FirestoreTaxRuleRepository implements TaxRuleRepository {
         .map((doc) {
           final data = normalizeFirestoreMap(doc.data());
           data.putIfAbsent('id', () => doc.id);
+          if (_isOperationProfileDoc(data)) {
+            return null;
+          }
           return TaxRule.fromMap(data);
         })
+        .whereType<TaxRule>()
         .where((rule) {
           final deletedAt = rule.deletedAt;
           return deletedAt == null;
@@ -100,6 +113,9 @@ class FirestoreTaxRuleRepository implements TaxRuleRepository {
 
     final data = normalizeFirestoreMap(doc.data() ?? <String, dynamic>{});
     data.putIfAbsent('id', () => doc.id);
+    if (_isOperationProfileDoc(data)) {
+      return null;
+    }
     final entity = TaxRule.fromMap(data);
     if (entity.tenantId != normalizedTenantId) {
       return null;

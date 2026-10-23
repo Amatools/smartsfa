@@ -1,14 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../../shared/presentation/widgets/app_medium_controls.dart';
+import '../services/product_tax_group_catalog_service.dart';
 import 'product_editor_field_builder.dart';
 
-class ProductTaxationTabSection extends StatelessWidget {
+class ProductTaxationTabSection extends StatefulWidget {
   static const double _maxFieldWidth = 200;
 
   const ProductTaxationTabSection({
     super.key,
     required this.readOnly,
+    required this.tenantId,
+    required this.taxGroupCatalogService,
+    required this.grupoTributarioIdController,
     required this.ncmController,
     required this.cestController,
     required this.ipiBaseController,
@@ -16,10 +21,21 @@ class ProductTaxationTabSection extends StatelessWidget {
   });
 
   final bool readOnly;
+  final String tenantId;
+  final ProductTaxGroupCatalogService taxGroupCatalogService;
+  final TextEditingController grupoTributarioIdController;
   final TextEditingController ncmController;
   final TextEditingController cestController;
   final TextEditingController ipiBaseController;
   final ProductEditorFieldBuilder editorFieldBuilder;
+
+  @override
+  State<ProductTaxationTabSection> createState() =>
+      _ProductTaxationTabSectionState();
+}
+
+class _ProductTaxationTabSectionState extends State<ProductTaxationTabSection> {
+  static const double _maxFieldWidth = ProductTaxationTabSection._maxFieldWidth;
 
   Widget _buildCompactField(
     BuildContext context,
@@ -35,13 +51,122 @@ class ProductTaxationTabSection extends StatelessWidget {
             : _maxFieldWidth;
         return SizedBox(
           width: width,
-          child: editorFieldBuilder(
+          child: widget.editorFieldBuilder(
             controller,
             label,
-            readOnly: readOnly,
+            readOnly: widget.readOnly,
             keyboardType: keyboardType,
             inputFormatters: inputFormatters,
           ),
+        );
+      },
+    );
+  }
+
+  Widget _buildGrupoTributarioField(BuildContext context) {
+    return StreamBuilder<List<ProductTaxGroupCatalogEntry>>(
+      stream: widget.taxGroupCatalogService.watchGroups(
+        tenantId: widget.tenantId,
+      ),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildCompactField(
+                context,
+                widget.grupoTributarioIdController,
+                'Grupo Tributario (ID)',
+              ),
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  'Nao foi possivel carregar os grupos tributarios agora.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
+            ],
+          );
+        }
+        final allGroups =
+            snapshot.data ?? const <ProductTaxGroupCatalogEntry>[];
+        final availableGroups = allGroups
+            .where((group) => group.isActive)
+            .toList(growable: false);
+        final currentValue = widget.grupoTributarioIdController.text.trim();
+        final hasCurrent =
+            currentValue.isEmpty ||
+            availableGroups.any((group) => group.id == currentValue);
+        final dropdownValue = hasCurrent ? currentValue : '';
+
+        final items = <DropdownMenuItem<String>>[
+          DropdownMenuItem<String>(
+            value: '',
+            child: Text(
+              availableGroups.isEmpty
+                  ? 'Sem grupo (cadastre grupos tributarios)'
+                  : 'Sem grupo',
+              textAlign: TextAlign.left,
+            ),
+          ),
+          ...availableGroups.map(
+            (group) => DropdownMenuItem<String>(
+              value: group.id,
+              child: Text(group.displayLabel, textAlign: TextAlign.left),
+            ),
+          ),
+        ];
+
+        if (!hasCurrent && currentValue.isNotEmpty) {
+          items.add(
+            DropdownMenuItem<String>(
+              value: currentValue,
+              child: Text(
+                'Grupo atual nao encontrado: $currentValue',
+                textAlign: TextAlign.left,
+              ),
+            ),
+          );
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final width = constraints.maxWidth < _maxFieldWidth
+                    ? constraints.maxWidth
+                    : _maxFieldWidth;
+                return SizedBox(
+                  width: width,
+                  child: AppMediumLabeledControl(
+                    label: 'Grupo Tributario',
+                    child: AppMediumDropdown<String>(
+                      value: dropdownValue,
+                      alignment: AlignmentDirectional.centerStart,
+                      hint: const Text('Selecione um grupo'),
+                      items: items,
+                      onChanged: widget.readOnly
+                          ? null
+                          : (value) {
+                              widget.grupoTributarioIdController.text =
+                                  (value ?? '').trim();
+                              setState(() {});
+                            },
+                    ),
+                  ),
+                );
+              },
+            ),
+            if (!widget.readOnly && availableGroups.isEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  'Nenhum grupo tributario cadastrado para este workspace.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
+          ],
         );
       },
     );
@@ -53,19 +178,21 @@ class ProductTaxationTabSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 8),
+        _buildGrupoTributarioField(context),
+        const SizedBox(height: 10),
         _buildCompactField(
           context,
-          ncmController,
+          widget.ncmController,
           'NCM',
           keyboardType: TextInputType.number,
           inputFormatters: const [_NcmMaskedInputFormatter()],
         ),
         const SizedBox(height: 10),
-        _buildCompactField(context, cestController, 'CEST'),
+        _buildCompactField(context, widget.cestController, 'CEST'),
         const SizedBox(height: 10),
         _buildCompactField(
           context,
-          ipiBaseController,
+          widget.ipiBaseController,
           'IPI base (%)',
           keyboardType: TextInputType.number,
         ),

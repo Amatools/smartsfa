@@ -197,9 +197,10 @@ class _EnterprisePoliciesSection extends StatefulWidget {
       _EnterprisePoliciesSectionState();
 }
 
-class _EnterprisePoliciesSectionState extends State<_EnterprisePoliciesSection> {
-  static final Map<String, _EnterprisePolicySubmenu>
-  _submenuByTenantId = <String, _EnterprisePolicySubmenu>{};
+class _EnterprisePoliciesSectionState
+    extends State<_EnterprisePoliciesSection> {
+  static final Map<String, _EnterprisePolicySubmenu> _submenuByTenantId =
+      <String, _EnterprisePolicySubmenu>{};
 
   _EnterprisePolicySubmenu _activeSubmenu =
       _EnterprisePolicySubmenu.tributacoes;
@@ -245,8 +246,14 @@ class _EnterprisePoliciesSectionState extends State<_EnterprisePoliciesSection> 
     if (!canAccessPolicies) {
       return const _SimpleCardSection(
         title: 'Políticas comerciais',
-        subtitle: 'Acesso restrito ao owner da empresa no workspace enterprise.',
-        items: ['Tributações', 'Condições de pagamento', 'Descontos pontuais', 'Acréscimos ou descontos'],
+        subtitle:
+            'Acesso restrito ao owner da empresa no workspace enterprise.',
+        items: [
+          'Tributações',
+          'Condições de pagamento',
+          'Descontos pontuais',
+          'Acréscimos ou descontos',
+        ],
       );
     }
 
@@ -309,15 +316,10 @@ class _EnterprisePoliciesSectionState extends State<_EnterprisePoliciesSection> 
     required String label,
   }) {
     return FilterChip(
-      label: Text(
-        label,
-        style: const TextStyle(fontWeight: FontWeight.w600),
-      ),
+      label: Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
       side: BorderSide.none,
       shape: const StadiumBorder(),
-      selectedColor: Theme.of(context)
-          .colorScheme
-          .primaryContainer
+      selectedColor: Theme.of(context).colorScheme.primaryContainer
           .withValues(alpha: 0.8),
       backgroundColor: Colors.white,
       selected: _activeSubmenu == submenu,
@@ -333,7 +335,7 @@ class _EnterprisePoliciesSectionState extends State<_EnterprisePoliciesSection> 
   Widget _buildSubmenuContent() {
     switch (_activeSubmenu) {
       case _EnterprisePolicySubmenu.tributacoes:
-        return _TaxRulesSection(
+        return _TaxationSection(
           activeTenant: widget.activeTenant,
           selectedRepresentedCompanyId: _representedCompanyId,
           activeRepresentedCompanyName: _representedCompanyName,

@@ -37,6 +37,7 @@ class ProductEditorEntityMapper {
     required String unidadeText,
     required String multiploVendaText,
     required String quantidadeMinimaText,
+    required String grupoTributarioIdText,
     required String ncmText,
     required String cestText,
     required String origemMercadoriaCstText,
@@ -109,6 +110,9 @@ class ProductEditorEntityMapper {
       multiploVenda: ProductFormValueCodec.parseDecimal(multiploVendaText),
       quantidadeMinima: ProductFormValueCodec.parseDecimal(
         quantidadeMinimaText,
+      ),
+      grupoTributarioId: ProductFormValueCodec.nullableText(
+        grupoTributarioIdText,
       ),
       ncm: ProductFormValueCodec.nullableText(ncmText),
       cest: ProductFormValueCodec.nullableText(cestText),

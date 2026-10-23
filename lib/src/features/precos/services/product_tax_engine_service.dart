@@ -6,6 +6,7 @@ import '../../../core/models/domain_types.dart';
 import '../../../core/repositories/product_base_price_repository.dart';
 import '../../../core/repositories/produto_repository.dart';
 import '../../../core/repositories/tax_rule_repository.dart';
+import 'tax_operation_classifier_service.dart';
 
 class ProductTaxCalculationResult {
   const ProductTaxCalculationResult({
@@ -20,6 +21,7 @@ class ProductTaxCalculationResult {
     this.regraFiscalId,
     this.ncm,
     this.cest,
+    this.operationProfileKey,
   });
 
   final double precoBase;
@@ -38,6 +40,7 @@ class ProductTaxCalculationResult {
   final String? regraFiscalId;
   final String? ncm;
   final String? cest;
+  final String? operationProfileKey;
 }
 
 class ProductTaxEngineService {
@@ -50,6 +53,8 @@ class ProductTaxEngineService {
   final ProdutoRepository produtoRepository;
   final ProductBasePriceRepository basePriceRepository;
   final TaxRuleRepository taxRuleRepository;
+    final TaxOperationClassifierService _operationClassifier =
+      const TaxOperationClassifierService();
   final Map<String, List<ProductBasePrice>> _basePricesCache =
       <String, List<ProductBasePrice>>{};
   final Map<String, List<TaxRule>> _taxRulesCache = <String, List<TaxRule>>{};
@@ -72,6 +77,7 @@ class ProductTaxEngineService {
     final normalizedUfDestino = clienteUf.trim().toUpperCase();
     final normalizedUfOrigem = ufOrigem.trim().toUpperCase();
     final normalizedRepresentedCompanyId = (representedCompanyId ?? '').trim();
+    final sameUf = normalizedUfOrigem == normalizedUfDestino;
 
     if (normalizedTenantId.isEmpty ||
         normalizedProdutoId.isEmpty ||
@@ -125,10 +131,17 @@ class ProductTaxEngineService {
 
     final precoBaseOriginal = precoBaseRegistro.basePrice * quantidade;
     final precoUnitario = precoBaseRegistro.basePrice;
+    final operationResolution = _operationClassifier.classify(
+      salePurpose: salePurpose,
+      sameUf: sameUf,
+      customerTaxProfile: customerTaxProfile,
+      isZonaFrancaSuframa: isZonaFrancaSuframa,
+    );
 
     // For ZFM/SUFRAMA, instead of adding tax over the item total, we discount
     // the product value by the configured ICMS destination rate.
-    final zfmDiscountRate = isZonaFrancaSuframa
+    final zfmDiscountRate = isZonaFrancaSuframa &&
+          operationResolution.reduceIcmsForZfm
       ? (regra?.aliquotaDestino ??
           regra?.aliquotaSt ??
           regra?.aliquotaIcms ??
@@ -143,7 +156,11 @@ class ProductTaxEngineService {
       : precoBaseOriginal;
 
     final aliquotaIpi = produto.aliquotaIpiBase ?? 0;
-    final valorIpi = precoBase * (aliquotaIpi / 100);
+    final valorIpiCalculado = precoBase * (aliquotaIpi / 100);
+    final valorIpi = operationResolution.addIpiToTotal ? valorIpiCalculado : 0.0;
+    final baseIcms = operationResolution.includeIpiInIcmsBase
+        ? precoBase + valorIpiCalculado
+        : precoBase;
 
     final double aliquotaCredito =
       regra?.aliquotaCredito ?? regra?.aliquotaIcms ?? 0.0;
@@ -152,19 +169,14 @@ class ProductTaxEngineService {
     final double mvaIva = regra?.mvaIva ?? 0.0;
     final tipoSt = (regra?.stCalculationType ?? 'mva').trim().toLowerCase();
     final isMva = tipoSt != 'pmc';
-    final isUsoConsumo = salePurpose == SalePurpose.usoConsumo;
-    final applySt = !isZonaFrancaSuframa &&
-      (!isUsoConsumo ||
-          customerTaxProfile == CustomerTaxProfile.contribuinte);
-    final applyDifal = !isZonaFrancaSuframa &&
-      (!isUsoConsumo ||
-          customerTaxProfile == CustomerTaxProfile.naoContribuinte);
+    final applySt = operationResolution.calculateIcmsSt;
+    final applyDifal = operationResolution.calculateDifal;
 
     double valorSt = 0;
     if (applySt && aliquotaDestino > 0) {
       final baseSt = _resolveStBase(
         isMva: isMva,
-        precoBase: precoBase,
+        precoBase: baseIcms,
         precoUnitario: precoUnitario,
         quantidade: quantidade,
         precoConsiderado: regra?.stPriceForCalculation,
@@ -172,7 +184,7 @@ class ProductTaxEngineService {
         reducaoBase: regra?.stBaseReductionPercent,
         baseCalculoPmc: regra?.stBaseAmount,
       );
-      final icmsProprio = precoBase * (aliquotaCredito / 100);
+      final icmsProprio = baseIcms * (aliquotaCredito / 100);
       final icmsStCheio = baseSt * (aliquotaDestino / 100);
       valorSt = math.max(icmsStCheio - icmsProprio, 0.0);
     }
@@ -195,6 +207,7 @@ class ProductTaxEngineService {
       regraFiscalId: regra?.id,
       ncm: produto.ncm,
       cest: produto.cest,
+      operationProfileKey: operationResolution.profileKey.value,
     );
   }
 

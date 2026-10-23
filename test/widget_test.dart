@@ -60,6 +60,7 @@ void main() {
       estado: 'SP',
       cep: '01000-000',
       pais: 'Brasil',
+      taxRegime: defaultTaxRegime,
       status: PreRegistrationStatus.approved,
       requestedByUid: 'u-1',
       createdAt: DateTime(2024, 1, 1),

@@ -59,6 +59,7 @@ class _ClientePreCadastroPageState extends State<ClientePreCadastroPage> {
   String _tipoPessoa = 'pj';
   SalePurpose _salePurpose = SalePurpose.revenda;
   CustomerTaxProfile _taxProfile = CustomerTaxProfile.contribuinte;
+  String _taxRegime = defaultTaxRegime;
   bool _isZfmSuframa = false;
   final String _canal = 'vendedor';
   bool _saving = false;
@@ -419,6 +420,7 @@ class _ClientePreCadastroPageState extends State<ClientePreCadastroPage> {
       inscricaoMunicipal: _inscricaoMunicipalController.text.trim(),
       salePurpose: _salePurpose,
       taxProfile: _taxProfile,
+      taxRegime: _taxRegime,
       isZfmSuframa: _isZfmSuframa,
       observacoes: _observacoesController.text.trim(),
       origemCadastro: CustomerOrigin.manual,
@@ -442,7 +444,9 @@ class _ClientePreCadastroPageState extends State<ClientePreCadastroPage> {
 
       if (result.savedLocalOnly) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Salvo no dispositivo Local (off-line)')),
+          const SnackBar(
+            content: Text('Salvo no dispositivo Local (off-line)'),
+          ),
         );
         return;
       }
@@ -699,7 +703,9 @@ class _ClientePreCadastroPageState extends State<ClientePreCadastroPage> {
                                     items: CustomerTaxProfile.values
                                         .map(
                                           (item) =>
-                                              DropdownMenuItem<CustomerTaxProfile>(
+                                              DropdownMenuItem<
+                                                CustomerTaxProfile
+                                              >(
                                                 value: item,
                                                 child: Text(item.label),
                                               ),
@@ -712,23 +718,61 @@ class _ClientePreCadastroPageState extends State<ClientePreCadastroPage> {
                                     },
                                   ),
                             ),
+                            const SizedBox(height: 12),
+                            labeledField(
+                              label: 'Regime tributário',
+                              child: DropdownButtonFormField<String>(
+                                initialValue: _taxRegime,
+                                isExpanded: true,
+                                decoration: formInputDecoration(),
+                                items: taxRegimeValues
+                                    .map(
+                                      (item) => DropdownMenuItem<String>(
+                                        value: item,
+                                        child: Text(taxRegimeLabel(item)),
+                                      ),
+                                    )
+                                    .toList(growable: false),
+                                validator: (value) {
+                                  final normalized = normalizeTaxRegimeValue(
+                                    value ?? '',
+                                  );
+                                  if (!isValidTaxRegimeValue(normalized)) {
+                                    return 'Selecione o regime tributário.';
+                                  }
+                                  return null;
+                                },
+                                onChanged: (value) {
+                                  if (value != null) {
+                                    setState(() {
+                                      _taxRegime = normalizeTaxRegimeValue(
+                                        value,
+                                      );
+                                    });
+                                  }
+                                },
+                              ),
+                            ),
                             const SizedBox(height: 8),
                             labeledField(
                               label: 'Zona Franca / SUFRAMA',
-                              child: CheckboxListTile(
-                                value: _isZfmSuframa,
-                                dense: true,
-                                contentPadding: EdgeInsets.zero,
-                                controlAffinity:
-                                    ListTileControlAffinity.leading,
-                                title: const Text(
-                                  'Cliente enquadrado em ZFM-SUFRAMA',
+                              child: Material(
+                                color: Colors.transparent,
+                                child: CheckboxListTile(
+                                  value: _isZfmSuframa,
+                                  dense: true,
+                                  contentPadding: EdgeInsets.zero,
+                                  controlAffinity:
+                                      ListTileControlAffinity.leading,
+                                  title: const Text(
+                                    'Cliente enquadrado em ZFM-SUFRAMA',
+                                  ),
+                                  onChanged: (value) {
+                                    setState(
+                                      () => _isZfmSuframa = value ?? false,
+                                    );
+                                  },
                                 ),
-                                onChanged: (value) {
-                                  setState(
-                                    () => _isZfmSuframa = value ?? false,
-                                  );
-                                },
                               ),
                             ),
                             const SizedBox(height: 16),
