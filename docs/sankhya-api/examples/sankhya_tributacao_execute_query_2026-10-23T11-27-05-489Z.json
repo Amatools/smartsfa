@@ -1,0 +1,176 @@
+{
+  "marker": "TRIBUTACAO_EXECUTE_QUERY_PROBE",
+  "ok": true,
+  "tenantId": "self_T8oqTD0UBtWATPbITOGsqAEZt3d2_smartsfa-enterprise-teste",
+  "environment": "prod",
+  "baseUrlCandidates": [
+    "https://api.sankhya.com.br"
+  ],
+  "endpointCandidates": [
+    "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+    "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+    "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+    "/gateway/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+    "/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery"
+  ],
+  "sqlFile": "g:\\smartsfa\\docs\\sankhya-api\\examples\\tributacao_diagnostico_cobertura_icm_ite_agregado.sql",
+  "sqlPreview": "WITH ICM_GENERICO AS (\r\n    SELECT DISTINCT\r\n        NVL(ICM.CODTRIB, -1) AS CODTRIB,\r\n        NVL(ICM.IDALIQ, -1) AS IDALIQ\r\n    FROM TGFICM ICM\r\n    WHERE NVL(TO_CHAR(ICM.CODRESTRICAO), '-1') IN ('-1', '0')\r\n      AND NVL(TO_CHAR(ICM.CODRESTRICAO2), '-1') IN ('-1', '0')\r\n),\r\nITE_AGREGADO AS (\r\n    SELECT\r\n        NVL(ITE.CODTRIB, -1) AS CODTRIB,\r\n        NVL(ITE.IDALIQICMS, -1) AS IDALIQ,\r\n        COUNT(DISTINCT ITE.CODPROD) AS PRODUTOS_DISTINTOS\r\n    FROM TGFITE ITE\r\n    WHERE ITE.CODPROD IS ",
+  "successfulAttempt": {
+    "baseUrl": "https://api.sankhya.com.br",
+    "endpointPath": "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+    "payloadVariant": "body_serviceName_requestBody_sql",
+    "httpStatus": 200,
+    "responseIsJson": true,
+    "rowCountDetected": 1,
+    "responseBody": {
+      "serviceName": "DbExplorerSP.executeQuery",
+      "status": "1",
+      "pendingPrinting": "false",
+      "transactionId": "DB9C8E8FC83A47D5DED141DDDAF7ADC5",
+      "responseBody": {
+        "fieldsMetadata": [
+          {
+            "name": "CHAVES_ICM_GENERICAS",
+            "description": "CHAVES_ICM_GENERICAS",
+            "order": 1,
+            "userType": "I"
+          },
+          {
+            "name": "MATCH_EXATO_CODTRIB_IDALIQ",
+            "description": "MATCH_EXATO_CODTRIB_IDALIQ",
+            "order": 2,
+            "userType": "I"
+          },
+          {
+            "name": "MATCH_APENAS_IDALIQ",
+            "description": "MATCH_APENAS_IDALIQ",
+            "order": 3,
+            "userType": "I"
+          },
+          {
+            "name": "MATCH_APENAS_CODTRIB",
+            "description": "MATCH_APENAS_CODTRIB",
+            "order": 4,
+            "userType": "I"
+          },
+          {
+            "name": "PRODUTOS_COBERTOS_MATCH_EXATO",
+            "description": "PRODUTOS_COBERTOS_MATCH_EXATO",
+            "order": 5,
+            "userType": "I"
+          }
+        ],
+        "rows": [
+          [
+            2134,
+            11,
+            11,
+            2134,
+            35
+          ]
+        ],
+        "burstLimit": false,
+        "timeQuery": "5,176s",
+        "timeResultSet": "1ms"
+      }
+    },
+    "requestPayload": {
+      "serviceName": "DbExplorerSP.executeQuery",
+      "requestBody": {
+        "sql": "WITH ICM_GENERICO AS (\r\n    SELECT DISTINCT\r\n        NVL(ICM.CODTRIB, -1) AS CODTRIB,\r\n        NVL(ICM.IDALIQ, -1) AS IDALIQ\r\n    FROM TGFICM ICM\r\n    WHERE NVL(TO_CHAR(ICM.CODRESTRICAO), '-1') IN ('-1', '0')\r\n      AND NVL(TO_CHAR(ICM.CODRESTRICAO2), '-1') IN ('-1', '0')\r\n),\r\nITE_AGREGADO AS (\r\n    SELECT\r\n        NVL(ITE.CODTRIB, -1) AS CODTRIB,\r\n        NVL(ITE.IDALIQICMS, -1) AS IDALIQ,\r\n        COUNT(DISTINCT ITE.CODPROD) AS PRODUTOS_DISTINTOS\r\n    FROM TGFITE ITE\r\n    WHERE ITE.CODPROD IS NOT NULL\r\n    GROUP BY\r\n        NVL(ITE.CODTRIB, -1),\r\n        NVL(ITE.IDALIQICMS, -1)\r\n)\r\nSELECT\r\n    COUNT(*) AS CHAVES_ICM_GENERICAS,\r\n    SUM(CASE WHEN M1.IDALIQ IS NOT NULL THEN 1 ELSE 0 END) AS MATCH_EXATO_CODTRIB_IDALIQ,\r\n    SUM(CASE WHEN M2.IDALIQ IS NOT NULL THEN 1 ELSE 0 END) AS MATCH_APENAS_IDALIQ,\r\n    SUM(CASE WHEN M3.CODTRIB IS NOT NULL THEN 1 ELSE 0 END) AS MATCH_APENAS_CODTRIB,\r\n    SUM(CASE WHEN M1.IDALIQ IS NOT NULL THEN NVL(M1.PRODUTOS_DISTINTOS, 0) ELSE 0 END) AS PRODUTOS_COBERTOS_MATCH_EXATO\r\nFROM ICM_GENERICO I\r\nLEFT JOIN ITE_AGREGADO M1\r\n    ON M1.CODTRIB = I.CODTRIB\r\n   AND M1.IDALIQ = I.IDALIQ\r\nLEFT JOIN (\r\n    SELECT DISTINCT IDALIQ\r\n    FROM ITE_AGREGADO\r\n) M2\r\n    ON M2.IDALIQ = I.IDALIQ\r\nLEFT JOIN (\r\n    SELECT DISTINCT CODTRIB\r\n    FROM ITE_AGREGADO\r\n) M3\r\n    ON M3.CODTRIB = I.CODTRIB"
+      }
+    }
+  },
+  "attempts": [
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_serviceName_requestBody_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_requestBody_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_requestBody_query",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_only_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+      "payloadVariant": "body_serviceName_requestBody_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+      "payloadVariant": "body_requestBody_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+      "payloadVariant": "body_requestBody_query",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+      "payloadVariant": "body_only_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_serviceName_requestBody_sql",
+      "httpStatus": 200,
+      "ok": true,
+      "rowCountDetected": 1,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"serviceName\":\"DbExplorerSP.executeQuery\",\"status\":\"1\",\"pendingPrinting\":\"false\",\"transactionId\":\"DB9C8E8FC83A47D5DED141DDDAF7ADC5\",\"responseBody\":{\"fieldsMetadata\":[{\"name\":\"CHAVES_ICM_GENERICAS\",\"description\":\"CHAVES_ICM_GENERICAS\",\"order\":1,\"userType\":\"I\"},{\"name\":\"MATCH_EXATO_CODTRIB_IDALIQ\",\"description\":\"MATCH_EXATO_CODTRIB_IDALIQ\",\"order\":2,\"userType\":\"I\"},{\"name\":\"MATCH_APENAS_IDALIQ\",\"description\":\"MATCH_APENAS_IDALIQ\",\"order\":3,\"userType\":\"I\"},{\"name\":\"MATCH_APENAS_CODTRIB\",\"description\":\"MATCH_APENAS_CODTRIB\",\"order\":4,\"userType\":\"I\"},{\"name\":\"PRODUTOS_COBERTOS_MATCH_EXATO\",\"description\":\"PRODUTOS_COBERTOS_MATCH_EXATO\",\"order\":5,\"userType\":\"I\"}],\"rows\":[[2134,11,11,2134,35]],\"burstLimit\":false,\"timeQuery\":\"5,176s\",\"timeResultSet\":\"1ms\"}}"
+    }
+  ]
+}

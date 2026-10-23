@@ -1,0 +1,20 @@
+﻿{
+  "email": "enterprise@smartsfa.com.br",
+  "uid": "T8oqTD0UBtWATPbITOGsqAEZt3d2",
+  "userDefaultTenantId": "self_T8oqTD0UBtWATPbITOGsqAEZt3d2_smartsfa-enterprise-teste",
+  "userLastSelectedTenantId": "self_T8oqTD0UBtWATPbITOGsqAEZt3d2_smartsfa-enterprise-teste",
+  "userLastSelectedRepresentedCompanyId": "",
+  "contexts": [
+    {
+      "membershipId": "self_T8oqTD0UBtWATPbITOGsqAEZt3d2_smartsfa-enterprise-teste_T8oqTD0UBtWATPbITOGsqAEZt3d2",
+      "tenantId": "self_T8oqTD0UBtWATPbITOGsqAEZt3d2_smartsfa-enterprise-teste",
+      "role": "owner",
+      "ativo": true,
+      "state": "active",
+      "totalTaxRules": 0,
+      "globalTaxRules": 0,
+      "enterpriseDefaultTaxRules": 0,
+      "otherScopedTaxRules": 0
+    }
+  ]
+}

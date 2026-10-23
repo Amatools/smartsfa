@@ -1,0 +1,183 @@
+{
+  "marker": "TRIBUTACAO_EXECUTE_QUERY_PROBE",
+  "ok": true,
+  "tenantId": "self_T8oqTD0UBtWATPbITOGsqAEZt3d2_smartsfa-enterprise-teste",
+  "environment": "prod",
+  "baseUrlCandidates": [
+    "https://api.sankhya.com.br"
+  ],
+  "endpointCandidates": [
+    "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+    "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+    "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+    "/gateway/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+    "/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery"
+  ],
+  "sqlFile": "g:\\smartsfa\\docs\\sankhya-api\\examples\\tributacao_diagnostico_ttkicm_cobertura.sql",
+  "sqlPreview": "SELECT\r\n    COUNT(*) AS TOTAL_TTKICM,\r\n    SUM(CASE WHEN TRIM(NVL(NCM, '')) <> '' THEN 1 ELSE 0 END) AS COM_NCM,\r\n    SUM(CASE WHEN TRIM(NVL(CESTREGRA, '')) <> '' THEN 1 ELSE 0 END) AS COM_CEST,\r\n    COUNT(DISTINCT NVL(CODTRIB, -1)) AS CODTRIB_DISTINTOS,\r\n    COUNT(DISTINCT NVL(UFORIG, '-')) AS UFORIG_DISTINTOS,\r\n    COUNT(DISTINCT NVL(UFDEST, '-')) AS UFDEST_DISTINTOS\r\nFROM TTKICM",
+  "successfulAttempt": {
+    "baseUrl": "https://api.sankhya.com.br",
+    "endpointPath": "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+    "payloadVariant": "body_serviceName_requestBody_sql",
+    "httpStatus": 200,
+    "responseIsJson": true,
+    "rowCountDetected": 1,
+    "responseBody": {
+      "serviceName": "DbExplorerSP.executeQuery",
+      "status": "1",
+      "pendingPrinting": "false",
+      "transactionId": "F2BAD2B29AECD6ACFFCE6E3650C86446",
+      "responseBody": {
+        "fieldsMetadata": [
+          {
+            "name": "TOTAL_TTKICM",
+            "description": "TOTAL_TTKICM",
+            "order": 1,
+            "userType": "I"
+          },
+          {
+            "name": "COM_NCM",
+            "description": "COM_NCM",
+            "order": 2,
+            "userType": "I"
+          },
+          {
+            "name": "COM_CEST",
+            "description": "COM_CEST",
+            "order": 3,
+            "userType": "I"
+          },
+          {
+            "name": "CODTRIB_DISTINTOS",
+            "description": "CODTRIB_DISTINTOS",
+            "order": 4,
+            "userType": "I"
+          },
+          {
+            "name": "UFORIG_DISTINTOS",
+            "description": "UFORIG_DISTINTOS",
+            "order": 5,
+            "userType": "I"
+          },
+          {
+            "name": "UFDEST_DISTINTOS",
+            "description": "UFDEST_DISTINTOS",
+            "order": 6,
+            "userType": "I"
+          }
+        ],
+        "rows": [
+          [
+            0,
+            null,
+            null,
+            0,
+            0,
+            0
+          ]
+        ],
+        "burstLimit": false,
+        "timeQuery": "39ms",
+        "timeResultSet": "1ms"
+      }
+    },
+    "requestPayload": {
+      "serviceName": "DbExplorerSP.executeQuery",
+      "requestBody": {
+        "sql": "SELECT\r\n    COUNT(*) AS TOTAL_TTKICM,\r\n    SUM(CASE WHEN TRIM(NVL(NCM, '')) <> '' THEN 1 ELSE 0 END) AS COM_NCM,\r\n    SUM(CASE WHEN TRIM(NVL(CESTREGRA, '')) <> '' THEN 1 ELSE 0 END) AS COM_CEST,\r\n    COUNT(DISTINCT NVL(CODTRIB, -1)) AS CODTRIB_DISTINTOS,\r\n    COUNT(DISTINCT NVL(UFORIG, '-')) AS UFORIG_DISTINTOS,\r\n    COUNT(DISTINCT NVL(UFDEST, '-')) AS UFDEST_DISTINTOS\r\nFROM TTKICM"
+      }
+    }
+  },
+  "attempts": [
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_serviceName_requestBody_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_requestBody_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_requestBody_query",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_only_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+      "payloadVariant": "body_serviceName_requestBody_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+      "payloadVariant": "body_requestBody_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+      "payloadVariant": "body_requestBody_query",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+      "payloadVariant": "body_only_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_serviceName_requestBody_sql",
+      "httpStatus": 200,
+      "ok": true,
+      "rowCountDetected": 1,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"serviceName\":\"DbExplorerSP.executeQuery\",\"status\":\"1\",\"pendingPrinting\":\"false\",\"transactionId\":\"F2BAD2B29AECD6ACFFCE6E3650C86446\",\"responseBody\":{\"fieldsMetadata\":[{\"name\":\"TOTAL_TTKICM\",\"description\":\"TOTAL_TTKICM\",\"order\":1,\"userType\":\"I\"},{\"name\":\"COM_NCM\",\"description\":\"COM_NCM\",\"order\":2,\"userType\":\"I\"},{\"name\":\"COM_CEST\",\"description\":\"COM_CEST\",\"order\":3,\"userType\":\"I\"},{\"name\":\"CODTRIB_DISTINTOS\",\"description\":\"CODTRIB_DISTINTOS\",\"order\":4,\"userType\":\"I\"},{\"name\":\"UFORIG_DISTINTOS\",\"description\":\"UFORIG_DISTINTOS\",\"order\":5,\"userType\":\"I\"},{\"name\":\"UFDEST_DISTINTOS\",\"description\":\"UFDEST_DISTINTOS\",\"order\":6,\"userType\":\"I\"}],\"rows\":[[0,null,null,0,0,0]],\"burstLimit\":false,\"timeQuery\":\"39ms\",\"timeResultSet\":\"1ms\"}}"
+    }
+  ]
+}

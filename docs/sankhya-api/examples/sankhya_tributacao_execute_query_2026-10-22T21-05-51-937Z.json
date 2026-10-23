@@ -1,0 +1,221 @@
+{
+  "marker": "TRIBUTACAO_EXECUTE_QUERY_PROBE",
+  "ok": false,
+  "tenantId": "self_T8oqTD0UBtWATPbITOGsqAEZt3d2_smartsfa-enterprise-teste",
+  "environment": "prod",
+  "baseUrlCandidates": [
+    "https://api.sankhya.com.br"
+  ],
+  "endpointCandidates": [
+    "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+    "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+    "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+    "/gateway/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+    "/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery"
+  ],
+  "sqlFile": "g:\\smartsfa\\docs\\sankhya-api\\examples\\tributacao_diagnostico_mapeamento_historico_tgfite.sql",
+  "sqlPreview": "WITH REGRAS_GENERICAS AS (\r\n    SELECT DISTINCT\r\n        NVL(ICM.CODTRIB, -1) AS CODTRIB,\r\n        NVL(ICM.IDALIQ, -1) AS IDALIQ\r\n    FROM TGFICM ICM\r\n    WHERE NVL(TO_CHAR(ICM.CODRESTRICAO), '-1') IN ('-1', '0')\r\n      AND NVL(TO_CHAR(ICM.CODRESTRICAO2), '-1') IN ('-1', '0')\r\n)\r\nSELECT\r\n    COUNT(*) AS REGRAS_GENERICAS_DISTINTAS,\r\n    SUM(\r\n        CASE\r\n            WHEN EXISTS (\r\n                SELECT 1\r\n                FROM TGFITE ITE\r\n                WHERE NVL(ITE.CODTRIB, -1) = R.CODTRIB\r\n",
+  "successfulAttempt": null,
+  "attempts": [
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_serviceName_requestBody_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_requestBody_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_requestBody_query",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_only_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+      "payloadVariant": "body_serviceName_requestBody_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+      "payloadVariant": "body_requestBody_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+      "payloadVariant": "body_requestBody_query",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+      "payloadVariant": "body_only_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_serviceName_requestBody_sql",
+      "httpStatus": 408,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"fieldSet\":null,\"paginate\":null,\"error\":{\"codigo\":\"GTW2512\",\"descricao\":\"Excedido o tempo máximo da Requisição do Gateway Sankhya.\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_requestBody_sql",
+      "httpStatus": 403,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"fieldSet\":null,\"paginate\":null,\"error\":{\"codigo\":\"GTW3403\",\"descricao\":\"Bearer Token inválido ou Expirado.\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_requestBody_query",
+      "httpStatus": 403,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"fieldSet\":null,\"paginate\":null,\"error\":{\"codigo\":\"GTW3403\",\"descricao\":\"Bearer Token inválido ou Expirado.\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_only_sql",
+      "httpStatus": 403,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"fieldSet\":null,\"paginate\":null,\"error\":{\"codigo\":\"GTW3403\",\"descricao\":\"Bearer Token inválido ou Expirado.\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/gateway/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_serviceName_requestBody_sql",
+      "httpStatus": 403,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"fieldSet\":null,\"paginate\":null,\"error\":{\"codigo\":\"GTW3403\",\"descricao\":\"Bearer Token inválido ou Expirado.\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/gateway/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_requestBody_sql",
+      "httpStatus": 403,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"fieldSet\":null,\"paginate\":null,\"error\":{\"codigo\":\"GTW3403\",\"descricao\":\"Bearer Token inválido ou Expirado.\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/gateway/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_requestBody_query",
+      "httpStatus": 403,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"fieldSet\":null,\"paginate\":null,\"error\":{\"codigo\":\"GTW3403\",\"descricao\":\"Bearer Token inválido ou Expirado.\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/gateway/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_only_sql",
+      "httpStatus": 403,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"fieldSet\":null,\"paginate\":null,\"error\":{\"codigo\":\"GTW3403\",\"descricao\":\"Bearer Token inválido ou Expirado.\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_serviceName_requestBody_sql",
+      "httpStatus": 403,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"fieldSet\":null,\"paginate\":null,\"error\":{\"codigo\":\"GTW3403\",\"descricao\":\"Bearer Token inválido ou Expirado.\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_requestBody_sql",
+      "httpStatus": 403,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"fieldSet\":null,\"paginate\":null,\"error\":{\"codigo\":\"GTW3403\",\"descricao\":\"Bearer Token inválido ou Expirado.\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_requestBody_query",
+      "httpStatus": 403,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"fieldSet\":null,\"paginate\":null,\"error\":{\"codigo\":\"GTW3403\",\"descricao\":\"Bearer Token inválido ou Expirado.\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_only_sql",
+      "httpStatus": 403,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"fieldSet\":null,\"paginate\":null,\"error\":{\"codigo\":\"GTW3403\",\"descricao\":\"Bearer Token inválido ou Expirado.\"}}"
+    }
+  ]
+}

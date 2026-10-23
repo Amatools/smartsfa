@@ -17,8 +17,14 @@ class _TaxRulesSection extends StatefulWidget {
 
 class _TaxRulesSectionState extends State<_TaxRulesSection> {
   static const String _selectUfOption = 'SELECIONE';
+  static const String _anyUfOption = 'QUALQUER';
   static final List<String> _ufOptions = <String>[
     _selectUfOption,
+    ...brazilStates,
+  ];
+  static final List<String> _ufFilterOptions = <String>[
+    _selectUfOption,
+    _anyUfOption,
     ...brazilStates,
   ];
 
@@ -28,13 +34,20 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
   static const Color _dialogFocusedBorderColor = Color(0xFFD0D6DE);
   static const double _dialogFieldVerticalGap = 14;
   static const int _rulesPageSize = 100;
+  static const Duration _textFilterDebounceDelay = Duration(milliseconds: 250);
 
   final FirestoreTaxRuleRepository _repository = FirestoreTaxRuleRepository(
     FirebaseFirestore.instance,
   );
+  final TextEditingController _filterNcmController = TextEditingController();
+  final TextEditingController _filterCestController = TextEditingController();
 
   bool _working = false;
   int _visibleRulesCount = _rulesPageSize;
+  String _filterNcm = '';
+  String _filterCest = '';
+  String _filterUfDestino = _selectUfOption;
+  int _textFilterDebounceToken = 0;
 
   String get _selectedRepresentedCompanyId {
     return (widget.selectedRepresentedCompanyId ?? '').trim();
@@ -90,6 +103,46 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
     return selected.isEmpty ? null : selected;
   }
 
+  @override
+  void initState() {
+    super.initState();
+    _filterNcmController.text = _filterNcm;
+    _filterCestController.text = _filterCest;
+    _filterNcmController.addListener(_scheduleTextFiltersApply);
+    _filterCestController.addListener(_scheduleTextFiltersApply);
+  }
+
+  @override
+  void dispose() {
+    _textFilterDebounceToken++;
+    _filterNcmController.removeListener(_scheduleTextFiltersApply);
+    _filterCestController.removeListener(_scheduleTextFiltersApply);
+    _filterNcmController.dispose();
+    _filterCestController.dispose();
+    super.dispose();
+  }
+
+  void _scheduleTextFiltersApply() {
+    final token = ++_textFilterDebounceToken;
+    Future<void>.delayed(_textFilterDebounceDelay, () {
+      if (!mounted || token != _textFilterDebounceToken) {
+        return;
+      }
+
+      final nextNcm = _filterNcmController.text;
+      final nextCest = _filterCestController.text;
+      if (nextNcm == _filterNcm && nextCest == _filterCest) {
+        return;
+      }
+
+      setState(() {
+        _filterNcm = nextNcm;
+        _filterCest = nextCest;
+        _resetVisibleCountAfterFilterChange();
+      });
+    });
+  }
+
   void _ensureVisibleRulesCountWithin(List<TaxRule> rules) {
     final total = rules.length;
     if (total == 0) {
@@ -132,6 +185,134 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
         total,
       );
     });
+  }
+
+  bool _hasActiveFilters() {
+    return _normalizeNcmDigits(_filterNcm).isNotEmpty ||
+        _normalizeCestDigits(_filterCest).isNotEmpty ||
+        _filterUfDestino != _selectUfOption;
+  }
+
+  bool _matchesFilters(TaxRule rule) {
+    final ncmFilter = _normalizeNcmDigits(_filterNcm);
+    if (ncmFilter.isNotEmpty) {
+      final ruleNcm = _normalizeNcmDigits(rule.ncm);
+      if (!ruleNcm.contains(ncmFilter)) {
+        return false;
+      }
+    }
+
+    final cestFilter = _normalizeCestDigits(_filterCest);
+    if (cestFilter.isNotEmpty) {
+      final ruleCest = _normalizeCestDigits(rule.cest);
+      if (!ruleCest.contains(cestFilter)) {
+        return false;
+      }
+    }
+
+    final ufFilter = _filterUfDestino.trim().toUpperCase();
+    final ruleUf = (rule.ufDestino).trim().toUpperCase();
+    if (ufFilter == _anyUfOption) {
+      return ruleUf.isEmpty || ruleUf == 'ANY';
+    }
+    if (ufFilter != _selectUfOption && ruleUf != ufFilter) {
+      return false;
+    }
+
+    return true;
+  }
+
+  List<TaxRule> _applyFilters(List<TaxRule> rules) {
+    return rules.where(_matchesFilters).toList(growable: false);
+  }
+
+  void _resetVisibleCountAfterFilterChange() {
+    _visibleRulesCount = _rulesPageSize;
+  }
+
+  Widget _buildFiltersSection() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+      ),
+      child: Wrap(
+        spacing: 10,
+        runSpacing: 10,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          SizedBox(
+            width: 180,
+            child: TextFormField(
+              controller: _filterNcmController,
+              decoration: const InputDecoration(
+                isDense: true,
+                labelText: 'Filtrar NCM',
+                hintText: 'Ex.: 8421',
+              ),
+            ),
+          ),
+          SizedBox(
+            width: 180,
+            child: TextFormField(
+              controller: _filterCestController,
+              decoration: const InputDecoration(
+                isDense: true,
+                labelText: 'Filtrar CEST',
+                hintText: 'Ex.: 21.117',
+              ),
+            ),
+          ),
+          SizedBox(
+            width: 180,
+            child: DropdownButtonFormField<String>(
+              initialValue: _filterUfDestino,
+              isDense: true,
+              decoration: const InputDecoration(
+                isDense: true,
+                labelText: 'Filtrar UF destino',
+              ),
+              items: _ufFilterOptions
+                  .map(
+                    (item) => DropdownMenuItem<String>(
+                      value: item,
+                      child: Text(item),
+                    ),
+                  )
+                  .toList(growable: false),
+              onChanged: (value) {
+                final next = (value ?? _selectUfOption).trim().toUpperCase();
+                if (next == _filterUfDestino) {
+                  return;
+                }
+                setState(() {
+                  _filterUfDestino = next;
+                  _resetVisibleCountAfterFilterChange();
+                });
+              },
+            ),
+          ),
+          if (_hasActiveFilters())
+            OutlinedButton.icon(
+              onPressed: () {
+                _textFilterDebounceToken++;
+                _filterNcmController.clear();
+                _filterCestController.clear();
+                setState(() {
+                  _filterNcm = '';
+                  _filterCest = '';
+                  _filterUfDestino = _selectUfOption;
+                  _resetVisibleCountAfterFilterChange();
+                });
+              },
+              icon: const Icon(Icons.clear),
+              label: const Text('Limpar filtros'),
+            ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -199,6 +380,13 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
                       icon: const Icon(Icons.upload_file_outlined),
                       label: const Text('Importar planilha'),
                     ),
+                    OutlinedButton.icon(
+                      onPressed: canEditSettings && !_working
+                          ? () => _cleanRulesWithoutNcm()
+                          : null,
+                      icon: const Icon(Icons.cleaning_services_outlined),
+                      label: const Text('Limpar sem NCM'),
+                    ),
                     FilledButton.icon(
                       onPressed: canEditSettings && !_working
                           ? () => _openRuleDialog()
@@ -217,6 +405,8 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
                 message: 'Tributações ficam em modo somente leitura para este perfil. Apenas o owner pode alterar.',
               ),
             ],
+            const SizedBox(height: 14),
+            _buildFiltersSection(),
             const SizedBox(height: 14),
             StreamBuilder<List<TaxRule>>(
               stream: _repository.watchAll(
@@ -240,9 +430,18 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
                     .where(_matchesSelectedRepresentedScope)
                     .toList(growable: false),
                 );
-                _ensureVisibleRulesCountWithin(scopedRules);
+                final filteredRules = _applyFilters(scopedRules);
+                _ensureVisibleRulesCountWithin(filteredRules);
+                final totalContextRules = scopedRules.length;
+                final missingNcmCount = scopedRules
+                    .where((rule) => _normalizeNcmDigits(rule.ncm).isEmpty)
+                    .length;
+                final withNcmCount = totalContextRules - missingNcmCount;
+                final missingCestCount = scopedRules
+                    .where((rule) => _normalizeCestDigits(rule.cest).isEmpty)
+                    .length;
                 if (snapshot.connectionState == ConnectionState.waiting &&
-                    scopedRules.isEmpty) {
+                    filteredRules.isEmpty) {
                   return const Padding(
                     padding: EdgeInsets.symmetric(vertical: 18),
                     child: Center(child: CircularProgressIndicator()),
@@ -255,12 +454,18 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
                   );
                 }
 
-                final totalRules = scopedRules.length;
+                if (filteredRules.isEmpty) {
+                  return const Text(
+                    'Nenhuma regra encontrada com os filtros informados.',
+                  );
+                }
+
+                final totalRules = filteredRules.length;
                 final visibleCount = _visibleRulesCount.clamp(
                   0,
                   totalRules,
                 );
-                final visibleRules = scopedRules
+                final visibleRules = filteredRules
                     .take(visibleCount)
                     .toList(growable: false);
                 final hasMore = visibleCount < totalRules;
@@ -268,10 +473,24 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        _ruleChip(
+                          context,
+                          'Total no contexto: $totalContextRules',
+                        ),
+                        _ruleChip(context, 'Com NCM: $withNcmCount'),
+                        _ruleChip(context, 'Sem NCM: $missingNcmCount'),
+                        _ruleChip(context, 'Sem CEST: $missingCestCount'),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
                     Padding(
                       padding: const EdgeInsets.only(bottom: 10),
                       child: Text(
-                        'Exibindo $visibleCount de $totalRules regra(s).',
+                        'Exibindo $visibleCount de $totalRules regra(s) filtrada(s). Total no contexto: ${scopedRules.length}.',
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ),
@@ -336,7 +555,7 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
                                   onPressed:
                                       canEditSettings && !_working && index > 0
                                       ? () => _moveRule(
-                                          rules: scopedRules,
+                                          rules: filteredRules,
                                           index: index,
                                           direction: -1,
                                         )
@@ -348,9 +567,9 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
                                   onPressed:
                                       canEditSettings &&
                                           !_working &&
-                                          index < scopedRules.length - 1
+                                        index < filteredRules.length - 1
                                       ? () => _moveRule(
-                                          rules: scopedRules,
+                                        rules: filteredRules,
                                           index: index,
                                           direction: 1,
                                         )
@@ -383,7 +602,7 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
                         child: OutlinedButton.icon(
                           onPressed: _working
                               ? null
-                              : () => _loadMoreRules(scopedRules),
+                              : () => _loadMoreRules(filteredRules),
                           icon: const Icon(Icons.expand_more),
                           label: Text(
                             'Carregar mais (${totalRules - visibleCount} restante(s))',
@@ -575,8 +794,8 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
             rows: <List<String>>[
               <String>[
                 'NCM',
-                'Opcional',
-                'Quando informado, deve ter 8 digitos no formato 0000.00.00.',
+                'Sim',
+                'Obrigatorio. Deve ter 8 digitos no formato 0000.00.00.',
               ],
               <String>[
                 'CEST',
@@ -775,9 +994,10 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
 
                 Navigator.of(sheetContext).pop();
                 final skipped = importResult.skipped;
+                final skippedNoChange = importResult.skippedNoChange;
                 if (skipped > 0) {
                   _showMessage(
-                    'Importacao concluida: ${importResult.imported} importada(s), $skipped ignorada(s).',
+                    'Importacao concluida: ${importResult.imported} importada(s), $skipped ignorada(s) ($skippedNoChange sem alteracao).',
                   );
                 } else {
                   _showMessage(
@@ -927,6 +1147,7 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
     }
 
     final missingUfDestinoLines = <int>[];
+    final invalidNcmLines = <int>[];
     final invalidTypeLines = <int>[];
     final missingAliquotasLines = <int>[];
     final invalidByTypeLines = <int>[];
@@ -942,8 +1163,14 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
           'uf destino',
         ]),
       );
+      final rawNcm = _normalizeNcmDigits(
+        _readTaxCell(row, const <String>['ncm']),
+      );
       if (ufDestino.isEmpty) {
         missingUfDestinoLines.add(line);
+      }
+      if (rawNcm.isEmpty || !_isValidNcmDigits(rawNcm)) {
+        invalidNcmLines.add(line);
       }
 
       final stTypeRaw = _readTaxCell(row, const <String>[
@@ -1005,6 +1232,7 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
     }
 
     if (missingUfDestinoLines.isNotEmpty ||
+      invalidNcmLines.isNotEmpty ||
         invalidTypeLines.isNotEmpty ||
         missingAliquotasLines.isNotEmpty ||
         invalidByTypeLines.isNotEmpty) {
@@ -1016,6 +1244,9 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
       final parts = <String>[];
       if (missingUfDestinoLines.isNotEmpty) {
         parts.add('UF destino ausente: ${sample(missingUfDestinoLines)}');
+      }
+      if (invalidNcmLines.isNotEmpty) {
+        parts.add('NCM obrigatório/inválido: ${sample(invalidNcmLines)}');
       }
       if (invalidTypeLines.isNotEmpty) {
         parts.add('Tipo ST invalido: ${sample(invalidTypeLines)}');
@@ -1045,6 +1276,98 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
     );
   }
 
+  Future<void> _cleanRulesWithoutNcm() async {
+    final selectedRepresentedCompanyId = _selectedRepresentedCompanyId;
+    if (selectedRepresentedCompanyId.isEmpty) {
+      _showMessage(
+        'Selecione uma representada ativa antes de limpar regras fiscais.',
+      );
+      return;
+    }
+
+    List<TaxRule> missingNcmRules;
+    try {
+      final allRules = await _repository.fetchAll(
+        tenantId: widget.activeTenant.tenantId,
+      );
+      missingNcmRules = allRules
+          .where(_matchesSelectedRepresentedScope)
+          .where((rule) => _normalizeNcmDigits(rule.ncm).isEmpty)
+          .toList(growable: false);
+    } catch (error) {
+      _showMessage(
+        'Falha ao analisar regras sem NCM: ${_extractErrorMessage(error)}',
+      );
+      return;
+    }
+
+    if (missingNcmRules.isEmpty) {
+      _showMessage('Nenhuma regra sem NCM encontrada neste contexto.');
+      return;
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Limpar regras sem NCM'),
+          content: Text(
+            'Foram encontradas ${missingNcmRules.length} regra(s) sem NCM no contexto atual. Deseja excluir todas antes da nova importacao?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Excluir todas'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) {
+      return;
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _working = true;
+    });
+
+    var deleted = 0;
+    try {
+      for (final rule in missingNcmRules) {
+        await _repository.delete(
+          tenantId: widget.activeTenant.tenantId,
+          id: rule.id,
+        );
+        deleted += 1;
+      }
+
+      _showMessage('Limpeza concluida: $deleted regra(s) sem NCM removida(s).');
+    } catch (error) {
+      _showMessage(
+        'Falha ao limpar regras sem NCM: ${_extractErrorMessage(error)}',
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _working = false;
+        });
+      }
+    }
+  }
+
   Future<_TaxImportResult> _importTaxRows(
     List<Map<String, String>> rows,
   ) async {
@@ -1061,6 +1384,9 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
     final existingById = <String, TaxRule>{
       for (final item in scopedExistingRules) item.id: item,
     };
+    final existingFingerprints = <String>{
+      for (final item in scopedExistingRules) _taxRuleFingerprintFromEntity(item),
+    };
     var maxPriority = 0;
     for (final rule in scopedExistingRules) {
       if (rule.priority > maxPriority) {
@@ -1070,6 +1396,7 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
 
     var imported = 0;
     var skipped = 0;
+    var skippedNoChange = 0;
     for (var index = 0; index < rows.length; index++) {
       final row = rows[index];
       final rawNcm = _normalizeNcmDigits(
@@ -1089,6 +1416,10 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
       final hasUfDestinoHeader =
           row.containsKey('ufdestino') || row.containsKey('uf_destino');
       if (hasUfDestinoHeader && ufDestino.isEmpty) {
+        skipped++;
+        continue;
+      }
+      if (rawNcm.isEmpty) {
         skipped++;
         continue;
       }
@@ -1113,7 +1444,7 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
       final id = sourceId.isEmpty
           ? FirebaseFirestore.instance.collection('tax_rules').doc().id
           : sourceId;
-      final existing = existingById[id];
+        final existing = existingById[id];
 
       final aliquotaDestino = TabularSpreadsheetService.parseDecimal(
         _readTaxCell(row, const <String>[
@@ -1266,11 +1597,39 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
         updatedAt: now,
       );
 
+      final previousFingerprint =
+          existing == null ? null : _taxRuleFingerprintFromEntity(existing);
+      if (previousFingerprint != null) {
+        existingFingerprints.remove(previousFingerprint);
+      }
+      final nextFingerprint = _taxRuleFingerprintFromEntity(entity);
+      if (existingFingerprints.contains(nextFingerprint)) {
+        skipped++;
+        skippedNoChange++;
+        if (previousFingerprint != null) {
+          existingFingerprints.add(previousFingerprint);
+        }
+        continue;
+      }
+
+      if (previousFingerprint == nextFingerprint) {
+        skipped++;
+        skippedNoChange++;
+        existingFingerprints.add(nextFingerprint);
+        continue;
+      }
+
       await _repository.save(entity);
       imported++;
+      existingById[id] = entity;
+      existingFingerprints.add(nextFingerprint);
     }
 
-    return _TaxImportResult(imported: imported, skipped: skipped);
+    return _TaxImportResult(
+      imported: imported,
+      skipped: skipped,
+      skippedNoChange: skippedNoChange,
+    );
   }
 
   String? _parseStTypeForImport(String raw) {
@@ -2509,6 +2868,52 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
     return value.toStringAsFixed(2).replaceAll('.', ',');
   }
 
+  String _taxRuleFingerprintFromEntity(TaxRule rule) {
+    String numberKey(double? value) {
+      if (value == null) {
+        return '';
+      }
+      return value.toStringAsFixed(6);
+    }
+
+    final scope = (rule.representedCompanyId ?? '').trim();
+    final salePurpose = rule.salePurpose?.value.trim().toLowerCase() ?? 'any';
+    final status = rule.status.trim().toLowerCase();
+    final stType = (rule.stCalculationType ?? 'mva').trim().toLowerCase();
+    final ncm = _normalizeNcmDigits(rule.ncm);
+    final cest = _normalizeCestDigits(rule.cest);
+    final ufOrigem = rule.ufOrigem.trim().toUpperCase();
+    final ufDestino = rule.ufDestino.trim().toUpperCase();
+    final fiscalException = (rule.fiscalException ?? '').trim().toLowerCase();
+    final grupoFiscalId = (rule.grupoFiscalId ?? '').trim().toLowerCase();
+    final cstCsosn = (rule.cstCsosn ?? '').trim().toLowerCase();
+    final validFrom = rule.validFrom?.toUtc().toIso8601String() ?? '';
+    final validUntil = rule.validUntil?.toUtc().toIso8601String() ?? '';
+
+    return <String>[
+      scope,
+      status,
+      ncm,
+      cest,
+      ufOrigem,
+      ufDestino,
+      salePurpose,
+      stType,
+      numberKey(rule.stPriceForCalculation),
+      numberKey(rule.stBaseReductionPercent),
+      numberKey(rule.stBaseAmount),
+      numberKey(rule.aliquotaDestino),
+      numberKey(rule.aliquotaCredito),
+      numberKey(rule.aliquotaDifal),
+      numberKey(rule.mvaIva),
+      fiscalException,
+      grupoFiscalId,
+      cstCsosn,
+      validFrom,
+      validUntil,
+    ].join('|');
+  }
+
   String _extractErrorMessage(Object error) {
     final text = error.toString().trim();
     const prefix = 'Bad state: ';
@@ -2633,8 +3038,13 @@ class _TaxImportValidation {
 }
 
 class _TaxImportResult {
-  const _TaxImportResult({required this.imported, required this.skipped});
+  const _TaxImportResult({
+    required this.imported,
+    required this.skipped,
+    required this.skippedNoChange,
+  });
 
   final int imported;
   final int skipped;
+  final int skippedNoChange;
 }

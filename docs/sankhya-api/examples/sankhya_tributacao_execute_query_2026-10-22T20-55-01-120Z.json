@@ -1,0 +1,712 @@
+{
+  "marker": "TRIBUTACAO_EXECUTE_QUERY_PROBE",
+  "ok": true,
+  "tenantId": "self_T8oqTD0UBtWATPbITOGsqAEZt3d2_smartsfa-enterprise-teste",
+  "environment": "prod",
+  "baseUrlCandidates": [
+    "https://api.sankhya.com.br"
+  ],
+  "endpointCandidates": [
+    "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+    "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+    "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+    "/gateway/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+    "/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery"
+  ],
+  "sqlFile": "g:\\smartsfa\\docs\\sankhya-api\\examples\\tributacao_diagnostico_tabelas_vinculo.sql",
+  "sqlPreview": "WITH C AS (\r\n    SELECT\r\n        TABLE_NAME,\r\n        COLUMN_NAME\r\n    FROM ALL_TAB_COLUMNS\r\n)\r\nSELECT\r\n    TABLE_NAME,\r\n    MAX(CASE WHEN COLUMN_NAME = 'CODTRIB' THEN 1 ELSE 0 END) AS HAS_CODTRIB,\r\n    MAX(CASE WHEN COLUMN_NAME = 'IDALIQ' THEN 1 ELSE 0 END) AS HAS_IDALIQ,\r\n    MAX(CASE WHEN COLUMN_NAME LIKE '%CODPROD%' THEN 1 ELSE 0 END) AS HAS_CODPROD,\r\n    MAX(CASE WHEN COLUMN_NAME LIKE '%NCM%' THEN 1 ELSE 0 END) AS HAS_NCM,\r\n    MAX(CASE WHEN COLUMN_NAME LIKE '%CEST%' OR COLUMN_NAME LIKE '%C",
+  "successfulAttempt": {
+    "baseUrl": "https://api.sankhya.com.br",
+    "endpointPath": "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+    "payloadVariant": "body_serviceName_requestBody_sql",
+    "httpStatus": 200,
+    "responseIsJson": true,
+    "rowCountDetected": 59,
+    "responseBody": {
+      "serviceName": "DbExplorerSP.executeQuery",
+      "status": "1",
+      "pendingPrinting": "false",
+      "transactionId": "F0EB4F621A392F28637782C80A6B50A2",
+      "responseBody": {
+        "fieldsMetadata": [
+          {
+            "name": "TABLE_NAME",
+            "description": "TABLE_NAME",
+            "order": 1,
+            "userType": "S"
+          },
+          {
+            "name": "HAS_CODTRIB",
+            "description": "HAS_CODTRIB",
+            "order": 2,
+            "userType": "I"
+          },
+          {
+            "name": "HAS_IDALIQ",
+            "description": "HAS_IDALIQ",
+            "order": 3,
+            "userType": "I"
+          },
+          {
+            "name": "HAS_CODPROD",
+            "description": "HAS_CODPROD",
+            "order": 4,
+            "userType": "I"
+          },
+          {
+            "name": "HAS_NCM",
+            "description": "HAS_NCM",
+            "order": 5,
+            "userType": "I"
+          },
+          {
+            "name": "HAS_CEST",
+            "description": "HAS_CEST",
+            "order": 6,
+            "userType": "I"
+          },
+          {
+            "name": "HAS_GRUPOICMS",
+            "description": "HAS_GRUPOICMS",
+            "order": 7,
+            "userType": "I"
+          }
+        ],
+        "rows": [
+          [
+            "BKP_TGFICM_NOVO",
+            1,
+            1,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            "TGFHICM",
+            1,
+            1,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            "TGFICM",
+            1,
+            1,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            "TGFICM_INT_TRIB",
+            1,
+            1,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            "REDZBLX",
+            1,
+            0,
+            1,
+            1,
+            1,
+            0
+          ],
+          [
+            "TCEITE",
+            1,
+            0,
+            1,
+            1,
+            0,
+            0
+          ],
+          [
+            "TCEITE_HIS",
+            1,
+            0,
+            1,
+            1,
+            0,
+            0
+          ],
+          [
+            "VITE",
+            1,
+            0,
+            1,
+            1,
+            0,
+            0
+          ],
+          [
+            "AD_BKP_TGFITE_UNIF_260817208",
+            1,
+            0,
+            1,
+            0,
+            1,
+            0
+          ],
+          [
+            "AD_BKP_TGFITE_UNIF_260817541",
+            1,
+            0,
+            1,
+            0,
+            1,
+            0
+          ],
+          [
+            "AD_BKP_TGFITE_UNIF_260817839",
+            1,
+            0,
+            1,
+            0,
+            1,
+            0
+          ],
+          [
+            "AD_BKP_TGFITE_UNIF_260820831",
+            1,
+            0,
+            1,
+            0,
+            1,
+            0
+          ],
+          [
+            "AD_BKP_TGFITE_UNIF_260821329",
+            1,
+            0,
+            1,
+            0,
+            1,
+            0
+          ],
+          [
+            "AD_BKP_TGFITE_UNIF_260821402",
+            1,
+            0,
+            1,
+            0,
+            1,
+            0
+          ],
+          [
+            "AD_BKP_TGFITE_UNIF_260821791",
+            1,
+            0,
+            1,
+            0,
+            1,
+            0
+          ],
+          [
+            "AD_BKP_TGFITE_UNIF_260824235",
+            1,
+            0,
+            1,
+            0,
+            1,
+            0
+          ],
+          [
+            "AD_BKP_TGFITE_UNIF_260824456",
+            1,
+            0,
+            1,
+            0,
+            1,
+            0
+          ],
+          [
+            "AD_BKP_TGFITE_UNIF_260824512",
+            1,
+            0,
+            1,
+            0,
+            1,
+            0
+          ],
+          [
+            "AD_BKP_TGFITE_UNIF_260824547",
+            1,
+            0,
+            1,
+            0,
+            1,
+            0
+          ],
+          [
+            "AD_BKP_TGFITE_UNIF_260923188",
+            1,
+            0,
+            1,
+            0,
+            1,
+            0
+          ],
+          [
+            "BKP_TGFITE_NOVO",
+            1,
+            0,
+            1,
+            0,
+            1,
+            0
+          ],
+          [
+            "TFXIPV",
+            1,
+            0,
+            1,
+            0,
+            1,
+            0
+          ],
+          [
+            "TFXIVD",
+            1,
+            0,
+            1,
+            0,
+            1,
+            0
+          ],
+          [
+            "TGFITE",
+            1,
+            0,
+            1,
+            0,
+            1,
+            0
+          ],
+          [
+            "TGFITE_BCK14092022",
+            1,
+            0,
+            1,
+            0,
+            1,
+            0
+          ],
+          [
+            "TGFITE_EXC",
+            1,
+            0,
+            1,
+            0,
+            1,
+            0
+          ],
+          [
+            "TEMP_ITENS",
+            1,
+            0,
+            1,
+            0,
+            0,
+            0
+          ],
+          [
+            "TGFCAT42R1050NAE",
+            1,
+            0,
+            1,
+            0,
+            0,
+            0
+          ],
+          [
+            "TGFDAV",
+            1,
+            0,
+            1,
+            0,
+            0,
+            0
+          ],
+          [
+            "TGFIDST",
+            1,
+            0,
+            1,
+            0,
+            0,
+            0
+          ],
+          [
+            "TGFIRCST",
+            1,
+            0,
+            1,
+            0,
+            0,
+            0
+          ],
+          [
+            "TGFITE_UPD",
+            1,
+            0,
+            1,
+            0,
+            0,
+            0
+          ],
+          [
+            "TGFIVR",
+            1,
+            0,
+            1,
+            0,
+            0,
+            0
+          ],
+          [
+            "TTKICM",
+            1,
+            0,
+            0,
+            1,
+            1,
+            1
+          ],
+          [
+            "TGFBEN",
+            1,
+            0,
+            0,
+            0,
+            0,
+            1
+          ],
+          [
+            "BKP_TGFFIN_NOVO",
+            1,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            "TCBIRPJPTBCP",
+            1,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            "TEMP_CHAVES",
+            1,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            "TEMP_DIFER",
+            1,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            "TEMP_DIFERENCAS",
+            1,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            "TEMP_REDZ",
+            1,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            "TGFFIN",
+            1,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            "TGFFIN_BCK14092022",
+            1,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            "TGFLIV",
+            1,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            "TGFLIV_EXC",
+            1,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            "TGFTCFOP",
+            1,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            "TGFTOP",
+            1,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            "TGFTOP_BCK12092022",
+            1,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            "VGFFIN",
+            1,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            "VGFFREM",
+            1,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            "VGFICM",
+            1,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            "VW_TGFFIN_FRETE_AGRUP",
+            1,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            "VW_TGFFIN_FRETE_ORIGINAL",
+            1,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            "TGFPMT",
+            0,
+            1,
+            1,
+            1,
+            0,
+            0
+          ],
+          [
+            "TGFHISS",
+            0,
+            1,
+            1,
+            0,
+            0,
+            0
+          ],
+          [
+            "TGFISS",
+            0,
+            1,
+            1,
+            0,
+            0,
+            0
+          ],
+          [
+            "TGFDIN",
+            0,
+            1,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            "TGFIFE",
+            0,
+            1,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            "TLFDINVR",
+            0,
+            1,
+            0,
+            0,
+            0,
+            0
+          ]
+        ],
+        "burstLimit": false,
+        "timeQuery": "1,569s",
+        "timeResultSet": "1ms"
+      }
+    },
+    "requestPayload": {
+      "serviceName": "DbExplorerSP.executeQuery",
+      "requestBody": {
+        "sql": "WITH C AS (\r\n    SELECT\r\n        TABLE_NAME,\r\n        COLUMN_NAME\r\n    FROM ALL_TAB_COLUMNS\r\n)\r\nSELECT\r\n    TABLE_NAME,\r\n    MAX(CASE WHEN COLUMN_NAME = 'CODTRIB' THEN 1 ELSE 0 END) AS HAS_CODTRIB,\r\n    MAX(CASE WHEN COLUMN_NAME = 'IDALIQ' THEN 1 ELSE 0 END) AS HAS_IDALIQ,\r\n    MAX(CASE WHEN COLUMN_NAME LIKE '%CODPROD%' THEN 1 ELSE 0 END) AS HAS_CODPROD,\r\n    MAX(CASE WHEN COLUMN_NAME LIKE '%NCM%' THEN 1 ELSE 0 END) AS HAS_NCM,\r\n    MAX(CASE WHEN COLUMN_NAME LIKE '%CEST%' OR COLUMN_NAME LIKE '%CODESPECST%' THEN 1 ELSE 0 END) AS HAS_CEST,\r\n    MAX(CASE WHEN COLUMN_NAME LIKE '%GRUPOICMS%' THEN 1 ELSE 0 END) AS HAS_GRUPOICMS\r\nFROM C\r\nGROUP BY TABLE_NAME\r\nHAVING MAX(CASE WHEN COLUMN_NAME = 'CODTRIB' THEN 1 ELSE 0 END) = 1\r\n    OR MAX(CASE WHEN COLUMN_NAME = 'IDALIQ' THEN 1 ELSE 0 END) = 1\r\nORDER BY\r\n    HAS_CODTRIB DESC,\r\n    HAS_IDALIQ DESC,\r\n    HAS_CODPROD DESC,\r\n    HAS_NCM DESC,\r\n    HAS_CEST DESC,\r\n    HAS_GRUPOICMS DESC,\r\n    TABLE_NAME"
+      }
+    }
+  },
+  "attempts": [
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_serviceName_requestBody_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_requestBody_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_requestBody_query",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_only_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+      "payloadVariant": "body_serviceName_requestBody_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+      "payloadVariant": "body_requestBody_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+      "payloadVariant": "body_requestBody_query",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+      "payloadVariant": "body_only_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_serviceName_requestBody_sql",
+      "httpStatus": 200,
+      "ok": true,
+      "rowCountDetected": 59,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"serviceName\":\"DbExplorerSP.executeQuery\",\"status\":\"1\",\"pendingPrinting\":\"false\",\"transactionId\":\"F0EB4F621A392F28637782C80A6B50A2\",\"responseBody\":{\"fieldsMetadata\":[{\"name\":\"TABLE_NAME\",\"description\":\"TABLE_NAME\",\"order\":1,\"userType\":\"S\"},{\"name\":\"HAS_CODTRIB\",\"description\":\"HAS_CODTRIB\",\"order\":2,\"userType\":\"I\"},{\"name\":\"HAS_IDALIQ\",\"description\":\"HAS_IDALIQ\",\"order\":3,\"userType\":\"I\"},{\"name\":\"HAS_CODPROD\",\"description\":\"HAS_CODPROD\",\"order\":4,\"userType\":\"I\"},{\"name\":\"HAS_NCM\",\"description\":\"HAS_NCM\",\"order\":5,\"userType\":\"I\"},{\"name\":\"HAS_CEST\",\"description\":\"HAS_CEST\",\"order\":6,\"userType\":\"I\"},{\"name\":\"HAS_GRUPOICMS\",\"description\":\"HAS_GRUPOICMS\",\"order\":7,\"userType\":\"I\"}],\"rows\":[[\"BKP_TGFICM_NOVO\",1,1,0,0,0,0],[\"TGFHICM\",1,1,0,0,0,0],[\"TGFICM\",1,1,0,0,0,0],[\"TGFICM_INT_TRIB\",1,1,0,0,0,0],[\"REDZBLX\",1,0,1,1,1,0],[\"TCEITE\",1,0,1,1,0,0],[\"TCEITE_HIS\",1,0,1,1,0,0],[\"VITE\",1,0,1,1,0,0],[\"AD_BKP_TGFITE_UNIF_260817208\",1,0,1,0,1,0],[\"AD_BKP_TGFITE_UNIF_260817541\",1,0,1,0,1,0],[\"AD_BKP_TGFITE_UNIF_260817839\",1,0,1,0,1,0],[\"AD_BKP_TGFITE_UNIF_260820831\",1,0,1,0,1,0],[\"AD_BKP_TGFITE_UNIF_260821329\",1,0,1,0,1,0],[\"AD_BKP_TGFITE_UNIF_260821402\",1,0,1,0,1,0],[\"AD_BKP_TGFITE_UNIF_260821791"
+    }
+  ]
+}

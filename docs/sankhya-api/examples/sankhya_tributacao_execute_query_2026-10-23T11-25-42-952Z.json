@@ -1,0 +1,127 @@
+{
+  "marker": "TRIBUTACAO_EXECUTE_QUERY_PROBE",
+  "ok": true,
+  "tenantId": "self_T8oqTD0UBtWATPbITOGsqAEZt3d2_smartsfa-enterprise-teste",
+  "environment": "prod",
+  "baseUrlCandidates": [
+    "https://api.sankhya.com.br"
+  ],
+  "endpointCandidates": [
+    "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+    "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+    "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+    "/gateway/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+    "/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery"
+  ],
+  "sqlFile": "g:\\smartsfa\\docs\\sankhya-api\\examples\\tributacao_diagnostico_tipos_restricao_amostras.sql",
+  "sqlPreview": "SELECT\r\n    NVL(TO_CHAR(ICM.TIPRESTRICAO), '-') AS TIPRESTRICAO,\r\n    NVL(TO_CHAR(ICM.CODRESTRICAO), '-') AS CODRESTRICAO,\r\n    NVL(ICM.DESCRRESTRICAO, '-') AS DESCRRESTRICAO,\r\n    NVL(TO_CHAR(ICM.TIPRESTRICAO2), '-') AS TIPRESTRICAO2,\r\n    NVL(TO_CHAR(ICM.CODRESTRICAO2), '-') AS CODRESTRICAO2,\r\n    NVL(ICM.DESCRRESTRICAO, '-') AS DESCRRESTRICAO2,\r\n    COUNT(*) AS TOTAL\r\nFROM TGFICM ICM\r\nGROUP BY\r\n    NVL(TO_CHAR(ICM.TIPRESTRICAO), '-'),\r\n    NVL(TO_CHAR(ICM.CODRESTRICAO), '-'),\r\n    NVL(ICM.DES",
+  "successfulAttempt": {
+    "baseUrl": "https://api.sankhya.com.br",
+    "endpointPath": "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+    "payloadVariant": "body_serviceName_requestBody_sql",
+    "httpStatus": 200,
+    "responseIsJson": false,
+    "rowCountDetected": 0,
+    "responseBody": {
+      "raw": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<serviceResponse serviceName=\"DbExplorerSP.executeQuery\" status=\"0\" pendingPrinting=\"false\" transactionId=\"EABCF7A60295B912FCC6CC7D7455B263\"><statusMessage><![CDATA[T1JBLTAwOTA0OiAiSUNNIi4iREVTQ1JSRVNUUklDQU8iOiBpZGVudGlmaWNhZG9yIGluduFsaWRv\n]]></statusMessage></serviceResponse>\n"
+    },
+    "requestPayload": {
+      "serviceName": "DbExplorerSP.executeQuery",
+      "requestBody": {
+        "sql": "SELECT\r\n    NVL(TO_CHAR(ICM.TIPRESTRICAO), '-') AS TIPRESTRICAO,\r\n    NVL(TO_CHAR(ICM.CODRESTRICAO), '-') AS CODRESTRICAO,\r\n    NVL(ICM.DESCRRESTRICAO, '-') AS DESCRRESTRICAO,\r\n    NVL(TO_CHAR(ICM.TIPRESTRICAO2), '-') AS TIPRESTRICAO2,\r\n    NVL(TO_CHAR(ICM.CODRESTRICAO2), '-') AS CODRESTRICAO2,\r\n    NVL(ICM.DESCRRESTRICAO, '-') AS DESCRRESTRICAO2,\r\n    COUNT(*) AS TOTAL\r\nFROM TGFICM ICM\r\nGROUP BY\r\n    NVL(TO_CHAR(ICM.TIPRESTRICAO), '-'),\r\n    NVL(TO_CHAR(ICM.CODRESTRICAO), '-'),\r\n    NVL(ICM.DESCRRESTRICAO, '-'),\r\n    NVL(TO_CHAR(ICM.TIPRESTRICAO2), '-'),\r\n    NVL(TO_CHAR(ICM.CODRESTRICAO2), '-'),\r\n    NVL(ICM.DESCRRESTRICAO, '-')\r\nORDER BY TOTAL DESC\r\nFETCH FIRST 120 ROWS ONLY"
+      }
+    }
+  },
+  "attempts": [
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_serviceName_requestBody_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_requestBody_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_requestBody_query",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_only_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+      "payloadVariant": "body_serviceName_requestBody_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+      "payloadVariant": "body_requestBody_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+      "payloadVariant": "body_requestBody_query",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+      "payloadVariant": "body_only_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_serviceName_requestBody_sql",
+      "httpStatus": 200,
+      "ok": true,
+      "rowCountDetected": 0,
+      "responseIsJson": false,
+      "responseBodyPreview": "{\"raw\":\"<?xml version=\\\"1.0\\\" encoding=\\\"utf-8\\\"?>\\n<serviceResponse serviceName=\\\"DbExplorerSP.executeQuery\\\" status=\\\"0\\\" pendingPrinting=\\\"false\\\" transactionId=\\\"EABCF7A60295B912FCC6CC7D7455B263\\\"><statusMessage><![CDATA[T1JBLTAwOTA0OiAiSUNNIi4iREVTQ1JSRVNUUklDQU8iOiBpZGVudGlmaWNhZG9yIGluduFsaWRv\\n]]></statusMessage></serviceResponse>\\n\"}"
+    }
+  ]
+}

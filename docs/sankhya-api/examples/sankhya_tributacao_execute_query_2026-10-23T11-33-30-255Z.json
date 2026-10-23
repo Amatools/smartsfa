@@ -1,0 +1,127 @@
+{
+  "marker": "TRIBUTACAO_EXECUTE_QUERY_PROBE",
+  "ok": true,
+  "tenantId": "self_T8oqTD0UBtWATPbITOGsqAEZt3d2_smartsfa-enterprise-teste",
+  "environment": "prod",
+  "baseUrlCandidates": [
+    "https://api.sankhya.com.br"
+  ],
+  "endpointCandidates": [
+    "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+    "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+    "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+    "/gateway/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+    "/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery"
+  ],
+  "sqlFile": "g:\\smartsfa\\docs\\sankhya-api\\examples\\tributacao_diagnostico_expand_hik_counts.sql",
+  "sqlPreview": "WITH ICM_BASE AS (\r\n    SELECT\r\n        ICM.ROWID AS ICM_ROWID,\r\n        ICM.*\r\n    FROM TGFICM ICM\r\n    WHERE ICM.DTINICIOVIGENCIA IS NULL\r\n       OR ICM.DTINICIOVIGENCIA <= SYSDATE\r\n),\r\nMAPEAMENTO AS (\r\n    SELECT DISTINCT\r\n        I.ICM_ROWID,\r\n        N.CODNCM AS NCM,\r\n        CAST(NULL AS VARCHAR2(30)) AS CEST\r\n    FROM ICM_BASE I\r\n    JOIN TGFNCM N\r\n      ON TO_CHAR(I.TIPRESTRICAO) IN ('N', '4', 'H')\r\n     AND TO_CHAR(I.CODRESTRICAO) NOT IN ('-1', '0')\r\n     AND LTRIM(TO_CHAR(I.CODRESTRICA",
+  "successfulAttempt": {
+    "baseUrl": "https://api.sankhya.com.br",
+    "endpointPath": "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+    "payloadVariant": "body_serviceName_requestBody_sql",
+    "httpStatus": 200,
+    "responseIsJson": false,
+    "rowCountDetected": 0,
+    "responseBody": {
+      "raw": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<serviceResponse serviceName=\"DbExplorerSP.executeQuery\" status=\"0\" pendingPrinting=\"false\" transactionId=\"D6C61EE95B4EDD99B63902FE841701BC\"><statusMessage><![CDATA[T1JBLTAxNzkwOiBhIGV4cHJlc3PjbyBkZXZlIHRlciBvIG1lc21vIHRpcG8gZGUgZGFkb3MgZGEg\nZXhwcmVzc+NvIGNvcnJlc3BvbmRlbnRl\n]]></statusMessage></serviceResponse>\n"
+    },
+    "requestPayload": {
+      "serviceName": "DbExplorerSP.executeQuery",
+      "requestBody": {
+        "sql": "WITH ICM_BASE AS (\r\n    SELECT\r\n        ICM.ROWID AS ICM_ROWID,\r\n        ICM.*\r\n    FROM TGFICM ICM\r\n    WHERE ICM.DTINICIOVIGENCIA IS NULL\r\n       OR ICM.DTINICIOVIGENCIA <= SYSDATE\r\n),\r\nMAPEAMENTO AS (\r\n    SELECT DISTINCT\r\n        I.ICM_ROWID,\r\n        N.CODNCM AS NCM,\r\n        CAST(NULL AS VARCHAR2(30)) AS CEST\r\n    FROM ICM_BASE I\r\n    JOIN TGFNCM N\r\n      ON TO_CHAR(I.TIPRESTRICAO) IN ('N', '4', 'H')\r\n     AND TO_CHAR(I.CODRESTRICAO) NOT IN ('-1', '0')\r\n     AND LTRIM(TO_CHAR(I.CODRESTRICAO), '0') = LTRIM(REPLACE(N.CODNCM, '.', ''), '0')\r\n\r\n    UNION ALL\r\n\r\n    SELECT DISTINCT\r\n        I.ICM_ROWID,\r\n        N.CODNCM AS NCM,\r\n        CAST(NULL AS VARCHAR2(30)) AS CEST\r\n    FROM ICM_BASE I\r\n    JOIN TGFNCM N\r\n      ON TO_CHAR(I.TIPRESTRICAO2) IN ('N', '4', 'H')\r\n     AND TO_CHAR(I.CODRESTRICAO2) NOT IN ('-1', '0')\r\n     AND LTRIM(TO_CHAR(I.CODRESTRICAO2), '0') = LTRIM(REPLACE(N.CODNCM, '.', ''), '0')\r\n\r\n    UNION ALL\r\n\r\n    SELECT DISTINCT\r\n        I.ICM_ROWID,\r\n        P.NCM AS NCM,\r\n        P.CODESPECST AS CEST\r\n    FROM ICM_BASE I\r\n    JOIN TGFPRO P\r\n      ON TO_CHAR(I.TIPRESTRICAO) IN ('P', '1')\r\n     AND TO_CHAR(I.CODRESTRICAO) NOT IN ('-1', '0')\r\n     AND P.CODPROD = I.CODRESTRICAO\r\n    WHERE TRIM(NVL(P.NCM, '')) <> ''\r\n\r\n    UNION ALL\r\n\r\n    SELECT DISTINCT\r\n        I.ICM_ROWID,\r\n        P.NCM AS NCM,\r\n        P.CODESPECST AS CEST\r\n    FROM ICM_BASE I\r\n    JOIN TGFPRO P\r\n      ON TO_CHAR(I.TIPRESTRICAO2) IN ('P', '1')\r\n     AND TO_CHAR(I.CODRESTRICAO2) NOT IN ('-1', '0')\r\n     AND P.CODPROD = I.CODRESTRICAO2\r\n    WHERE TRIM(NVL(P.NCM, '')) <> ''\r\n\r\n    UNION ALL\r\n\r\n    SELECT DISTINCT\r\n        I.ICM_ROWID,\r\n        P.NCM AS NCM,\r\n        P.CODESPECST AS CEST\r\n    FROM ICM_BASE I\r\n    JOIN TGFPRO P\r\n      ON TO_CHAR(I.TIPRESTRICAO) = 'I'\r\n     AND TO_CHAR(I.CODRESTRICAO) NOT IN ('-1', '0')\r\n     AND NVL(P.GRUPOICMS, -1) = NVL(I.CODRESTRICAO, -2)\r\n    WHERE TRIM(NVL(P.NCM, '')) <> ''\r\n\r\n    UNION ALL\r\n\r\n    SELECT DISTINCT\r\n        I.ICM_ROWID,\r\n        P.NCM AS NCM,\r\n        P.CODESPECST AS CEST\r\n    FROM ICM_BASE I\r\n    JOIN TGFPRO P\r\n      ON TO_CHAR(I.TIPRESTRICAO2) = 'I'\r\n     AND TO_CHAR(I.CODRESTRICAO2) NOT IN ('-1', '0')\r\n     AND NVL(P.GRUPOICMS, -1) = NVL(I.CODRESTRICAO2, -2)\r\n    WHERE TRIM(NVL(P.NCM, '')) <> ''\r\n\r\n    UNION ALL\r\n\r\n    SELECT DISTINCT\r\n        I.ICM_ROWID,\r\n        P.NCM AS NCM,\r\n        P.CODESPECST AS CEST\r\n    FROM ICM_BASE I\r\n    JOIN TGFPRO P\r\n      ON TO_CHAR(I.TIPRESTRICAO) = 'K'\r\n     AND TO_CHAR(I.CODRESTRICAO) NOT IN ('-1', '0')\r\n     AND NVL(P.GRUPOICMS2, -1) = NVL(I.CODRESTRICAO, -2)\r\n    WHERE TRIM(NVL(P.NCM, '')) <> ''\r\n\r\n    UNION ALL\r\n\r\n    SELECT DISTINCT\r\n        I.ICM_ROWID,\r\n        P.NCM AS NCM,\r\n        P.CODESPECST AS CEST\r\n    FROM ICM_BASE I\r\n    JOIN TGFPRO P\r\n      ON TO_CHAR(I.TIPRESTRICAO2) = 'K'\r\n     AND TO_CHAR(I.CODRESTRICAO2) NOT IN ('-1', '0')\r\n     AND NVL(P.GRUPOICMS2, -1) = NVL(I.CODRESTRICAO2, -2)\r\n    WHERE TRIM(NVL(P.NCM, '')) <> ''\r\n)\r\nSELECT\r\n    (SELECT COUNT(*) FROM ICM_BASE) AS LINHAS_ICM,\r\n    COUNT(*) AS LINHAS_MAPEADAS,\r\n    COUNT(DISTINCT ICM_ROWID) AS LINHAS_ICM_COM_NCM,\r\n    COUNT(DISTINCT NCM) AS NCM_DISTINTOS,\r\n    COUNT(DISTINCT CEST) AS CEST_DISTINTOS\r\nFROM MAPEAMENTO"
+      }
+    }
+  },
+  "attempts": [
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_serviceName_requestBody_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_requestBody_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_requestBody_query",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_only_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+      "payloadVariant": "body_serviceName_requestBody_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+      "payloadVariant": "body_requestBody_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+      "payloadVariant": "body_requestBody_query",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+      "payloadVariant": "body_only_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_serviceName_requestBody_sql",
+      "httpStatus": 200,
+      "ok": true,
+      "rowCountDetected": 0,
+      "responseIsJson": false,
+      "responseBodyPreview": "{\"raw\":\"<?xml version=\\\"1.0\\\" encoding=\\\"utf-8\\\"?>\\n<serviceResponse serviceName=\\\"DbExplorerSP.executeQuery\\\" status=\\\"0\\\" pendingPrinting=\\\"false\\\" transactionId=\\\"D6C61EE95B4EDD99B63902FE841701BC\\\"><statusMessage><![CDATA[T1JBLTAxNzkwOiBhIGV4cHJlc3PjbyBkZXZlIHRlciBvIG1lc21vIHRpcG8gZGUgZGFkb3MgZGEg\\nZXhwcmVzc+NvIGNvcnJlc3BvbmRlbnRl\\n]]></statusMessage></serviceResponse>\\n\"}"
+    }
+  ]
+}

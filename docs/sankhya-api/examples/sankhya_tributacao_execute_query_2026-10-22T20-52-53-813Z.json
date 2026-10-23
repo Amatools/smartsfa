@@ -1,0 +1,559 @@
+{
+  "marker": "TRIBUTACAO_EXECUTE_QUERY_PROBE",
+  "ok": true,
+  "tenantId": "self_T8oqTD0UBtWATPbITOGsqAEZt3d2_smartsfa-enterprise-teste",
+  "environment": "prod",
+  "baseUrlCandidates": [
+    "https://api.sankhya.com.br"
+  ],
+  "endpointCandidates": [
+    "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+    "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+    "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+    "/gateway/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+    "/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery"
+  ],
+  "sqlFile": "g:\\smartsfa\\docs\\sankhya-api\\examples\\tributacao_diagnostico_colunas_relacionamento.sql",
+  "sqlPreview": "SELECT\r\n    TABLE_NAME,\r\n    COLUMN_NAME\r\nFROM ALL_TAB_COLUMNS\r\nWHERE TABLE_NAME IN ('TGFICM', 'TGFPRO', 'TGFPEM', 'TGFNCM', 'TGFITE', 'TGFDIN')\r\n  AND (\r\n    COLUMN_NAME LIKE '%NCM%'\r\n    OR COLUMN_NAME LIKE '%CEST%'\r\n    OR COLUMN_NAME LIKE '%TRIB%'\r\n    OR COLUMN_NAME LIKE '%ALIQ%'\r\n    OR COLUMN_NAME LIKE '%GRUPOICMS%'\r\n    OR COLUMN_NAME LIKE '%CODTAB%'\r\n    OR COLUMN_NAME LIKE '%IDALIQ%'\r\n  )\r\nORDER BY TABLE_NAME, COLUMN_NAME",
+  "successfulAttempt": {
+    "baseUrl": "https://api.sankhya.com.br",
+    "endpointPath": "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+    "payloadVariant": "body_serviceName_requestBody_sql",
+    "httpStatus": 200,
+    "responseIsJson": true,
+    "rowCountDetected": 102,
+    "responseBody": {
+      "serviceName": "DbExplorerSP.executeQuery",
+      "status": "1",
+      "pendingPrinting": "false",
+      "transactionId": "446ACA285D6ADF7C99F81D071D3DAD65",
+      "responseBody": {
+        "fieldsMetadata": [
+          {
+            "name": "TABLE_NAME",
+            "description": "TABLE_NAME",
+            "order": 1,
+            "userType": "S"
+          },
+          {
+            "name": "COLUMN_NAME",
+            "description": "COLUMN_NAME",
+            "order": 2,
+            "userType": "S"
+          }
+        ],
+        "rows": [
+          [
+            "TGFDIN",
+            "ALIQADREDRETANT"
+          ],
+          [
+            "TGFDIN",
+            "ALIQADREM"
+          ],
+          [
+            "TGFDIN",
+            "ALIQADREMSR"
+          ],
+          [
+            "TGFDIN",
+            "ALIQDESPACESS"
+          ],
+          [
+            "TGFDIN",
+            "ALIQDIFERENCIAL"
+          ],
+          [
+            "TGFDIN",
+            "ALIQINTDEST"
+          ],
+          [
+            "TGFDIN",
+            "ALIQPARADIFAL"
+          ],
+          [
+            "TGFDIN",
+            "ALIQUOTA"
+          ],
+          [
+            "TGFDIN",
+            "ALIQUOTADESON"
+          ],
+          [
+            "TGFDIN",
+            "ALIQUOTAEFET"
+          ],
+          [
+            "TGFDIN",
+            "ALIQUOTANORMAL"
+          ],
+          [
+            "TGFDIN",
+            "CCLASSTRIB"
+          ],
+          [
+            "TGFDIN",
+            "CCLASSTRIBREG"
+          ],
+          [
+            "TGFDIN",
+            "CODTRIBMUNISS"
+          ],
+          [
+            "TGFDIN",
+            "IDALIQ"
+          ],
+          [
+            "TGFDIN",
+            "PALIQCBSREG"
+          ],
+          [
+            "TGFDIN",
+            "PALIQEFETREG"
+          ],
+          [
+            "TGFDIN",
+            "PALIQIBSMUNREG"
+          ],
+          [
+            "TGFDIN",
+            "PALIQIBSUFREG"
+          ],
+          [
+            "TGFDIN",
+            "PERCALIQADREMICMS"
+          ],
+          [
+            "TGFDIN",
+            "PERCALIQEFET"
+          ],
+          [
+            "TGFDIN",
+            "PERCDEVTRIB"
+          ],
+          [
+            "TGFDIN",
+            "PERCREDALIQ"
+          ],
+          [
+            "TGFDIN",
+            "PERCREDGOVALIQ"
+          ],
+          [
+            "TGFDIN",
+            "VLRDEVTRIB"
+          ],
+          [
+            "TGFDIN",
+            "VTRIBREG"
+          ],
+          [
+            "TGFICM",
+            "ALIQADREMICMS"
+          ],
+          [
+            "TGFICM",
+            "ALIQCONSFIN"
+          ],
+          [
+            "TGFICM",
+            "ALIQESTRANGEIRA"
+          ],
+          [
+            "TGFICM",
+            "ALIQFRETE"
+          ],
+          [
+            "TGFICM",
+            "ALIQICMSAT"
+          ],
+          [
+            "TGFICM",
+            "ALIQICMSATIMP"
+          ],
+          [
+            "TGFICM",
+            "ALIQICMSATINT"
+          ],
+          [
+            "TGFICM",
+            "ALIQICMSCARGTRIBRED"
+          ],
+          [
+            "TGFICM",
+            "ALIQICMSEFET"
+          ],
+          [
+            "TGFICM",
+            "ALIQICMSESPST"
+          ],
+          [
+            "TGFICM",
+            "ALIQICMSLIMITECALCST"
+          ],
+          [
+            "TGFICM",
+            "ALIQINTDEST"
+          ],
+          [
+            "TGFICM",
+            "ALIQSTCARGTRIBRED"
+          ],
+          [
+            "TGFICM",
+            "ALIQSUBTRIB"
+          ],
+          [
+            "TGFICM",
+            "ALIQUFDEST"
+          ],
+          [
+            "TGFICM",
+            "ALIQUOTA"
+          ],
+          [
+            "TGFICM",
+            "CALCSTDIFALIQ"
+          ],
+          [
+            "TGFICM",
+            "CARACTRIB"
+          ],
+          [
+            "TGFICM",
+            "CODTAB"
+          ],
+          [
+            "TGFICM",
+            "CODTABICMS"
+          ],
+          [
+            "TGFICM",
+            "CODTABSTANT"
+          ],
+          [
+            "TGFICM",
+            "CODTABSTFARPOP"
+          ],
+          [
+            "TGFICM",
+            "CODTABSTPMPF"
+          ],
+          [
+            "TGFICM",
+            "CODTABSTUFDEST"
+          ],
+          [
+            "TGFICM",
+            "CODTRIB"
+          ],
+          [
+            "TGFICM",
+            "IDALIQ"
+          ],
+          [
+            "TGFICM",
+            "PERCALIQADREMICMS"
+          ],
+          [
+            "TGFICM",
+            "PERCCARGATRIBMEDIA"
+          ],
+          [
+            "TGFICM",
+            "PERCMINSUBTRIB"
+          ],
+          [
+            "TGFITE",
+            "AD_CODTAB"
+          ],
+          [
+            "TGFITE",
+            "ALIQFETHAB"
+          ],
+          [
+            "TGFITE",
+            "ALIQFUNTTEL"
+          ],
+          [
+            "TGFITE",
+            "ALIQFUST"
+          ],
+          [
+            "TGFITE",
+            "ALIQICMS"
+          ],
+          [
+            "TGFITE",
+            "ALIQICMSAT"
+          ],
+          [
+            "TGFITE",
+            "ALIQICMSRED"
+          ],
+          [
+            "TGFITE",
+            "ALIQINTERICMSAT"
+          ],
+          [
+            "TGFITE",
+            "ALIQIPI"
+          ],
+          [
+            "TGFITE",
+            "ALIQISS"
+          ],
+          [
+            "TGFITE",
+            "ALIQSTEXTRANOTA"
+          ],
+          [
+            "TGFITE",
+            "ALIQSTFCPSTANT"
+          ],
+          [
+            "TGFITE",
+            "CODTRIB"
+          ],
+          [
+            "TGFITE",
+            "CODTRIBISS"
+          ],
+          [
+            "TGFITE",
+            "GTINTRIBNFE"
+          ],
+          [
+            "TGFITE",
+            "IDALIQICMS"
+          ],
+          [
+            "TGFITE",
+            "IDALIQICMSAT"
+          ],
+          [
+            "TGFITE",
+            "IDALIQICMSDIFICMS"
+          ],
+          [
+            "TGFITE",
+            "IDALIQISS"
+          ],
+          [
+            "TGFITE",
+            "QTDTRIBEXPORT"
+          ],
+          [
+            "TGFNCM",
+            "CODNCM"
+          ],
+          [
+            "TGFNCM",
+            "DSNCM"
+          ],
+          [
+            "TGFNCM",
+            "DSUNITRIBUTACAO"
+          ],
+          [
+            "TGFNCM",
+            "UNITRIBUTACAO"
+          ],
+          [
+            "TGFPEM",
+            "ALIQGERAL"
+          ],
+          [
+            "TGFPEM",
+            "ALIQICMSINTEFD"
+          ],
+          [
+            "TGFPEM",
+            "GRUPOICMS"
+          ],
+          [
+            "TGFPEM",
+            "GRUPOICMS2"
+          ],
+          [
+            "TGFPRO",
+            "AD_GRUPOICMSPROD"
+          ],
+          [
+            "TGFPRO",
+            "ALIQFECOP"
+          ],
+          [
+            "TGFPRO",
+            "ALIQFETHAB"
+          ],
+          [
+            "TGFPRO",
+            "ALIQGERAL"
+          ],
+          [
+            "TGFPRO",
+            "ALIQICMSINTEFD"
+          ],
+          [
+            "TGFPRO",
+            "ALIQIMP"
+          ],
+          [
+            "TGFPRO",
+            "ALIQINTERNACAT42"
+          ],
+          [
+            "TGFPRO",
+            "ALIQNAC"
+          ],
+          [
+            "TGFPRO",
+            "CLASSUBTRIB"
+          ],
+          [
+            "TGFPRO",
+            "CODBARTRIBDIFGTIN"
+          ],
+          [
+            "TGFPRO",
+            "CODCLASTRIBNAC"
+          ],
+          [
+            "TGFPRO",
+            "CODEXNCM"
+          ],
+          [
+            "TGFPRO",
+            "CODTAB"
+          ],
+          [
+            "TGFPRO",
+            "CODTRIBMUNISS"
+          ],
+          [
+            "TGFPRO",
+            "GRUPOICMS"
+          ],
+          [
+            "TGFPRO",
+            "GRUPOICMS2"
+          ],
+          [
+            "TGFPRO",
+            "NCM"
+          ],
+          [
+            "TGFPRO",
+            "SERVDESPNTRIB"
+          ],
+          [
+            "TGFPRO",
+            "STATUSNCM"
+          ]
+        ],
+        "burstLimit": false,
+        "timeQuery": "293ms",
+        "timeResultSet": "1ms"
+      }
+    },
+    "requestPayload": {
+      "serviceName": "DbExplorerSP.executeQuery",
+      "requestBody": {
+        "sql": "SELECT\r\n    TABLE_NAME,\r\n    COLUMN_NAME\r\nFROM ALL_TAB_COLUMNS\r\nWHERE TABLE_NAME IN ('TGFICM', 'TGFPRO', 'TGFPEM', 'TGFNCM', 'TGFITE', 'TGFDIN')\r\n  AND (\r\n    COLUMN_NAME LIKE '%NCM%'\r\n    OR COLUMN_NAME LIKE '%CEST%'\r\n    OR COLUMN_NAME LIKE '%TRIB%'\r\n    OR COLUMN_NAME LIKE '%ALIQ%'\r\n    OR COLUMN_NAME LIKE '%GRUPOICMS%'\r\n    OR COLUMN_NAME LIKE '%CODTAB%'\r\n    OR COLUMN_NAME LIKE '%IDALIQ%'\r\n  )\r\nORDER BY TABLE_NAME, COLUMN_NAME"
+      }
+    }
+  },
+  "attempts": [
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_serviceName_requestBody_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_requestBody_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_requestBody_query",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_only_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+      "payloadVariant": "body_serviceName_requestBody_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+      "payloadVariant": "body_requestBody_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+      "payloadVariant": "body_requestBody_query",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+      "payloadVariant": "body_only_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_serviceName_requestBody_sql",
+      "httpStatus": 200,
+      "ok": true,
+      "rowCountDetected": 102,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"serviceName\":\"DbExplorerSP.executeQuery\",\"status\":\"1\",\"pendingPrinting\":\"false\",\"transactionId\":\"446ACA285D6ADF7C99F81D071D3DAD65\",\"responseBody\":{\"fieldsMetadata\":[{\"name\":\"TABLE_NAME\",\"description\":\"TABLE_NAME\",\"order\":1,\"userType\":\"S\"},{\"name\":\"COLUMN_NAME\",\"description\":\"COLUMN_NAME\",\"order\":2,\"userType\":\"S\"}],\"rows\":[[\"TGFDIN\",\"ALIQADREDRETANT\"],[\"TGFDIN\",\"ALIQADREM\"],[\"TGFDIN\",\"ALIQADREMSR\"],[\"TGFDIN\",\"ALIQDESPACESS\"],[\"TGFDIN\",\"ALIQDIFERENCIAL\"],[\"TGFDIN\",\"ALIQINTDEST\"],[\"TGFDIN\",\"ALIQPARADIFAL\"],[\"TGFDIN\",\"ALIQUOTA\"],[\"TGFDIN\",\"ALIQUOTADESON\"],[\"TGFDIN\",\"ALIQUOTAEFET\"],[\"TGFDIN\",\"ALIQUOTANORMAL\"],[\"TGFDIN\",\"CCLASSTRIB\"],[\"TGFDIN\",\"CCLASSTRIBREG\"],[\"TGFDIN\",\"CODTRIBMUNISS\"],[\"TGFDIN\",\"IDALIQ\"],[\"TGFDIN\",\"PALIQCBSREG\"],[\"TGFDIN\",\"PALIQEFETREG\"],[\"TGFDIN\",\"PALIQIBSMUNREG\"],[\"TGFDIN\",\"PALIQIBSUFREG\"],[\"TGFDIN\",\"PERCALIQADREMICMS\"],[\"TGFDIN\",\"PERCALIQEFET\"],[\"TGFDIN\",\"PERCDEVTRIB\"],[\"TGFDIN\",\"PERCREDALIQ\"],[\"TGFDIN\",\"PERCREDGOVALIQ\"],[\"TGFDIN\",\"VLRDEVTRIB\"],[\"TGFDIN\",\"VTRIBREG\"],[\"TGFICM\",\"ALIQADREMICMS\"],[\"TGFICM\",\"ALIQCONSFIN\"],[\"TGFICM\",\"ALIQESTRANGEIRA\"],[\"TGFICM\",\"ALIQFRETE\"],[\"TGFICM\",\"ALIQICMSAT\"],[\"TGFICM\",\"ALIQICMSATIMP\"],[\"TGFICM\",\"ALIQICMSATINT\"],[\"TGFICM\",\"ALIQICMS"
+    }
+  ]
+}

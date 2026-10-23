@@ -1,0 +1,327 @@
+{
+  "marker": "TRIBUTACAO_EXECUTE_QUERY_PROBE",
+  "ok": true,
+  "tenantId": "self_T8oqTD0UBtWATPbITOGsqAEZt3d2_smartsfa-enterprise-teste",
+  "environment": "prod",
+  "baseUrlCandidates": [
+    "https://api.sankhya.com.br"
+  ],
+  "endpointCandidates": [
+    "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+    "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+    "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+    "/gateway/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+    "/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery"
+  ],
+  "sqlFile": "g:\\smartsfa\\docs\\sankhya-api\\examples\\tributacao_diagnostico_ttkicm_colunas.sql",
+  "sqlPreview": "SELECT\r\n    COLUMN_ID,\r\n    COLUMN_NAME,\r\n    DATA_TYPE\r\nFROM ALL_TAB_COLUMNS\r\nWHERE TABLE_NAME = 'TTKICM'\r\nORDER BY COLUMN_ID",
+  "successfulAttempt": {
+    "baseUrl": "https://api.sankhya.com.br",
+    "endpointPath": "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+    "payloadVariant": "body_serviceName_requestBody_sql",
+    "httpStatus": 200,
+    "responseIsJson": true,
+    "rowCountDetected": 34,
+    "responseBody": {
+      "serviceName": "DbExplorerSP.executeQuery",
+      "status": "1",
+      "pendingPrinting": "false",
+      "transactionId": "9761CB8C77547EF57EFF66326EE11A37",
+      "responseBody": {
+        "fieldsMetadata": [
+          {
+            "name": "COLUMN_ID",
+            "description": "COLUMN_ID",
+            "order": 1,
+            "userType": "I"
+          },
+          {
+            "name": "COLUMN_NAME",
+            "description": "COLUMN_NAME",
+            "order": 2,
+            "userType": "S"
+          },
+          {
+            "name": "DATA_TYPE",
+            "description": "DATA_TYPE",
+            "order": 3,
+            "userType": "S"
+          }
+        ],
+        "rows": [
+          [
+            1,
+            "NUPROC",
+            "NUMBER"
+          ],
+          [
+            2,
+            "SEQUENCIA",
+            "NUMBER"
+          ],
+          [
+            3,
+            "CPFCNPJORIG",
+            "VARCHAR2"
+          ],
+          [
+            4,
+            "NCM",
+            "VARCHAR2"
+          ],
+          [
+            5,
+            "CLASSIFICACAO",
+            "VARCHAR2"
+          ],
+          [
+            6,
+            "UFORIG",
+            "VARCHAR2"
+          ],
+          [
+            7,
+            "UFDEST",
+            "VARCHAR2"
+          ],
+          [
+            8,
+            "CODTRIB",
+            "NUMBER"
+          ],
+          [
+            9,
+            "TIPRESTRICAO",
+            "VARCHAR2"
+          ],
+          [
+            10,
+            "CODRESTRICAO",
+            "NUMBER"
+          ],
+          [
+            11,
+            "TIPRESTRICAO2",
+            "VARCHAR2"
+          ],
+          [
+            12,
+            "CODRESTRICAO2",
+            "NUMBER"
+          ],
+          [
+            13,
+            "MODBCICMS",
+            "NUMBER"
+          ],
+          [
+            14,
+            "ALIQICMS",
+            "FLOAT"
+          ],
+          [
+            15,
+            "PERREDBCICMS",
+            "FLOAT"
+          ],
+          [
+            16,
+            "MVA",
+            "FLOAT"
+          ],
+          [
+            17,
+            "ALIQESTRANGEIRA",
+            "FLOAT"
+          ],
+          [
+            18,
+            "MARGLUCROEST",
+            "FLOAT"
+          ],
+          [
+            19,
+            "MODBCICMSST",
+            "NUMBER"
+          ],
+          [
+            20,
+            "PERREDBCST",
+            "FLOAT"
+          ],
+          [
+            21,
+            "PERCDIF",
+            "FLOAT"
+          ],
+          [
+            22,
+            "MOTDESICMS",
+            "VARCHAR2"
+          ],
+          [
+            23,
+            "CAMPOATUALIZAR",
+            "VARCHAR2"
+          ],
+          [
+            24,
+            "GRUPOICMSNOVO",
+            "NUMBER"
+          ],
+          [
+            25,
+            "USOPROD",
+            "VARCHAR2"
+          ],
+          [
+            26,
+            "ALTERAUSOPROD",
+            "NUMBER"
+          ],
+          [
+            27,
+            "STATUSTGFPEM",
+            "VARCHAR2"
+          ],
+          [
+            28,
+            "STATUS",
+            "VARCHAR2"
+          ],
+          [
+            29,
+            "DATAFONTE",
+            "DATE"
+          ],
+          [
+            30,
+            "CHAVEFONTE",
+            "VARCHAR2"
+          ],
+          [
+            31,
+            "CESTREGRA",
+            "VARCHAR2"
+          ],
+          [
+            32,
+            "MOTIVO",
+            "VARCHAR2"
+          ],
+          [
+            33,
+            "ALIQICMSFCP",
+            "FLOAT"
+          ],
+          [
+            34,
+            "ALIQSUBTRIB",
+            "FLOAT"
+          ]
+        ],
+        "burstLimit": false,
+        "timeQuery": "69ms",
+        "timeResultSet": "1ms"
+      }
+    },
+    "requestPayload": {
+      "serviceName": "DbExplorerSP.executeQuery",
+      "requestBody": {
+        "sql": "SELECT\r\n    COLUMN_ID,\r\n    COLUMN_NAME,\r\n    DATA_TYPE\r\nFROM ALL_TAB_COLUMNS\r\nWHERE TABLE_NAME = 'TTKICM'\r\nORDER BY COLUMN_ID"
+      }
+    }
+  },
+  "attempts": [
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_serviceName_requestBody_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_requestBody_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_requestBody_query",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_only_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+      "payloadVariant": "body_serviceName_requestBody_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+      "payloadVariant": "body_requestBody_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+      "payloadVariant": "body_requestBody_query",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+      "payloadVariant": "body_only_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_serviceName_requestBody_sql",
+      "httpStatus": 200,
+      "ok": true,
+      "rowCountDetected": 34,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"serviceName\":\"DbExplorerSP.executeQuery\",\"status\":\"1\",\"pendingPrinting\":\"false\",\"transactionId\":\"9761CB8C77547EF57EFF66326EE11A37\",\"responseBody\":{\"fieldsMetadata\":[{\"name\":\"COLUMN_ID\",\"description\":\"COLUMN_ID\",\"order\":1,\"userType\":\"I\"},{\"name\":\"COLUMN_NAME\",\"description\":\"COLUMN_NAME\",\"order\":2,\"userType\":\"S\"},{\"name\":\"DATA_TYPE\",\"description\":\"DATA_TYPE\",\"order\":3,\"userType\":\"S\"}],\"rows\":[[1,\"NUPROC\",\"NUMBER\"],[2,\"SEQUENCIA\",\"NUMBER\"],[3,\"CPFCNPJORIG\",\"VARCHAR2\"],[4,\"NCM\",\"VARCHAR2\"],[5,\"CLASSIFICACAO\",\"VARCHAR2\"],[6,\"UFORIG\",\"VARCHAR2\"],[7,\"UFDEST\",\"VARCHAR2\"],[8,\"CODTRIB\",\"NUMBER\"],[9,\"TIPRESTRICAO\",\"VARCHAR2\"],[10,\"CODRESTRICAO\",\"NUMBER\"],[11,\"TIPRESTRICAO2\",\"VARCHAR2\"],[12,\"CODRESTRICAO2\",\"NUMBER\"],[13,\"MODBCICMS\",\"NUMBER\"],[14,\"ALIQICMS\",\"FLOAT\"],[15,\"PERREDBCICMS\",\"FLOAT\"],[16,\"MVA\",\"FLOAT\"],[17,\"ALIQESTRANGEIRA\",\"FLOAT\"],[18,\"MARGLUCROEST\",\"FLOAT\"],[19,\"MODBCICMSST\",\"NUMBER\"],[20,\"PERREDBCST\",\"FLOAT\"],[21,\"PERCDIF\",\"FLOAT\"],[22,\"MOTDESICMS\",\"VARCHAR2\"],[23,\"CAMPOATUALIZAR\",\"VARCHAR2\"],[24,\"GRUPOICMSNOVO\",\"NUMBER\"],[25,\"USOPROD\",\"VARCHAR2\"],[26,\"ALTERAUSOPROD\",\"NUMBER\"],[27,\"STATUSTGFPEM\",\"VARCHAR2\"],[28,\"STATUS\",\"VARCHAR2\"],[29,\"DATAFONTE\",\"DATE\"],[30,\"CHAVEFONTE\",\"VARCH"
+    }
+  ]
+}

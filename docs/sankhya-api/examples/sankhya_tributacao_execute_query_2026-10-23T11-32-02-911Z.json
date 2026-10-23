@@ -1,0 +1,253 @@
+{
+  "marker": "TRIBUTACAO_EXECUTE_QUERY_PROBE",
+  "ok": true,
+  "tenantId": "self_T8oqTD0UBtWATPbITOGsqAEZt3d2_smartsfa-enterprise-teste",
+  "environment": "prod",
+  "baseUrlCandidates": [
+    "https://api.sankhya.com.br"
+  ],
+  "endpointCandidates": [
+    "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+    "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+    "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+    "/gateway/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+    "/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery"
+  ],
+  "sqlFile": "g:\\smartsfa\\docs\\sankhya-api\\examples\\tributacao_diagnostico_tiprestricao_mapeamento.sql",
+  "sqlPreview": "WITH RESTR AS (\r\n    SELECT\r\n        'R1' AS LADO,\r\n        NVL(TO_CHAR(ICM.TIPRESTRICAO), '-') AS TIPO,\r\n        NVL(ICM.CODRESTRICAO, -1) AS COD\r\n    FROM TGFICM ICM\r\n    WHERE NVL(TO_CHAR(ICM.CODRESTRICAO), '-1') NOT IN ('-1', '0')\r\n\r\n    UNION ALL\r\n\r\n    SELECT\r\n        'R2' AS LADO,\r\n        NVL(TO_CHAR(ICM.TIPRESTRICAO2), '-') AS TIPO,\r\n        NVL(ICM.CODRESTRICAO2, -1) AS COD\r\n    FROM TGFICM ICM\r\n    WHERE NVL(TO_CHAR(ICM.CODRESTRICAO2), '-1') NOT IN ('-1', '0')\r\n)\r\nSELECT\r\n    TIPO,\r\n ",
+  "successfulAttempt": {
+    "baseUrl": "https://api.sankhya.com.br",
+    "endpointPath": "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+    "payloadVariant": "body_serviceName_requestBody_sql",
+    "httpStatus": 200,
+    "responseIsJson": true,
+    "rowCountDetected": 8,
+    "responseBody": {
+      "serviceName": "DbExplorerSP.executeQuery",
+      "status": "1",
+      "pendingPrinting": "false",
+      "transactionId": "1D76F5C78173B22ACA2FB8DF6BB0A2E6",
+      "responseBody": {
+        "fieldsMetadata": [
+          {
+            "name": "TIPO",
+            "description": "TIPO",
+            "order": 1,
+            "userType": "S"
+          },
+          {
+            "name": "LADO",
+            "description": "LADO",
+            "order": 2,
+            "userType": "S"
+          },
+          {
+            "name": "TOTAL",
+            "description": "TOTAL",
+            "order": 3,
+            "userType": "I"
+          },
+          {
+            "name": "MATCH_PRODUTO",
+            "description": "MATCH_PRODUTO",
+            "order": 4,
+            "userType": "I"
+          },
+          {
+            "name": "MATCH_NCM",
+            "description": "MATCH_NCM",
+            "order": 5,
+            "userType": "I"
+          },
+          {
+            "name": "MATCH_GRUPOICMS",
+            "description": "MATCH_GRUPOICMS",
+            "order": 6,
+            "userType": "I"
+          },
+          {
+            "name": "MATCH_GRUPOICMS2",
+            "description": "MATCH_GRUPOICMS2",
+            "order": 7,
+            "userType": "I"
+          }
+        ],
+        "rows": [
+          [
+            "U",
+            "R1",
+            37,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            "I",
+            "R1",
+            27,
+            0,
+            0,
+            25,
+            0
+          ],
+          [
+            "H",
+            "R1",
+            18,
+            0,
+            18,
+            0,
+            0
+          ],
+          [
+            "O",
+            "R1",
+            8,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            "K",
+            "R1",
+            2,
+            0,
+            0,
+            0,
+            2
+          ],
+          [
+            "E",
+            "R1",
+            1,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            "K",
+            "R2",
+            1,
+            0,
+            0,
+            0,
+            1
+          ],
+          [
+            "O",
+            "R2",
+            1,
+            0,
+            0,
+            0,
+            0
+          ]
+        ],
+        "burstLimit": false,
+        "timeQuery": "585ms",
+        "timeResultSet": "1ms"
+      }
+    },
+    "requestPayload": {
+      "serviceName": "DbExplorerSP.executeQuery",
+      "requestBody": {
+        "sql": "WITH RESTR AS (\r\n    SELECT\r\n        'R1' AS LADO,\r\n        NVL(TO_CHAR(ICM.TIPRESTRICAO), '-') AS TIPO,\r\n        NVL(ICM.CODRESTRICAO, -1) AS COD\r\n    FROM TGFICM ICM\r\n    WHERE NVL(TO_CHAR(ICM.CODRESTRICAO), '-1') NOT IN ('-1', '0')\r\n\r\n    UNION ALL\r\n\r\n    SELECT\r\n        'R2' AS LADO,\r\n        NVL(TO_CHAR(ICM.TIPRESTRICAO2), '-') AS TIPO,\r\n        NVL(ICM.CODRESTRICAO2, -1) AS COD\r\n    FROM TGFICM ICM\r\n    WHERE NVL(TO_CHAR(ICM.CODRESTRICAO2), '-1') NOT IN ('-1', '0')\r\n)\r\nSELECT\r\n    TIPO,\r\n    LADO,\r\n    COUNT(*) AS TOTAL,\r\n    SUM(CASE WHEN EXISTS (SELECT 1 FROM TGFPRO P WHERE P.CODPROD = R.COD AND ROWNUM = 1) THEN 1 ELSE 0 END) AS MATCH_PRODUTO,\r\n    SUM(CASE WHEN EXISTS (\r\n        SELECT 1\r\n        FROM TGFNCM N\r\n        WHERE LTRIM(TO_CHAR(R.COD), '0') = LTRIM(REPLACE(N.CODNCM, '.', ''), '0')\r\n          AND ROWNUM = 1\r\n    ) THEN 1 ELSE 0 END) AS MATCH_NCM,\r\n    SUM(CASE WHEN EXISTS (SELECT 1 FROM TGFPRO P WHERE NVL(P.GRUPOICMS, -1) = R.COD AND ROWNUM = 1) THEN 1 ELSE 0 END) AS MATCH_GRUPOICMS,\r\n    SUM(CASE WHEN EXISTS (SELECT 1 FROM TGFPRO P WHERE NVL(P.GRUPOICMS2, -1) = R.COD AND ROWNUM = 1) THEN 1 ELSE 0 END) AS MATCH_GRUPOICMS2\r\nFROM RESTR R\r\nGROUP BY TIPO, LADO\r\nORDER BY TOTAL DESC, TIPO, LADO"
+      }
+    }
+  },
+  "attempts": [
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_serviceName_requestBody_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_requestBody_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_requestBody_query",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_only_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+      "payloadVariant": "body_serviceName_requestBody_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+      "payloadVariant": "body_requestBody_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+      "payloadVariant": "body_requestBody_query",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+      "payloadVariant": "body_only_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_serviceName_requestBody_sql",
+      "httpStatus": 200,
+      "ok": true,
+      "rowCountDetected": 8,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"serviceName\":\"DbExplorerSP.executeQuery\",\"status\":\"1\",\"pendingPrinting\":\"false\",\"transactionId\":\"1D76F5C78173B22ACA2FB8DF6BB0A2E6\",\"responseBody\":{\"fieldsMetadata\":[{\"name\":\"TIPO\",\"description\":\"TIPO\",\"order\":1,\"userType\":\"S\"},{\"name\":\"LADO\",\"description\":\"LADO\",\"order\":2,\"userType\":\"S\"},{\"name\":\"TOTAL\",\"description\":\"TOTAL\",\"order\":3,\"userType\":\"I\"},{\"name\":\"MATCH_PRODUTO\",\"description\":\"MATCH_PRODUTO\",\"order\":4,\"userType\":\"I\"},{\"name\":\"MATCH_NCM\",\"description\":\"MATCH_NCM\",\"order\":5,\"userType\":\"I\"},{\"name\":\"MATCH_GRUPOICMS\",\"description\":\"MATCH_GRUPOICMS\",\"order\":6,\"userType\":\"I\"},{\"name\":\"MATCH_GRUPOICMS2\",\"description\":\"MATCH_GRUPOICMS2\",\"order\":7,\"userType\":\"I\"}],\"rows\":[[\"U\",\"R1\",37,0,0,0,0],[\"I\",\"R1\",27,0,0,25,0],[\"H\",\"R1\",18,0,18,0,0],[\"O\",\"R1\",8,0,0,0,0],[\"K\",\"R1\",2,0,0,0,2],[\"E\",\"R1\",1,0,0,0,0],[\"K\",\"R2\",1,0,0,0,1],[\"O\",\"R2\",1,0,0,0,0]],\"burstLimit\":false,\"timeQuery\":\"585ms\",\"timeResultSet\":\"1ms\"}}"
+    }
+  ]
+}

@@ -1496,6 +1496,9 @@ async function syncSankhyaTaxRulesModule({
   });
 
   let importedCount = 0;
+  let skippedMissingNcmCount = 0;
+  let importedMissingCestCount = 0;
+  let prunedLegacyMissingNcmCount = 0;
   const mappedRuleIds = new Set();
   const syncVersionBase = Date.now() * 1000;
 
@@ -1510,12 +1513,45 @@ async function syncSankhyaTaxRulesModule({
         syncVersion: syncVersionBase + index,
       });
       if (!mapped) {
+        const ncmDigits = normalizeDigits(
+          readRowValueByAliases(row, ['NCM']),
+        );
+        if (!ncmDigits) {
+          skippedMissingNcmCount += 1;
+        }
         continue;
       }
 
       mappedRuleIds.add(mapped.id);
       writer.set(taxRulesCollection.doc(mapped.id), mapped, { merge: true });
       importedCount += 1;
+      if (!mapped.cest) {
+        importedMissingCestCount += 1;
+      }
+    }
+
+    const existingSnapshot = await taxRulesCollection
+      .where('tenantId', '==', tenantId)
+      .get();
+    for (const doc of existingSnapshot.docs) {
+      const payload = doc.data() || {};
+      const origin = String(payload.origin ?? '').trim().toLowerCase();
+      if (origin !== 'erp') {
+        continue;
+      }
+
+      const representedScope = String(payload.representedCompanyId ?? '').trim();
+      if (representedScope) {
+        continue;
+      }
+
+      const existingNcmDigits = normalizeDigits(payload.ncm);
+      if (existingNcmDigits) {
+        continue;
+      }
+
+      writer.delete(doc.ref);
+      prunedLegacyMissingNcmCount += 1;
     }
   } finally {
     await writer.close();
@@ -1529,6 +1565,9 @@ async function syncSankhyaTaxRulesModule({
       lastTaxRulesSyncMode: 'full',
       lastTaxRulesSourceCount: queryResult.rows.length,
       lastTaxRulesImportedCount: importedCount,
+      lastTaxRulesSkippedMissingNcmCount: skippedMissingNcmCount,
+      lastTaxRulesImportedMissingCestCount: importedMissingCestCount,
+      lastTaxRulesPrunedLegacyMissingNcmCount: prunedLegacyMissingNcmCount,
       lastTaxRulesEndpoint: queryResult.endpointPath,
     },
   });
@@ -1539,6 +1578,9 @@ async function syncSankhyaTaxRulesModule({
     endpoint: queryResult.endpointPath,
     sourceCount: queryResult.rows.length,
     importedCount,
+    skippedMissingNcmCount,
+    importedMissingCestCount,
+    prunedLegacyMissingNcmCount,
     filteredOutZeroCodeCount: 0,
     skippedNotFoundCount: 0,
     mirroredRuleCount: mappedRuleIds.size,
@@ -1547,21 +1589,56 @@ async function syncSankhyaTaxRulesModule({
 
 function buildSankhyaTaxRulesSql() {
   return `
-SELECT
+SELECT DISTINCT
     'active' AS STATUS,
     CASE
-        WHEN TO_CHAR(ICM.TIPRESTRICAO) IN ('N', '4')
+        WHEN TO_CHAR(ICM.TIPRESTRICAO) IN ('N', '4', 'H')
              AND TO_CHAR(ICM.CODRESTRICAO) NOT IN ('-1', '0')
             THEN NCM1.CODNCM
-        WHEN TO_CHAR(ICM.TIPRESTRICAO2) IN ('N', '4')
+        WHEN TO_CHAR(ICM.TIPRESTRICAO2) IN ('N', '4', 'H')
              AND TO_CHAR(ICM.CODRESTRICAO2) NOT IN ('-1', '0')
             THEN NCM2.CODNCM
         WHEN TO_CHAR(ICM.TIPRESTRICAO) IN ('P', '1')
              AND TO_CHAR(ICM.CODRESTRICAO) NOT IN ('-1', '0')
-            THEN PRO.NCM
+      THEN PRO1.NCM
+    WHEN TO_CHAR(ICM.TIPRESTRICAO2) IN ('P', '1')
+       AND TO_CHAR(ICM.CODRESTRICAO2) NOT IN ('-1', '0')
+      THEN PRO2.NCM
+    WHEN TO_CHAR(ICM.TIPRESTRICAO) = 'I'
+       AND TO_CHAR(ICM.CODRESTRICAO) NOT IN ('-1', '0')
+      THEN PRO_GI1.NCM
+    WHEN TO_CHAR(ICM.TIPRESTRICAO2) = 'I'
+       AND TO_CHAR(ICM.CODRESTRICAO2) NOT IN ('-1', '0')
+      THEN PRO_GI2.NCM
+    WHEN TO_CHAR(ICM.TIPRESTRICAO) = 'K'
+       AND TO_CHAR(ICM.CODRESTRICAO) NOT IN ('-1', '0')
+      THEN PRO_GK1.NCM
+    WHEN TO_CHAR(ICM.TIPRESTRICAO2) = 'K'
+       AND TO_CHAR(ICM.CODRESTRICAO2) NOT IN ('-1', '0')
+      THEN PRO_GK2.NCM
         ELSE NULL
     END AS NCM,
-    PRO.CODESPECST AS CEST,
+  CASE
+    WHEN TO_CHAR(ICM.TIPRESTRICAO) IN ('P', '1')
+       AND TO_CHAR(ICM.CODRESTRICAO) NOT IN ('-1', '0')
+      THEN PRO1.CODESPECST
+    WHEN TO_CHAR(ICM.TIPRESTRICAO2) IN ('P', '1')
+       AND TO_CHAR(ICM.CODRESTRICAO2) NOT IN ('-1', '0')
+      THEN PRO2.CODESPECST
+    WHEN TO_CHAR(ICM.TIPRESTRICAO) = 'I'
+       AND TO_CHAR(ICM.CODRESTRICAO) NOT IN ('-1', '0')
+      THEN PRO_GI1.CODESPECST
+    WHEN TO_CHAR(ICM.TIPRESTRICAO2) = 'I'
+       AND TO_CHAR(ICM.CODRESTRICAO2) NOT IN ('-1', '0')
+      THEN PRO_GI2.CODESPECST
+    WHEN TO_CHAR(ICM.TIPRESTRICAO) = 'K'
+       AND TO_CHAR(ICM.CODRESTRICAO) NOT IN ('-1', '0')
+      THEN PRO_GK1.CODESPECST
+    WHEN TO_CHAR(ICM.TIPRESTRICAO2) = 'K'
+       AND TO_CHAR(ICM.CODRESTRICAO2) NOT IN ('-1', '0')
+      THEN PRO_GK2.CODESPECST
+    ELSE NULL
+  END AS CEST,
     NVL(UFO.UF, 'ANY') AS UFORIGEM,
     NVL(UFD.UF, 'ANY') AS UFDESTINO,
     CASE
@@ -1609,12 +1686,24 @@ SELECT
             WHEN TO_CHAR(ICM.TIPRESTRICAO) IN ('P', '1')
                  AND TO_CHAR(ICM.CODRESTRICAO) NOT IN ('-1', '0')
                 THEN 300000 + NVL(ICM.SEQUENCIA, 0)
-            WHEN TO_CHAR(ICM.TIPRESTRICAO) IN ('N', '4')
+          WHEN TO_CHAR(ICM.TIPRESTRICAO) IN ('N', '4', 'H')
                  AND TO_CHAR(ICM.CODRESTRICAO) NOT IN ('-1', '0')
                 THEN 200000 + NVL(ICM.SEQUENCIA, 0)
-            WHEN TO_CHAR(ICM.TIPRESTRICAO2) IN ('N', '4')
+          WHEN TO_CHAR(ICM.TIPRESTRICAO2) IN ('N', '4', 'H')
                  AND TO_CHAR(ICM.CODRESTRICAO2) NOT IN ('-1', '0')
                 THEN 190000 + NVL(ICM.SEQUENCIA, 0)
+          WHEN TO_CHAR(ICM.TIPRESTRICAO) = 'I'
+             AND TO_CHAR(ICM.CODRESTRICAO) NOT IN ('-1', '0')
+            THEN 180000 + NVL(ICM.SEQUENCIA, 0)
+          WHEN TO_CHAR(ICM.TIPRESTRICAO2) = 'I'
+             AND TO_CHAR(ICM.CODRESTRICAO2) NOT IN ('-1', '0')
+            THEN 170000 + NVL(ICM.SEQUENCIA, 0)
+          WHEN TO_CHAR(ICM.TIPRESTRICAO) = 'K'
+             AND TO_CHAR(ICM.CODRESTRICAO) NOT IN ('-1', '0')
+            THEN 160000 + NVL(ICM.SEQUENCIA, 0)
+          WHEN TO_CHAR(ICM.TIPRESTRICAO2) = 'K'
+             AND TO_CHAR(ICM.CODRESTRICAO2) NOT IN ('-1', '0')
+            THEN 150000 + NVL(ICM.SEQUENCIA, 0)
             ELSE 100000 + NVL(ICM.SEQUENCIA, 0)
         END
     ) AS PRIORIDADE,
@@ -1627,14 +1716,33 @@ LEFT JOIN TSIUFS UFO
     ON ICM.UFORIG = UFO.CODUF
 LEFT JOIN TSIUFS UFD
     ON ICM.UFDEST = UFD.CODUF
-LEFT JOIN TGFPRO PRO
+LEFT JOIN TGFPRO PRO1
     ON TO_CHAR(ICM.TIPRESTRICAO) IN ('P', '1')
-   AND ICM.CODRESTRICAO = PRO.CODPROD
+  AND ICM.CODRESTRICAO = PRO1.CODPROD
+LEFT JOIN TGFPRO PRO2
+   ON TO_CHAR(ICM.TIPRESTRICAO2) IN ('P', '1')
+  AND ICM.CODRESTRICAO2 = PRO2.CODPROD
+LEFT JOIN TGFPRO PRO_GI1
+  ON TO_CHAR(ICM.TIPRESTRICAO) = 'I'
+  AND TO_CHAR(ICM.CODRESTRICAO) NOT IN ('-1', '0')
+  AND NVL(PRO_GI1.GRUPOICMS, -1) = NVL(ICM.CODRESTRICAO, -2)
+LEFT JOIN TGFPRO PRO_GI2
+  ON TO_CHAR(ICM.TIPRESTRICAO2) = 'I'
+  AND TO_CHAR(ICM.CODRESTRICAO2) NOT IN ('-1', '0')
+  AND NVL(PRO_GI2.GRUPOICMS, -1) = NVL(ICM.CODRESTRICAO2, -2)
+LEFT JOIN TGFPRO PRO_GK1
+  ON TO_CHAR(ICM.TIPRESTRICAO) = 'K'
+  AND TO_CHAR(ICM.CODRESTRICAO) NOT IN ('-1', '0')
+  AND NVL(PRO_GK1.GRUPOICMS2, -1) = NVL(ICM.CODRESTRICAO, -2)
+LEFT JOIN TGFPRO PRO_GK2
+  ON TO_CHAR(ICM.TIPRESTRICAO2) = 'K'
+  AND TO_CHAR(ICM.CODRESTRICAO2) NOT IN ('-1', '0')
+  AND NVL(PRO_GK2.GRUPOICMS2, -1) = NVL(ICM.CODRESTRICAO2, -2)
 LEFT JOIN TGFNCM NCM1
-    ON TO_CHAR(ICM.TIPRESTRICAO) IN ('N', '4')
+   ON TO_CHAR(ICM.TIPRESTRICAO) IN ('N', '4', 'H')
    AND LTRIM(TO_CHAR(ICM.CODRESTRICAO), '0') = LTRIM(REPLACE(NCM1.CODNCM, '.', ''), '0')
 LEFT JOIN TGFNCM NCM2
-    ON TO_CHAR(ICM.TIPRESTRICAO2) IN ('N', '4')
+   ON TO_CHAR(ICM.TIPRESTRICAO2) IN ('N', '4', 'H')
    AND LTRIM(TO_CHAR(ICM.CODRESTRICAO2), '0') = LTRIM(REPLACE(NCM2.CODNCM, '.', ''), '0')
 WHERE
     ICM.DTINICIOVIGENCIA IS NULL
@@ -1658,6 +1766,9 @@ function mapSankhyaTaxRuleRow({
   const ncmDigits = normalizeDigits(
     readRowValueByAliases(row, ['NCM']),
   );
+  if (!ncmDigits) {
+    return null;
+  }
   const ufDestino = normalizeTaxRuleUf(
     readRowValueByAliases(row, ['UFDESTINO']),
   );

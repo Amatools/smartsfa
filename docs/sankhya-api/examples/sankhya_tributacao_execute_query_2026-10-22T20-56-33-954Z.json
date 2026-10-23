@@ -1,0 +1,183 @@
+{
+  "marker": "TRIBUTACAO_EXECUTE_QUERY_PROBE",
+  "ok": true,
+  "tenantId": "self_T8oqTD0UBtWATPbITOGsqAEZt3d2_smartsfa-enterprise-teste",
+  "environment": "prod",
+  "baseUrlCandidates": [
+    "https://api.sankhya.com.br"
+  ],
+  "endpointCandidates": [
+    "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+    "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+    "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+    "/gateway/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+    "/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery"
+  ],
+  "sqlFile": "g:\\smartsfa\\docs\\sankhya-api\\examples\\tributacao_diagnostico_mapeamento_codtrib_grupoicms.sql",
+  "sqlPreview": "SELECT\r\n    CASE\r\n        WHEN NVL(PRO.GRUPOICMS, -1) = NVL(ICM.CODTRIB, -2) THEN 'GRUPOICMS'\r\n        WHEN NVL(PRO.GRUPOICMS2, -1) = NVL(ICM.CODTRIB, -2) THEN 'GRUPOICMS2'\r\n        ELSE 'SEM_MAPEAMENTO'\r\n    END AS TIPO_MAPEAMENTO,\r\n    COUNT(*) AS TOTAL_COMBINACOES,\r\n    COUNT(DISTINCT ICM.CODTRIB) AS CODTRIB_DISTINTOS,\r\n    COUNT(DISTINCT PRO.CODPROD) AS PRODUTOS_DISTINTOS,\r\n    COUNT(DISTINCT PRO.NCM) AS NCM_DISTINTOS,\r\n    COUNT(DISTINCT PRO.CODESPECST) AS CEST_DISTINTOS\r\nFROM TGFICM ICM\r\nL",
+  "successfulAttempt": {
+    "baseUrl": "https://api.sankhya.com.br",
+    "endpointPath": "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+    "payloadVariant": "body_serviceName_requestBody_sql",
+    "httpStatus": 200,
+    "responseIsJson": true,
+    "rowCountDetected": 1,
+    "responseBody": {
+      "serviceName": "DbExplorerSP.executeQuery",
+      "status": "1",
+      "pendingPrinting": "false",
+      "transactionId": "E7FEC11D1F9557928C7E833FB3CC75FA",
+      "responseBody": {
+        "fieldsMetadata": [
+          {
+            "name": "TIPO_MAPEAMENTO",
+            "description": "TIPO_MAPEAMENTO",
+            "order": 1,
+            "userType": "S"
+          },
+          {
+            "name": "TOTAL_COMBINACOES",
+            "description": "TOTAL_COMBINACOES",
+            "order": 2,
+            "userType": "I"
+          },
+          {
+            "name": "CODTRIB_DISTINTOS",
+            "description": "CODTRIB_DISTINTOS",
+            "order": 3,
+            "userType": "I"
+          },
+          {
+            "name": "PRODUTOS_DISTINTOS",
+            "description": "PRODUTOS_DISTINTOS",
+            "order": 4,
+            "userType": "I"
+          },
+          {
+            "name": "NCM_DISTINTOS",
+            "description": "NCM_DISTINTOS",
+            "order": 5,
+            "userType": "I"
+          },
+          {
+            "name": "CEST_DISTINTOS",
+            "description": "CEST_DISTINTOS",
+            "order": 6,
+            "userType": "I"
+          }
+        ],
+        "rows": [
+          [
+            "SEM_MAPEAMENTO",
+            2134,
+            1,
+            0,
+            0,
+            0
+          ]
+        ],
+        "burstLimit": false,
+        "timeQuery": "24,195s",
+        "timeResultSet": "1ms"
+      }
+    },
+    "requestPayload": {
+      "serviceName": "DbExplorerSP.executeQuery",
+      "requestBody": {
+        "sql": "SELECT\r\n    CASE\r\n        WHEN NVL(PRO.GRUPOICMS, -1) = NVL(ICM.CODTRIB, -2) THEN 'GRUPOICMS'\r\n        WHEN NVL(PRO.GRUPOICMS2, -1) = NVL(ICM.CODTRIB, -2) THEN 'GRUPOICMS2'\r\n        ELSE 'SEM_MAPEAMENTO'\r\n    END AS TIPO_MAPEAMENTO,\r\n    COUNT(*) AS TOTAL_COMBINACOES,\r\n    COUNT(DISTINCT ICM.CODTRIB) AS CODTRIB_DISTINTOS,\r\n    COUNT(DISTINCT PRO.CODPROD) AS PRODUTOS_DISTINTOS,\r\n    COUNT(DISTINCT PRO.NCM) AS NCM_DISTINTOS,\r\n    COUNT(DISTINCT PRO.CODESPECST) AS CEST_DISTINTOS\r\nFROM TGFICM ICM\r\nLEFT JOIN TGFPRO PRO\r\n    ON PRO.ATIVO = 'S'\r\n   AND (\r\n        NVL(PRO.GRUPOICMS, -1) = NVL(ICM.CODTRIB, -2)\r\n        OR NVL(PRO.GRUPOICMS2, -1) = NVL(ICM.CODTRIB, -2)\r\n   )\r\nWHERE\r\n    NVL(TO_CHAR(ICM.CODRESTRICAO), '-1') IN ('-1', '0')\r\n    AND NVL(TO_CHAR(ICM.CODRESTRICAO2), '-1') IN ('-1', '0')\r\nGROUP BY\r\n    CASE\r\n        WHEN NVL(PRO.GRUPOICMS, -1) = NVL(ICM.CODTRIB, -2) THEN 'GRUPOICMS'\r\n        WHEN NVL(PRO.GRUPOICMS2, -1) = NVL(ICM.CODTRIB, -2) THEN 'GRUPOICMS2'\r\n        ELSE 'SEM_MAPEAMENTO'\r\n    END\r\nORDER BY TOTAL_COMBINACOES DESC"
+      }
+    }
+  },
+  "attempts": [
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_serviceName_requestBody_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_requestBody_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_requestBody_query",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_only_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+      "payloadVariant": "body_serviceName_requestBody_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+      "payloadVariant": "body_requestBody_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+      "payloadVariant": "body_requestBody_query",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+      "payloadVariant": "body_only_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_serviceName_requestBody_sql",
+      "httpStatus": 200,
+      "ok": true,
+      "rowCountDetected": 1,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"serviceName\":\"DbExplorerSP.executeQuery\",\"status\":\"1\",\"pendingPrinting\":\"false\",\"transactionId\":\"E7FEC11D1F9557928C7E833FB3CC75FA\",\"responseBody\":{\"fieldsMetadata\":[{\"name\":\"TIPO_MAPEAMENTO\",\"description\":\"TIPO_MAPEAMENTO\",\"order\":1,\"userType\":\"S\"},{\"name\":\"TOTAL_COMBINACOES\",\"description\":\"TOTAL_COMBINACOES\",\"order\":2,\"userType\":\"I\"},{\"name\":\"CODTRIB_DISTINTOS\",\"description\":\"CODTRIB_DISTINTOS\",\"order\":3,\"userType\":\"I\"},{\"name\":\"PRODUTOS_DISTINTOS\",\"description\":\"PRODUTOS_DISTINTOS\",\"order\":4,\"userType\":\"I\"},{\"name\":\"NCM_DISTINTOS\",\"description\":\"NCM_DISTINTOS\",\"order\":5,\"userType\":\"I\"},{\"name\":\"CEST_DISTINTOS\",\"description\":\"CEST_DISTINTOS\",\"order\":6,\"userType\":\"I\"}],\"rows\":[[\"SEM_MAPEAMENTO\",2134,1,0,0,0]],\"burstLimit\":false,\"timeQuery\":\"24,195s\",\"timeResultSet\":\"1ms\"}}"
+    }
+  ]
+}

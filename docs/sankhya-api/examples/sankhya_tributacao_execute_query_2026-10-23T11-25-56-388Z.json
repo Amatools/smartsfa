@@ -1,0 +1,812 @@
+{
+  "marker": "TRIBUTACAO_EXECUTE_QUERY_PROBE",
+  "ok": true,
+  "tenantId": "self_T8oqTD0UBtWATPbITOGsqAEZt3d2_smartsfa-enterprise-teste",
+  "environment": "prod",
+  "baseUrlCandidates": [
+    "https://api.sankhya.com.br"
+  ],
+  "endpointCandidates": [
+    "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+    "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+    "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+    "/gateway/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+    "/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery"
+  ],
+  "sqlFile": "g:\\smartsfa\\docs\\sankhya-api\\examples\\tributacao_diagnostico_tgficm_colunas.sql",
+  "sqlPreview": "SELECT\r\n    COLUMN_ID,\r\n    COLUMN_NAME,\r\n    DATA_TYPE\r\nFROM ALL_TAB_COLUMNS\r\nWHERE TABLE_NAME = 'TGFICM'\r\nORDER BY COLUMN_ID",
+  "successfulAttempt": {
+    "baseUrl": "https://api.sankhya.com.br",
+    "endpointPath": "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+    "payloadVariant": "body_serviceName_requestBody_sql",
+    "httpStatus": 200,
+    "responseIsJson": true,
+    "rowCountDetected": 131,
+    "responseBody": {
+      "serviceName": "DbExplorerSP.executeQuery",
+      "status": "1",
+      "pendingPrinting": "false",
+      "transactionId": "FB71CA7ADA701D63F273293DDADF1ED6",
+      "responseBody": {
+        "fieldsMetadata": [
+          {
+            "name": "COLUMN_ID",
+            "description": "COLUMN_ID",
+            "order": 1,
+            "userType": "I"
+          },
+          {
+            "name": "COLUMN_NAME",
+            "description": "COLUMN_NAME",
+            "order": 2,
+            "userType": "S"
+          },
+          {
+            "name": "DATA_TYPE",
+            "description": "DATA_TYPE",
+            "order": 3,
+            "userType": "S"
+          }
+        ],
+        "rows": [
+          [
+            1,
+            "UFORIG",
+            "NUMBER"
+          ],
+          [
+            2,
+            "UFDEST",
+            "NUMBER"
+          ],
+          [
+            3,
+            "TIPRESTRICAO",
+            "VARCHAR2"
+          ],
+          [
+            4,
+            "CODRESTRICAO",
+            "NUMBER"
+          ],
+          [
+            5,
+            "TIPRESTRICAO2",
+            "VARCHAR2"
+          ],
+          [
+            6,
+            "CODRESTRICAO2",
+            "NUMBER"
+          ],
+          [
+            7,
+            "ALIQUOTA",
+            "FLOAT"
+          ],
+          [
+            8,
+            "REDBASE",
+            "FLOAT"
+          ],
+          [
+            9,
+            "ALIQFRETE",
+            "FLOAT"
+          ],
+          [
+            10,
+            "REDBASEFRETE",
+            "FLOAT"
+          ],
+          [
+            11,
+            "MARGLUCRO",
+            "FLOAT"
+          ],
+          [
+            12,
+            "CODTRIB",
+            "NUMBER"
+          ],
+          [
+            13,
+            "CODOBSPADRAO",
+            "NUMBER"
+          ],
+          [
+            14,
+            "REPREDBASE",
+            "VARCHAR2"
+          ],
+          [
+            15,
+            "ALIQSUBTRIB",
+            "FLOAT"
+          ],
+          [
+            16,
+            "REDBASEST",
+            "FLOAT"
+          ],
+          [
+            17,
+            "CODTAB",
+            "NUMBER"
+          ],
+          [
+            18,
+            "MAIORBASEST",
+            "VARCHAR2"
+          ],
+          [
+            19,
+            "REPICMS",
+            "VARCHAR2"
+          ],
+          [
+            20,
+            "REDICMS",
+            "VARCHAR2"
+          ],
+          [
+            21,
+            "BASESTRED",
+            "VARCHAR2"
+          ],
+          [
+            22,
+            "OUTORGA",
+            "FLOAT"
+          ],
+          [
+            23,
+            "CONVPRODUZ",
+            "VARCHAR2"
+          ],
+          [
+            24,
+            "MAIORBASEICMS",
+            "VARCHAR2"
+          ],
+          [
+            25,
+            "CODTABICMS",
+            "NUMBER"
+          ],
+          [
+            26,
+            "BASICMMOD",
+            "NUMBER"
+          ],
+          [
+            27,
+            "BASICMSTMOD",
+            "NUMBER"
+          ],
+          [
+            28,
+            "REPREDBASE2",
+            "VARCHAR2"
+          ],
+          [
+            29,
+            "CODTABSTANT",
+            "NUMBER"
+          ],
+          [
+            30,
+            "CODTABSTUFDEST",
+            "NUMBER"
+          ],
+          [
+            31,
+            "MVASTUFDEST",
+            "FLOAT"
+          ],
+          [
+            32,
+            "ALIQUFDEST",
+            "FLOAT"
+          ],
+          [
+            33,
+            "BASESTUFDEST",
+            "VARCHAR2"
+          ],
+          [
+            34,
+            "CODANTECIPST",
+            "VARCHAR2"
+          ],
+          [
+            35,
+            "CSOSN",
+            "NUMBER"
+          ],
+          [
+            36,
+            "ZERAR",
+            "VARCHAR2"
+          ],
+          [
+            37,
+            "PROEMPREGO",
+            "VARCHAR2"
+          ],
+          [
+            38,
+            "STCAT137SP",
+            "CHAR"
+          ],
+          [
+            39,
+            "ZERARSTNEG",
+            "CHAR"
+          ],
+          [
+            40,
+            "REPPERCBASEICMS",
+            "FLOAT"
+          ],
+          [
+            41,
+            "CODMOTDESONERAICMS",
+            "NUMBER"
+          ],
+          [
+            42,
+            "CALCSTEXTRANOTA",
+            "CHAR"
+          ],
+          [
+            43,
+            "CUSCOMICMSBASEST",
+            "CHAR"
+          ],
+          [
+            44,
+            "PERCMINSUBTRIB",
+            "FLOAT"
+          ],
+          [
+            45,
+            "IDALIQ",
+            "NUMBER"
+          ],
+          [
+            46,
+            "TABCFOP",
+            "VARCHAR2"
+          ],
+          [
+            47,
+            "STSUTRI4302014MG",
+            "CHAR"
+          ],
+          [
+            48,
+            "CALCMVAAJUSTADO",
+            "CHAR"
+          ],
+          [
+            49,
+            "ALIQINTDEST",
+            "FLOAT"
+          ],
+          [
+            50,
+            "PERCICMSFCP",
+            "FLOAT"
+          ],
+          [
+            51,
+            "PERCICMSCOMPL",
+            "FLOAT"
+          ],
+          [
+            52,
+            "TIPCALCDIFAL",
+            "NUMBER"
+          ],
+          [
+            53,
+            "PERCREDBASEDEST",
+            "FLOAT"
+          ],
+          [
+            54,
+            "CALCSTDIFALIQ",
+            "CHAR"
+          ],
+          [
+            55,
+            "ALIQESTRANGEIRA",
+            "FLOAT"
+          ],
+          [
+            56,
+            "DESCONSIDERAREDBASE",
+            "VARCHAR2"
+          ],
+          [
+            57,
+            "ICMSUFORIGDIFEMIT",
+            "CHAR"
+          ],
+          [
+            58,
+            "CALCSTSEMDEDICMS",
+            "CHAR"
+          ],
+          [
+            59,
+            "SEQUENCIA",
+            "NUMBER"
+          ],
+          [
+            60,
+            "TIPCALCSTESPEC",
+            "NUMBER"
+          ],
+          [
+            61,
+            "MVASIMPLIFICADO",
+            "CHAR"
+          ],
+          [
+            62,
+            "PERCCARGATRIBMEDIA",
+            "FLOAT"
+          ],
+          [
+            63,
+            "MVAORIGINAL",
+            "CHAR"
+          ],
+          [
+            64,
+            "PERCICMSFCPINT",
+            "FLOAT"
+          ],
+          [
+            65,
+            "PERCSTFCPINT",
+            "FLOAT"
+          ],
+          [
+            66,
+            "ZERARDIFALREM",
+            "CHAR"
+          ],
+          [
+            67,
+            "PERCTRAVAMED",
+            "FLOAT"
+          ],
+          [
+            68,
+            "REPDIFALFCP",
+            "CHAR"
+          ],
+          [
+            69,
+            "CODFORMBASICM",
+            "NUMBER"
+          ],
+          [
+            70,
+            "BASEFCPINT",
+            "VARCHAR2"
+          ],
+          [
+            71,
+            "REDBASEESTRANGEIRA",
+            "FLOAT"
+          ],
+          [
+            72,
+            "PERCREDBASEICMSEFET",
+            "FLOAT"
+          ],
+          [
+            73,
+            "ALIQICMSEFET",
+            "FLOAT"
+          ],
+          [
+            74,
+            "PERCMULTCALCDP",
+            "FLOAT"
+          ],
+          [
+            75,
+            "ICMSDIFPOSITIVA",
+            "CHAR"
+          ],
+          [
+            76,
+            "MARGLUCROEST",
+            "FLOAT"
+          ],
+          [
+            77,
+            "CALCREPREDDENTRO",
+            "VARCHAR2"
+          ],
+          [
+            78,
+            "FORMAREPICMS",
+            "VARCHAR2"
+          ],
+          [
+            79,
+            "CALCDIFICMSDENTRO",
+            "VARCHAR2"
+          ],
+          [
+            80,
+            "PAUTAVLRSTFIXO",
+            "CHAR"
+          ],
+          [
+            81,
+            "CALCSTLIVRECOM",
+            "CHAR"
+          ],
+          [
+            82,
+            "ALIQICMSLIMITECALCST",
+            "FLOAT"
+          ],
+          [
+            83,
+            "CALCSTCONSUTRI",
+            "CHAR"
+          ],
+          [
+            84,
+            "CONSIDIPIVLROPPROP",
+            "CHAR"
+          ],
+          [
+            85,
+            "PERCPMPF",
+            "FLOAT"
+          ],
+          [
+            86,
+            "CODFORMBASDIFAL",
+            "NUMBER"
+          ],
+          [
+            87,
+            "ALIQICMSESPST",
+            "FLOAT"
+          ],
+          [
+            88,
+            "CARACTRIB",
+            "CHAR"
+          ],
+          [
+            89,
+            "FINALIDADE",
+            "CHAR"
+          ],
+          [
+            90,
+            "REGRACALCBCICMSAT",
+            "CHAR"
+          ],
+          [
+            91,
+            "CODFORMBCICMSAT",
+            "NUMBER"
+          ],
+          [
+            92,
+            "ALIQICMSAT",
+            "FLOAT"
+          ],
+          [
+            93,
+            "ALIQICMSATIMP",
+            "FLOAT"
+          ],
+          [
+            94,
+            "ALIQICMSATINT",
+            "FLOAT"
+          ],
+          [
+            95,
+            "REGRADEDICMSAT",
+            "CHAR"
+          ],
+          [
+            96,
+            "PERCUSAQUDECPE",
+            "FLOAT"
+          ],
+          [
+            97,
+            "TIPCUSAQUDECPE",
+            "CHAR"
+          ],
+          [
+            98,
+            "TIPCALCFCPSTESPEC",
+            "NUMBER"
+          ],
+          [
+            99,
+            "CALCREPREDST",
+            "VARCHAR2"
+          ],
+          [
+            100,
+            "CODMOTDESONERAST",
+            "NUMBER"
+          ],
+          [
+            101,
+            "ALIQICMSCARGTRIBRED",
+            "FLOAT"
+          ],
+          [
+            102,
+            "ALIQSTCARGTRIBRED",
+            "FLOAT"
+          ],
+          [
+            103,
+            "CALPERREDBASEICMS",
+            "VARCHAR2"
+          ],
+          [
+            104,
+            "CALPERREDBASEST",
+            "VARCHAR2"
+          ],
+          [
+            105,
+            "CODTABSTPMPF",
+            "NUMBER"
+          ],
+          [
+            106,
+            "CODTABSTFARPOP",
+            "NUMBER"
+          ],
+          [
+            107,
+            "AD_REGRAUT",
+            "VARCHAR2"
+          ],
+          [
+            108,
+            "DESICMSSN",
+            "CHAR"
+          ],
+          [
+            109,
+            "PERCUSAQUDECPEEST",
+            "FLOAT"
+          ],
+          [
+            110,
+            "CALCSTDECPR",
+            "CHAR"
+          ],
+          [
+            111,
+            "CREDPRESDECPR",
+            "FLOAT"
+          ],
+          [
+            112,
+            "FORMCALFCPDIFAL",
+            "NUMBER"
+          ],
+          [
+            113,
+            "CODFORMCALCDIFAL",
+            "NUMBER"
+          ],
+          [
+            114,
+            "CALCREDPREICMCON",
+            "CHAR"
+          ],
+          [
+            115,
+            "PERCREDPREICMCON",
+            "FLOAT"
+          ],
+          [
+            116,
+            "NAOCONSIDMVA",
+            "CHAR"
+          ],
+          [
+            117,
+            "MOTREDADREM",
+            "NUMBER"
+          ],
+          [
+            118,
+            "PERCICMSMONORET",
+            "FLOAT"
+          ],
+          [
+            119,
+            "PERCALIQADREMICMS",
+            "FLOAT"
+          ],
+          [
+            120,
+            "ALIQADREMICMS",
+            "FLOAT"
+          ],
+          [
+            121,
+            "CONSPMVABCICM",
+            "CHAR"
+          ],
+          [
+            122,
+            "CALCALIFCPST",
+            "CHAR"
+          ],
+          [
+            123,
+            "CODBEN",
+            "VARCHAR2"
+          ],
+          [
+            124,
+            "PERCREDPR",
+            "FLOAT"
+          ],
+          [
+            125,
+            "ALIQCONSFIN",
+            "FLOAT"
+          ],
+          [
+            126,
+            "CODFORMVA",
+            "NUMBER"
+          ],
+          [
+            127,
+            "DTINICIOVIGENCIA",
+            "TIMESTAMP(6)"
+          ],
+          [
+            128,
+            "DTFIMVIGENCIA",
+            "TIMESTAMP(6)"
+          ],
+          [
+            129,
+            "GERADIFZERADO",
+            "CHAR"
+          ],
+          [
+            130,
+            "DESCREDBST",
+            "CHAR"
+          ],
+          [
+            131,
+            "PERCICMSPART",
+            "FLOAT"
+          ]
+        ],
+        "burstLimit": false,
+        "timeQuery": "175ms",
+        "timeResultSet": "1ms"
+      }
+    },
+    "requestPayload": {
+      "serviceName": "DbExplorerSP.executeQuery",
+      "requestBody": {
+        "sql": "SELECT\r\n    COLUMN_ID,\r\n    COLUMN_NAME,\r\n    DATA_TYPE\r\nFROM ALL_TAB_COLUMNS\r\nWHERE TABLE_NAME = 'TGFICM'\r\nORDER BY COLUMN_ID"
+      }
+    }
+  },
+  "attempts": [
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_serviceName_requestBody_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_requestBody_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_requestBody_query",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_only_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+      "payloadVariant": "body_serviceName_requestBody_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+      "payloadVariant": "body_requestBody_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+      "payloadVariant": "body_requestBody_query",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+      "payloadVariant": "body_only_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_serviceName_requestBody_sql",
+      "httpStatus": 200,
+      "ok": true,
+      "rowCountDetected": 131,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"serviceName\":\"DbExplorerSP.executeQuery\",\"status\":\"1\",\"pendingPrinting\":\"false\",\"transactionId\":\"FB71CA7ADA701D63F273293DDADF1ED6\",\"responseBody\":{\"fieldsMetadata\":[{\"name\":\"COLUMN_ID\",\"description\":\"COLUMN_ID\",\"order\":1,\"userType\":\"I\"},{\"name\":\"COLUMN_NAME\",\"description\":\"COLUMN_NAME\",\"order\":2,\"userType\":\"S\"},{\"name\":\"DATA_TYPE\",\"description\":\"DATA_TYPE\",\"order\":3,\"userType\":\"S\"}],\"rows\":[[1,\"UFORIG\",\"NUMBER\"],[2,\"UFDEST\",\"NUMBER\"],[3,\"TIPRESTRICAO\",\"VARCHAR2\"],[4,\"CODRESTRICAO\",\"NUMBER\"],[5,\"TIPRESTRICAO2\",\"VARCHAR2\"],[6,\"CODRESTRICAO2\",\"NUMBER\"],[7,\"ALIQUOTA\",\"FLOAT\"],[8,\"REDBASE\",\"FLOAT\"],[9,\"ALIQFRETE\",\"FLOAT\"],[10,\"REDBASEFRETE\",\"FLOAT\"],[11,\"MARGLUCRO\",\"FLOAT\"],[12,\"CODTRIB\",\"NUMBER\"],[13,\"CODOBSPADRAO\",\"NUMBER\"],[14,\"REPREDBASE\",\"VARCHAR2\"],[15,\"ALIQSUBTRIB\",\"FLOAT\"],[16,\"REDBASEST\",\"FLOAT\"],[17,\"CODTAB\",\"NUMBER\"],[18,\"MAIORBASEST\",\"VARCHAR2\"],[19,\"REPICMS\",\"VARCHAR2\"],[20,\"REDICMS\",\"VARCHAR2\"],[21,\"BASESTRED\",\"VARCHAR2\"],[22,\"OUTORGA\",\"FLOAT\"],[23,\"CONVPRODUZ\",\"VARCHAR2\"],[24,\"MAIORBASEICMS\",\"VARCHAR2\"],[25,\"CODTABICMS\",\"NUMBER\"],[26,\"BASICMMOD\",\"NUMBER\"],[27,\"BASICMSTMOD\",\"NUMBER\"],[28,\"REPREDBASE2\",\"VARCHAR2\"],[29,\"CODTABSTANT\",\"NUMBER\"],[30,\"CODTABSTUFDEST\",\"NUMBER\"]"
+    }
+  ]
+}

@@ -1,0 +1,176 @@
+{
+  "marker": "TRIBUTACAO_EXECUTE_QUERY_PROBE",
+  "ok": true,
+  "tenantId": "self_T8oqTD0UBtWATPbITOGsqAEZt3d2_smartsfa-enterprise-teste",
+  "environment": "prod",
+  "baseUrlCandidates": [
+    "https://api.sankhya.com.br"
+  ],
+  "endpointCandidates": [
+    "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+    "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+    "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+    "/gateway/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+    "/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery"
+  ],
+  "sqlFile": "g:\\smartsfa\\docs\\sankhya-api\\examples\\tributacao_diagnostico_icm_distribuicao_genericos.sql",
+  "sqlPreview": "SELECT\r\n    COUNT(*) AS TOTAL_LINHAS,\r\n    COUNT(DISTINCT NVL(CODTRIB, -1)) AS CODTRIB_DISTINTOS,\r\n    COUNT(DISTINCT NVL(IDALIQ, -1)) AS IDALIQ_DISTINTOS,\r\n    SUM(CASE WHEN NVL(CODTRIB, -1) = 0 THEN 1 ELSE 0 END) AS CODTRIB_ZERO,\r\n    SUM(CASE WHEN NVL(IDALIQ, -1) > 0 THEN 1 ELSE 0 END) AS COM_IDALIQ\r\nFROM TGFICM\r\nWHERE NVL(TO_CHAR(CODRESTRICAO), '-1') IN ('-1', '0')\r\n  AND NVL(TO_CHAR(CODRESTRICAO2), '-1') IN ('-1', '0')",
+  "successfulAttempt": {
+    "baseUrl": "https://api.sankhya.com.br",
+    "endpointPath": "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+    "payloadVariant": "body_serviceName_requestBody_sql",
+    "httpStatus": 200,
+    "responseIsJson": true,
+    "rowCountDetected": 1,
+    "responseBody": {
+      "serviceName": "DbExplorerSP.executeQuery",
+      "status": "1",
+      "pendingPrinting": "false",
+      "transactionId": "8E6F2F92AE90F9120135CC523B2776AD",
+      "responseBody": {
+        "fieldsMetadata": [
+          {
+            "name": "TOTAL_LINHAS",
+            "description": "TOTAL_LINHAS",
+            "order": 1,
+            "userType": "I"
+          },
+          {
+            "name": "CODTRIB_DISTINTOS",
+            "description": "CODTRIB_DISTINTOS",
+            "order": 2,
+            "userType": "I"
+          },
+          {
+            "name": "IDALIQ_DISTINTOS",
+            "description": "IDALIQ_DISTINTOS",
+            "order": 3,
+            "userType": "I"
+          },
+          {
+            "name": "CODTRIB_ZERO",
+            "description": "CODTRIB_ZERO",
+            "order": 4,
+            "userType": "I"
+          },
+          {
+            "name": "COM_IDALIQ",
+            "description": "COM_IDALIQ",
+            "order": 5,
+            "userType": "I"
+          }
+        ],
+        "rows": [
+          [
+            2134,
+            1,
+            2134,
+            2134,
+            2134
+          ]
+        ],
+        "burstLimit": false,
+        "timeQuery": "8ms",
+        "timeResultSet": "1ms"
+      }
+    },
+    "requestPayload": {
+      "serviceName": "DbExplorerSP.executeQuery",
+      "requestBody": {
+        "sql": "SELECT\r\n    COUNT(*) AS TOTAL_LINHAS,\r\n    COUNT(DISTINCT NVL(CODTRIB, -1)) AS CODTRIB_DISTINTOS,\r\n    COUNT(DISTINCT NVL(IDALIQ, -1)) AS IDALIQ_DISTINTOS,\r\n    SUM(CASE WHEN NVL(CODTRIB, -1) = 0 THEN 1 ELSE 0 END) AS CODTRIB_ZERO,\r\n    SUM(CASE WHEN NVL(IDALIQ, -1) > 0 THEN 1 ELSE 0 END) AS COM_IDALIQ\r\nFROM TGFICM\r\nWHERE NVL(TO_CHAR(CODRESTRICAO), '-1') IN ('-1', '0')\r\n  AND NVL(TO_CHAR(CODRESTRICAO2), '-1') IN ('-1', '0')"
+      }
+    }
+  },
+  "attempts": [
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_serviceName_requestBody_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_requestBody_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_requestBody_query",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_only_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+      "payloadVariant": "body_serviceName_requestBody_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+      "payloadVariant": "body_requestBody_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+      "payloadVariant": "body_requestBody_query",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+      "payloadVariant": "body_only_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_serviceName_requestBody_sql",
+      "httpStatus": 200,
+      "ok": true,
+      "rowCountDetected": 1,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"serviceName\":\"DbExplorerSP.executeQuery\",\"status\":\"1\",\"pendingPrinting\":\"false\",\"transactionId\":\"8E6F2F92AE90F9120135CC523B2776AD\",\"responseBody\":{\"fieldsMetadata\":[{\"name\":\"TOTAL_LINHAS\",\"description\":\"TOTAL_LINHAS\",\"order\":1,\"userType\":\"I\"},{\"name\":\"CODTRIB_DISTINTOS\",\"description\":\"CODTRIB_DISTINTOS\",\"order\":2,\"userType\":\"I\"},{\"name\":\"IDALIQ_DISTINTOS\",\"description\":\"IDALIQ_DISTINTOS\",\"order\":3,\"userType\":\"I\"},{\"name\":\"CODTRIB_ZERO\",\"description\":\"CODTRIB_ZERO\",\"order\":4,\"userType\":\"I\"},{\"name\":\"COM_IDALIQ\",\"description\":\"COM_IDALIQ\",\"order\":5,\"userType\":\"I\"}],\"rows\":[[2134,1,2134,2134,2134]],\"burstLimit\":false,\"timeQuery\":\"8ms\",\"timeResultSet\":\"1ms\"}}"
+    }
+  ]
+}

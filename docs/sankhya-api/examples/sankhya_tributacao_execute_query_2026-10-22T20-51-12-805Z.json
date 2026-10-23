@@ -1,0 +1,287 @@
+{
+  "marker": "TRIBUTACAO_EXECUTE_QUERY_PROBE",
+  "ok": true,
+  "tenantId": "self_T8oqTD0UBtWATPbITOGsqAEZt3d2_smartsfa-enterprise-teste",
+  "environment": "prod",
+  "baseUrlCandidates": [
+    "https://api.sankhya.com.br"
+  ],
+  "endpointCandidates": [
+    "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+    "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+    "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+    "/gateway/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+    "/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery"
+  ],
+  "sqlFile": "g:\\smartsfa\\docs\\sankhya-api\\examples\\tributacao_diagnostico_resumo.sql",
+  "sqlPreview": "SELECT\r\n    NVL(TO_CHAR(ICM.TIPRESTRICAO), '-') AS TIPRESTRICAO,\r\n    NVL(TO_CHAR(ICM.TIPRESTRICAO2), '-') AS TIPRESTRICAO2,\r\n    COUNT(*) AS TOTAL,\r\n    SUM(\r\n        CASE\r\n            WHEN NVL(TO_CHAR(ICM.CODRESTRICAO), '-1') IN ('-1', '0') THEN 1\r\n            ELSE 0\r\n        END\r\n    ) AS CODRESTRICAO_GENERICO,\r\n    SUM(\r\n        CASE\r\n            WHEN NVL(TO_CHAR(ICM.CODRESTRICAO2), '-1') IN ('-1', '0') THEN 1\r\n            ELSE 0\r\n        END\r\n    ) AS CODRESTRICAO2_GENERICO,\r\n    SUM(\r\n    ",
+  "successfulAttempt": {
+    "baseUrl": "https://api.sankhya.com.br",
+    "endpointPath": "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+    "payloadVariant": "body_serviceName_requestBody_sql",
+    "httpStatus": 200,
+    "responseIsJson": true,
+    "rowCountDetected": 10,
+    "responseBody": {
+      "serviceName": "DbExplorerSP.executeQuery",
+      "status": "1",
+      "pendingPrinting": "false",
+      "transactionId": "F5D80E05E30605392DD1ABD4649F465C",
+      "responseBody": {
+        "fieldsMetadata": [
+          {
+            "name": "TIPRESTRICAO",
+            "description": "TIPRESTRICAO",
+            "order": 1,
+            "userType": "S"
+          },
+          {
+            "name": "TIPRESTRICAO2",
+            "description": "TIPRESTRICAO2",
+            "order": 2,
+            "userType": "S"
+          },
+          {
+            "name": "TOTAL",
+            "description": "TOTAL",
+            "order": 3,
+            "userType": "I"
+          },
+          {
+            "name": "CODRESTRICAO_GENERICO",
+            "description": "CODRESTRICAO_GENERICO",
+            "order": 4,
+            "userType": "I"
+          },
+          {
+            "name": "CODRESTRICAO2_GENERICO",
+            "description": "CODRESTRICAO2_GENERICO",
+            "order": 5,
+            "userType": "I"
+          },
+          {
+            "name": "LINHAS_ALIQUOTA_ZERO",
+            "description": "LINHAS_ALIQUOTA_ZERO",
+            "order": 6,
+            "userType": "I"
+          },
+          {
+            "name": "CODTRIB_DISTINTOS",
+            "description": "CODTRIB_DISTINTOS",
+            "order": 7,
+            "userType": "I"
+          },
+          {
+            "name": "IDALIQ_DISTINTOS",
+            "description": "IDALIQ_DISTINTOS",
+            "order": 8,
+            "userType": "I"
+          }
+        ],
+        "rows": [
+          [
+            "S",
+            "S",
+            728,
+            728,
+            728,
+            0,
+            1,
+            728
+          ],
+          [
+            "N",
+            "S",
+            703,
+            703,
+            703,
+            0,
+            1,
+            703
+          ],
+          [
+            "X",
+            "S",
+            703,
+            703,
+            703,
+            0,
+            1,
+            703
+          ],
+          [
+            "U",
+            "S",
+            37,
+            0,
+            37,
+            37,
+            3,
+            37
+          ],
+          [
+            "I",
+            "S",
+            27,
+            0,
+            27,
+            0,
+            3,
+            27
+          ],
+          [
+            "H",
+            "S",
+            18,
+            0,
+            18,
+            0,
+            1,
+            18
+          ],
+          [
+            "O",
+            "S",
+            8,
+            0,
+            8,
+            8,
+            2,
+            8
+          ],
+          [
+            "K",
+            "S",
+            2,
+            0,
+            2,
+            1,
+            2,
+            2
+          ],
+          [
+            "X",
+            "O",
+            1,
+            1,
+            0,
+            0,
+            1,
+            1
+          ],
+          [
+            "E",
+            "K",
+            1,
+            0,
+            0,
+            0,
+            1,
+            1
+          ]
+        ],
+        "burstLimit": false,
+        "timeQuery": "17ms",
+        "timeResultSet": "1ms"
+      }
+    },
+    "requestPayload": {
+      "serviceName": "DbExplorerSP.executeQuery",
+      "requestBody": {
+        "sql": "SELECT\r\n    NVL(TO_CHAR(ICM.TIPRESTRICAO), '-') AS TIPRESTRICAO,\r\n    NVL(TO_CHAR(ICM.TIPRESTRICAO2), '-') AS TIPRESTRICAO2,\r\n    COUNT(*) AS TOTAL,\r\n    SUM(\r\n        CASE\r\n            WHEN NVL(TO_CHAR(ICM.CODRESTRICAO), '-1') IN ('-1', '0') THEN 1\r\n            ELSE 0\r\n        END\r\n    ) AS CODRESTRICAO_GENERICO,\r\n    SUM(\r\n        CASE\r\n            WHEN NVL(TO_CHAR(ICM.CODRESTRICAO2), '-1') IN ('-1', '0') THEN 1\r\n            ELSE 0\r\n        END\r\n    ) AS CODRESTRICAO2_GENERICO,\r\n    SUM(\r\n        CASE\r\n            WHEN NVL(ICM.ALIQSUBTRIB, 0) = 0\r\n             AND NVL(ICM.ALIQINTDEST, 0) = 0\r\n             AND NVL(ICM.ALIQUOTA, 0) = 0\r\n            THEN 1\r\n            ELSE 0\r\n        END\r\n    ) AS LINHAS_ALIQUOTA_ZERO,\r\n    COUNT(DISTINCT NVL(TO_CHAR(ICM.CODTRIB), '-')) AS CODTRIB_DISTINTOS,\r\n    COUNT(DISTINCT NVL(TO_CHAR(ICM.IDALIQ), '-')) AS IDALIQ_DISTINTOS\r\nFROM TGFICM ICM\r\nGROUP BY\r\n    NVL(TO_CHAR(ICM.TIPRESTRICAO), '-'),\r\n    NVL(TO_CHAR(ICM.TIPRESTRICAO2), '-')\r\nORDER BY TOTAL DESC"
+      }
+    }
+  },
+  "attempts": [
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_serviceName_requestBody_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_requestBody_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_requestBody_query",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_only_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+      "payloadVariant": "body_serviceName_requestBody_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+      "payloadVariant": "body_requestBody_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+      "payloadVariant": "body_requestBody_query",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json",
+      "payloadVariant": "body_only_sql",
+      "httpStatus": 404,
+      "ok": false,
+      "rowCountDetected": 0,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"statusCode\":404,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Item não encontrado!\",\"details\":\"O path solicitado não existe!\"}}"
+    },
+    {
+      "baseUrl": "https://api.sankhya.com.br",
+      "endpointPath": "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "payloadVariant": "body_serviceName_requestBody_sql",
+      "httpStatus": 200,
+      "ok": true,
+      "rowCountDetected": 10,
+      "responseIsJson": true,
+      "responseBodyPreview": "{\"serviceName\":\"DbExplorerSP.executeQuery\",\"status\":\"1\",\"pendingPrinting\":\"false\",\"transactionId\":\"F5D80E05E30605392DD1ABD4649F465C\",\"responseBody\":{\"fieldsMetadata\":[{\"name\":\"TIPRESTRICAO\",\"description\":\"TIPRESTRICAO\",\"order\":1,\"userType\":\"S\"},{\"name\":\"TIPRESTRICAO2\",\"description\":\"TIPRESTRICAO2\",\"order\":2,\"userType\":\"S\"},{\"name\":\"TOTAL\",\"description\":\"TOTAL\",\"order\":3,\"userType\":\"I\"},{\"name\":\"CODRESTRICAO_GENERICO\",\"description\":\"CODRESTRICAO_GENERICO\",\"order\":4,\"userType\":\"I\"},{\"name\":\"CODRESTRICAO2_GENERICO\",\"description\":\"CODRESTRICAO2_GENERICO\",\"order\":5,\"userType\":\"I\"},{\"name\":\"LINHAS_ALIQUOTA_ZERO\",\"description\":\"LINHAS_ALIQUOTA_ZERO\",\"order\":6,\"userType\":\"I\"},{\"name\":\"CODTRIB_DISTINTOS\",\"description\":\"CODTRIB_DISTINTOS\",\"order\":7,\"userType\":\"I\"},{\"name\":\"IDALIQ_DISTINTOS\",\"description\":\"IDALIQ_DISTINTOS\",\"order\":8,\"userType\":\"I\"}],\"rows\":[[\"S\",\"S\",728,728,728,0,1,728],[\"N\",\"S\",703,703,703,0,1,703],[\"X\",\"S\",703,703,703,0,1,703],[\"U\",\"S\",37,0,37,37,3,37],[\"I\",\"S\",27,0,27,0,3,27],[\"H\",\"S\",18,0,18,0,1,18],[\"O\",\"S\",8,0,8,8,2,8],[\"K\",\"S\",2,0,2,1,2,2],[\"X\",\"O\",1,1,0,0,1,1],[\"E\",\"K\",1,0,0,0,1,1]],\"burstLimit\":false,\"timeQuery\":\"17ms\",\"timeResultSet\":\"1ms\"}}"
+    }
+  ]
+}
