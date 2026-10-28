@@ -11,6 +11,7 @@ import '../../../../core/models/app_identity.dart';
 import '../../../../core/data/firestore/firestore_cliente_repository.dart';
 import '../../../../core/data/firestore/firestore_customer_price_table_assignment_repository.dart';
 import '../../../../core/data/firestore/firestore_product_base_price_repository.dart';
+import '../../../../core/data/firestore/firestore_tax_operation_profile_repository.dart';
 import '../../../../core/data/firestore/firestore_tax_rule_repository.dart';
 import '../../../../core/models/domain_types.dart';
 import '../../../../core/models/cliente.dart';
@@ -24,38 +25,27 @@ import '../../../../core/services/catalog_incremental_sync_service.dart';
 import '../../../../core/services/catalog_snapshot_store.dart';
 import '../../../../core/services/offline_sync_queue.dart';
 import '../../../../core/models/produto.dart';
-import '../../../../core/models/customer_price_table_assignment.dart';
 import '../../../auth/services/tenant_membership_service.dart';
 import '../../../auth/services/workspace_profile_service.dart';
-import '../../../precos/presentation/services/default_price_table_guard.dart';
 import '../../../precos/services/product_tax_engine_service.dart';
+import '../models/computed_pedido_item_values.dart';
+import '../services/pedido_cliente_lookup_service.dart';
+import '../services/pedido_commercial_pricing_service.dart';
+import '../services/pedido_discount_controller_manager.dart';
+import '../services/pedido_format_utils.dart';
+import '../services/pedido_item_pricing_service.dart';
+import '../services/pedido_product_search_service.dart';
+import '../widgets/pedido_customer_selector_section.dart';
+import '../widgets/pedido_item_tax_details_dialog.dart';
+import '../widgets/pedido_list_widgets.dart';
+import '../widgets/pedido_mobile_add_item_sheet.dart';
 
 String _pedidoDisplayNumber(String id) {
-  final normalized = id.trim();
-  if (normalized.isEmpty) {
-    return '-';
-  }
-
-  final parts = normalized.split('_');
-  final candidate = parts.isNotEmpty ? parts.last.trim() : normalized;
-  if (candidate.isNotEmpty && RegExp(r'^\d+$').hasMatch(candidate)) {
-    return candidate;
-  }
-
-  final digits = RegExp(r'\d+')
-      .allMatches(normalized)
-      .map((m) => m.group(0))
-      .whereType<String>()
-      .join();
-  if (digits.isNotEmpty) {
-    return digits;
-  }
-
-  return normalized;
+  return PedidoFormatUtils.pedidoDisplayNumber(id);
 }
 
 String _formatMoneyBr(double value) {
-  return value.toStringAsFixed(2).replaceAll('.', ',');
+  return PedidoFormatUtils.formatMoneyBr(value);
 }
 
 class PedidosPage extends StatefulWidget {
@@ -114,6 +104,9 @@ class _PedidosPageState extends State<PedidosPage> {
       produtoRepository: widget.produtoRepository,
       basePriceRepository: FirestoreProductBasePriceRepository(firestore),
       taxRuleRepository: FirestoreTaxRuleRepository(firestore),
+      taxOperationProfileRepository: FirestoreTaxOperationProfileRepository(
+        firestore,
+      ),
     );
     _loadRepresentedContextIfNeeded();
   }
@@ -132,7 +125,7 @@ class _PedidosPageState extends State<PedidosPage> {
   }
 
   double _roundCurrency(double value) {
-    return (value * 100).roundToDouble() / 100;
+    return PedidoFormatUtils.roundCurrency(value);
   }
 
   double _totalQuantity(List<PedidoItem> itens) {
@@ -1033,7 +1026,7 @@ class _PedidosPageState extends State<PedidosPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _HeaderCard(
+                        PedidoHeaderCard(
                           title: 'Pedidos',
                           subtitle: 'Lista de Pedidos.',
                           actionLabel: _creatingDraft
@@ -1048,13 +1041,13 @@ class _PedidosPageState extends State<PedidosPage> {
                         ],
                         const SizedBox(height: 16),
                         if (pedidos.isEmpty)
-                          const _EmptyState(
+                          const PedidoEmptyState(
                             title: 'Nenhum pedido carregado',
                             subtitle: 'Os pedidos locais aparecerão aqui assim que a fila for preenchida.',
                           )
                         else
                           ...pedidos.map(
-                            (entry) => _PedidoCard(
+                            (entry) => PedidoCard(
                               entry.pedido,
                               syncedRemotely: entry.syncedRemotely,
                               selected: false,
@@ -1117,119 +1110,7 @@ class _RepresentedOriginContextOption {
   }
 }
 
-class _HeaderCard extends StatelessWidget {
-  const _HeaderCard({
-    required this.title,
-    required this.subtitle,
-    required this.actionLabel,
-    required this.onAction,
-    this.actionEnabled = true,
-  });
 
-  final String title;
-  final String subtitle;
-  final String actionLabel;
-  final VoidCallback onAction;
-  final bool actionEnabled;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: Theme.of(context).textTheme.headlineSmall),
-            const SizedBox(height: 8),
-            Text(subtitle),
-            const SizedBox(height: 10),
-            FilledButton(
-              onPressed: actionEnabled ? onAction : null,
-              child: Text(actionLabel),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _PedidoCard extends StatelessWidget {
-  const _PedidoCard(
-    this.pedido, {
-    required this.syncedRemotely,
-    required this.selected,
-    required this.onTap,
-    required this.onDelete,
-  });
-
-  final Pedido pedido;
-  final bool syncedRemotely;
-  final bool selected;
-  final VoidCallback onTap;
-  final VoidCallback onDelete;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      margin: const EdgeInsets.only(bottom: 12),
-      color: selected
-          ? Theme.of(context).colorScheme.surfaceContainerHighest
-                .withValues(alpha: 0.45)
-          : null,
-      child: ListTile(
-        onTap: onTap,
-        leading: const Icon(Icons.receipt_long_outlined),
-        title: Text('Pedido ${_pedidoDisplayNumber(pedido.id)}'),
-        subtitle: Text(
-          '${pedido.origemPedido.label} · ${pedido.statusFila.label} · ${pedido.clienteReferencia?.nomeSnapshot ?? '-'}\n'
-          'Itens: ${pedido.itens.length} · Quantidade: ${pedido.totalItens.toStringAsFixed(2)} · Total: R\$ ${_formatMoneyBr(pedido.totalBruto)}\n'
-          'Forma de pagamento: ${((pedido.formaPagamento ?? '').trim().isEmpty ? '-' : pedido.formaPagamento)}\n'
-          'Finalidade: ${pedido.salePurpose.label}\n'
-          'Origem empresa: ${pedido.originCompanyUnitLabel ?? '-'}${(pedido.originCompanyUf ?? '').trim().isEmpty ? '' : ' (${pedido.originCompanyUf})'}\n'
-          'Sync: ${syncedRemotely ? 'sincronizado' : 'pendente'}',
-        ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(
-              tooltip: 'Excluir pedido',
-              icon: const Icon(Icons.delete_outline),
-              onPressed: onDelete,
-            ),
-            const Icon(Icons.chevron_right),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.title, required this.subtitle});
-
-  final String title;
-  final String subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 8),
-            Text(subtitle),
-          ],
-        ),
-      ),
-    );
-  }
-}
 
 class _PedidoInlineEditor extends StatefulWidget {
   const _PedidoInlineEditor({
@@ -1287,9 +1168,9 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
   final FocusNode _searchFocusNode = FocusNode();
   final TextEditingController _customerController = TextEditingController();
   final FocusNode _customerFocusNode = FocusNode();
-  final Map<String, List<TextEditingController>> _discountControllersByItemId =
-      <String, List<TextEditingController>>{};
-  final Map<String, int> _discountApplyRevisionByItemId = <String, int>{};
+  final PedidoDiscountControllerManager _discountControllerManager =
+      PedidoDiscountControllerManager();
+  bool _addingProductInFlight = false;
   List<PedidoItem> _items = const [];
   List<Cliente> _clientes = const [];
   List<PaymentConditionRule> _paymentConditionRules =
@@ -1314,7 +1195,18 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
   final WorkspaceProfileService _workspaceProfileService =
       WorkspaceProfileService(FirebaseFirestore.instance);
   final CatalogSnapshotStore _catalogSnapshotStore = CatalogSnapshotStore();
-  List<CustomerPriceTableAssignment>? _cachedAssignments;
+  late final PedidoClienteLookupService _clienteLookupService =
+      PedidoClienteLookupService(
+        clienteRepository: widget.clienteRepository,
+        catalogSnapshotStore: _catalogSnapshotStore,
+      );
+  late final PedidoItemPricingService _itemPricingService =
+      PedidoItemPricingService(
+        clienteRepository: widget.clienteRepository,
+        customerPriceTableAssignmentRepository:
+            widget.customerPriceTableAssignmentRepository,
+        taxEngineService: widget.taxEngineService,
+      );
 
   String? _effectiveRepresentedCompanyIdForWidget(_PedidoInlineEditor source) {
     final fromOrder = (source.pedido?.representedCompanyId ?? '').trim();
@@ -1362,7 +1254,7 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
     final newScope = _effectiveRepresentedCompanyId;
 
     if (oldWidget.tenantId != widget.tenantId) {
-      _cachedAssignments = null;
+      _itemPricingService.invalidateAssignmentsCache();
       _loadClientes();
       _resetScopedPoliciesState();
       _loadCommercialRules();
@@ -1549,7 +1441,9 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
     }
 
     try {
-      final approved = await _resolveApprovedClientes(tenantId);
+      final approved = await _clienteLookupService.resolveApprovedClientes(
+        tenantId,
+      );
 
       if (!mounted) {
         return;
@@ -1599,55 +1493,11 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
     }
   }
 
-  Future<List<Cliente>> _resolveApprovedClientes(String tenantId) async {
-    final cachedPayloads = await _catalogSnapshotStore.readAll(
-      tenantId: tenantId,
-      module: CatalogSyncModule.clientes,
-    );
-    if (cachedPayloads.isNotEmpty) {
-      final cachedClientes = <Cliente>[];
-      for (final payload in cachedPayloads) {
-        try {
-          cachedClientes.add(Cliente.fromMap(payload));
-        } catch (_) {
-          // Skip invalid cached payloads and fallback to repository when needed.
-        }
-      }
-
-      final approvedCached =
-          cachedClientes
-              .where(
-                (item) =>
-                    item.status == CustomerStatus.approved &&
-                    item.deletedAt == null,
-              )
-              .toList()
-            ..sort(
-              (a, b) => a.nome.toLowerCase().compareTo(b.nome.toLowerCase()),
-            );
-      if (approvedCached.isNotEmpty) {
-        return approvedCached;
-      }
-    }
-
-    final clientes = await widget.clienteRepository.fetchAll(
-      tenantId: tenantId,
-    );
-    final approved =
-        clientes
-            .where((item) => item.status == CustomerStatus.approved)
-            .toList()
-          ..sort(
-            (a, b) => a.nome.toLowerCase().compareTo(b.nome.toLowerCase()),
-          );
-    return approved;
-  }
-
   void _syncFromPedidoIfNeeded() {
     final currentId = widget.pedido?.id;
     if (currentId == null || currentId.isEmpty) {
       if (_boundOrderId != null) {
-        _disposeAllDiscountControllers();
+        _discountControllerManager.disposeAll();
         _boundOrderId = null;
         _items = const [];
         _clienteReferenciaSelecionada = null;
@@ -1664,7 +1514,7 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
       return;
     }
 
-    _disposeAllDiscountControllers();
+    _discountControllerManager.disposeAll();
     _boundOrderId = currentId;
     _items = List<PedidoItem>.from(widget.pedido?.itens ?? const []);
     _clienteReferenciaSelecionada = widget.pedido?.clienteReferencia;
@@ -1823,7 +1673,7 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
 
   @override
   void dispose() {
-    _disposeAllDiscountControllers();
+    _discountControllerManager.disposeAll();
     _customerFocusNode.dispose();
     _customerController.dispose();
     try {
@@ -1840,65 +1690,18 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
     super.dispose();
   }
 
-  void _disposeAllDiscountControllers() {
-    for (final controllers in _discountControllersByItemId.values) {
-      for (final controller in controllers) {
-        controller.dispose();
-      }
-    }
-    _discountControllersByItemId.clear();
-    _discountApplyRevisionByItemId.clear();
-  }
-
   void _disposeDiscountControllersForItem(String itemId) {
-    final controllers = _discountControllersByItemId.remove(itemId);
-    _discountApplyRevisionByItemId.remove(itemId);
-    if (controllers == null) {
-      return;
-    }
-    for (final controller in controllers) {
-      controller.dispose();
-    }
+    _discountControllerManager.disposeForItem(itemId);
   }
 
   List<TextEditingController> _ensureDiscountControllersForItem(
     PedidoItem item,
     int slotCount,
   ) {
-    final safeSlots = slotCount < 0 ? 0 : slotCount;
-    final existing =
-        _discountControllersByItemId[item.id] ?? <TextEditingController>[];
-
-    if (safeSlots == 0) {
-      for (final controller in existing) {
-        controller.dispose();
-      }
-      _discountControllersByItemId[item.id] = <TextEditingController>[];
-      return _discountControllersByItemId[item.id]!;
-    }
-
-    while (existing.length < safeSlots) {
-      final index = existing.length;
-      final initial = index < item.appliedDiscountPercents.length
-          ? item.appliedDiscountPercents[index]
-          : 0;
-      existing.add(
-        TextEditingController(
-          text: initial <= 0
-              ? ''
-              : initial
-                    .toStringAsFixed(initial % 1 == 0 ? 0 : 2)
-                    .replaceAll('.', ','),
-        ),
-      );
-    }
-
-    while (existing.length > safeSlots) {
-      existing.removeLast().dispose();
-    }
-
-    _discountControllersByItemId[item.id] = existing;
-    return existing;
+    return _discountControllerManager.ensureControllersForItem(
+      item,
+      slotCount,
+    );
   }
 
   InputDecoration _inputDecoration({required String label}) {
@@ -1924,142 +1727,14 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
   }
 
   String _normalizeSearch(String value) {
-    var normalized = value.toLowerCase().trim();
-    const replacements = {
-      'á': 'a',
-      'à': 'a',
-      'â': 'a',
-      'ã': 'a',
-      'ä': 'a',
-      'é': 'e',
-      'è': 'e',
-      'ê': 'e',
-      'ë': 'e',
-      'í': 'i',
-      'ì': 'i',
-      'î': 'i',
-      'ï': 'i',
-      'ó': 'o',
-      'ò': 'o',
-      'ô': 'o',
-      'õ': 'o',
-      'ö': 'o',
-      'ú': 'u',
-      'ù': 'u',
-      'û': 'u',
-      'ü': 'u',
-      'ç': 'c',
-      'ñ': 'n',
-    };
-    replacements.forEach((source, target) {
-      normalized = normalized.replaceAll(source, target);
-    });
-    normalized = normalized.replaceAll(RegExp(r'[^a-z0-9\s]'), ' ');
-    normalized = normalized.replaceAll(RegExp(r'\s+'), ' ').trim();
-    return normalized;
-  }
-
-  bool _isSubsequence(String needle, String haystack) {
-    if (needle.isEmpty) {
-      return true;
-    }
-    var i = 0;
-    for (var j = 0; j < haystack.length && i < needle.length; j++) {
-      if (needle.codeUnitAt(i) == haystack.codeUnitAt(j)) {
-        i++;
-      }
-    }
-    return i == needle.length;
-  }
-
-  int _scoreProductMatch(
-    Produto product,
-    String normalizedQuery,
-    List<String> tokens,
-  ) {
-    final name = _normalizeSearch(product.descricao);
-    final code = _normalizeSearch(product.codigoInterno);
-    final makerCode = _normalizeSearch(product.codigoFabricante ?? '');
-    final sku = _normalizeSearch(product.sku ?? '');
-    final ean = _normalizeSearch(product.ean ?? '');
-    final brand = _normalizeSearch(product.marca ?? '');
-    final ncm = _normalizeSearch(product.ncm ?? '');
-    final haystack = '$code $makerCode $sku $ean $name $brand $ncm'.trim();
-    if (haystack.isEmpty) {
-      return -1;
-    }
-
-    var score = 0;
-    if (normalizedQuery.isNotEmpty && haystack.contains(normalizedQuery)) {
-      score += 260;
-      final index = haystack.indexOf(normalizedQuery);
-      if (index >= 0) {
-        score += 40 - (index ~/ 4);
-      }
-    }
-
-    for (final token in tokens) {
-      if (token.isEmpty) {
-        continue;
-      }
-
-      if (code.startsWith(token)) {
-        score += 130;
-      } else if (code.contains(token)) {
-        score += 110;
-      } else if (name.startsWith(token)) {
-        score += 120;
-      } else if (name.contains(token)) {
-        score += 95;
-      } else if (brand.contains(token) || ncm.contains(token)) {
-        score += 55;
-      } else if (_isSubsequence(token, name) ||
-          _isSubsequence(token, haystack)) {
-        score += 25;
-      } else {
-        return -1;
-      }
-    }
-
-    if (score <= 0) {
-      return -1;
-    }
-    return score;
+    return PedidoFormatUtils.normalizeSearch(value);
   }
 
   List<Produto> _buildProductResultsForQuery(String query) {
-    final normalizedQuery = _normalizeSearch(query);
-    if (widget.products.isEmpty) {
-      return const [];
-    }
-
-    if (normalizedQuery.isEmpty) {
-      return const [];
-    }
-
-    final tokens = normalizedQuery
-        .split(' ')
-        .where((token) => token.isNotEmpty)
-        .toList();
-    final scored = <({Produto product, int score})>[];
-    for (final product in widget.products) {
-      final score = _scoreProductMatch(product, normalizedQuery, tokens);
-      if (score > 0) {
-        scored.add((product: product, score: score));
-      }
-    }
-
-    scored.sort((a, b) {
-      final scoreCompare = b.score.compareTo(a.score);
-      if (scoreCompare != 0) {
-        return scoreCompare;
-      }
-      return a.product.descricao.toLowerCase().compareTo(
-        b.product.descricao.toLowerCase(),
-      );
-    });
-
-    return scored.map((entry) => entry.product).toList();
+    return PedidoProductSearchService.buildProductResultsForQuery(
+      widget.products,
+      query,
+    );
   }
 
   List<Produto> _buildProductResults() {
@@ -2077,174 +1752,27 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
   }
 
   double _roundCurrency(double value) {
-    return (value * 100).roundToDouble() / 100;
-  }
-
-  List<String> _splitRuleTargets(String raw) {
-    final targets = <String>[];
-    final seen = <String>{};
-    for (final value in raw.split(RegExp(r'[,;|\n]+'))) {
-      final normalized = _normalizeSearch(value);
-      if (normalized.isEmpty || !seen.add(normalized)) {
-        continue;
-      }
-      targets.add(value.trim());
-    }
-    return targets;
-  }
-
-  List<String> _resolveRuleTargets(CommercialAdjustmentRule rule) {
-    if (rule.scopeTargets.isNotEmpty) {
-      final targets = <String>[];
-      final seen = <String>{};
-      for (final value in rule.scopeTargets) {
-        final normalized = _normalizeSearch(value);
-        if (normalized.isEmpty || !seen.add(normalized)) {
-          continue;
-        }
-        targets.add(value.trim());
-      }
-      return targets;
-    }
-    return _splitRuleTargets(rule.scopeTarget);
-  }
-
-  bool _ruleTargetsContain(
-    CommercialAdjustmentRule rule,
-    Iterable<String> candidates,
-  ) {
-    final normalizedTargets = _resolveRuleTargets(rule)
-        .map(_normalizeSearch)
-        .where((value) => value.isNotEmpty)
-        .toSet();
-    if (normalizedTargets.isEmpty) {
-      return false;
-    }
-
-    for (final candidate in candidates) {
-      final normalizedCandidate = _normalizeSearch(candidate);
-      if (normalizedCandidate.isEmpty) {
-        continue;
-      }
-      if (normalizedTargets.contains(normalizedCandidate)) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  bool _ruleMatchesProduct(CommercialAdjustmentRule rule, Produto product) {
-    final scope = rule.scope.trim().toLowerCase();
-    if (scope == 'geral') {
-      return true;
-    }
-
-    if (scope == 'marca') {
-      return _ruleTargetsContain(rule, <String>[product.marca ?? '']);
-    }
-
-    if (scope == 'categoria') {
-      return _ruleTargetsContain(rule, <String>[product.categoria ?? '']);
-    }
-
-    if (scope == 'produto') {
-      final descricao = product.descricao.trim();
-      final codigoInterno = product.codigoInterno.trim();
-      final comercial = _resolveCommercialCode(product);
-      return _ruleTargetsContain(rule, <String>[
-        product.id,
-        descricao,
-        codigoInterno,
-        comercial,
-        if (codigoInterno.isNotEmpty && descricao.isNotEmpty)
-          '$codigoInterno - $descricao',
-      ]);
-    }
-
-    return false;
-  }
-
-  CommercialAdjustmentRule? _resolvePriorityRuleForProduct(Produto product) {
-    for (final rule in _commercialRules) {
-      if (_ruleMatchesProduct(rule, product)) {
-        return rule;
-      }
-    }
-    return null;
-  }
-
-  _ComputedPedidoItemValues _applyCommercialRule({
-    required _ComputedPedidoItemValues baseValues,
-    required Produto product,
-    required double quantity,
-  }) {
-    final rule = _resolvePriorityRuleForProduct(product);
-    if (rule == null) {
-      return baseValues;
-    }
-
-    final safeQuantity = quantity <= 0 ? 1 : quantity;
-    var unitPrice = baseValues.unitPrice;
-    final valueType = rule.valueType.trim().toLowerCase();
-    final adjustmentType = rule.adjustmentType.trim().toLowerCase();
-    final amount = rule.value;
-
-    if (valueType == 'percent') {
-      final factor = adjustmentType == 'discount'
-          ? (1 - (amount / 100))
-          : (1 + (amount / 100));
-      unitPrice = _roundCurrency(baseValues.unitPrice * factor);
-    } else {
-      final delta = adjustmentType == 'discount' ? -amount : amount;
-      unitPrice = _roundCurrency(baseValues.unitPrice + delta);
-    }
-
-    if (unitPrice < 0) {
-      unitPrice = 0;
-    }
-
-    final unitDiff = unitPrice - baseValues.unitPrice;
-    var totalPrice = _roundCurrency(
-      baseValues.totalPrice + (unitDiff * safeQuantity),
-    );
-    if (totalPrice < 0) {
-      totalPrice = 0;
-    }
-
-    final snapshot = baseValues.taxSnapshot.copyWith(
-      valorTotalItem: totalPrice,
-    );
-
-    return _ComputedPedidoItemValues(
-      unitPrice: unitPrice,
-      totalPrice: totalPrice,
-      taxSnapshot: snapshot,
-      usedFallback: baseValues.usedFallback,
-    );
+    return PedidoFormatUtils.roundCurrency(value);
   }
 
   String _formatMoney(double value) {
-    return value.toStringAsFixed(2).replaceAll('.', ',');
+    return PedidoFormatUtils.formatMoney(value);
   }
 
   String _formatQuantity(double value) {
-    return value.round().toString();
+    return PedidoFormatUtils.formatQuantity(value);
   }
 
   int _readIntegerQuantity(String raw) {
-    final trimmed = raw.trim();
-    if (trimmed.isEmpty) {
-      return 0;
-    }
-    return int.tryParse(trimmed) ?? 0;
+    return PedidoFormatUtils.readIntegerQuantity(raw);
   }
 
   String _formatPercent(double value) {
-    final hasFraction = (value % 1).abs() > 0.00001;
-    final formatted = hasFraction
-        ? value.toStringAsFixed(2).replaceAll('.', ',')
-        : value.toStringAsFixed(0);
-    return '$formatted%';
+    return PedidoFormatUtils.formatPercent(value);
+  }
+
+  void _showItemTaxDetailsDialog(PedidoItem item) {
+    showPedidoItemTaxDetailsDialog(context, item);
   }
 
   double? _parsePercentInput(String raw) {
@@ -2385,8 +1913,7 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
     }
 
     final itemId = item.id;
-    final applyRevision = (_discountApplyRevisionByItemId[itemId] ?? 0) + 1;
-    _discountApplyRevisionByItemId[itemId] = applyRevision;
+    final applyRevision = _discountControllerManager.bumpApplyRevision(itemId);
 
     final computed = await _resolveItemValues(
       product: product,
@@ -2400,7 +1927,10 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
       return false;
     }
 
-    if ((_discountApplyRevisionByItemId[itemId] ?? 0) != applyRevision) {
+    if (!_discountControllerManager.isApplyRevisionCurrent(
+      itemId,
+      applyRevision,
+    )) {
       return false;
     }
 
@@ -2463,7 +1993,7 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
     if (discountIndex < controllers.length) {
       controllers[discountIndex].dispose();
       controllers.removeAt(discountIndex);
-      _discountControllersByItemId[item.id] = controllers;
+      _discountControllerManager.setControllersForItem(item.id, controllers);
     }
 
     final values = <double>[];
@@ -2517,53 +2047,8 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
     });
   }
 
-  _ComputedPedidoItemValues _applyPointDiscounts({
-    required _ComputedPedidoItemValues baseValues,
-    required List<double> discountPercents,
-  }) {
-    if (discountPercents.isEmpty) {
-      return baseValues;
-    }
-
-    var unitPrice = baseValues.unitPrice;
-    var totalPrice = baseValues.totalPrice;
-    for (final discount in discountPercents) {
-      final safeDiscount = discount < 0 ? 0 : discount;
-      if (safeDiscount <= 0) {
-        continue;
-      }
-      final factor = 1 - (safeDiscount / 100);
-      unitPrice = _roundCurrency(unitPrice * factor);
-      totalPrice = _roundCurrency(totalPrice * factor);
-    }
-
-    if (unitPrice < 0) {
-      unitPrice = 0;
-    }
-    if (totalPrice < 0) {
-      totalPrice = 0;
-    }
-
-    final snapshot = baseValues.taxSnapshot.copyWith(
-      valorTotalItem: totalPrice,
-    );
-    return _ComputedPedidoItemValues(
-      unitPrice: unitPrice,
-      totalPrice: totalPrice,
-      taxSnapshot: snapshot,
-      usedFallback: baseValues.usedFallback,
-    );
-  }
-
   String _resolveCommercialCode(Produto product) {
-    final codeCandidates = [product.codigoFabricante, product.sku, product.ean];
-    for (final candidate in codeCandidates) {
-      final normalized = (candidate ?? '').trim();
-      if (normalized.isNotEmpty) {
-        return normalized;
-      }
-    }
-    return '';
+    return PedidoCommercialPricingService.resolveCommercialCode(product);
   }
 
   String _resolveItemDisplayCode(PedidoItem item, Produto? product) {
@@ -2648,176 +2133,7 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
     return null;
   }
 
-  String _normalizedOriginUf() {
-    final fromWidget = (widget.originCompanyUf ?? '').trim().toUpperCase();
-    if (fromWidget.isNotEmpty) {
-      return fromWidget;
-    }
-    final fromPedido = (widget.pedido?.originCompanyUf ?? '')
-        .trim()
-        .toUpperCase();
-    if (fromPedido.isNotEmpty) {
-      return fromPedido;
-    }
-    return 'SP';
-  }
-
-  bool _isInDateWindow(
-    DateTime? validFrom,
-    DateTime? validUntil,
-    DateTime now,
-  ) {
-    if (validFrom != null && now.isBefore(validFrom.toUtc())) {
-      return false;
-    }
-    if (validUntil != null && now.isAfter(validUntil.toUtc())) {
-      return false;
-    }
-    return true;
-  }
-
-  Future<String> _resolveDestinationUf() async {
-    final fallback = _normalizedOriginUf();
-    final customerId =
-        (_clienteReferenciaSelecionada?.id ??
-                widget.pedido?.clienteReferencia?.id ??
-                '')
-            .trim();
-    final tenantId = widget.tenantId.trim();
-    if (customerId.isEmpty || tenantId.isEmpty) {
-      return fallback;
-    }
-
-    try {
-      final cliente = await widget.clienteRepository.fetchById(
-        tenantId: tenantId,
-        id: customerId,
-      );
-      final clienteUf = (cliente?.estado ?? '').trim().toUpperCase();
-      return clienteUf.isEmpty ? fallback : clienteUf;
-    } catch (_) {
-      return fallback;
-    }
-  }
-
-  Future<String> _resolvePriceTableId(String destinationUf) async {
-    final tenantId = widget.tenantId.trim();
-    if (tenantId.isEmpty) {
-      return '';
-    }
-
-    final customerId =
-        (_clienteReferenciaSelecionada?.id ??
-                widget.pedido?.clienteReferencia?.id ??
-                '')
-            .trim();
-    final now = DateTime.now().toUtc();
-
-    if (customerId.isNotEmpty) {
-      try {
-        final assignments = await _loadAssignmentsOnce(tenantId);
-        final eligible = assignments
-            .where(
-              (item) =>
-                  item.customerId == customerId &&
-                  item.isActive &&
-                  _isInDateWindow(item.validFrom, item.validUntil, now),
-            )
-            .toList();
-
-        eligible.sort((a, b) {
-          final aRegion = (a.regionId ?? '').trim().toUpperCase();
-          final bRegion = (b.regionId ?? '').trim().toUpperCase();
-          final aExact = aRegion == destinationUf;
-          final bExact = bRegion == destinationUf;
-          if (aExact != bExact) {
-            return bExact ? 1 : -1;
-          }
-
-          final aDefault = aRegion.isEmpty || a.isDefault;
-          final bDefault = bRegion.isEmpty || b.isDefault;
-          if (aDefault != bDefault) {
-            return bDefault ? 1 : -1;
-          }
-
-          return b.priority.compareTo(a.priority);
-        });
-
-        final chosen = eligible.isEmpty ? null : eligible.first;
-        final assignmentTableId = (chosen?.priceTableId ?? '').trim();
-        if (assignmentTableId.isNotEmpty) {
-          return assignmentTableId;
-        }
-      } catch (_) {
-        // Falls back to default table id when customer assignment lookup fails.
-      }
-    }
-
-    return DefaultPriceTableGuard.defaultPriceTableIdForScope(
-      tenantId: tenantId,
-      representedCompanyId: _effectiveRepresentedCompanyId,
-    );
-  }
-
-  Future<List<CustomerPriceTableAssignment>> _loadAssignmentsOnce(
-    String tenantId,
-  ) async {
-    final cached = _cachedAssignments;
-    if (cached != null) {
-      return cached;
-    }
-
-    final loaded = await widget.customerPriceTableAssignmentRepository.fetchAll(
-      tenantId: tenantId,
-    );
-    _cachedAssignments = loaded;
-    return loaded;
-  }
-
-  PedidoItemTaxSnapshot _buildFallbackSnapshotFromProduct({
-    required Produto product,
-    required double quantity,
-    required double unitPrice,
-    PedidoItemTaxSnapshot? previous,
-    double? previousQuantity,
-  }) {
-    final baseValue = _roundCurrency(quantity * unitPrice);
-    final aliquotaIpi = product.aliquotaIpiBase ?? previous?.aliquotaIpiPercent;
-    final valorIpi = aliquotaIpi == null
-        ? null
-        : _roundCurrency(baseValue * (aliquotaIpi / 100));
-    final oldQty = previousQuantity ?? quantity;
-    final safeOldQty = oldQty <= 0 ? 1 : oldQty;
-    final ratio = quantity / safeOldQty;
-    final valorSt = previous?.valorSt == null
-        ? 0
-        : _roundCurrency(previous!.valorSt! * ratio);
-    final valorDifal = previous?.valorDifal == null
-        ? 0
-        : _roundCurrency(previous!.valorDifal! * ratio);
-
-    final normalizedNcm = (product.ncm ?? '').trim();
-    final normalizedCest = (product.cest ?? '').trim();
-    return PedidoItemTaxSnapshot(
-      regraFiscalId: previous?.regraFiscalId,
-      tabelaId: previous?.tabelaId,
-      ufDestino: previous?.ufDestino,
-      ncm: normalizedNcm.isEmpty ? previous?.ncm : normalizedNcm,
-      cest: normalizedCest.isEmpty ? previous?.cest : normalizedCest,
-      aliquotaIpiPercent: aliquotaIpi,
-      aliquotaDestinoPercent: previous?.aliquotaDestinoPercent,
-      aliquotaCreditoPercent: previous?.aliquotaCreditoPercent,
-      aliquotaDifalPercent: previous?.aliquotaDifalPercent,
-      valorIpi: valorIpi,
-      valorSt: previous?.valorSt,
-      valorDifal: previous?.valorDifal,
-      valorTotalItem: _roundCurrency(
-        baseValue + (valorIpi ?? 0) + valorSt + valorDifal,
-      ),
-    );
-  }
-
-  Future<_ComputedPedidoItemValues> _resolveItemValues({
+  Future<ComputedPedidoItemValues> _resolveItemValues({
     required Produto product,
     required double quantity,
     PedidoItemTaxSnapshot? previousSnapshot,
@@ -2827,149 +2143,26 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
     await _ensureCommercialRulesLoaded();
     await _ensureOrderDiscountPolicyLoaded();
 
-    final fallbackUnitPrice = _roundCurrency(product.valorBruto ?? 0);
-    final fallbackSnapshot = _buildFallbackSnapshotFromProduct(
+    final customerId =
+        _clienteReferenciaSelecionada?.id ??
+        widget.pedido?.clienteReferencia?.id;
+
+    return _itemPricingService.resolveItemValues(
+      tenantId: widget.tenantId.trim(),
       product: product,
       quantity: quantity,
-      unitPrice: fallbackUnitPrice,
-      previous: previousSnapshot,
+      previousSnapshot: previousSnapshot,
       previousQuantity: previousQuantity,
-    );
-
-    final fallback = _ComputedPedidoItemValues(
-      unitPrice: fallbackUnitPrice,
-      totalPrice: _roundCurrency(quantity * fallbackUnitPrice),
-      taxSnapshot: fallbackSnapshot,
-      usedFallback: true,
-    );
-
-    final tenantId = widget.tenantId.trim();
-    if (tenantId.isEmpty) {
-      final adjusted = _applyCommercialRule(
-        baseValues: fallback,
-        product: product,
-        quantity: quantity,
-      );
-      return _applyPointDiscounts(
-        baseValues: adjusted,
-        discountPercents: appliedDiscountPercents,
-      );
-    }
-
-    final destinationUf = await _resolveDestinationUf();
-    final resolvedTableId = await _resolvePriceTableId(destinationUf);
-    if (resolvedTableId.isEmpty) {
-      final adjusted = _applyCommercialRule(
-        baseValues: fallback,
-        product: product,
-        quantity: quantity,
-      );
-      return _applyPointDiscounts(
-        baseValues: adjusted,
-        discountPercents: appliedDiscountPercents,
-      );
-    }
-
-    final originUf = _normalizedOriginUf();
-    final selectedCliente = _findClienteById(
-      _clienteReferenciaSelecionada?.id ?? '',
-    );
-    final customerTaxProfile =
-        selectedCliente?.taxProfile ?? CustomerTaxProfile.contribuinte;
-    final isZonaFrancaSuframa = selectedCliente?.isZfmSuframa ?? false;
-
-    Future<_ComputedPedidoItemValues?> tryTable(String tableId) async {
-      if (tableId.trim().isEmpty) {
-        return null;
-      }
-
-      final result = await widget.taxEngineService.calcularTotaisItem(
-        tenantId: tenantId,
-        produtoId: product.id,
-        tabelaId: tableId,
-        clienteUf: destinationUf,
-        quantidade: quantity,
-        salePurpose: _selectedSalePurpose,
-        customerTaxProfile: customerTaxProfile,
-        isZonaFrancaSuframa: isZonaFrancaSuframa,
-        representedCompanyId: _effectiveRepresentedCompanyId,
-        ufOrigem: originUf,
-      );
-
-      final safeQty = quantity <= 0 ? 1 : quantity;
-      final unitPrice = _roundCurrency(result.precoBase / safeQty);
-      final snapshot = PedidoItemTaxSnapshot(
-        regraFiscalId: result.regraFiscalId,
-        tabelaId: result.tabelaId,
-        ufDestino: result.ufDestino,
-        ncm: (result.ncm ?? product.ncm)?.trim(),
-        cest: (result.cest ?? product.cest)?.trim(),
-        aliquotaIpiPercent: product.aliquotaIpiBase,
-        aliquotaDestinoPercent: previousSnapshot?.aliquotaDestinoPercent,
-        aliquotaCreditoPercent: previousSnapshot?.aliquotaCreditoPercent,
-        aliquotaDifalPercent: previousSnapshot?.aliquotaDifalPercent,
-        valorIpi: _roundCurrency(result.valorIpi),
-        valorSt: _roundCurrency(result.valorSt),
-        valorDifal: _roundCurrency(result.valorDifal),
-        valorTotalItem: _roundCurrency(result.valorTotalItem),
-      );
-
-      return _ComputedPedidoItemValues(
-        unitPrice: unitPrice,
-        totalPrice: _roundCurrency(result.valorTotalItem),
-        taxSnapshot: snapshot,
-        usedFallback: false,
-      );
-    }
-
-    try {
-      final primary = await tryTable(resolvedTableId);
-      if (primary != null) {
-        final adjusted = _applyCommercialRule(
-          baseValues: primary,
-          product: product,
-          quantity: quantity,
-        );
-        return _applyPointDiscounts(
-          baseValues: adjusted,
-          discountPercents: appliedDiscountPercents,
-        );
-      }
-    } catch (_) {
-      final legacyDefaultTableId =
-          DefaultPriceTableGuard.legacyDefaultPriceTableIdForScope(
-            tenantId: tenantId,
-            representedCompanyId: _effectiveRepresentedCompanyId,
-          );
-
-      if (legacyDefaultTableId != resolvedTableId) {
-        try {
-          final legacy = await tryTable(legacyDefaultTableId);
-          if (legacy != null) {
-            final adjusted = _applyCommercialRule(
-              baseValues: legacy,
-              product: product,
-              quantity: quantity,
-            );
-            return _applyPointDiscounts(
-              baseValues: adjusted,
-              discountPercents: appliedDiscountPercents,
-            );
-          }
-        } catch (_) {
-          // Keeps fallback below.
-        }
-      }
-    }
-
-    final adjusted = _applyCommercialRule(
-      baseValues: fallback,
-      product: product,
-      quantity: quantity,
-    );
-    return _applyPointDiscounts(
-      baseValues: adjusted,
-      discountPercents: appliedDiscountPercents,
+      appliedDiscountPercents: appliedDiscountPercents,
+      selectedCliente: _findClienteById(customerId ?? ''),
+      customerId: customerId,
+      representedCompanyId: _effectiveRepresentedCompanyId,
+      originCompanyUf: _itemPricingService.normalizedOriginUf(
+        originCompanyUfFromWidget: widget.originCompanyUf,
+        originCompanyUfFromPedido: widget.pedido?.originCompanyUf,
+      ),
+      salePurpose: _selectedSalePurpose,
+      commercialRules: _commercialRules,
     );
   }
 
@@ -3122,83 +2315,97 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
       return;
     }
 
-    final quantity =
-        quantityOverride ?? _readIntegerQuantity(_quantityController.text);
-    if (quantity <= 0) {
-      _showQuantityValidation();
+    // Guards against a double-tap (or an action firing twice in quick
+    // succession) racing past the async tax computation below before the
+    // previous call's setState has applied - without this, two concurrent
+    // calls both see the product as "not yet in the cart" and each add a
+    // separate line instead of merging into a single incremented item.
+    if (_addingProductInFlight) {
       return;
     }
+    _addingProductInFlight = true;
 
-    if (quantity > 99999) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Quantidade maxima: 99999.')),
-      );
-      return;
-    }
+    try {
+      final quantity =
+          quantityOverride ?? _readIntegerQuantity(_quantityController.text);
+      if (quantity <= 0) {
+        _showQuantityValidation();
+        return;
+      }
 
-    final commercialCode = _resolveCommercialCode(product);
-    final existingIndex = _items.indexWhere(
-      (item) => item.productId == product.id,
-    );
-
-    final existing = existingIndex >= 0 ? _items[existingIndex] : null;
-    final nextQty = (existing?.quantity.round() ?? 0) + quantity;
-    final computed = await _resolveItemValues(
-      product: product,
-      quantity: nextQty.toDouble(),
-      previousSnapshot: existing?.taxSnapshot,
-      previousQuantity: existing?.quantity,
-      appliedDiscountPercents:
-          existing?.appliedDiscountPercents ?? const <double>[],
-    );
-
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {
-      if (existingIndex >= 0) {
-        final existingItem = _items[existingIndex];
-        _items[existingIndex] = existingItem.copyWith(
-          quantity: nextQty.toDouble(),
-          unitPrice: computed.unitPrice,
-          totalPrice: computed.totalPrice,
-          taxSnapshot: computed.taxSnapshot,
-          appliedDiscountPercents: existingItem.appliedDiscountPercents,
+      if (quantity > 99999) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Quantidade maxima: 99999.')),
         );
-      } else {
-        _items.add(
-          PedidoItem(
-            id: 'itm_${DateTime.now().microsecondsSinceEpoch}_${product.id}',
-            productId: product.id,
-            productCode: commercialCode.isEmpty ? '-' : commercialCode,
-            productName: product.descricao,
-            quantity: quantity.toDouble(),
+        return;
+      }
+
+      final commercialCode = _resolveCommercialCode(product);
+      final existingIndex = _items.indexWhere(
+        (item) => item.productId == product.id,
+      );
+
+      final existing = existingIndex >= 0 ? _items[existingIndex] : null;
+      final nextQty = (existing?.quantity.round() ?? 0) + quantity;
+      final computed = await _resolveItemValues(
+        product: product,
+        quantity: nextQty.toDouble(),
+        previousSnapshot: existing?.taxSnapshot,
+        previousQuantity: existing?.quantity,
+        appliedDiscountPercents:
+            existing?.appliedDiscountPercents ?? const <double>[],
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        if (existingIndex >= 0) {
+          final existingItem = _items[existingIndex];
+          _items[existingIndex] = existingItem.copyWith(
+            quantity: nextQty.toDouble(),
             unitPrice: computed.unitPrice,
             totalPrice: computed.totalPrice,
-            appliedDiscountPercents: const <double>[],
-            unit: product.unidade,
-            ncm: product.ncm,
             taxSnapshot: computed.taxSnapshot,
+            appliedDiscountPercents: existingItem.appliedDiscountPercents,
+          );
+        } else {
+          _items.add(
+            PedidoItem(
+              id: 'itm_${DateTime.now().microsecondsSinceEpoch}_${product.id}',
+              productId: product.id,
+              productCode: commercialCode.isEmpty ? '-' : commercialCode,
+              productName: product.descricao,
+              quantity: quantity.toDouble(),
+              unitPrice: computed.unitPrice,
+              totalPrice: computed.totalPrice,
+              appliedDiscountPercents: const <double>[],
+              unit: product.unidade,
+              ncm: product.ncm,
+              taxSnapshot: computed.taxSnapshot,
+            ),
+          );
+        }
+        _quantityController.text = '1';
+        _searchController.clear();
+        _searchQuery = '';
+      });
+
+      if (computed.usedFallback && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Impostos não calculados para este item (sem tabela/regra aplicável). Valor mantido pelo preço bruto.',
+            ),
           ),
         );
       }
-      _quantityController.text = '1';
-      _searchController.clear();
-      _searchQuery = '';
-    });
 
-    if (computed.usedFallback && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Impostos não calculados para este item (sem tabela/regra aplicável). Valor mantido pelo preço bruto.',
-          ),
-        ),
-      );
+      _searchFocusNode.requestFocus();
+    } finally {
+      _addingProductInFlight = false;
     }
-
-    _searchFocusNode.requestFocus();
   }
 
   Future<void> _openSearchResultsModal(List<Produto> searchResults) async {
@@ -3314,9 +2521,11 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
       return;
     }
 
-    final searchController = TextEditingController();
-    final quantityController = TextEditingController(text: '1');
-    var localQuery = '';
+    // Drop focus from the customer autocomplete field before opening the
+    // sheet. Otherwise, when the sheet (whose search field has autofocus)
+    // closes, Flutter can restore focus back onto the customer field, which
+    // reopens its suggestions overlay and leaves it stuck open.
+    _customerFocusNode.unfocus();
 
     await showModalBottomSheet<void>(
       context: context,
@@ -3324,348 +2533,68 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
       useSafeArea: true,
       showDragHandle: true,
       builder: (sheetContext) {
-        return StatefulBuilder(
-          builder: (modalContext, setModalState) {
-            final normalized = _normalizeSearch(localQuery);
-            final results = normalized.isEmpty
-                ? const <Produto>[]
-                : _buildProductResultsForQuery(localQuery).take(120).toList();
-
-            Future<void> addSelectedProduct(Produto product) async {
-              final quantity = _readIntegerQuantity(quantityController.text);
-              if (quantity <= 0) {
-                ScaffoldMessenger.of(modalContext).showSnackBar(
-                  const SnackBar(
-                    content: Text(
-                      'Informe uma quantidade inteira maior que zero para adicionar.',
-                    ),
-                  ),
-                );
-                return;
-              }
-
-              final sheetNavigator = Navigator.of(sheetContext);
-              await _addProduct(product, quantityOverride: quantity);
-              if (!mounted) {
-                return;
-              }
-              if (sheetNavigator.canPop()) {
-                sheetNavigator.pop();
-              }
-            }
-
-            return Padding(
-              padding: EdgeInsets.only(
-                bottom: MediaQuery.of(modalContext).viewInsets.bottom,
-              ),
-              child: SizedBox(
-                height: MediaQuery.of(modalContext).size.height * 0.84,
-                child: Column(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              'Adicionar item ao pedido',
-                              style: Theme.of(modalContext)
-                                  .textTheme
-                                  .titleMedium,
-                            ),
-                          ),
-                          IconButton(
-                            tooltip: 'Fechar',
-                            onPressed: () => Navigator.of(sheetContext).pop(),
-                            icon: const Icon(Icons.close),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: TextField(
-                              controller: searchController,
-                              autofocus: true,
-                              textInputAction: TextInputAction.search,
-                              onChanged: (value) {
-                                setModalState(() {
-                                  localQuery = value;
-                                });
-                              },
-                              decoration: _inputDecoration(
-                                label: 'Buscar por descrição, código, marca ou NCM',
-                              ).copyWith(prefixIcon: const Icon(Icons.search)),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          SizedBox(
-                            width: 96,
-                            child: TextField(
-                              controller: quantityController,
-                              keyboardType: TextInputType.number,
-                              inputFormatters: [
-                                FilteringTextInputFormatter.digitsOnly,
-                                LengthLimitingTextInputFormatter(5),
-                              ],
-                              decoration: _inputDecoration(label: 'Qtd'),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    if (normalized.isEmpty)
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                        child: Text(
-                          'Digite para buscar produtos.',
-                          style: Theme.of(modalContext).textTheme.bodySmall,
-                        ),
-                      )
-                    else
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            results.isEmpty
-                                ? 'Nenhum item compatível com essa busca.'
-                                : 'Resultados: ${results.length}',
-                            style: Theme.of(modalContext).textTheme.bodySmall,
-                          ),
-                        ),
-                      ),
-                    const Divider(height: 1),
-                    Expanded(
-                      child: results.isEmpty
-                          ? const SizedBox.shrink()
-                          : ListView.separated(
-                              itemCount: results.length,
-                              separatorBuilder: (_, index) =>
-                                  const Divider(height: 1),
-                              itemBuilder: (context, index) {
-                                final product = results[index];
-                                final displayCode = _resolveCommercialCode(
-                                  product,
-                                );
-                                return ListTile(
-                                  dense: true,
-                                  onTap: widget.saving
-                                      ? null
-                                      : () => addSelectedProduct(product),
-                                  title: Text(product.descricao),
-                                  subtitle: Text(
-                                    '${displayCode.isEmpty ? '-' : displayCode} · ${product.marca?.trim().isEmpty ?? true ? '-' : product.marca} · NCM ${product.ncm?.trim().isEmpty ?? true ? '-' : product.ncm} · R\$ ${_formatMoneyBr(product.valorBruto ?? 0)}',
-                                  ),
-                                  trailing: IconButton.filledTonal(
-                                    tooltip: 'Adicionar ao pedido',
-                                    onPressed: widget.saving
-                                        ? null
-                                        : () => addSelectedProduct(product),
-                                    icon: const Icon(Icons.add),
-                                  ),
-                                );
-                              },
-                            ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
+        return PedidoMobileAddItemSheet(
+          saving: widget.saving,
+          normalizeSearch: _normalizeSearch,
+          buildProductResultsForQuery: _buildProductResultsForQuery,
+          readIntegerQuantity: _readIntegerQuantity,
+          resolveCommercialCode: _resolveCommercialCode,
+          formatMoneyBr: _formatMoneyBr,
+          inputDecoration: _inputDecoration,
+          onAddProduct: (product, {required quantityOverride}) =>
+              _addProduct(product, quantityOverride: quantityOverride),
         );
       },
     );
+
+    // Defensive: make sure the customer field stays unfocused after the
+    // sheet is dismissed, regardless of how it was closed (X button, back
+    // gesture, or after successfully adding an item).
+    if (mounted) {
+      _customerFocusNode.unfocus();
+    }
+  }
+
+  void _setCustomerInputError(String? message) {
+    setState(() {
+      _customerInputError = message;
+    });
+  }
+
+  void _clearSelectedClienteReference() {
+    setState(() {
+      _clienteReferenciaSelecionada = null;
+    });
+  }
+
+  Future<void> _handleSalePurposeChanged(SalePurpose value) async {
+    setState(() {
+      _selectedSalePurpose = value;
+    });
+    await _recalculateAllItemsForCustomerContext();
   }
 
   Widget _buildCustomerSelectorSection({required bool compact}) {
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.fromLTRB(
-        compact ? 6 : 8,
-        compact ? 3 : 4,
-        compact ? 6 : 8,
-        compact ? 4 : 6,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          RawAutocomplete<Cliente>(
-            textEditingController: _customerController,
-            focusNode: _customerFocusNode,
-            displayStringForOption: _formatClienteLabel,
-            optionsBuilder: (textEditingValue) {
-              final query = _normalizeSearch(textEditingValue.text);
-              if (query.isEmpty) {
-                return _clientes.take(25);
-              }
-
-              final filtered = _clientes.where((cliente) {
-                final label = _normalizeSearch(_formatClienteLabel(cliente));
-                final nome = _normalizeSearch(cliente.nome);
-                final documento = _normalizeSearch(cliente.documento);
-                return label.contains(query) ||
-                    nome.contains(query) ||
-                    documento.contains(query);
-              });
-              return filtered.take(25);
-            },
-            onSelected: (cliente) {
-              _selectCustomerById(cliente.id);
-            },
-            fieldViewBuilder:
-                (context, textEditingController, focusNode, onFieldSubmitted) {
-                  return TextField(
-                    controller: textEditingController,
-                    focusNode: focusNode,
-                    enabled:
-                        !widget.saving &&
-                        !_loadingClientes &&
-                        !_customerReadDenied,
-                    decoration: _inputDecoration(label: 'Cliente').copyWith(
-                      hintText: 'Digite para buscar e selecione da lista',
-                      helperText: _customerReadDenied
-                          ? 'Sem permissão para listar clientes neste perfil.'
-                          : null,
-                      errorText: _customerInputError,
-                      contentPadding: EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: compact ? 8 : 12,
-                      ),
-                      suffixIcon: IconButton(
-                        tooltip: 'Limpar cliente',
-                        onPressed:
-                            widget.saving ||
-                                _loadingClientes ||
-                                _customerReadDenied
-                            ? null
-                            : () {
-                                _selectCustomerById('');
-                              },
-                        icon: const Icon(Icons.clear),
-                      ),
-                    ),
-                    onSubmitted: (_) {
-                      final typed = textEditingController.text.trim();
-                      if (typed.isEmpty) {
-                        _selectCustomerById('');
-                        return;
-                      }
-                      final matched = _findClienteByTypedText(typed);
-                      if (matched != null) {
-                        _selectCustomerById(matched.id);
-                        return;
-                      }
-                      setState(() {
-                        _customerInputError =
-                            'Selecione um cliente existente da lista.';
-                      });
-                    },
-                    onChanged: (value) {
-                      if (_customerInputError != null) {
-                        setState(() {
-                          _customerInputError = null;
-                        });
-                      }
-
-                      final selected = _findClienteById(
-                        _clienteReferenciaSelecionada?.id ?? '',
-                      );
-                      if (selected == null) {
-                        return;
-                      }
-
-                      final selectedLabel = _normalizeSearch(
-                        _formatClienteLabel(selected),
-                      );
-                      if (_normalizeSearch(value) != selectedLabel) {
-                        setState(() {
-                          _clienteReferenciaSelecionada = null;
-                        });
-                      }
-                    },
-                  );
-                },
-            optionsViewBuilder: (context, onSelected, options) {
-              final optionList = options.toList(growable: false);
-              return Align(
-                alignment: Alignment.topLeft,
-                child: Material(
-                  elevation: 4,
-                  borderRadius: BorderRadius.circular(8),
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(
-                      maxWidth: 680,
-                      maxHeight: 240,
-                    ),
-                    child: ListView.builder(
-                      padding: EdgeInsets.zero,
-                      itemCount: optionList.length,
-                      itemBuilder: (context, index) {
-                        final cliente = optionList[index];
-                        return ListTile(
-                          dense: true,
-                          title: Text(cliente.nome),
-                          subtitle: Text(
-                            [
-                              if (cliente.documento.trim().isNotEmpty)
-                                cliente.documento.trim(),
-                              if (cliente.estado.trim().isNotEmpty)
-                                cliente.estado.trim().toUpperCase(),
-                            ].join(' · '),
-                          ),
-                          onTap: () => onSelected(cliente),
-                        );
-                      },
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
-          if (_loadingClientes) ...[
-            const SizedBox(height: 8),
-            const LinearProgressIndicator(minHeight: 2),
-          ],
-          const SizedBox(height: 8),
-          DropdownButtonFormField<SalePurpose>(
-            initialValue: _selectedSalePurpose,
-            isExpanded: true,
-            decoration: _inputDecoration(
-              label: 'Finalidade da venda',
-            ).copyWith(
-              contentPadding: EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: compact ? 8 : 12,
-              ),
-            ),
-            items: SalePurpose.values
-                .map(
-                  (item) => DropdownMenuItem<SalePurpose>(
-                    value: item,
-                    child: Text(item.label),
-                  ),
-                )
-                .toList(growable: false),
-            onChanged: widget.saving
-                ? null
-                : (value) async {
-                    if (value == null) {
-                      return;
-                    }
-                    setState(() {
-                      _selectedSalePurpose = value;
-                    });
-                    await _recalculateAllItemsForCustomerContext();
-                  },
-          ),
-        ],
-      ),
+    return PedidoCustomerSelectorSection(
+      compact: compact,
+      customerController: _customerController,
+      customerFocusNode: _customerFocusNode,
+      clientes: _clientes,
+      loadingClientes: _loadingClientes,
+      customerReadDenied: _customerReadDenied,
+      customerInputError: _customerInputError,
+      saving: widget.saving,
+      selectedSalePurpose: _selectedSalePurpose,
+      selectedClienteId: _clienteReferenciaSelecionada?.id ?? '',
+      formatClienteLabel: _formatClienteLabel,
+      normalizeSearch: _normalizeSearch,
+      findClienteById: _findClienteById,
+      findClienteByTypedText: _findClienteByTypedText,
+      inputDecoration: _inputDecoration,
+      onSelectCustomerById: _selectCustomerById,
+      onCustomerInputErrorChanged: _setCustomerInputError,
+      onClearSelectedClienteReference: _clearSelectedClienteReference,
+      onSalePurposeChanged: _handleSalePurposeChanged,
     );
   }
 
@@ -4283,14 +3212,39 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
                                                                     const SizedBox(
                                                                       height: 4,
                                                                     ),
-                                                                    Text(
-                                                                      fiscalMetaText
-                                                                              .isEmpty
-                                                                          ? '$ipiText · ICMS-ST por regra fiscal'
-                                                                          : '$ipiText · $fiscalMetaText · ICMS-ST por regra fiscal',
-                                                                      style: Theme.of(
-                                                                        context,
-                                                                      ).textTheme.bodySmall,
+                                                                    InkWell(
+                                                                      onTap: () =>
+                                                                          _showItemTaxDetailsDialog(
+                                                                            item,
+                                                                          ),
+                                                                      child: Row(
+                                                                        mainAxisSize:
+                                                                            MainAxisSize.min,
+                                                                        children: [
+                                                                          Flexible(
+                                                                            child: Text(
+                                                                              fiscalMetaText.isEmpty
+                                                                                  ? '$ipiText · ICMS-ST por regra fiscal'
+                                                                                  : '$ipiText · $fiscalMetaText · ICMS-ST por regra fiscal',
+                                                                              style: Theme.of(
+                                                                                context,
+                                                                              ).textTheme.bodySmall,
+                                                                              overflow:
+                                                                                  TextOverflow.ellipsis,
+                                                                            ),
+                                                                          ),
+                                                                          const SizedBox(
+                                                                            width: 4,
+                                                                          ),
+                                                                          Icon(
+                                                                            Icons.info_outline,
+                                                                            size: 14,
+                                                                            color: Theme.of(
+                                                                              context,
+                                                                            ).colorScheme.outline,
+                                                                          ),
+                                                                        ],
+                                                                      ),
                                                                     ),
                                                                   ],
                                                                 ),
@@ -4855,18 +3809,40 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
                                                                       const EdgeInsets.only(
                                                                         top: 3,
                                                                       ),
-                                                                  child: Text(
-                                                                    fiscalMetaText
-                                                                            .isEmpty
-                                                                        ? '$ipiText · ICMS-ST por regra fiscal'
-                                                                        : '$ipiText · $fiscalMetaText · ICMS-ST por regra fiscal',
-                                                                    maxLines: 1,
-                                                                    overflow:
-                                                                        TextOverflow
-                                                                            .ellipsis,
-                                                                    style: Theme.of(
-                                                                      context,
-                                                                    ).textTheme.bodySmall,
+                                                                  child: InkWell(
+                                                                    onTap: () =>
+                                                                        _showItemTaxDetailsDialog(
+                                                                          item,
+                                                                        ),
+                                                                    child: Row(
+                                                                      mainAxisSize:
+                                                                          MainAxisSize.min,
+                                                                      children: [
+                                                                        Flexible(
+                                                                          child: Text(
+                                                                            fiscalMetaText.isEmpty
+                                                                                ? '$ipiText · ICMS-ST por regra fiscal'
+                                                                                : '$ipiText · $fiscalMetaText · ICMS-ST por regra fiscal',
+                                                                            maxLines: 1,
+                                                                            overflow:
+                                                                                TextOverflow.ellipsis,
+                                                                            style: Theme.of(
+                                                                              context,
+                                                                            ).textTheme.bodySmall,
+                                                                          ),
+                                                                        ),
+                                                                        const SizedBox(
+                                                                          width: 4,
+                                                                        ),
+                                                                        Icon(
+                                                                          Icons.info_outline,
+                                                                          size: 14,
+                                                                          color: Theme.of(
+                                                                            context,
+                                                                          ).colorScheme.outline,
+                                                                        ),
+                                                                      ],
+                                                                    ),
                                                                   ),
                                                                 ),
                                                                 const SizedBox.shrink(),
@@ -5256,20 +4232,6 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
       ),
     );
   }
-}
-
-class _ComputedPedidoItemValues {
-  const _ComputedPedidoItemValues({
-    required this.unitPrice,
-    required this.totalPrice,
-    required this.taxSnapshot,
-    required this.usedFallback,
-  });
-
-  final double unitPrice;
-  final double totalPrice;
-  final PedidoItemTaxSnapshot taxSnapshot;
-  final bool usedFallback;
 }
 
 class _PedidoOfflineSaveMarker {

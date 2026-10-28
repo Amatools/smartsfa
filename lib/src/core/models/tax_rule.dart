@@ -16,10 +16,12 @@ class TaxRule implements TenantScopedEntity {
     this.stPriceForCalculation,
     this.stBaseReductionPercent,
     this.stBaseAmount,
+    this.stReductionAppliesToIcmsProprio = false,
     this.aliquotaDestino,
     this.aliquotaCredito,
     this.grupoFiscalId,
     this.taxGroupId,
+    this.produtoId,
     this.operationProfileKey,
     this.salePurpose,
     this.cstCsosn,
@@ -27,6 +29,14 @@ class TaxRule implements TenantScopedEntity {
     this.mvaIva,
     this.aliquotaSt,
     this.aliquotaDifal,
+    this.aliquotaFcp,
+    this.aliquotaFcpSt,
+    this.aliquotaFcpDifal,
+    this.reformaClassificacaoTributaria,
+    this.reformaAliquotaReferenciaIbs,
+    this.reformaAliquotaReferenciaCbs,
+    this.reformaPercentualReducao,
+    this.applicableBuyerTaxRegime,
     this.priority = 0,
     this.validFrom,
     this.validUntil,
@@ -51,6 +61,9 @@ class TaxRule implements TenantScopedEntity {
       stPriceForCalculation: _readDouble(map['stPriceForCalculation']),
       stBaseReductionPercent: _readDouble(map['stBaseReductionPercent']),
       stBaseAmount: _readDouble(map['stBaseAmount']),
+      stReductionAppliesToIcmsProprio: _readBool(
+        map['stReductionAppliesToIcmsProprio'],
+      ),
       aliquotaDestino:
           _readDouble(map['aliquotaDestino']) ?? _readDouble(map['aliquotaSt']),
       aliquotaCredito:
@@ -59,6 +72,9 @@ class TaxRule implements TenantScopedEntity {
       grupoFiscalId: (map['grupoFiscalId'] as String?)?.trim(),
       taxGroupId: _readTrimmedStringOrNull(
         map['taxGroupId'] ?? map['tax_group_id'] ?? map['grupoTributarioId'],
+      ),
+      produtoId: _readTrimmedStringOrNull(
+        map['produtoId'] ?? map['produto_id'],
       ),
       operationProfileKey: _readTrimmedStringOrNull(
         map['operationProfileKey'] ?? map['operation_profile_key'],
@@ -74,6 +90,22 @@ class TaxRule implements TenantScopedEntity {
       aliquotaSt:
           _readDouble(map['aliquotaSt']) ?? _readDouble(map['aliquotaDestino']),
       aliquotaDifal: _readDouble(map['aliquotaDifal']),
+      aliquotaFcp: _readDouble(map['aliquotaFcp']),
+      aliquotaFcpSt: _readDouble(map['aliquotaFcpSt']),
+      aliquotaFcpDifal: _readDouble(map['aliquotaFcpDifal']),
+      reformaClassificacaoTributaria: _readTrimmedStringOrNull(
+        map['reformaClassificacaoTributaria'] ?? map['cClassTrib'],
+      ),
+      reformaAliquotaReferenciaIbs: _readDouble(
+        map['reformaAliquotaReferenciaIbs'],
+      ),
+      reformaAliquotaReferenciaCbs: _readDouble(
+        map['reformaAliquotaReferenciaCbs'],
+      ),
+      reformaPercentualReducao: _readDouble(map['reformaPercentualReducao']),
+      applicableBuyerTaxRegime: _readTrimmedStringOrNull(
+        map['applicableBuyerTaxRegime'],
+      ),
       priority: _readInt(map['priority']) ?? 0,
       validFrom: _readDateTime(map['validFrom']),
       validUntil: _readDateTime(map['validUntil']),
@@ -98,10 +130,12 @@ class TaxRule implements TenantScopedEntity {
   final double? stPriceForCalculation;
   final double? stBaseReductionPercent;
   final double? stBaseAmount;
+  final bool stReductionAppliesToIcmsProprio;
   final double? aliquotaDestino;
   final double? aliquotaCredito;
   final String? grupoFiscalId;
   final String? taxGroupId;
+  final String? produtoId;
   final String? operationProfileKey;
   final SalePurpose? salePurpose;
   final String ufOrigem;
@@ -111,6 +145,14 @@ class TaxRule implements TenantScopedEntity {
   final double? mvaIva;
   final double? aliquotaSt;
   final double? aliquotaDifal;
+  final double? aliquotaFcp;
+  final double? aliquotaFcpSt;
+  final double? aliquotaFcpDifal;
+  final String? reformaClassificacaoTributaria;
+  final double? reformaAliquotaReferenciaIbs;
+  final double? reformaAliquotaReferenciaCbs;
+  final double? reformaPercentualReducao;
+  final String? applicableBuyerTaxRegime;
   final int priority;
   final DateTime? validFrom;
   final DateTime? validUntil;
@@ -134,10 +176,12 @@ class TaxRule implements TenantScopedEntity {
       'stPriceForCalculation': stPriceForCalculation,
       'stBaseReductionPercent': stBaseReductionPercent,
       'stBaseAmount': stBaseAmount,
+      'stReductionAppliesToIcmsProprio': stReductionAppliesToIcmsProprio,
       'aliquotaDestino': aliquotaDestino,
       'aliquotaCredito': aliquotaCredito,
       'grupoFiscalId': grupoFiscalId,
       'taxGroupId': taxGroupId,
+      'produtoId': produtoId,
       'operationProfileKey': operationProfileKey,
       'salePurpose': salePurpose?.value,
       'ufOrigem': ufOrigem,
@@ -148,6 +192,14 @@ class TaxRule implements TenantScopedEntity {
       'mvaIva': mvaIva,
       'aliquotaSt': aliquotaSt ?? aliquotaDestino,
       'aliquotaDifal': aliquotaDifal,
+      'aliquotaFcp': aliquotaFcp,
+      'aliquotaFcpSt': aliquotaFcpSt,
+      'aliquotaFcpDifal': aliquotaFcpDifal,
+      'reformaClassificacaoTributaria': reformaClassificacaoTributaria,
+      'reformaAliquotaReferenciaIbs': reformaAliquotaReferenciaIbs,
+      'reformaAliquotaReferenciaCbs': reformaAliquotaReferenciaCbs,
+      'reformaPercentualReducao': reformaPercentualReducao,
+      'applicableBuyerTaxRegime': applicableBuyerTaxRegime,
       'priority': priority,
       'validFrom': validFrom?.toIso8601String(),
       'validUntil': validUntil?.toIso8601String(),
@@ -215,4 +267,14 @@ double? _readDouble(Object? value) {
     return double.tryParse(value.replaceAll(',', '.'));
   }
   return null;
+}
+
+bool _readBool(Object? value) {
+  if (value is bool) {
+    return value;
+  }
+  if (value is String) {
+    return value.trim().toLowerCase() == 'true';
+  }
+  return false;
 }

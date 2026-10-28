@@ -1,0 +1,95 @@
+{
+  "marker": "SQL_FILE_PROBE",
+  "ok": true,
+  "tenantId": "self_T8oqTD0UBtWATPbITOGsqAEZt3d2_smartsfa-enterprise-teste",
+  "environment": "prod",
+  "sqlFile": "G:\\smartsfa\\docs\\sankhya-api\\examples\\probe_tgfpar_classificms.sql",
+  "baseUrl": "https://api.sankhya.com.br",
+  "endpointPath": "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+  "status": 200,
+  "responseIsJson": true,
+  "rowCount": 5,
+  "fields": [
+    {
+      "name": "CLASSIFICMS",
+      "order": 1,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "QTD",
+      "order": 2,
+      "userType": "I",
+      "precision": null
+    }
+  ],
+  "rows": [
+    [
+      "R",
+      15088
+    ],
+    [
+      "C",
+      512
+    ],
+    [
+      "I",
+      119
+    ],
+    [
+      "P",
+      6
+    ],
+    [
+      null,
+      1
+    ]
+  ],
+  "responseBody": {
+    "serviceName": "DbExplorerSP.executeQuery",
+    "status": "1",
+    "pendingPrinting": "false",
+    "transactionId": "A311C38B45733EE0E3B0F7CBB8E293D5",
+    "responseBody": {
+      "fieldsMetadata": [
+        {
+          "name": "CLASSIFICMS",
+          "description": "CLASSIFICMS",
+          "order": 1,
+          "userType": "S"
+        },
+        {
+          "name": "QTD",
+          "description": "QTD",
+          "order": 2,
+          "userType": "I"
+        }
+      ],
+      "rows": [
+        [
+          "R",
+          15088
+        ],
+        [
+          "C",
+          512
+        ],
+        [
+          "I",
+          119
+        ],
+        [
+          "P",
+          6
+        ],
+        [
+          null,
+          1
+        ]
+      ],
+      "burstLimit": false,
+      "timeQuery": "39ms",
+      "timeResultSet": "1ms"
+    }
+  }
+}

@@ -71,6 +71,9 @@ class _EnterpriseErpIntegrationSectionState
   bool? _lastKnownHasActiveConnector;
   EnterpriseErpConnectionTestResult? _lastConnectionTest;
   EnterpriseErpModuleSyncResult? _lastModuleSyncResult;
+  bool _fetchingOperationTypes = false;
+  List<EnterpriseErpOperationType> _operationTypes =
+      const <EnterpriseErpOperationType>[];
 
   @override
   void initState() {
@@ -747,6 +750,51 @@ class _EnterpriseErpIntegrationSectionState
     });
   }
 
+  Future<void> _fetchOperationTypes() async {
+    if (!_validateAuthenticationForm()) {
+      return;
+    }
+
+    setState(() {
+      _fetchingOperationTypes = true;
+    });
+
+    try {
+      final items = await _service.fetchOperationTypes(
+        environment: _selectedEnvironment,
+        username: _usernameController.text,
+        password: _passwordController.text,
+        accessToken: _accessTokenController.text,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _operationTypes = items;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${items.length} tipos de operacao (TOPs) encontrados no Sankhya.',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Falha ao buscar TOPs do Sankhya: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _fetchingOperationTypes = false;
+        });
+      }
+    }
+  }
+
   Widget _buildConnectionStatusPanel() {
     final colorScheme = Theme.of(context).colorScheme;
     final result = _lastConnectionTest;
@@ -1054,6 +1102,36 @@ class _EnterpriseErpIntegrationSectionState
           const Text(
             'Defina as 10 TOPs por finalidade, perfil fiscal e tipo da operacao (mesma UF x interestadual), incluindo cenarios ZFM/SUFRAMA.',
           ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              OutlinedButton.icon(
+                onPressed: _fetchingOperationTypes ? null : _fetchOperationTypes,
+                icon: _fetchingOperationTypes
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.travel_explore_outlined),
+                label: Text(
+                  _fetchingOperationTypes
+                      ? 'Buscando TOPs...'
+                      : 'Buscar TOPs do Sankhya',
+                ),
+              ),
+              if (_operationTypes.isNotEmpty) ...[
+                const SizedBox(width: 8),
+                Chip(label: Text('${_operationTypes.length} TOPs carregadas')),
+              ],
+            ],
+          ),
+          if (_operationTypes.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            const Text(
+              'Clique na lupa de cada campo para escolher a TOP pela descricao, em vez de digitar o codigo de cabeca.',
+            ),
+          ],
           const SizedBox(height: 12),
           _buildTopCodeField(
             controller: _topRevendaSameUfController,
@@ -1146,16 +1224,104 @@ class _EnterpriseErpIntegrationSectionState
     required String label,
     required bool canEdit,
   }) {
+    final fieldEnabled = canEdit && !_savingOrderTopCodes;
     return TextFormField(
       controller: controller,
-      enabled: canEdit && !_savingOrderTopCodes,
+      enabled: fieldEnabled,
       keyboardType: TextInputType.number,
       decoration: _authInputDecoration(
         label: label,
         icon: Icons.tag_outlined,
         hintText: 'Ex.: 1200',
+      ).copyWith(
+        suffixIcon: _operationTypes.isEmpty
+            ? null
+            : IconButton(
+                tooltip: 'Escolher TOP pela descricao',
+                icon: const Icon(Icons.search),
+                onPressed: fieldEnabled
+                    ? () => _pickOperationType(controller)
+                    : null,
+              ),
       ),
     );
+  }
+
+  Future<void> _pickOperationType(TextEditingController controller) async {
+    final selected = await showDialog<EnterpriseErpOperationType>(
+      context: context,
+      builder: (dialogContext) {
+        var query = '';
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final filtered = query.isEmpty
+                ? _operationTypes
+                : _operationTypes
+                      .where(
+                        (item) =>
+                            item.code.toLowerCase().contains(query) ||
+                            item.description.toLowerCase().contains(query),
+                      )
+                      .toList(growable: false);
+            return AlertDialog(
+              title: const Text('Selecionar TOP do Sankhya'),
+              content: SizedBox(
+                width: 480,
+                height: 420,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TextField(
+                      autofocus: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Buscar por codigo ou descricao',
+                        prefixIcon: Icon(Icons.search),
+                      ),
+                      onChanged: (value) {
+                        setDialogState(() {
+                          query = value.trim().toLowerCase();
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                    Expanded(
+                      child: filtered.isEmpty
+                          ? const Center(child: Text('Nenhuma TOP encontrada.'))
+                          : ListView.builder(
+                              itemCount: filtered.length,
+                              itemBuilder: (context, index) {
+                                final item = filtered[index];
+                                return ListTile(
+                                  title: Text(item.description.isEmpty
+                                      ? item.code
+                                      : item.description),
+                                  subtitle: Text('Codigo: ${item.code}'),
+                                  onTap: () =>
+                                      Navigator.of(dialogContext).pop(item),
+                                );
+                              },
+                            ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Cancelar'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (selected != null) {
+      setState(() {
+        controller.text = selected.code;
+      });
+    }
   }
 
   Widget _buildModuleSyncStatusPanel(EnterpriseErpModuleSyncResult result) {

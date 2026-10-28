@@ -297,7 +297,16 @@ class PedidoItemTaxSnapshot {
     this.valorIpi,
     this.valorSt,
     this.valorDifal,
+    this.valorFcp,
+    this.valorFcpSt,
+    this.valorFcpDifal,
     this.valorTotalItem,
+    this.operationProfileKey,
+    this.matchedTier,
+    this.matchedByCest = false,
+    this.matchedByBuyerRegime = false,
+    this.operationProfileSource,
+    this.operationProfileOverrideId,
   });
 
   factory PedidoItemTaxSnapshot.fromMap(Map<String, Object?> map) {
@@ -314,7 +323,16 @@ class PedidoItemTaxSnapshot {
       valorIpi: _readDouble(map['valorIpi']),
       valorSt: _readDouble(map['valorSt']),
       valorDifal: _readDouble(map['valorDifal']),
+      valorFcp: _readDouble(map['valorFcp']),
+      valorFcpSt: _readDouble(map['valorFcpSt']),
+      valorFcpDifal: _readDouble(map['valorFcpDifal']),
       valorTotalItem: _readDouble(map['valorTotalItem']),
+      operationProfileKey: map['operationProfileKey'] as String?,
+      matchedTier: _readInt(map['matchedTier']),
+      matchedByCest: map['matchedByCest'] == true,
+      matchedByBuyerRegime: map['matchedByBuyerRegime'] == true,
+      operationProfileSource: map['operationProfileSource'] as String?,
+      operationProfileOverrideId: map['operationProfileOverrideId'] as String?,
     );
   }
 
@@ -330,7 +348,30 @@ class PedidoItemTaxSnapshot {
   final double? valorIpi;
   final double? valorSt;
   final double? valorDifal;
+  final double? valorFcp;
+  final double? valorFcpSt;
+  final double? valorFcpDifal;
   final double? valorTotalItem;
+
+  /// Chave do perfil de operacao aplicado (ex.: `revenda_same_uf`).
+  final String? operationProfileKey;
+
+  /// Nivel do matcher que selecionou a regra fiscal (0=produto especifico,
+  /// 1=grupo tributario, 2=NCM, 3=regra geral por UF). Usado pela tela de
+  /// auditoria fiscal (P1.4).
+  final int? matchedTier;
+
+  /// Se a regra escolhida desempatou por CEST dentro do mesmo nivel.
+  final bool matchedByCest;
+
+  /// Se a regra escolhida desempatou pelo regime tributario do comprador.
+  final bool matchedByBuyerRegime;
+
+  /// Origem do perfil de operacao: 'native' ou 'override'.
+  final String? operationProfileSource;
+
+  /// Id do `TaxOperationProfile` usado, quando aplicavel.
+  final String? operationProfileOverrideId;
 
   PedidoItemTaxSnapshot copyWith({
     String? regraFiscalId,
@@ -345,7 +386,16 @@ class PedidoItemTaxSnapshot {
     double? valorIpi,
     double? valorSt,
     double? valorDifal,
+    double? valorFcp,
+    double? valorFcpSt,
+    double? valorFcpDifal,
     double? valorTotalItem,
+    String? operationProfileKey,
+    int? matchedTier,
+    bool? matchedByCest,
+    bool? matchedByBuyerRegime,
+    String? operationProfileSource,
+    String? operationProfileOverrideId,
   }) {
     return PedidoItemTaxSnapshot(
       regraFiscalId: regraFiscalId ?? this.regraFiscalId,
@@ -362,7 +412,18 @@ class PedidoItemTaxSnapshot {
       valorIpi: valorIpi ?? this.valorIpi,
       valorSt: valorSt ?? this.valorSt,
       valorDifal: valorDifal ?? this.valorDifal,
+      valorFcp: valorFcp ?? this.valorFcp,
+      valorFcpSt: valorFcpSt ?? this.valorFcpSt,
+      valorFcpDifal: valorFcpDifal ?? this.valorFcpDifal,
       valorTotalItem: valorTotalItem ?? this.valorTotalItem,
+      operationProfileKey: operationProfileKey ?? this.operationProfileKey,
+      matchedTier: matchedTier ?? this.matchedTier,
+      matchedByCest: matchedByCest ?? this.matchedByCest,
+      matchedByBuyerRegime: matchedByBuyerRegime ?? this.matchedByBuyerRegime,
+      operationProfileSource:
+          operationProfileSource ?? this.operationProfileSource,
+      operationProfileOverrideId:
+          operationProfileOverrideId ?? this.operationProfileOverrideId,
     );
   }
 
@@ -380,7 +441,16 @@ class PedidoItemTaxSnapshot {
       'valorIpi': valorIpi,
       'valorSt': valorSt,
       'valorDifal': valorDifal,
+      'valorFcp': valorFcp,
+      'valorFcpSt': valorFcpSt,
+      'valorFcpDifal': valorFcpDifal,
       'valorTotalItem': valorTotalItem,
+      'operationProfileKey': operationProfileKey,
+      'matchedTier': matchedTier,
+      'matchedByCest': matchedByCest,
+      'matchedByBuyerRegime': matchedByBuyerRegime,
+      'operationProfileSource': operationProfileSource,
+      'operationProfileOverrideId': operationProfileOverrideId,
     };
   }
 }

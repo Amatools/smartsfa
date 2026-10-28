@@ -1,0 +1,1367 @@
+{
+  "marker": "SQL_FILE_PROBE",
+  "ok": true,
+  "tenantId": "self_T8oqTD0UBtWATPbITOGsqAEZt3d2_smartsfa-enterprise-teste",
+  "environment": "prod",
+  "sqlFile": "G:\\smartsfa\\docs\\sankhya-api\\examples\\probe_tgftop.sql",
+  "baseUrl": "https://api.sankhya.com.br",
+  "endpointPath": "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+  "status": 200,
+  "responseIsJson": true,
+  "rowCount": 62,
+  "fields": [
+    {
+      "name": "CODTIPOPER",
+      "order": 1,
+      "userType": "I",
+      "precision": null
+    },
+    {
+      "name": "DESCROPER",
+      "order": 2,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "TIPMOV",
+      "order": 3,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "ATIVO",
+      "order": 4,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "CALCDIFALPART",
+      "order": 5,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "CALCICMS",
+      "order": 6,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "CALCFCPINT",
+      "order": 7,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "CALCFUSTTOP",
+      "order": 8,
+      "userType": "S",
+      "precision": null
+    }
+  ],
+  "rows": [
+    [
+      0,
+      "<SEM TOP>",
+      "P",
+      "S",
+      "N",
+      "D",
+      "N",
+      null
+    ],
+    [
+      1000,
+      "ORÇAMENTO DE VENDA",
+      "P",
+      "S",
+      "N",
+      "D",
+      "N",
+      null
+    ],
+    [
+      1001,
+      "PEDIDO DE VENDA",
+      "P",
+      "S",
+      "S",
+      "D",
+      "N",
+      null
+    ],
+    [
+      1101,
+      "VENDA NACIONAL - NF-E",
+      "V",
+      "S",
+      "S",
+      "C",
+      "N",
+      null
+    ],
+    [
+      1102,
+      "VENDA  CONSUMIDOR CONTRIBUINTE",
+      "V",
+      "S",
+      "N",
+      "C",
+      "N",
+      null
+    ],
+    [
+      1103,
+      "VENDA EXPORTAÇÃO DIRETA",
+      "V",
+      "S",
+      "N",
+      "C",
+      "N",
+      null
+    ],
+    [
+      1104,
+      "VENDA  EXPORTAÇÃO INDIRETA",
+      "V",
+      "S",
+      "N",
+      "C",
+      "N",
+      null
+    ],
+    [
+      1105,
+      "VENDA - FATURAMENTO CONSIGNAÇÃO",
+      "V",
+      "S",
+      "N",
+      "C",
+      "N",
+      null
+    ],
+    [
+      1106,
+      "AMOSTRA DE PRODUTOS EXPORTAÇÃO DIRETA",
+      "V",
+      "S",
+      "N",
+      "C",
+      "N",
+      null
+    ],
+    [
+      1116,
+      "VENDA - COMPLEMENTAR NF-E",
+      "V",
+      "S",
+      "N",
+      "B",
+      "N",
+      null
+    ],
+    [
+      1120,
+      "VENDA - IMOBILIZADO",
+      "V",
+      "S",
+      "N",
+      "C",
+      "N",
+      null
+    ],
+    [
+      1123,
+      "VENDA- ZFM TODOS BENEF.",
+      "V",
+      "S",
+      "S",
+      "D",
+      "N",
+      null
+    ],
+    [
+      1124,
+      "VENDA - EXPORTAÇÃO - OUTRAS SAÍDAS",
+      "V",
+      "S",
+      "S",
+      "C",
+      "N",
+      null
+    ],
+    [
+      1125,
+      "VENDA- ZFM  SEM IPI  - BENEF",
+      "V",
+      "S",
+      "S",
+      "D",
+      "N",
+      null
+    ],
+    [
+      1151,
+      "SAIDA - REMESSA DE BONIFICAÇÃO",
+      "V",
+      "S",
+      "N",
+      "C",
+      "N",
+      null
+    ],
+    [
+      1154,
+      "REMESSA - DEMONSTRAÇÃO",
+      "V",
+      "S",
+      "N",
+      "C",
+      "N",
+      null
+    ],
+    [
+      1158,
+      "SAIDA - SIMPLES REMESSA (OUTRAS)",
+      "V",
+      "S",
+      "N",
+      "C",
+      "N",
+      null
+    ],
+    [
+      1159,
+      "REMESSA P/ CONSERTO",
+      "V",
+      "S",
+      "N",
+      "C",
+      "N",
+      null
+    ],
+    [
+      1165,
+      "REMESSA - MERCADORIA ADQ TERCEIROS - EXPORTACAO",
+      "V",
+      "S",
+      "N",
+      "C",
+      "N",
+      null
+    ],
+    [
+      1171,
+      "REMESSA P/ AMOSTRA",
+      "V",
+      "S",
+      "N",
+      "C",
+      "N",
+      null
+    ],
+    [
+      1172,
+      "REMESSA - EXPOSICAO/FEIRA",
+      "V",
+      "S",
+      "N",
+      "C",
+      "N",
+      null
+    ],
+    [
+      1197,
+      "NF-E PENDENTE RETORNO",
+      "V",
+      "S",
+      "N",
+      "D",
+      "N",
+      null
+    ],
+    [
+      1198,
+      "NF-E DENEGADA",
+      "V",
+      "S",
+      "N",
+      "D",
+      "N",
+      null
+    ],
+    [
+      1201,
+      "DEV. VENDA - NF PRÓPRIA",
+      "D",
+      "S",
+      "N",
+      "B",
+      "N",
+      null
+    ],
+    [
+      1202,
+      "DEV. VENDA - NF TERCEIROS",
+      "D",
+      "S",
+      "N",
+      "D",
+      "N",
+      null
+    ],
+    [
+      1299,
+      "RETORNO - EXPOSICAO/FEIRA (PROPRIO)",
+      "D",
+      "S",
+      "N",
+      "C",
+      "N",
+      null
+    ],
+    [
+      1300,
+      "COTAÇÃO DE COMPRA",
+      "O",
+      "S",
+      "N",
+      "D",
+      "N",
+      null
+    ],
+    [
+      1301,
+      "PEDIDO DE COMPRA - REVENDA",
+      "O",
+      "S",
+      "N",
+      "D",
+      "N",
+      null
+    ],
+    [
+      1302,
+      "PEDIDO DE COMPRA - USO/CONSUMO",
+      "O",
+      "S",
+      "N",
+      "A",
+      "N",
+      null
+    ],
+    [
+      1303,
+      "ORÇAMENTO DE COMPRA",
+      "O",
+      "S",
+      "N",
+      "A",
+      "N",
+      null
+    ],
+    [
+      1401,
+      "COMPRA - REVENDA",
+      "C",
+      "S",
+      "N",
+      "D",
+      "N",
+      null
+    ],
+    [
+      1402,
+      "COMPRA - USO/CONSUMO COM ESTOQUE",
+      "C",
+      "S",
+      "N",
+      "D",
+      "N",
+      null
+    ],
+    [
+      1403,
+      "COMPRA - USO/CONSUMO (USO DIRETO)",
+      "C",
+      "S",
+      "N",
+      "D",
+      "N",
+      null
+    ],
+    [
+      1405,
+      "COMPRA - SERVIÇOS",
+      "C",
+      "S",
+      "N",
+      "D",
+      "N",
+      null
+    ],
+    [
+      1406,
+      "COMPRA - IMOBILIZADO",
+      "C",
+      "S",
+      "N",
+      "D",
+      "N",
+      null
+    ],
+    [
+      1408,
+      "COMPRA - NACIONALIZAÇÃO",
+      "C",
+      "S",
+      "N",
+      "D",
+      "N",
+      null
+    ],
+    [
+      1414,
+      "COMPRA - CT-E",
+      "C",
+      "S",
+      "N",
+      "D",
+      "N",
+      null
+    ],
+    [
+      1450,
+      "ENTRADA - REMESSA AMOSTRA GRATIS",
+      "C",
+      "S",
+      "N",
+      "D",
+      "N",
+      null
+    ],
+    [
+      1451,
+      "ENTRADA - REMESSA BONIFICAÇÃO",
+      "C",
+      "S",
+      "N",
+      "D",
+      "N",
+      null
+    ],
+    [
+      1458,
+      "ENTRADA - SIMPLES REMESSA (OUTRAS)",
+      "C",
+      "S",
+      "N",
+      "D",
+      "N",
+      null
+    ],
+    [
+      1465,
+      "COMPRA - NACIONALIZAÇÃO - OUTRAS ENTRADAS",
+      "C",
+      "S",
+      "N",
+      "D",
+      "N",
+      null
+    ],
+    [
+      1495,
+      "ENTRADA - AJUSTE DE ESTOQUE",
+      "C",
+      "S",
+      "N",
+      "D",
+      "N",
+      null
+    ],
+    [
+      1501,
+      "DEV. COMPRA - REVENDA",
+      "E",
+      "S",
+      "N",
+      "D",
+      "N",
+      null
+    ],
+    [
+      1502,
+      "DEV. COMPRA - USO/CONSUMO (COM ESTOQUE)",
+      "E",
+      "S",
+      "N",
+      "D",
+      "N",
+      null
+    ],
+    [
+      1506,
+      "DEV. COMPRA - IMOBILIZADO",
+      "E",
+      "S",
+      "N",
+      "D",
+      "N",
+      null
+    ],
+    [
+      1508,
+      "DEVOLUÇÃO DE COMPRA - REVENDA (TER.)",
+      "E",
+      "S",
+      "N",
+      "D",
+      "N",
+      null
+    ],
+    [
+      1554,
+      "RETORNO - DEMONSTRAÇAO",
+      "E",
+      "S",
+      "N",
+      "D",
+      "N",
+      null
+    ],
+    [
+      1556,
+      "RETORNO - BENS RECEBIDOS EM COMODATO",
+      "E",
+      "S",
+      "N",
+      "A",
+      "N",
+      null
+    ],
+    [
+      1559,
+      "RETORNO - MERCADORIA RECEBIDA P/ CONSERTO",
+      "E",
+      "S",
+      "N",
+      "D",
+      "N",
+      null
+    ],
+    [
+      1602,
+      "ADIANTAMENTO A FORNECEDOR - DESPESA",
+      "I",
+      "S",
+      "N",
+      "D",
+      "N",
+      null
+    ],
+    [
+      1651,
+      "RECEITAS FINANCEIRAS",
+      "I",
+      "S",
+      "N",
+      "D",
+      "N",
+      null
+    ],
+    [
+      1652,
+      "ADIANTAMENTO A FORNECEDOR - RECEITA",
+      "I",
+      "S",
+      "N",
+      "D",
+      "N",
+      null
+    ],
+    [
+      1700,
+      "PAGAMENTO",
+      "G",
+      "S",
+      "N",
+      "D",
+      "N",
+      null
+    ],
+    [
+      1709,
+      "PAGAMENTO C/ CREDITO",
+      "G",
+      "S",
+      "N",
+      "D",
+      "N",
+      null
+    ],
+    [
+      1750,
+      "RECEBIMENTO",
+      "R",
+      "S",
+      "N",
+      "D",
+      "N",
+      null
+    ],
+    [
+      1769,
+      "RECEBIMENTO C/ CREDITO",
+      "R",
+      "S",
+      "N",
+      "D",
+      "N",
+      null
+    ],
+    [
+      1790,
+      "MOVIMENTACAO BANCÁRIA",
+      "B",
+      "S",
+      "N",
+      "D",
+      "N",
+      null
+    ],
+    [
+      1801,
+      "PEDIDO DE REQUISIÇÃO",
+      "J",
+      "S",
+      "N",
+      "A",
+      "N",
+      null
+    ],
+    [
+      1811,
+      "PEDIDO REQUISIÇÃO INTERNA",
+      "Q",
+      "S",
+      "N",
+      "D",
+      "N",
+      null
+    ],
+    [
+      1812,
+      "REQUISIÇÃO INTERNA - SAIDA",
+      "Q",
+      "S",
+      "N",
+      "D",
+      "N",
+      null
+    ],
+    [
+      2051,
+      "REMESSA AMOSTRA GRATIS - SAIDA",
+      "V",
+      "S",
+      "N",
+      "C",
+      "N",
+      null
+    ],
+    [
+      9995,
+      "IMPORTACAO NF (OUTRAS SAIDAS)",
+      "V",
+      "S",
+      "N",
+      "C",
+      "N",
+      null
+    ]
+  ],
+  "responseBody": {
+    "serviceName": "DbExplorerSP.executeQuery",
+    "status": "1",
+    "pendingPrinting": "false",
+    "transactionId": "0F55E8C4F1B05FF5A1E86F20C0F906D0",
+    "responseBody": {
+      "fieldsMetadata": [
+        {
+          "name": "CODTIPOPER",
+          "description": "CODTIPOPER",
+          "order": 1,
+          "userType": "I"
+        },
+        {
+          "name": "DESCROPER",
+          "description": "DESCROPER",
+          "order": 2,
+          "userType": "S"
+        },
+        {
+          "name": "TIPMOV",
+          "description": "TIPMOV",
+          "order": 3,
+          "userType": "S"
+        },
+        {
+          "name": "ATIVO",
+          "description": "ATIVO",
+          "order": 4,
+          "userType": "S"
+        },
+        {
+          "name": "CALCDIFALPART",
+          "description": "CALCDIFALPART",
+          "order": 5,
+          "userType": "S"
+        },
+        {
+          "name": "CALCICMS",
+          "description": "CALCICMS",
+          "order": 6,
+          "userType": "S"
+        },
+        {
+          "name": "CALCFCPINT",
+          "description": "CALCFCPINT",
+          "order": 7,
+          "userType": "S"
+        },
+        {
+          "name": "CALCFUSTTOP",
+          "description": "CALCFUSTTOP",
+          "order": 8,
+          "userType": "S"
+        }
+      ],
+      "rows": [
+        [
+          0,
+          "<SEM TOP>",
+          "P",
+          "S",
+          "N",
+          "D",
+          "N",
+          null
+        ],
+        [
+          1000,
+          "ORÇAMENTO DE VENDA",
+          "P",
+          "S",
+          "N",
+          "D",
+          "N",
+          null
+        ],
+        [
+          1001,
+          "PEDIDO DE VENDA",
+          "P",
+          "S",
+          "S",
+          "D",
+          "N",
+          null
+        ],
+        [
+          1101,
+          "VENDA NACIONAL - NF-E",
+          "V",
+          "S",
+          "S",
+          "C",
+          "N",
+          null
+        ],
+        [
+          1102,
+          "VENDA  CONSUMIDOR CONTRIBUINTE",
+          "V",
+          "S",
+          "N",
+          "C",
+          "N",
+          null
+        ],
+        [
+          1103,
+          "VENDA EXPORTAÇÃO DIRETA",
+          "V",
+          "S",
+          "N",
+          "C",
+          "N",
+          null
+        ],
+        [
+          1104,
+          "VENDA  EXPORTAÇÃO INDIRETA",
+          "V",
+          "S",
+          "N",
+          "C",
+          "N",
+          null
+        ],
+        [
+          1105,
+          "VENDA - FATURAMENTO CONSIGNAÇÃO",
+          "V",
+          "S",
+          "N",
+          "C",
+          "N",
+          null
+        ],
+        [
+          1106,
+          "AMOSTRA DE PRODUTOS EXPORTAÇÃO DIRETA",
+          "V",
+          "S",
+          "N",
+          "C",
+          "N",
+          null
+        ],
+        [
+          1116,
+          "VENDA - COMPLEMENTAR NF-E",
+          "V",
+          "S",
+          "N",
+          "B",
+          "N",
+          null
+        ],
+        [
+          1120,
+          "VENDA - IMOBILIZADO",
+          "V",
+          "S",
+          "N",
+          "C",
+          "N",
+          null
+        ],
+        [
+          1123,
+          "VENDA- ZFM TODOS BENEF.",
+          "V",
+          "S",
+          "S",
+          "D",
+          "N",
+          null
+        ],
+        [
+          1124,
+          "VENDA - EXPORTAÇÃO - OUTRAS SAÍDAS",
+          "V",
+          "S",
+          "S",
+          "C",
+          "N",
+          null
+        ],
+        [
+          1125,
+          "VENDA- ZFM  SEM IPI  - BENEF",
+          "V",
+          "S",
+          "S",
+          "D",
+          "N",
+          null
+        ],
+        [
+          1151,
+          "SAIDA - REMESSA DE BONIFICAÇÃO",
+          "V",
+          "S",
+          "N",
+          "C",
+          "N",
+          null
+        ],
+        [
+          1154,
+          "REMESSA - DEMONSTRAÇÃO",
+          "V",
+          "S",
+          "N",
+          "C",
+          "N",
+          null
+        ],
+        [
+          1158,
+          "SAIDA - SIMPLES REMESSA (OUTRAS)",
+          "V",
+          "S",
+          "N",
+          "C",
+          "N",
+          null
+        ],
+        [
+          1159,
+          "REMESSA P/ CONSERTO",
+          "V",
+          "S",
+          "N",
+          "C",
+          "N",
+          null
+        ],
+        [
+          1165,
+          "REMESSA - MERCADORIA ADQ TERCEIROS - EXPORTACAO",
+          "V",
+          "S",
+          "N",
+          "C",
+          "N",
+          null
+        ],
+        [
+          1171,
+          "REMESSA P/ AMOSTRA",
+          "V",
+          "S",
+          "N",
+          "C",
+          "N",
+          null
+        ],
+        [
+          1172,
+          "REMESSA - EXPOSICAO/FEIRA",
+          "V",
+          "S",
+          "N",
+          "C",
+          "N",
+          null
+        ],
+        [
+          1197,
+          "NF-E PENDENTE RETORNO",
+          "V",
+          "S",
+          "N",
+          "D",
+          "N",
+          null
+        ],
+        [
+          1198,
+          "NF-E DENEGADA",
+          "V",
+          "S",
+          "N",
+          "D",
+          "N",
+          null
+        ],
+        [
+          1201,
+          "DEV. VENDA - NF PRÓPRIA",
+          "D",
+          "S",
+          "N",
+          "B",
+          "N",
+          null
+        ],
+        [
+          1202,
+          "DEV. VENDA - NF TERCEIROS",
+          "D",
+          "S",
+          "N",
+          "D",
+          "N",
+          null
+        ],
+        [
+          1299,
+          "RETORNO - EXPOSICAO/FEIRA (PROPRIO)",
+          "D",
+          "S",
+          "N",
+          "C",
+          "N",
+          null
+        ],
+        [
+          1300,
+          "COTAÇÃO DE COMPRA",
+          "O",
+          "S",
+          "N",
+          "D",
+          "N",
+          null
+        ],
+        [
+          1301,
+          "PEDIDO DE COMPRA - REVENDA",
+          "O",
+          "S",
+          "N",
+          "D",
+          "N",
+          null
+        ],
+        [
+          1302,
+          "PEDIDO DE COMPRA - USO/CONSUMO",
+          "O",
+          "S",
+          "N",
+          "A",
+          "N",
+          null
+        ],
+        [
+          1303,
+          "ORÇAMENTO DE COMPRA",
+          "O",
+          "S",
+          "N",
+          "A",
+          "N",
+          null
+        ],
+        [
+          1401,
+          "COMPRA - REVENDA",
+          "C",
+          "S",
+          "N",
+          "D",
+          "N",
+          null
+        ],
+        [
+          1402,
+          "COMPRA - USO/CONSUMO COM ESTOQUE",
+          "C",
+          "S",
+          "N",
+          "D",
+          "N",
+          null
+        ],
+        [
+          1403,
+          "COMPRA - USO/CONSUMO (USO DIRETO)",
+          "C",
+          "S",
+          "N",
+          "D",
+          "N",
+          null
+        ],
+        [
+          1405,
+          "COMPRA - SERVIÇOS",
+          "C",
+          "S",
+          "N",
+          "D",
+          "N",
+          null
+        ],
+        [
+          1406,
+          "COMPRA - IMOBILIZADO",
+          "C",
+          "S",
+          "N",
+          "D",
+          "N",
+          null
+        ],
+        [
+          1408,
+          "COMPRA - NACIONALIZAÇÃO",
+          "C",
+          "S",
+          "N",
+          "D",
+          "N",
+          null
+        ],
+        [
+          1414,
+          "COMPRA - CT-E",
+          "C",
+          "S",
+          "N",
+          "D",
+          "N",
+          null
+        ],
+        [
+          1450,
+          "ENTRADA - REMESSA AMOSTRA GRATIS",
+          "C",
+          "S",
+          "N",
+          "D",
+          "N",
+          null
+        ],
+        [
+          1451,
+          "ENTRADA - REMESSA BONIFICAÇÃO",
+          "C",
+          "S",
+          "N",
+          "D",
+          "N",
+          null
+        ],
+        [
+          1458,
+          "ENTRADA - SIMPLES REMESSA (OUTRAS)",
+          "C",
+          "S",
+          "N",
+          "D",
+          "N",
+          null
+        ],
+        [
+          1465,
+          "COMPRA - NACIONALIZAÇÃO - OUTRAS ENTRADAS",
+          "C",
+          "S",
+          "N",
+          "D",
+          "N",
+          null
+        ],
+        [
+          1495,
+          "ENTRADA - AJUSTE DE ESTOQUE",
+          "C",
+          "S",
+          "N",
+          "D",
+          "N",
+          null
+        ],
+        [
+          1501,
+          "DEV. COMPRA - REVENDA",
+          "E",
+          "S",
+          "N",
+          "D",
+          "N",
+          null
+        ],
+        [
+          1502,
+          "DEV. COMPRA - USO/CONSUMO (COM ESTOQUE)",
+          "E",
+          "S",
+          "N",
+          "D",
+          "N",
+          null
+        ],
+        [
+          1506,
+          "DEV. COMPRA - IMOBILIZADO",
+          "E",
+          "S",
+          "N",
+          "D",
+          "N",
+          null
+        ],
+        [
+          1508,
+          "DEVOLUÇÃO DE COMPRA - REVENDA (TER.)",
+          "E",
+          "S",
+          "N",
+          "D",
+          "N",
+          null
+        ],
+        [
+          1554,
+          "RETORNO - DEMONSTRAÇAO",
+          "E",
+          "S",
+          "N",
+          "D",
+          "N",
+          null
+        ],
+        [
+          1556,
+          "RETORNO - BENS RECEBIDOS EM COMODATO",
+          "E",
+          "S",
+          "N",
+          "A",
+          "N",
+          null
+        ],
+        [
+          1559,
+          "RETORNO - MERCADORIA RECEBIDA P/ CONSERTO",
+          "E",
+          "S",
+          "N",
+          "D",
+          "N",
+          null
+        ],
+        [
+          1602,
+          "ADIANTAMENTO A FORNECEDOR - DESPESA",
+          "I",
+          "S",
+          "N",
+          "D",
+          "N",
+          null
+        ],
+        [
+          1651,
+          "RECEITAS FINANCEIRAS",
+          "I",
+          "S",
+          "N",
+          "D",
+          "N",
+          null
+        ],
+        [
+          1652,
+          "ADIANTAMENTO A FORNECEDOR - RECEITA",
+          "I",
+          "S",
+          "N",
+          "D",
+          "N",
+          null
+        ],
+        [
+          1700,
+          "PAGAMENTO",
+          "G",
+          "S",
+          "N",
+          "D",
+          "N",
+          null
+        ],
+        [
+          1709,
+          "PAGAMENTO C/ CREDITO",
+          "G",
+          "S",
+          "N",
+          "D",
+          "N",
+          null
+        ],
+        [
+          1750,
+          "RECEBIMENTO",
+          "R",
+          "S",
+          "N",
+          "D",
+          "N",
+          null
+        ],
+        [
+          1769,
+          "RECEBIMENTO C/ CREDITO",
+          "R",
+          "S",
+          "N",
+          "D",
+          "N",
+          null
+        ],
+        [
+          1790,
+          "MOVIMENTACAO BANCÁRIA",
+          "B",
+          "S",
+          "N",
+          "D",
+          "N",
+          null
+        ],
+        [
+          1801,
+          "PEDIDO DE REQUISIÇÃO",
+          "J",
+          "S",
+          "N",
+          "A",
+          "N",
+          null
+        ],
+        [
+          1811,
+          "PEDIDO REQUISIÇÃO INTERNA",
+          "Q",
+          "S",
+          "N",
+          "D",
+          "N",
+          null
+        ],
+        [
+          1812,
+          "REQUISIÇÃO INTERNA - SAIDA",
+          "Q",
+          "S",
+          "N",
+          "D",
+          "N",
+          null
+        ],
+        [
+          2051,
+          "REMESSA AMOSTRA GRATIS - SAIDA",
+          "V",
+          "S",
+          "N",
+          "C",
+          "N",
+          null
+        ],
+        [
+          9995,
+          "IMPORTACAO NF (OUTRAS SAIDAS)",
+          "V",
+          "S",
+          "N",
+          "C",
+          "N",
+          null
+        ]
+      ],
+      "burstLimit": false,
+      "timeQuery": "49ms",
+      "timeResultSet": "1ms"
+    }
+  }
+}

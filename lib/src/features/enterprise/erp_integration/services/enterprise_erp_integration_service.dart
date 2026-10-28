@@ -49,6 +49,21 @@ class EnterpriseErpModuleSyncResult {
   final int sourceCount;
 }
 
+class EnterpriseErpOperationType {
+  const EnterpriseErpOperationType({
+    required this.code,
+    required this.description,
+    required this.movementType,
+  });
+
+  final String code;
+  final String description;
+  final String movementType;
+
+  String get displayLabel =>
+      description.isEmpty ? code : '$code - $description';
+}
+
 class EnterpriseErpIntegrationService {
   EnterpriseErpIntegrationService(
     FirebaseFirestore firestore, {
@@ -65,6 +80,8 @@ class EnterpriseErpIntegrationService {
       'https://us-central1-smart-sfa.cloudfunctions.net/testSankhyaAuthentication';
   static const String _defaultSyncCatalogModuleProxyUrl =
       'https://us-central1-smart-sfa.cloudfunctions.net/syncSankhyaCatalogModule';
+  static const String _defaultFetchOperationTypesProxyUrl =
+      'https://us-central1-smart-sfa.cloudfunctions.net/fetchSankhyaOperationTypes';
   static const String _functionsBaseUrlOverride = String.fromEnvironment(
     'SANKHYA_FUNCTIONS_BASE_URL',
     defaultValue: '',
@@ -75,6 +92,10 @@ class EnterpriseErpIntegrationService {
   );
   static const String _syncCatalogModuleProxyUrlOverride = String.fromEnvironment(
     'SANKHYA_SYNC_PROXY_URL',
+    defaultValue: '',
+  );
+  static const String _fetchOperationTypesProxyUrlOverride = String.fromEnvironment(
+    'SANKHYA_OPERATION_TYPES_PROXY_URL',
     defaultValue: '',
   );
   static const int temporaryModuleImportLimit = 5;
@@ -89,6 +110,12 @@ class EnterpriseErpIntegrationService {
     explicitOverride: _syncCatalogModuleProxyUrlOverride,
     functionName: 'syncSankhyaCatalogModule',
     defaultUrl: _defaultSyncCatalogModuleProxyUrl,
+  );
+
+  static String get fetchOperationTypesProxyUrl => _resolveProxyUrl(
+    explicitOverride: _fetchOperationTypesProxyUrlOverride,
+    functionName: 'fetchSankhyaOperationTypes',
+    defaultUrl: _defaultFetchOperationTypesProxyUrl,
   );
 
   static const List<EnterpriseErpSyncModuleOption> supportedSyncModules = [
@@ -584,6 +611,73 @@ class EnterpriseErpIntegrationService {
         sourceCount: 0,
       );
     }
+  }
+
+  Future<List<EnterpriseErpOperationType>> fetchOperationTypes({
+    required String environment,
+    required String username,
+    required String password,
+    required String accessToken,
+  }) async {
+    final normalizedEnvironment = environment.trim().toLowerCase();
+    if (normalizedEnvironment != 'homolog' && normalizedEnvironment != 'prod') {
+      throw Exception('Ambiente invalido. Use homolog ou prod.');
+    }
+
+    final xToken = accessToken.trim();
+    final clientId = username.trim();
+    final clientSecret = password.trim();
+    if (xToken.isEmpty || clientId.isEmpty || clientSecret.isEmpty) {
+      throw Exception(
+        'Informe Client Id, Client Secret e X-Token antes de buscar as TOPs.',
+      );
+    }
+
+    final body = jsonEncode(<String, Object?>{
+      'environment': normalizedEnvironment,
+      'clientId': clientId,
+      'clientSecret': clientSecret,
+      'xToken': xToken,
+    });
+
+    final uri = Uri.parse(fetchOperationTypesProxyUrl);
+    final response = await _httpClient
+        .post(
+          uri,
+          headers: const <String, String>{
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+          },
+          body: body,
+        )
+        .timeout(const Duration(seconds: 30));
+
+    final payload = _decodeResponseAsMap(response.body);
+    if (response.statusCode != 200 || payload['ok'] != true) {
+      final message = _readString(payload['message']);
+      throw Exception(
+        message.isNotEmpty
+            ? message
+            : 'Falha ao buscar tipos de operacao (HTTP ${response.statusCode}).',
+      );
+    }
+
+    final rawItems = payload['operationTypes'];
+    if (rawItems is! List) {
+      return const <EnterpriseErpOperationType>[];
+    }
+
+    return rawItems
+        .whereType<Map<String, dynamic>>()
+        .map(
+          (item) => EnterpriseErpOperationType(
+            code: _readString(item['code']),
+            description: _readString(item['description']),
+            movementType: _readString(item['movementType']),
+          ),
+        )
+        .where((item) => item.code.isNotEmpty)
+        .toList(growable: false);
   }
 
   static String _resolveProxyUrl({

@@ -1,4 +1,6 @@
 
+> **Nota**: este arquivo é o transcript bruto de brainstorming original (histórico). A especificação técnica única e atual do motor de tributação está em [tributacao_motor_especificacao_tecnica.md](tributacao_motor_especificacao_tecnica.md).
+
 ```python
 import pandas as pd
 

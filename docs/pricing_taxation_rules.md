@@ -1,5 +1,7 @@
 # SmartSFA - Pricing and Taxation Rules (handoff de continuidade)
 
+> **Nota**: a especificacao tecnica unica e atual do motor de tributacao (modelo de dados, pipeline de calculo, formulas, FCP/Reforma Tributaria, backlog priorizado, mapa Sankhya) esta consolidada em [tributacao_motor_especificacao_tecnica.md](tributacao_motor_especificacao_tecnica.md). Este documento permanece como handoff tecnico historico.
+
 ## 1) Objetivo deste documento
 
 Este arquivo e a base de continuidade do modulo de tributacao/precificacao.
@@ -56,14 +58,13 @@ Capacidades implementadas:
 - importacao via planilha (XLSX/CSV) com validacao forte
 - exportacao de template com instrucoes
 - limpeza de regras sem NCM (acao assistida)
-- suporte a `salePurpose` e tipo de ST (`mva`/`pmc`)
-- suporte inicial a campos normalizados na regra:
-   - `operationProfileKey`
-   - `taxGroupId`
-   - exibicao desses campos em chips na lista da matriz
+- suporte a tipo de ST (`mva`/`pmc`)
+- suporte a `taxGroupId` na regra e exibicao em chips na lista da matriz
+- suporte a FCP/FCP-ST/FCP-DIFAL, regime tributario do comprador (desempate) e flag de reducao de base aplicada tambem ao ICMS proprio, tanto no dialogo manual quanto na planilha (template/importacao/validacao/fingerprint de deduplicacao atualizados)
+- perfil de operacao removido da configuracao da matriz; a selecao e automatica via classificador de operacao
+- finalidade de venda removida da configuracao da matriz; a selecao e automatica pelo contexto da venda
 
 Nomes de tela para o usuario (matriz):
-- `Perfil de operacao` (aceita nome de negocio do perfil ou chave tecnica)
 - `Grupo tributario` (ID do grupo cadastrado no modulo Grupos tributarios)
 
 Persistencia:
@@ -102,8 +103,9 @@ Capacidades implementadas:
   - ativo/inativo
   - prioridade
   - switches fiscais
-  - provider ERP e codigo externo
 - escopo global/representada
+
+Importante: os 10 perfis nativos sao fixos (nome/descricao/switches), sem nenhum campo de ERP/codigo externo. A ligacao "qual TOP do Sankhya corresponde a qual perfil nativo" vive do lado do conector ERP (`erpOrderTopCodes`, ver 4.5), nunca dentro do perfil.
 
 Persistencia atual:
 - colecao `tax_operation_profiles` (dedicada)
@@ -147,12 +149,12 @@ Status:
 - classificador nativo dos 10 perfis implementado no dominio
 - calculo de ST/DIFAL/IPI/ZFM agora segue switches do perfil classificado
 - calcula IPI, ST, DIFAL e ajuste ZFM
-- usa NCM/CEST/UF origem-destino e janela de vigencia
+- matcher tecnico da matriz priorizando Grupo tributario > NCM > CEST, com filtro por UF origem/destino e vigencia
 - retorna `operationProfileKey` no resultado do calculo
 
 Limitacao atual:
 - o classificador ainda usa default nativo em memoria; falta leitura dinamica de overrides da colecao `tax_operation_profiles`
-- o matcher ainda prioriza NCM/CEST/UF/finalidade; falta cadeia completa Produto > Grupo > NCM > regra geral UF
+- falta completar cadeia alvo com regra geral UF (atualmente exige ao menos Grupo tributario ou NCM)
 
 ## 4.4 Seguranca Firestore
 

@@ -1,0 +1,110 @@
+{
+  "tenantId": "self_T8oqTD0UBtWATPbITOGsqAEZt3d2_smartsfa-enterprise-teste",
+  "env": "prod",
+  "baseUrl": "https://api.sankhya.com.br",
+  "results": {
+    "coverage": {
+      "endpointPath": "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "status": 200,
+      "ok": true,
+      "responseIsJson": true,
+      "rowCount": 1,
+      "fields": [
+        "TOTAL_LINHAS",
+        "LINHAS_PERCICMSFCP",
+        "LINHAS_PERCICMSFCPINT",
+        "LINHAS_PERCSTFCPINT",
+        "LINHAS_TIPCALCDIFAL",
+        "LINHAS_REPDIFALFCP",
+        "LINHAS_ALIQINTDEST",
+        "LINHAS_ALIQUOTA"
+      ],
+      "rows": [
+        [
+          2228,
+          0,
+          2,
+          0,
+          2228,
+          2228,
+          0,
+          0
+        ]
+      ]
+    },
+    "samples_fcp": {
+      "endpointPath": "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "status": 200,
+      "ok": true,
+      "responseIsJson": true,
+      "rowCount": 2,
+      "fields": [
+        "CODTAB",
+        "SEQUENCIA",
+        "IDALIQ",
+        "UFORIG",
+        "UFDEST",
+        "PERCICMSFCP",
+        "PERCICMSFCPINT",
+        "PERCSTFCPINT",
+        "TIPCALCDIFAL",
+        "REPDIFALFCP",
+        "ALIQINTDEST",
+        "ALIQUOTA",
+        "ALIQSUBTRIB"
+      ],
+      "rows": [
+        [
+          null,
+          1,
+          633,
+          7,
+          7,
+          null,
+          2,
+          null,
+          0,
+          "N",
+          null,
+          20,
+          null
+        ],
+        [
+          null,
+          1,
+          2240,
+          1,
+          7,
+          null,
+          2,
+          null,
+          0,
+          "N",
+          null,
+          12,
+          null
+        ]
+      ]
+    },
+    "samples_difal_interstate": {
+      "endpointPath": "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+      "status": 200,
+      "ok": true,
+      "responseIsJson": true,
+      "rowCount": 0,
+      "fields": [
+        "CODTAB",
+        "SEQUENCIA",
+        "IDALIQ",
+        "UFORIG",
+        "UFDEST",
+        "ALIQINTDEST",
+        "ALIQUOTA",
+        "ALIQSUBTRIB",
+        "TIPCALCDIFAL",
+        "PERCICMSFCP"
+      ],
+      "rows": []
+    }
+  }
+}

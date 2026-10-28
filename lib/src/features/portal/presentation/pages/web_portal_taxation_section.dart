@@ -1524,8 +1524,6 @@ class _TaxOperationProfilesSectionState extends State<_TaxOperationProfilesSecti
           'includeIpiInIcmsBase': template.includeIpiInIcmsBase,
           'addIpiToTotal': template.addIpiToTotal,
           'reduceIcmsForZfm': template.reduceIcmsForZfm,
-          'erpProvider': 'sankhya',
-          'externalOperationCode': null,
           'createdAt': FieldValue.serverTimestamp(),
           'updatedAt': FieldValue.serverTimestamp(),
         }, SetOptions(merge: true));
@@ -1637,7 +1635,7 @@ class _TaxOperationProfilesSectionState extends State<_TaxOperationProfilesSecti
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Use os 10 tipos nativos pré-configurados para $scopeLabel e mapeie códigos externos por ERP quando necessário.',
+                        'Use os 10 tipos nativos pré-configurados para $scopeLabel. A ligação com o código do ERP (TOP) é feita na tela de Integração ERP.',
                       ),
                     ],
                   ),
@@ -1688,9 +1686,6 @@ class _TaxOperationProfilesSectionState extends State<_TaxOperationProfilesSecti
                 }
 
                 final activeCount = profiles.where((item) => item.isActive).length;
-                final withMappingCount = profiles
-                    .where((item) => item.externalOperationCode.trim().isNotEmpty)
-                    .length;
 
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1701,7 +1696,6 @@ class _TaxOperationProfilesSectionState extends State<_TaxOperationProfilesSecti
                       children: [
                         _statusChip(context, 'Total: ${profiles.length}'),
                         _statusChip(context, 'Ativos: $activeCount'),
-                        _statusChip(context, 'Mapeados ERP: $withMappingCount'),
                       ],
                     ),
                     const SizedBox(height: 10),
@@ -1755,7 +1749,7 @@ class _TaxOperationProfilesSectionState extends State<_TaxOperationProfilesSecti
                                   if (profile.description.trim().isNotEmpty)
                                     profile.description.trim(),
                                   'Switches: ${switches.isEmpty ? 'Nenhum' : switches.join(', ')}',
-                                  'Prioridade: ${profile.priority} | ERP: ${profile.erpProviderLabel} | Código externo: ${profile.externalOperationCodeLabel}',
+                                  'Prioridade: ${profile.priority}',
                                 ].join('\n'),
                                 style: Theme.of(context).textTheme.bodySmall,
                               ),
@@ -1822,12 +1816,6 @@ class _TaxOperationProfilesSectionState extends State<_TaxOperationProfilesSecti
     final descriptionController = TextEditingController(
       text: profile.description,
     );
-    final erpProviderController = TextEditingController(
-      text: profile.erpProvider,
-    );
-    final externalCodeController = TextEditingController(
-      text: profile.externalOperationCode,
-    );
     final priorityController = TextEditingController(
       text: profile.priority.toString(),
     );
@@ -1873,30 +1861,6 @@ class _TaxOperationProfilesSectionState extends State<_TaxOperationProfilesSecti
                             labelText: 'Descrição',
                           ),
                           maxLines: 2,
-                        ),
-                        const SizedBox(height: 10),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: TextFormField(
-                                controller: erpProviderController,
-                                decoration: const InputDecoration(
-                                  labelText: 'ERP provider',
-                                  hintText: 'sankhya, totvs, sap...',
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: TextFormField(
-                                controller: externalCodeController,
-                                decoration: const InputDecoration(
-                                  labelText: 'Código externo',
-                                  hintText: 'TOP/código no ERP',
-                                ),
-                              ),
-                            ),
-                          ],
                         ),
                         const SizedBox(height: 10),
                         TextFormField(
@@ -1998,9 +1962,6 @@ class _TaxOperationProfilesSectionState extends State<_TaxOperationProfilesSecti
                         'status': active ? 'active' : 'inactive',
                         'priority': int.tryParse(priorityController.text.trim()) ??
                             profile.priority,
-                        'erpProvider': erpProviderController.text.trim(),
-                        'externalOperationCode':
-                            externalCodeController.text.trim(),
                         'calculateIcmsSt': calculateIcmsSt,
                         'calculateDifal': calculateDifal,
                         'includeIpiInIcmsBase': includeIpiInIcmsBase,
@@ -2098,8 +2059,6 @@ class _TaxOperationProfileEntity {
     required this.includeIpiInIcmsBase,
     required this.addIpiToTotal,
     required this.reduceIcmsForZfm,
-    required this.erpProvider,
-    required this.externalOperationCode,
     this.representedCompanyId,
     this.createdAt,
     this.updatedAt,
@@ -2119,8 +2078,6 @@ class _TaxOperationProfileEntity {
   final bool includeIpiInIcmsBase;
   final bool addIpiToTotal;
   final bool reduceIcmsForZfm;
-  final String erpProvider;
-  final String externalOperationCode;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -2130,22 +2087,6 @@ class _TaxOperationProfileEntity {
     return (representedCompanyId ?? '').trim().isEmpty
         ? 'Escopo: Global'
         : 'Escopo: Representada';
-  }
-
-  String get erpProviderLabel {
-    final normalized = erpProvider.trim();
-    if (normalized.isEmpty) {
-      return 'Não informado';
-    }
-    return normalized;
-  }
-
-  String get externalOperationCodeLabel {
-    final normalized = externalOperationCode.trim();
-    if (normalized.isEmpty) {
-      return 'Não mapeado';
-    }
-    return normalized;
   }
 
   static _TaxOperationProfileEntity? fromDoc(
@@ -2176,8 +2117,6 @@ class _TaxOperationProfileEntity {
       includeIpiInIcmsBase: raw['includeIpiInIcmsBase'] == true,
       addIpiToTotal: raw['addIpiToTotal'] == true,
       reduceIcmsForZfm: raw['reduceIcmsForZfm'] == true,
-      erpProvider: (raw['erpProvider'] ?? '').toString(),
-      externalOperationCode: (raw['externalOperationCode'] ?? '').toString(),
       createdAt: _readDateTime(raw['createdAt']),
       updatedAt: _readDateTime(raw['updatedAt']),
     );

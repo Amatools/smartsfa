@@ -1,6 +1,7 @@
 const { onRequest } = require('firebase-functions/v2/https');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const admin = require('firebase-admin');
+const crypto = require('node:crypto');
 
 const SANKHYA_PRODUCTION_URL = 'https://api.sankhya.com.br/authenticate';
 const SANKHYA_SANDBOX_URL =
@@ -102,6 +103,14 @@ exports.syncSankhyaCatalogModule = onRequest(
     const clientId = String(request.body?.clientId ?? '').trim();
     const clientSecret = String(request.body?.clientSecret ?? '').trim();
     const xToken = String(request.body?.xToken ?? '').trim();
+    // Filtro temporario de validacao: quando presente, restringe o sync de
+    // 'clientes' a uma lista explicita de CODPARC (ex.: ['191']), evitando
+    // puxar a base inteira de parceiros enquanto o mapeamento de campos ainda
+    // esta em teste. Vazio/ausente = sem filtro (sync completo).
+    const codigosFiltroRaw = request.body?.codigosFiltro;
+    const codigosFiltro = Array.isArray(codigosFiltroRaw)
+      ? codigosFiltroRaw
+      : [];
 
     if (!tenantId) {
       response.status(400).json({
@@ -127,7 +136,7 @@ exports.syncSankhyaCatalogModule = onRequest(
       return;
     }
 
-    if (!['produtos', 'tabelas_preco', 'tax_rules'].includes(moduleId)) {
+    if (!['produtos', 'tabelas_preco', 'tax_rules', 'clientes'].includes(moduleId)) {
       response.status(400).json({
         error: 'module_not_enabled',
         message:
@@ -177,6 +186,15 @@ exports.syncSankhyaCatalogModule = onRequest(
           bearerToken,
           xToken,
         });
+      } else if (moduleId === 'clientes') {
+        result = await syncSankhyaClientesModule({
+          firestore,
+          tenantId,
+          baseUrl,
+          bearerToken,
+          xToken,
+          codigosFiltro,
+        });
       } else {
         result = await syncSankhyaPriceTablesModule({
           firestore,
@@ -201,6 +219,137 @@ exports.syncSankhyaCatalogModule = onRequest(
     }
   },
 );
+
+exports.fetchSankhyaOperationTypes = onRequest(
+  { cors: true, region: 'us-central1', timeoutSeconds: 30 },
+  async (request, response) => {
+    if (request.method !== 'POST') {
+      response.status(405).json({ error: 'method_not_allowed' });
+      return;
+    }
+
+    const environment = String(request.body?.environment ?? '')
+      .trim()
+      .toLowerCase();
+    const clientId = String(request.body?.clientId ?? '').trim();
+    const clientSecret = String(request.body?.clientSecret ?? '').trim();
+    const xToken = String(request.body?.xToken ?? '').trim();
+
+    if (!['homolog', 'prod'].includes(environment)) {
+      response.status(400).json({
+        error: 'invalid_environment',
+        message: 'Use homolog ou prod.',
+      });
+      return;
+    }
+    if (!clientId || !clientSecret || !xToken) {
+      response.status(400).json({
+        error: 'missing_credentials',
+        message: 'Client Id, Client Secret e X-Token sao obrigatorios.',
+      });
+      return;
+    }
+
+    const baseUrl =
+      environment === 'prod'
+        ? 'https://api.sankhya.com.br'
+        : 'https://api.sandbox.sankhya.com.br';
+
+    try {
+      const authPayload = await authenticateInSankhya({
+        baseUrl,
+        clientId,
+        clientSecret,
+        xToken,
+      });
+
+      const bearerToken = readBearerToken(authPayload);
+      if (!bearerToken) {
+        response.status(502).json({
+          error: 'missing_bearer',
+          message:
+            'Autenticacao retornou sem access_token. Verifique credenciais e permissao do app Sankhya.',
+        });
+        return;
+      }
+
+      const sql = buildSankhyaOperationTypesSql();
+      const queryResult = await executeSankhyaDbExplorerQuery({
+        baseUrl,
+        bearerToken,
+        xToken,
+        sql,
+      });
+
+      const operationTypes = queryResult.rows
+        .map((row) => mapSankhyaOperationTypeRow(row))
+        .filter((item) => item && item.code);
+
+      response.status(200).json({
+        ok: true,
+        environment,
+        endpoint: queryResult.endpointPath,
+        rowCount: operationTypes.length,
+        operationTypes,
+      });
+    } catch (error) {
+      response.status(502).json({
+        error: 'sankhya_operation_types_failed',
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  },
+);
+
+function buildSankhyaOperationTypesSql() {
+  return `
+SELECT
+    T.CODTIPOPER AS CodTipoOper,
+    T.DESCROPER AS Descricao,
+    T.TIPMOV AS TipoMovimento,
+    T.CALCDIFALPART AS CalcDifalPart,
+    T.CALCICMS AS CalcIcms,
+    T.CALCFCPINT AS CalcFcpInt,
+    T.CALCFUSTTOP AS CalcFustTop
+FROM TGFTOP T
+WHERE T.ATIVO = 'S'
+  AND T.DHALTER = (
+        SELECT MAX(T2.DHALTER) FROM TGFTOP T2 WHERE T2.CODTIPOPER = T.CODTIPOPER
+      )
+ORDER BY T.CODTIPOPER
+`.trim();
+}
+
+function mapSankhyaOperationTypeRow(row) {
+  const code = toCodeString(
+    readRowValueByAliases(row, ['CodTipoOper', 'CODTIPOOPER']),
+  );
+  if (!code) {
+    return null;
+  }
+
+  return {
+    code,
+    description: String(
+      readRowValueByAliases(row, ['Descricao', 'DESCRICAO']) ?? '',
+    ).trim(),
+    movementType: String(
+      readRowValueByAliases(row, ['TipoMovimento', 'TIPOMOVIMENTO']) ?? '',
+    ).trim(),
+    calcDifalPart: String(
+      readRowValueByAliases(row, ['CalcDifalPart', 'CALCDIFALPART']) ?? '',
+    ).trim(),
+    calcIcms: String(
+      readRowValueByAliases(row, ['CalcIcms', 'CALCICMS']) ?? '',
+    ).trim(),
+    calcFcpInt: String(
+      readRowValueByAliases(row, ['CalcFcpInt', 'CALCFCPINT']) ?? '',
+    ).trim(),
+    calcFustTop: String(
+      readRowValueByAliases(row, ['CalcFustTop', 'CALCFUSTTOP']) ?? '',
+    ).trim(),
+  };
+}
 
 exports.syncSankhyaPriceTablesNightly = onSchedule(
   {
@@ -364,6 +513,29 @@ function readBearerToken(payload) {
   return '';
 }
 
+async function buildTenantNcmGroupIndex({ firestore, tenantId }) {
+  const snapshot = await firestore
+    .collection('tax_rule_groups')
+    .where('tenantId', '==', tenantId)
+    .select('memberNcms')
+    .get();
+
+  const index = new Map();
+  for (const doc of snapshot.docs) {
+    const memberNcms = doc.data()?.memberNcms;
+    if (!Array.isArray(memberNcms)) {
+      continue;
+    }
+    for (const ncmDigits of memberNcms) {
+      const digits = normalizeDigits(ncmDigits);
+      if (digits) {
+        index.set(digits, doc.id);
+      }
+    }
+  }
+  return index;
+}
+
 async function syncSankhyaProductsModule({
   firestore,
   tenantId,
@@ -430,6 +602,7 @@ async function syncSankhyaProductsModule({
   let fiscalOriginEnrichmentCount = 0;
   let fiscalIpiEnrichmentCount = 0;
   let productFiscalByCode = new Map();
+  const ncmToGroupId = await buildTenantNcmGroupIndex({ firestore, tenantId });
 
   if (validProductCodes.length > 0) {
     try {
@@ -494,6 +667,7 @@ async function syncSankhyaProductsModule({
       productFiscal,
       existingData,
       nextSyncVersion,
+      ncmToGroupId,
     });
 
     await docRef.set(payload, { merge: true });
@@ -1053,6 +1227,7 @@ function mapSankhyaProductToFirestore({
   productFiscal,
   existingData,
   nextSyncVersion,
+  ncmToGroupId,
 }) {
   const code = toCodeString(source.codigoProduto);
   const name = String(source.nome ?? '').trim();
@@ -1068,6 +1243,11 @@ function mapSankhyaProductToFirestore({
   const aliquotaIpiBase = toNumberOrNull(
     productFiscal?.aliquotaIpiBase ?? existingData.aliquotaIpiBase,
   );
+  const ncmDigits = normalizeDigits(ncmRaw);
+  const grupoTributarioId =
+    (ncmDigits ? ncmToGroupId?.get(ncmDigits) : null) ??
+    existingData.grupoTributarioId ??
+    null;
 
   return {
     id: buildProductDocId(tenantId, code),
@@ -1084,6 +1264,7 @@ function mapSankhyaProductToFirestore({
     unidade: volume || null,
     ncm: ncmRaw || null,
     cest: cestRaw || null,
+    grupoTributarioId,
     origemMercadoriaCst,
     aliquotaIpiBase,
     pesoKg: toNumberOrNull(source.pesoBruto),
@@ -1477,7 +1658,90 @@ async function syncSankhyaTaxRulesModule({
     sql,
   });
 
+  // Passo 1: mapeia todas as linhas em memoria (descarta linhas invalidas ou
+  // excecoes por NCM sem nenhum valor fiscal real - ver mapSankhyaTaxRuleRow).
+  const syncVersionBase = Date.now() * 1000;
+  const mappedRows = [];
+  let skippedInvalidCount = 0;
+  for (let index = 0; index < queryResult.rows.length; index++) {
+    const row = queryResult.rows[index];
+    const mapped = mapSankhyaTaxRuleRow({
+      tenantId,
+      row,
+      nowIso,
+      syncBatchId,
+      syncVersion: syncVersionBase + index,
+    });
+    if (!mapped) {
+      skippedInvalidCount += 1;
+      continue;
+    }
+    mappedRows.push(mapped);
+  }
+
+  // Passo 2: separa regras genericas por UF (sem NCM - tier 3 do motor) das
+  // regras por NCM, e agrupa os NCMs com perfil fiscal identico (fingerprint)
+  // em Grupos Tributarios automaticos.
+  const genericRows = [];
+  const ncmVectorMap = new Map();
+  for (const mapped of mappedRows) {
+    const ncmDigits = normalizeDigits(mapped.ncm);
+    if (!ncmDigits) {
+      genericRows.push(mapped);
+      continue;
+    }
+    if (!ncmVectorMap.has(ncmDigits)) {
+      ncmVectorMap.set(ncmDigits, []);
+    }
+    ncmVectorMap.get(ncmDigits).push(mapped);
+  }
+
+  const clustersByHash = new Map();
+  for (const [ncmDigits, vectorRows] of ncmVectorMap.entries()) {
+    const hash = computeFingerprintHash(buildTaxFingerprintKey(vectorRows));
+    if (!clustersByHash.has(hash)) {
+      clustersByHash.set(hash, { ncmDigitsList: [], vectorRows });
+    }
+    clustersByHash.get(hash).ncmDigitsList.push(ncmDigits);
+  }
+
+  const groupedNcmDigits = new Set();
+  const ncmToGroupId = new Map();
+  const groupDocsToUpsert = [];
+  const groupRuleDocs = [];
+  for (const cluster of clustersByHash.values()) {
+    if (cluster.ncmDigitsList.length < 2) {
+      continue;
+    }
+    const hash = computeFingerprintHash(
+      buildTaxFingerprintKey(cluster.vectorRows),
+    );
+    const groupId = `erp_group_${tenantId}_${hash}`;
+    const memberNcms = cluster.ncmDigitsList.slice().sort();
+    for (const ncmDigits of memberNcms) {
+      groupedNcmDigits.add(ncmDigits);
+      ncmToGroupId.set(ncmDigits, groupId);
+    }
+    groupDocsToUpsert.push({
+      groupId,
+      hash,
+      memberNcms,
+      vectorRows: cluster.vectorRows,
+    });
+    for (const vectorRow of cluster.vectorRows) {
+      const ruleId = `erp_taxgroup_${tenantId}_${hash}_${sanitizeKeyToken(vectorRow.ufOrigem, 'ANY')}_${sanitizeKeyToken(vectorRow.ufDestino, 'ANY')}`;
+      groupRuleDocs.push({
+        ...vectorRow,
+        id: ruleId,
+        ncm: null,
+        cest: null,
+        taxGroupId: groupId,
+      });
+    }
+  }
+
   const taxRulesCollection = firestore.collection('tax_rules');
+  const taxRuleGroupsCollection = firestore.collection('tax_rule_groups');
   const writer = firestore.bulkWriter();
   writer.onWriteError((error) => {
     if (error.failedAttempts < 3) {
@@ -1496,38 +1760,73 @@ async function syncSankhyaTaxRulesModule({
   });
 
   let importedCount = 0;
-  let skippedMissingNcmCount = 0;
   let importedMissingCestCount = 0;
-  let prunedLegacyMissingNcmCount = 0;
+  let prunedStaleRuleCount = 0;
   const mappedRuleIds = new Set();
-  const syncVersionBase = Date.now() * 1000;
 
   try {
-    for (let index = 0; index < queryResult.rows.length; index++) {
-      const row = queryResult.rows[index];
-      const mapped = mapSankhyaTaxRuleRow({
-        tenantId,
-        row,
-        nowIso,
-        syncBatchId,
-        syncVersion: syncVersionBase + index,
-      });
-      if (!mapped) {
-        const ncmDigits = normalizeDigits(
-          readRowValueByAliases(row, ['NCM']),
-        );
-        if (!ncmDigits) {
-          skippedMissingNcmCount += 1;
-        }
-        continue;
-      }
-
-      mappedRuleIds.add(mapped.id);
-      writer.set(taxRulesCollection.doc(mapped.id), mapped, { merge: true });
+    const writeRule = (ruleDoc) => {
+      mappedRuleIds.add(ruleDoc.id);
+      writer.set(taxRulesCollection.doc(ruleDoc.id), ruleDoc, { merge: true });
       importedCount += 1;
-      if (!mapped.cest) {
+      if (!ruleDoc.cest) {
         importedMissingCestCount += 1;
       }
+    };
+
+    for (const mapped of genericRows) {
+      writeRule(mapped);
+    }
+    for (const [ncmDigits, vectorRows] of ncmVectorMap.entries()) {
+      if (groupedNcmDigits.has(ncmDigits)) {
+        continue;
+      }
+      for (const mapped of vectorRows) {
+        writeRule(mapped);
+      }
+    }
+    for (const ruleDoc of groupRuleDocs) {
+      writeRule(ruleDoc);
+    }
+
+    for (const groupDoc of groupDocsToUpsert) {
+      const ref = taxRuleGroupsCollection.doc(groupDoc.groupId);
+      const existingSnapshot = await ref.get();
+      const existing = existingSnapshot.exists
+        ? existingSnapshot.data() || {}
+        : {};
+      const isAutoName = existing.autoGenerated !== false;
+      const autoName = buildAutoGroupName(
+        groupDoc.vectorRows,
+        groupDoc.memberNcms.length,
+      );
+      const name = isAutoName ? autoName : existing.name || autoName;
+      writer.set(
+        ref,
+        {
+          id: groupDoc.groupId,
+          tenantId,
+          representedCompanyId: null,
+          status: existing.status || 'active',
+          source: 'erp_sync',
+          erpProvider: 'sankhya',
+          externalCode: groupDoc.hash,
+          fingerprint: groupDoc.hash,
+          memberNcms: groupDoc.memberNcms,
+          memberNcmCount: groupDoc.memberNcms.length,
+          priority: existing.priority ?? 0,
+          autoGenerated: existing.autoGenerated ?? true,
+          name,
+          normalizedName: name.trim().toLowerCase(),
+          description:
+            existing.description ||
+            buildAutoGroupDescription(groupDoc.vectorRows, groupDoc.memberNcms),
+          createdAt: existing.createdAt || nowIso,
+          updatedAt: nowIso,
+          erpSyncId: syncBatchId,
+        },
+        { merge: true },
+      );
     }
 
     const existingSnapshot = await taxRulesCollection
@@ -1545,16 +1844,24 @@ async function syncSankhyaTaxRulesModule({
         continue;
       }
 
-      const existingNcmDigits = normalizeDigits(payload.ncm);
-      if (existingNcmDigits) {
+      if (mappedRuleIds.has(doc.id)) {
         continue;
       }
 
       writer.delete(doc.ref);
-      prunedLegacyMissingNcmCount += 1;
+      prunedStaleRuleCount += 1;
     }
   } finally {
     await writer.close();
+  }
+
+  let productsGroupLinkedCount = 0;
+  if (ncmToGroupId.size > 0) {
+    productsGroupLinkedCount = await applyTaxGroupsToExistingProducts({
+      firestore,
+      tenantId,
+      ncmToGroupId,
+    });
   }
 
   await updateTenantSyncState({
@@ -1565,25 +1872,369 @@ async function syncSankhyaTaxRulesModule({
       lastTaxRulesSyncMode: 'full',
       lastTaxRulesSourceCount: queryResult.rows.length,
       lastTaxRulesImportedCount: importedCount,
-      lastTaxRulesSkippedMissingNcmCount: skippedMissingNcmCount,
+      lastTaxRulesSkippedInvalidCount: skippedInvalidCount,
       lastTaxRulesImportedMissingCestCount: importedMissingCestCount,
-      lastTaxRulesPrunedLegacyMissingNcmCount: prunedLegacyMissingNcmCount,
+      lastTaxRulesPrunedStaleRuleCount: prunedStaleRuleCount,
+      lastTaxRulesGroupsCreatedCount: groupDocsToUpsert.length,
+      lastTaxRulesGroupedNcmCount: groupedNcmDigits.size,
+      lastTaxRulesProductsGroupLinkedCount: productsGroupLinkedCount,
       lastTaxRulesEndpoint: queryResult.endpointPath,
     },
   });
 
   return {
     message:
-      'Sincronizacao completa de tax_rules concluida via SQL DbExplorer.',
+      'Sincronizacao completa de tax_rules concluida via SQL DbExplorer, com agrupamento automatico de grupos tributarios.',
     endpoint: queryResult.endpointPath,
     sourceCount: queryResult.rows.length,
     importedCount,
-    skippedMissingNcmCount,
+    skippedInvalidCount,
     importedMissingCestCount,
-    prunedLegacyMissingNcmCount,
+    prunedStaleRuleCount,
+    groupsCreatedCount: groupDocsToUpsert.length,
+    groupedNcmCount: groupedNcmDigits.size,
+    productsGroupLinkedCount,
     filteredOutZeroCodeCount: 0,
     skippedNotFoundCount: 0,
     mirroredRuleCount: mappedRuleIds.size,
+  };
+}
+
+function buildClienteDocId(tenantId, codigoParceiro) {
+  return `erp_cliente_${tenantId}_${toCodeString(codigoParceiro)}`;
+}
+
+// Mantido em paridade com `defaultTaxRegime` de lib/src/core/models/domain_types.dart.
+// TGFPAR nao possui coluna de regime tributario do parceiro; usado apenas
+// como fallback quando o documento ainda nao tem valor definido manualmente.
+const SANKHYA_DEFAULT_TAX_REGIME = 'simples_nacional';
+
+// Sync de clientes/parceiros Sankhya (TGFPAR) para a colecao `clientes`. UF e
+// resolvida via TGFPAR.CODCID -> TSICID.UF (codigo numerico) -> TSIUFS.UF
+// (sigla), mesmo join ja usado em tax_rules. CLASSIFICMS ("Classificacao
+// ICMS" no cadastro de parceiros do Sankhya) tem 6 opcoes na tela (Revendedor,
+// Produtor Rural, Consumidor Final Nao Contribuinte, Usar a da TOP, Isento de
+// ICMS, Consumidor Final Contribuinte). Letras confirmadas empiricamente
+// 2026-10-27 alterando o mesmo cliente de teste (191, CODPARC com IE valida)
+// entre as 6 opcoes na tela do Sankhya e conferindo `erpClassificmsRaw` apos
+// cada resync: R=Revendedor (contribuinte), P=Produtor Rural (contribuinte),
+// T=Usar a da TOP (sem classificacao fixa, cai no fallback por IE), C=
+// Consumidor Final NAO Contribuinte (a letra sugere o contrario, mas foi
+// confirmado pela tela do Sankhya para o cliente 1887, IE nula), X=
+// Consumidor Final Contribuinte (a letra 'C' ja estava ocupada por outra
+// opcao, entao o Sankhya usa 'X' aqui). I=Isento de ICMS (nao contribuinte,
+// validado com o cliente 1231, IE nula). 'N' nunca foi observado neste tenant
+// (nao ha clientes produtor/consumidor final nao-PJ com essa letra), mas
+// mantido no set nao_contribuinte por seguranca caso apareca futuramente -
+// nao deve ser confundido com 'C', que e a letra realmente usada para o caso
+// "Nao Contribuinte" nesta instalacao. Qualquer codigo nao mapeado
+// (null/T/desconhecido) cai no fallback por Inscricao Estadual valida.
+// taxRegime nao tem coluna correspondente em TGFPAR e permanece com o valor
+// existente/manual.
+const SANKHYA_CLASSIFICMS_CONTRIBUINTE_CODES = new Set(['R', 'P', 'X']);
+const SANKHYA_CLASSIFICMS_NAO_CONTRIBUINTE_CODES = new Set(['C', 'I', 'N']);
+
+function buildSankhyaClientesSql({ codigosFiltro } = {}) {
+  const safeCodes = normalizeSankhyaNumericCodeList(codigosFiltro ?? []);
+  const filtroCodigo =
+    safeCodes.length > 0 ? `\n  AND PAR.CODPARC IN (${safeCodes.join(', ')})` : '';
+
+  return `
+SELECT
+    TO_CHAR(PAR.CODPARC) AS CODPARC,
+    PAR.NOMEPARC,
+    PAR.RAZAOSOCIAL,
+    PAR.CGC_CPF,
+    PAR.TIPPESSOA,
+    PAR.ATIVO,
+    PAR.IDENTINSCESTAD,
+    PAR.INSCMUN,
+    PAR.CLASSIFICMS,
+    PAR.CEP,
+    PAR.NUMEND,
+    PAR.COMPLEMENTO,
+    PAR.TELEFONE,
+    PAR.EMAIL,
+    CID.NOMECID,
+    UFS.UF AS SIGLA_UF
+FROM TGFPAR PAR
+LEFT JOIN TSICID CID ON CID.CODCID = PAR.CODCID
+LEFT JOIN TSIUFS UFS ON UFS.CODUF = CID.UF
+WHERE PAR.CLIENTE = 'S'${filtroCodigo}
+`;
+}
+
+function mapSankhyaClienteRow({
+  tenantId,
+  row,
+  nowIso,
+  syncBatchId,
+  syncVersion,
+  existingData,
+}) {
+  const existing = existingData || {};
+  const codigo = toCodeString(readRowValueByAliases(row, ['CODPARC']));
+  if (!codigo || isZeroCode(codigo)) {
+    return null;
+  }
+
+  const razaoSocial = String(
+    readRowValueByAliases(row, ['RAZAOSOCIAL']) ?? '',
+  ).trim();
+  const nomeFantasia = String(
+    readRowValueByAliases(row, ['NOMEPARC']) ?? '',
+  ).trim();
+  const documento = normalizeDigits(readRowValueByAliases(row, ['CGC_CPF']));
+  const tipPessoaRaw = String(readRowValueByAliases(row, ['TIPPESSOA']) ?? '')
+    .trim()
+    .toUpperCase();
+  const ativoRaw = String(readRowValueByAliases(row, ['ATIVO']) ?? '')
+    .trim()
+    .toUpperCase();
+  const inscricaoEstadualRaw = String(
+    readRowValueByAliases(row, ['IDENTINSCESTAD']) ?? '',
+  ).trim();
+  const classificmsRaw =
+    nullableString(readRowValueByAliases(row, ['CLASSIFICMS']))?.toUpperCase() ??
+    null;
+  const inscricaoEstadualUpper = inscricaoEstadualRaw.toUpperCase();
+  const hasValidIe =
+    inscricaoEstadualUpper.length > 0 && inscricaoEstadualUpper !== 'ISENTO';
+
+  let taxProfile;
+  if (SANKHYA_CLASSIFICMS_CONTRIBUINTE_CODES.has(classificmsRaw)) {
+    taxProfile = 'contribuinte';
+  } else if (SANKHYA_CLASSIFICMS_NAO_CONTRIBUINTE_CODES.has(classificmsRaw)) {
+    taxProfile = 'nao_contribuinte';
+  } else {
+    taxProfile = hasValidIe ? 'contribuinte' : 'nao_contribuinte';
+  }
+
+  let salePurposeFromClassificms = null;
+  if (classificmsRaw === 'R') {
+    salePurposeFromClassificms = 'revenda';
+  } else if (
+    classificmsRaw === 'C' ||
+    classificmsRaw === 'N' ||
+    classificmsRaw === 'X'
+  ) {
+    salePurposeFromClassificms = 'uso_consumo';
+  }
+
+  return {
+    id: buildClienteDocId(tenantId, codigo),
+    tenantId,
+    representedCompanyId: existing.representedCompanyId ?? null,
+    ownerId: existing.ownerId ?? null,
+    gerenteId: existing.gerenteId ?? null,
+    representanteId: existing.representanteId ?? null,
+    vendedorId: existing.vendedorId ?? null,
+    nome: razaoSocial || nomeFantasia || `Cliente ${codigo}`,
+    nomeFantasia: nullableString(nomeFantasia),
+    documento: nullableString(documento),
+    tipoPessoa: tipPessoaRaw === 'F' ? 'pf' : 'pj',
+    cep: nullableString(normalizeDigits(readRowValueByAliases(row, ['CEP']))),
+    numero: nullableString(readRowValueByAliases(row, ['NUMEND'])),
+    complemento: nullableString(readRowValueByAliases(row, ['COMPLEMENTO'])),
+    cidade: nullableString(readRowValueByAliases(row, ['NOMECID'])),
+    estado: nullableString(
+      String(readRowValueByAliases(row, ['SIGLA_UF']) ?? '')
+        .trim()
+        .toUpperCase(),
+    ),
+    logradouro: existing.logradouro ?? null,
+    bairro: existing.bairro ?? null,
+    telefone: nullableString(readRowValueByAliases(row, ['TELEFONE'])),
+    email: nullableString(readRowValueByAliases(row, ['EMAIL'])),
+    inscricaoEstadual: nullableString(inscricaoEstadualRaw),
+    inscricaoMunicipal: nullableString(
+      readRowValueByAliases(row, ['INSCMUN']),
+    ),
+    taxProfile,
+    taxRegime: existing.taxRegime || SANKHYA_DEFAULT_TAX_REGIME,
+    isZfmSuframa: existing.isZfmSuframa ?? false,
+    salePurpose: salePurposeFromClassificms || existing.salePurpose || 'revenda',
+    origemCadastro: 'erp',
+    // Sankhya e a fonte da verdade quando a integracao esta ativa: um cliente
+    // ativo no ERP e gravado direto como 'aprovado' (nao 'sincronizado'), sem
+    // exigir aprovacao manual no app - do contrario ele nunca aparece no
+    // seletor de cliente da tela de pedido, que so lista status 'aprovado'.
+    status: ativoRaw === 'S' ? 'aprovado' : 'inativo',
+    erpClassificmsRaw: classificmsRaw,
+    erpSyncId: syncBatchId,
+    createdAt: existing.createdAt || nowIso,
+    updatedAt: nowIso,
+    deletedAt: null,
+    syncVersion,
+  };
+}
+
+// Mesma API publica (BrasilAPI) ja usada no app Flutter para preencher
+// logradouro/bairro a partir do CEP (ver cliente_pre_cadastro_page.dart). Nao
+// e relevante para o calculo fiscal, so para completar o cadastro de
+// endereco; falhas sao toleradas silenciosamente (o campo so fica vazio).
+async function lookupCepAddress(cep) {
+  try {
+    const response = await fetch(`https://brasilapi.com.br/api/cep/v2/${cep}`);
+    if (!response.ok) {
+      return null;
+    }
+    const data = await response.json();
+    return {
+      logradouro: nullableString(data?.street),
+      bairro: nullableString(data?.neighborhood),
+    };
+  } catch (error) {
+    console.error(
+      '[lookupCepAddress] failed',
+      JSON.stringify({ cep, message: error?.message }),
+    );
+    return null;
+  }
+}
+
+async function syncSankhyaClientesModule({
+  firestore,
+  tenantId,
+  baseUrl,
+  bearerToken,
+  xToken,
+  codigosFiltro,
+}) {
+  const nowIso = new Date().toISOString();
+  const syncBatchId = `sankhya_clientes_${Date.now()}`;
+  const sql = buildSankhyaClientesSql({ codigosFiltro });
+  const queryResult = await executeSankhyaDbExplorerQuery({
+    baseUrl,
+    bearerToken,
+    xToken,
+    sql,
+  });
+
+  const clientesCollection = firestore.collection('clientes');
+  const writer = firestore.bulkWriter();
+  writer.onWriteError((error) => {
+    if (error.failedAttempts < 3) {
+      return true;
+    }
+    console.error(
+      '[syncSankhyaClientesModule] write_failed',
+      JSON.stringify({
+        code: error.code,
+        message: error.message,
+        documentPath: error.documentRef?.path || null,
+        failedAttempts: error.failedAttempts,
+      }),
+    );
+    return false;
+  });
+
+  const syncVersionBase = Date.now() * 1000;
+  let importedCount = 0;
+  let skippedInvalidCount = 0;
+  let prunedInactiveCount = 0;
+  const cepCache = new Map();
+  const mappedClienteIds = new Set();
+  const isFullSync = !codigosFiltro || codigosFiltro.length === 0;
+
+  try {
+    for (let index = 0; index < queryResult.rows.length; index++) {
+      const row = queryResult.rows[index];
+      const docId = buildClienteDocId(
+        tenantId,
+        readRowValueByAliases(row, ['CODPARC']),
+      );
+      const ref = clientesCollection.doc(docId);
+      const existingSnapshot = await ref.get();
+      const existingData = existingSnapshot.exists
+        ? existingSnapshot.data() || {}
+        : {};
+
+      const mapped = mapSankhyaClienteRow({
+        tenantId,
+        row,
+        nowIso,
+        syncBatchId,
+        syncVersion: syncVersionBase + index,
+        existingData,
+      });
+
+      if (!mapped) {
+        skippedInvalidCount += 1;
+        continue;
+      }
+
+      if (mapped.cep && !mapped.logradouro) {
+        if (!cepCache.has(mapped.cep)) {
+          cepCache.set(mapped.cep, await lookupCepAddress(mapped.cep));
+        }
+        const cepInfo = cepCache.get(mapped.cep);
+        if (cepInfo) {
+          mapped.logradouro = mapped.logradouro || cepInfo.logradouro;
+          mapped.bairro = mapped.bairro || cepInfo.bairro;
+        }
+      }
+
+      writer.set(ref, mapped, { merge: true });
+      mappedClienteIds.add(docId);
+      importedCount += 1;
+    }
+
+    // Prune: so roda em sync completo (sem codigosFiltro), nunca em teste
+    // restrito a poucos codigos - do contrario qualquer cliente ERP fora do
+    // filtro de teste seria incorretamente marcado como inativo. Clientes ERP
+    // que deixaram de aparecer na consulta completa do Sankhya sao apenas
+    // marcados como 'inativo' no Firestore (soft, nunca excluidos), pois
+    // Sankhya e a fonte da verdade de quem esta ativo/existe no ERP.
+    if (isFullSync) {
+      const existingErpSnapshot = await clientesCollection
+        .where('tenantId', '==', tenantId)
+        .where('origemCadastro', '==', 'erp')
+        .get();
+      for (const doc of existingErpSnapshot.docs) {
+        if (mappedClienteIds.has(doc.id)) {
+          continue;
+        }
+        const payload = doc.data() || {};
+        if (payload.status === 'inativo') {
+          continue;
+        }
+        writer.set(
+          doc.ref,
+          { status: 'inativo', updatedAt: nowIso },
+          { merge: true },
+        );
+        prunedInactiveCount += 1;
+      }
+    }
+  } finally {
+    await writer.close();
+  }
+
+  await updateTenantSyncState({
+    firestore,
+    tenantId,
+    patch: {
+      lastClientesSyncAt: nowIso,
+      lastClientesSyncMode: codigosFiltro?.length ? 'test_filtered' : 'full',
+      lastClientesSourceCount: queryResult.rows.length,
+      lastClientesImportedCount: importedCount,
+      lastClientesSkippedInvalidCount: skippedInvalidCount,
+      lastClientesPrunedInactiveCount: prunedInactiveCount,
+      lastClientesEndpoint: queryResult.endpointPath,
+    },
+  });
+
+  return {
+    message: codigosFiltro?.length
+      ? `Sincronizacao de teste de clientes concluida (restrita aos codigos: ${codigosFiltro.join(', ')}).`
+      : 'Sincronizacao completa de clientes concluida via SQL DbExplorer.',
+    endpoint: queryResult.endpointPath,
+    sourceCount: queryResult.rows.length,
+    importedCount,
+    skippedInvalidCount,
+    prunedInactiveCount,
+    codigosFiltro: codigosFiltro ?? [],
   };
 }
 
@@ -1642,34 +2293,44 @@ SELECT DISTINCT
     NVL(UFO.UF, 'ANY') AS UFORIGEM,
     NVL(UFD.UF, 'ANY') AS UFDESTINO,
     CASE
-        WHEN TRIM(NVL(TO_CHAR(ICM.PAUTAVLRSTFIXO), '')) NOT IN ('', '0', '0,0', '0,00', '0.0', '0.00', 'N') THEN 'pmc'
+        WHEN NVL(TRIM(TO_CHAR(ICM.PAUTAVLRSTFIXO)), 'N') NOT IN ('0', '0,0', '0,00', '0.0', '0.00', 'N') THEN 'pmc'
         ELSE 'mva'
     END AS TIPOST,
     TO_CHAR(NULL) AS PRECOPARACALCULOST,
     CASE
-        WHEN TRIM(NVL(TO_CHAR(ICM.REDBASEST), '')) IN ('', 'N') THEN '0'
+        WHEN NVL(TRIM(TO_CHAR(ICM.REDBASEST)), 'N') = 'N' THEN '0'
         ELSE TO_CHAR(ICM.REDBASEST)
     END AS REDUCAOBASEICMSST,
     CASE
-        WHEN TRIM(NVL(TO_CHAR(ICM.PAUTAVLRSTFIXO), '')) IN ('', 'N') THEN '0'
+        WHEN NVL(TRIM(TO_CHAR(ICM.PAUTAVLRSTFIXO)), 'N') = 'N' THEN '0'
         ELSE TO_CHAR(ICM.PAUTAVLRSTFIXO)
     END AS BASECALCULOICMSST,
     CASE
-        WHEN TRIM(NVL(TO_CHAR(ICM.ALIQSUBTRIB), '')) NOT IN ('', 'N') THEN TO_CHAR(ICM.ALIQSUBTRIB)
-        WHEN TRIM(NVL(TO_CHAR(ICM.ALIQINTDEST), '')) NOT IN ('', 'N') THEN TO_CHAR(ICM.ALIQINTDEST)
-        WHEN TRIM(NVL(TO_CHAR(ICM.ALIQUOTA), '')) NOT IN ('', 'N') THEN TO_CHAR(ICM.ALIQUOTA)
+        WHEN NVL(TRIM(TO_CHAR(ICM.ALIQSUBTRIB)), 'N') <> 'N' THEN TO_CHAR(ICM.ALIQSUBTRIB)
+        WHEN NVL(TRIM(TO_CHAR(ICM.ALIQINTDEST)), 'N') <> 'N' THEN TO_CHAR(ICM.ALIQINTDEST)
+        WHEN NVL(TRIM(TO_CHAR(ICM.ALIQUOTA)), 'N') <> 'N' THEN TO_CHAR(ICM.ALIQUOTA)
         ELSE '0'
     END AS ALIQUOTADESTINO,
     CASE
-        WHEN TRIM(NVL(TO_CHAR(ICM.ALIQUOTA), '')) NOT IN ('', 'N') THEN TO_CHAR(ICM.ALIQUOTA)
-        WHEN TRIM(NVL(TO_CHAR(ICM.ALIQINTDEST), '')) NOT IN ('', 'N') THEN TO_CHAR(ICM.ALIQINTDEST)
+        WHEN NVL(TRIM(TO_CHAR(ICM.ALIQUOTA)), 'N') <> 'N' THEN TO_CHAR(ICM.ALIQUOTA)
+        WHEN NVL(TRIM(TO_CHAR(ICM.ALIQINTDEST)), 'N') <> 'N' THEN TO_CHAR(ICM.ALIQINTDEST)
         ELSE '0'
     END AS ALIQUOTACREDITO,
-    TO_CHAR(NULL) AS ALIQUOTADIFAL,
+    CASE
+        WHEN NVL(ICM.ALIQINTDEST, 0) > 0
+             AND UFO.UF IS NOT NULL
+             AND UFD.UF IS NOT NULL
+             AND UFO.UF <> UFD.UF
+            THEN TO_CHAR(GREATEST(ICM.ALIQINTDEST - NVL(ICM.ALIQUOTA, 0), 0))
+        ELSE TO_CHAR(NULL)
+    END AS ALIQUOTADIFAL,
+    TO_CHAR(ICM.PERCICMSFCPINT) AS PERCFCPINTERNO,
+    TO_CHAR(ICM.PERCICMSFCP) AS PERCFCPGERAL,
+    TO_CHAR(ICM.PERCSTFCPINT) AS PERCSTFCPINTERNO,
     TO_CHAR(ICM.CSOSN) AS CST_CSOSN,
     CASE
-        WHEN TRIM(NVL(TO_CHAR(ICM.MVAORIGINAL), '')) NOT IN ('', 'N') THEN TO_CHAR(ICM.MVAORIGINAL)
-        WHEN TRIM(NVL(TO_CHAR(ICM.MVASIMPLIFICADO), '')) NOT IN ('', 'N') THEN TO_CHAR(ICM.MVASIMPLIFICADO)
+        WHEN NVL(TRIM(TO_CHAR(ICM.MVAORIGINAL)), 'N') <> 'N' THEN TO_CHAR(ICM.MVAORIGINAL)
+        WHEN NVL(TRIM(TO_CHAR(ICM.MVASIMPLIFICADO)), 'N') <> 'N' THEN TO_CHAR(ICM.MVASIMPLIFICADO)
         ELSE '0'
     END AS MVA,
     (
@@ -1766,9 +2427,6 @@ function mapSankhyaTaxRuleRow({
   const ncmDigits = normalizeDigits(
     readRowValueByAliases(row, ['NCM']),
   );
-  if (!ncmDigits) {
-    return null;
-  }
   const ufDestino = normalizeTaxRuleUf(
     readRowValueByAliases(row, ['UFDESTINO']),
   );
@@ -1797,6 +2455,37 @@ function mapSankhyaTaxRuleRow({
   const stBaseAmount = toNumberOrNull(
     readRowValueByAliases(row, ['BASECALCULOICMSST', 'PAUTAVLRSTFIXO']),
   );
+  const aliquotaDifalValue = toNumberOrNull(
+    readRowValueByAliases(row, ['ALIQUOTADIFAL']),
+  );
+  const aliquotaFcpValue =
+    toNumberOrNull(readRowValueByAliases(row, ['PERCFCPINTERNO'])) ??
+    toNumberOrNull(readRowValueByAliases(row, ['PERCFCPGERAL']));
+  const aliquotaFcpStValue = toNumberOrNull(
+    readRowValueByAliases(row, ['PERCSTFCPINTERNO']),
+  );
+
+  // Linhas de excecao por NCM/produto/grupo que nao carregam NENHUM valor
+  // fiscal real (todos os campos numericos zerados/nulos) sao descartadas:
+  // no Sankhya elas so existem para fins de CST/CSOSN/CEST e, se importadas
+  // como regra por NCM (tier 2), mascarariam com 0% a regra generica por UF
+  // (tier 3) que e quem realmente carrega a aliquota. A regra generica (sem
+  // NCM) nunca e descartada por este filtro.
+  if (ncmDigits) {
+    const hasRealValue = [
+      aliquotaDestino,
+      aliquotaCredito,
+      mvaIva,
+      stBaseReductionPercent,
+      stBaseAmount,
+      aliquotaDifalValue,
+      aliquotaFcpValue,
+      aliquotaFcpStValue,
+    ].some((value) => (value ?? 0) > 0);
+    if (!hasRealValue) {
+      return null;
+    }
+  }
 
   const codTab = sanitizeKeyToken(readRowValueByAliases(row, ['CODTAB']), '-');
   const sequencia = sanitizeKeyToken(
@@ -1849,9 +2538,9 @@ function mapSankhyaTaxRuleRow({
     aliquotaIcms: aliquotaCredito,
     mvaIva,
     aliquotaSt: aliquotaDestino,
-    aliquotaDifal: toNumberOrNull(
-      readRowValueByAliases(row, ['ALIQUOTADIFAL']),
-    ),
+    aliquotaDifal: aliquotaDifalValue,
+    aliquotaFcp: aliquotaFcpValue,
+    aliquotaFcpSt: aliquotaFcpStValue,
     priority: readInt(readRowValueByAliases(row, ['PRIORIDADE'])),
     validFrom: toIsoDateOrNull(
       readRowValueByAliases(row, ['VIGENCIAINICIAL', 'VALIDFROM']),
@@ -1868,6 +2557,114 @@ function mapSankhyaTaxRuleRow({
     createdAt: nowIso,
     updatedAt: nowIso,
   };
+}
+
+// --- Agrupamento inteligente de regras fiscais (Grupo Tributario automatico) ---
+//
+// Objetivo: NCMs que, na pratica, tem exatamente o mesmo "perfil fiscal"
+// (mesma aliquota interna/interestadual, MVA, reducao de base, CST/CSOSN,
+// FCP etc. em cada par de UF) sao agrupados automaticamente em um unico
+// `tax_rule_groups` + um unico conjunto de `tax_rules` por grupo, em vez de
+// uma regra por NCM. Isso evita a explosao de regras quase-identicas e
+// aproxima o cadastro do que o usuario faria manualmente ao analisar uma
+// planilha de produtos (varios NCMs com o mesmo tratamento fiscal).
+function roundForFingerprint(value) {
+  const numeric = Number(value ?? 0);
+  if (!Number.isFinite(numeric)) {
+    return 0;
+  }
+  return Math.round(numeric * 10000) / 10000;
+}
+
+function buildTaxFingerprintKey(vectorRows) {
+  const parts = vectorRows
+    .map((row) =>
+      [
+        row.ufOrigem,
+        row.ufDestino,
+        roundForFingerprint(row.aliquotaDestino),
+        roundForFingerprint(row.aliquotaCredito),
+        roundForFingerprint(row.aliquotaDifal),
+        roundForFingerprint(row.mvaIva),
+        roundForFingerprint(row.stBaseReductionPercent),
+        roundForFingerprint(row.stBaseAmount),
+        row.stCalculationType || 'mva',
+        row.cstCsosn || '',
+        roundForFingerprint(row.aliquotaFcp),
+        roundForFingerprint(row.aliquotaFcpSt),
+      ].join('|'),
+    )
+    .sort();
+  return parts.join('#');
+}
+
+function computeFingerprintHash(key) {
+  return crypto.createHash('sha1').update(key).digest('hex').slice(0, 16);
+}
+
+function buildAutoGroupName(vectorRows, memberCount) {
+  const representative =
+    vectorRows.find((row) => (row.aliquotaDestino ?? 0) > 0) || vectorRows[0];
+  const icms = roundForFingerprint(representative?.aliquotaDestino);
+  const mva = roundForFingerprint(representative?.mvaIva);
+  const parts = [`ICMS ${icms}%`];
+  if (mva > 0) {
+    parts.push(`MVA ${mva}%`);
+  }
+  return `Grupo Fiscal ERP (${parts.join(' / ')}) - ${memberCount} NCMs`;
+}
+
+function buildAutoGroupDescription(vectorRows, memberNcms) {
+  const sampleNcms = memberNcms
+    .slice(0, 8)
+    .map((digits) => formatNcmMasked(digits))
+    .join(', ');
+  const suffix = memberNcms.length > 8 ? '...' : '';
+  const ufCount = new Set(vectorRows.map((row) => row.ufDestino)).size;
+  return `Grupo criado automaticamente na sincronizacao com o ERP (Sankhya), agrupando ${memberNcms.length} NCMs com identico tratamento fiscal em ${ufCount} UF(s) de destino. NCMs: ${sampleNcms}${suffix}`;
+}
+
+async function applyTaxGroupsToExistingProducts({
+  firestore,
+  tenantId,
+  ncmToGroupId,
+}) {
+  const snapshot = await firestore
+    .collection('produtos')
+    .where('tenantId', '==', tenantId)
+    .select('ncm', 'grupoTributarioId', 'deletedAt')
+    .get();
+
+  const writer = firestore.bulkWriter();
+  writer.onWriteError((error) => error.failedAttempts < 3);
+  let linkedCount = 0;
+
+  try {
+    for (const doc of snapshot.docs) {
+      const data = doc.data() || {};
+      if (data.deletedAt) {
+        continue;
+      }
+      const ncmDigits = normalizeDigits(data.ncm);
+      if (!ncmDigits) {
+        continue;
+      }
+      const groupId = ncmToGroupId.get(ncmDigits);
+      if (!groupId || data.grupoTributarioId === groupId) {
+        continue;
+      }
+      writer.set(
+        doc.ref,
+        { grupoTributarioId: groupId },
+        { merge: true },
+      );
+      linkedCount += 1;
+    }
+  } finally {
+    await writer.close();
+  }
+
+  return linkedCount;
 }
 
 function normalizeTaxRuleUf(value) {

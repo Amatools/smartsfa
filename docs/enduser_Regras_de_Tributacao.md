@@ -1,5 +1,7 @@
 Guia rapido de Regras de Tributacao (versao para usuarios)
 
+> Nota: para a especificacao tecnica completa e atualizada do motor de tributacao, ver [tributacao_motor_especificacao_tecnica.md](tributacao_motor_especificacao_tecnica.md). Este guia e uma versao simplificada para usuario final.
+
 Para simplificar o dia a dia da sua empresa, o sistema calcula os impostos automaticamente na venda.
 Ele cruza 3 grupos de informacoes:
 

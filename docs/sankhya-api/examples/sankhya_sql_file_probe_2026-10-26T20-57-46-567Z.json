@@ -1,0 +1,385 @@
+{
+  "marker": "SQL_FILE_PROBE",
+  "ok": true,
+  "tenantId": "self_T8oqTD0UBtWATPbITOGsqAEZt3d2_smartsfa-enterprise-teste",
+  "environment": "prod",
+  "sqlFile": "G:\\smartsfa\\docs\\sankhya-api\\examples\\probe_tgfpar_cliente_191.sql",
+  "baseUrl": "https://api.sankhya.com.br",
+  "endpointPath": "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+  "status": 200,
+  "responseIsJson": true,
+  "rowCount": 1,
+  "fields": [
+    {
+      "name": "CODPARC",
+      "order": 1,
+      "userType": "I",
+      "precision": null
+    },
+    {
+      "name": "NOMEPARC",
+      "order": 2,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "RAZAOSOCIAL",
+      "order": 3,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "CGC_CPF",
+      "order": 4,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "TIPPESSOA",
+      "order": 5,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "CLIENTE",
+      "order": 6,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "ATIVO",
+      "order": 7,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "IDENTINSCESTAD",
+      "order": 8,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "INSCESTADNAUF",
+      "order": 9,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "INSCMUN",
+      "order": 10,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "CLASSIFICMS",
+      "order": 11,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "CODTAB",
+      "order": 12,
+      "userType": "I",
+      "precision": null
+    },
+    {
+      "name": "CODTABST",
+      "order": 13,
+      "userType": "I",
+      "precision": null
+    },
+    {
+      "name": "CODCID",
+      "order": 14,
+      "userType": "I",
+      "precision": null
+    },
+    {
+      "name": "CEP",
+      "order": 15,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "CODEND",
+      "order": 16,
+      "userType": "I",
+      "precision": null
+    },
+    {
+      "name": "NUMEND",
+      "order": 17,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "COMPLEMENTO",
+      "order": 18,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "CODBAI",
+      "order": 19,
+      "userType": "I",
+      "precision": null
+    },
+    {
+      "name": "TELEFONE",
+      "order": 20,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "EMAIL",
+      "order": 21,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "DTCAD",
+      "order": 22,
+      "userType": "H",
+      "precision": null
+    },
+    {
+      "name": "NOMECID",
+      "order": 23,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "CODUF_CIDADE",
+      "order": 24,
+      "userType": "I",
+      "precision": null
+    },
+    {
+      "name": "SIGLA_UF",
+      "order": 25,
+      "userType": "S",
+      "precision": null
+    }
+  ],
+  "rows": [
+    [
+      191,
+      "RITEC COMERCIAL E IMPORTADORA LIMITADA",
+      "RITEC COMERCIAL E IMPORTADORA LIMITADA",
+      "54374525000116",
+      "J",
+      "S",
+      "S",
+      "535006808110",
+      null,
+      null,
+      "R",
+      null,
+      null,
+      9493,
+      "13400853",
+      1705840,
+      "969",
+      null,
+      3572,
+      "1934373437",
+      null,
+      "09062026 01:16:20",
+      "PIRACICABA",
+      1,
+      "SP"
+    ]
+  ],
+  "responseBody": {
+    "serviceName": "DbExplorerSP.executeQuery",
+    "status": "1",
+    "pendingPrinting": "false",
+    "transactionId": "A5ED1ABECC4771456B9568B6C21D9181",
+    "responseBody": {
+      "fieldsMetadata": [
+        {
+          "name": "CODPARC",
+          "description": "CODPARC",
+          "order": 1,
+          "userType": "I"
+        },
+        {
+          "name": "NOMEPARC",
+          "description": "NOMEPARC",
+          "order": 2,
+          "userType": "S"
+        },
+        {
+          "name": "RAZAOSOCIAL",
+          "description": "RAZAOSOCIAL",
+          "order": 3,
+          "userType": "S"
+        },
+        {
+          "name": "CGC_CPF",
+          "description": "CGC_CPF",
+          "order": 4,
+          "userType": "S"
+        },
+        {
+          "name": "TIPPESSOA",
+          "description": "TIPPESSOA",
+          "order": 5,
+          "userType": "S"
+        },
+        {
+          "name": "CLIENTE",
+          "description": "CLIENTE",
+          "order": 6,
+          "userType": "S"
+        },
+        {
+          "name": "ATIVO",
+          "description": "ATIVO",
+          "order": 7,
+          "userType": "S"
+        },
+        {
+          "name": "IDENTINSCESTAD",
+          "description": "IDENTINSCESTAD",
+          "order": 8,
+          "userType": "S"
+        },
+        {
+          "name": "INSCESTADNAUF",
+          "description": "INSCESTADNAUF",
+          "order": 9,
+          "userType": "S"
+        },
+        {
+          "name": "INSCMUN",
+          "description": "INSCMUN",
+          "order": 10,
+          "userType": "S"
+        },
+        {
+          "name": "CLASSIFICMS",
+          "description": "CLASSIFICMS",
+          "order": 11,
+          "userType": "S"
+        },
+        {
+          "name": "CODTAB",
+          "description": "CODTAB",
+          "order": 12,
+          "userType": "I"
+        },
+        {
+          "name": "CODTABST",
+          "description": "CODTABST",
+          "order": 13,
+          "userType": "I"
+        },
+        {
+          "name": "CODCID",
+          "description": "CODCID",
+          "order": 14,
+          "userType": "I"
+        },
+        {
+          "name": "CEP",
+          "description": "CEP",
+          "order": 15,
+          "userType": "S"
+        },
+        {
+          "name": "CODEND",
+          "description": "CODEND",
+          "order": 16,
+          "userType": "I"
+        },
+        {
+          "name": "NUMEND",
+          "description": "NUMEND",
+          "order": 17,
+          "userType": "S"
+        },
+        {
+          "name": "COMPLEMENTO",
+          "description": "COMPLEMENTO",
+          "order": 18,
+          "userType": "S"
+        },
+        {
+          "name": "CODBAI",
+          "description": "CODBAI",
+          "order": 19,
+          "userType": "I"
+        },
+        {
+          "name": "TELEFONE",
+          "description": "TELEFONE",
+          "order": 20,
+          "userType": "S"
+        },
+        {
+          "name": "EMAIL",
+          "description": "EMAIL",
+          "order": 21,
+          "userType": "S"
+        },
+        {
+          "name": "DTCAD",
+          "description": "DTCAD",
+          "order": 22,
+          "userType": "H"
+        },
+        {
+          "name": "NOMECID",
+          "description": "NOMECID",
+          "order": 23,
+          "userType": "S"
+        },
+        {
+          "name": "CODUF_CIDADE",
+          "description": "CODUF_CIDADE",
+          "order": 24,
+          "userType": "I"
+        },
+        {
+          "name": "SIGLA_UF",
+          "description": "SIGLA_UF",
+          "order": 25,
+          "userType": "S"
+        }
+      ],
+      "rows": [
+        [
+          191,
+          "RITEC COMERCIAL E IMPORTADORA LIMITADA",
+          "RITEC COMERCIAL E IMPORTADORA LIMITADA",
+          "54374525000116",
+          "J",
+          "S",
+          "S",
+          "535006808110",
+          null,
+          null,
+          "R",
+          null,
+          null,
+          9493,
+          "13400853",
+          1705840,
+          "969",
+          null,
+          3572,
+          "1934373437",
+          null,
+          "09062026 01:16:20",
+          "PIRACICABA",
+          1,
+          "SP"
+        ]
+      ],
+      "burstLimit": false,
+      "timeQuery": "6ms",
+      "timeResultSet": "1ms"
+    }
+  }
+}

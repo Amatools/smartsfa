@@ -144,6 +144,7 @@ class _ProductTaxationTabSectionState extends State<ProductTaxationTabSection> {
                     child: AppMediumDropdown<String>(
                       value: dropdownValue,
                       alignment: AlignmentDirectional.centerStart,
+                      style: Theme.of(context).textTheme.bodySmall,
                       hint: const Text('Selecione um grupo'),
                       items: items,
                       onChanged: widget.readOnly

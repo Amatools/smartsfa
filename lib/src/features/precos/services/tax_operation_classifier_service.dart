@@ -1,4 +1,5 @@
 import '../../../core/models/domain_types.dart';
+import '../../../core/models/tax_operation_profile.dart';
 
 class TaxOperationProfileResolution {
   const TaxOperationProfileResolution({
@@ -8,6 +9,8 @@ class TaxOperationProfileResolution {
     required this.includeIpiInIcmsBase,
     required this.addIpiToTotal,
     required this.reduceIcmsForZfm,
+    this.profileSource = 'native',
+    this.overrideId,
   });
 
   final TaxOperationProfileKey profileKey;
@@ -16,6 +19,14 @@ class TaxOperationProfileResolution {
   final bool includeIpiInIcmsBase;
   final bool addIpiToTotal;
   final bool reduceIcmsForZfm;
+
+  /// Origem da resolucao: 'native' (mapa `_nativeDefaults`) ou 'override'
+  /// (veio de um documento ativo em `tax_operation_profiles`). Usado pela
+  /// tela de auditoria fiscal para explicar a decisao (ver P1.4).
+  final String profileSource;
+
+  /// Id do `TaxOperationProfile` usado, quando `profileSource == 'override'`.
+  final String? overrideId;
 }
 
 class TaxOperationClassifierService {
@@ -117,6 +128,8 @@ class TaxOperationClassifierService {
     required bool sameUf,
     required CustomerTaxProfile customerTaxProfile,
     required bool isZonaFrancaSuframa,
+    List<TaxOperationProfile> overrides = const <TaxOperationProfile>[],
+    String? representedCompanyId,
   }) {
     final profileKey = _resolveKey(
       salePurpose: salePurpose,
@@ -125,8 +138,58 @@ class TaxOperationClassifierService {
       isZonaFrancaSuframa: isZonaFrancaSuframa,
     );
 
-    return _nativeDefaults[profileKey] ??
+    final nativeDefault = _nativeDefaults[profileKey] ??
         _nativeDefaults[TaxOperationProfileKey.revendaSameUf]!;
+
+    final override = _resolveOverride(
+      overrides: overrides,
+      profileKey: profileKey,
+      representedCompanyId: representedCompanyId,
+    );
+    if (override == null) {
+      return nativeDefault;
+    }
+
+    return TaxOperationProfileResolution(
+      profileKey: profileKey,
+      calculateIcmsSt: override.calculateIcmsSt,
+      calculateDifal: override.calculateDifal,
+      includeIpiInIcmsBase: override.includeIpiInIcmsBase,
+      addIpiToTotal: override.addIpiToTotal,
+      reduceIcmsForZfm: override.reduceIcmsForZfm,
+      profileSource: 'override',
+      overrideId: override.id,
+    );
+  }
+
+  /// Resolve o override dinamico de um perfil, se existir.
+  ///
+  /// Prioriza um override escopado para a `representedCompanyId` informada;
+  /// na ausencia dele, usa um override global (sem representada definida).
+  /// Overrides inativos ou de outro `profileKey` sao ignorados.
+  TaxOperationProfile? _resolveOverride({
+    required List<TaxOperationProfile> overrides,
+    required TaxOperationProfileKey profileKey,
+    required String? representedCompanyId,
+  }) {
+    if (overrides.isEmpty) {
+      return null;
+    }
+    final normalizedScope = (representedCompanyId ?? '').trim();
+    TaxOperationProfile? scoped;
+    TaxOperationProfile? global;
+    for (final profile in overrides) {
+      if (!profile.isActive || profile.profileKey != profileKey.value) {
+        continue;
+      }
+      final profileScope = (profile.representedCompanyId ?? '').trim();
+      if (profileScope.isEmpty) {
+        global ??= profile;
+      } else if (normalizedScope.isNotEmpty && profileScope == normalizedScope) {
+        scoped ??= profile;
+      }
+    }
+    return scoped ?? global;
   }
 
   TaxOperationProfileKey _resolveKey({
