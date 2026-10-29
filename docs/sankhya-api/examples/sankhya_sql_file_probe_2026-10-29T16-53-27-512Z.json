@@ -1,0 +1,161 @@
+{
+  "marker": "SQL_FILE_PROBE",
+  "ok": true,
+  "tenantId": "self_T8oqTD0UBtWATPbITOGsqAEZt3d2_smartsfa-enterprise-teste",
+  "environment": "prod",
+  "sqlFile": "G:\\smartsfa\\scripts\\bootstrap_owner\\sql\\probe_effective_mva_2512.sql",
+  "baseUrl": "https://api.sankhya.com.br",
+  "endpointPath": "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+  "status": 200,
+  "responseIsJson": true,
+  "rowCount": 1,
+  "fields": [
+    {
+      "name": "IDALIQ",
+      "order": 1,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "UFORIGEM",
+      "order": 2,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "UFDESTINO",
+      "order": 3,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "TIPRESTRICAO",
+      "order": 4,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "CODRESTRICAO",
+      "order": 5,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "MARGLUCRO",
+      "order": 6,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "MVASTUFDEST",
+      "order": 7,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "MARGLUCROEST",
+      "order": 8,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "MVA_EFFECTIVE",
+      "order": 9,
+      "userType": "S",
+      "precision": null
+    }
+  ],
+  "rows": [
+    [
+      "2512",
+      "SP",
+      "SP",
+      "I",
+      "98",
+      "98",
+      null,
+      "0",
+      "98"
+    ]
+  ],
+  "responseBody": {
+    "serviceName": "DbExplorerSP.executeQuery",
+    "status": "1",
+    "pendingPrinting": "false",
+    "transactionId": "C0C490BBCCE07254A17320AB7BEBB551",
+    "responseBody": {
+      "fieldsMetadata": [
+        {
+          "name": "IDALIQ",
+          "description": "IDALIQ",
+          "order": 1,
+          "userType": "S"
+        },
+        {
+          "name": "UFORIGEM",
+          "description": "UFORIGEM",
+          "order": 2,
+          "userType": "S"
+        },
+        {
+          "name": "UFDESTINO",
+          "description": "UFDESTINO",
+          "order": 3,
+          "userType": "S"
+        },
+        {
+          "name": "TIPRESTRICAO",
+          "description": "TIPRESTRICAO",
+          "order": 4,
+          "userType": "S"
+        },
+        {
+          "name": "CODRESTRICAO",
+          "description": "CODRESTRICAO",
+          "order": 5,
+          "userType": "S"
+        },
+        {
+          "name": "MARGLUCRO",
+          "description": "MARGLUCRO",
+          "order": 6,
+          "userType": "S"
+        },
+        {
+          "name": "MVASTUFDEST",
+          "description": "MVASTUFDEST",
+          "order": 7,
+          "userType": "S"
+        },
+        {
+          "name": "MARGLUCROEST",
+          "description": "MARGLUCROEST",
+          "order": 8,
+          "userType": "S"
+        },
+        {
+          "name": "MVA_EFFECTIVE",
+          "description": "MVA_EFFECTIVE",
+          "order": 9,
+          "userType": "S"
+        }
+      ],
+      "rows": [
+        [
+          "2512",
+          "SP",
+          "SP",
+          "I",
+          "98",
+          "98",
+          null,
+          "0",
+          "98"
+        ]
+      ],
+      "burstLimit": false,
+      "timeQuery": "9ms",
+      "timeResultSet": "1ms"
+    }
+  }
+}

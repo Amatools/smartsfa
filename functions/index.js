@@ -1515,7 +1515,17 @@ async function executeSankhyaDbExplorerQuery({
 
       const bodyText = await response.text();
       const parsed = tryParseJson(bodyText);
+      const xmlError = extractSankhyaXmlError(bodyText);
       if (response.ok) {
+        if (xmlError) {
+          failures.push({
+            endpointPath,
+            payloadVariant: payloadVariant.name,
+            status: response.status,
+            bodyPreview: xmlError,
+          });
+          continue;
+        }
         return {
           endpointPath,
           payloadVariant: payloadVariant.name,
@@ -1541,6 +1551,30 @@ async function executeSankhyaDbExplorerQuery({
     .slice(0, 1800);
 
   throw new Error(`DbExplorer executeQuery falhou. Tentativas: ${details}`);
+}
+
+function extractSankhyaXmlError(bodyText) {
+  if (!bodyText || !bodyText.includes('<serviceResponse')) {
+    return null;
+  }
+
+  const statusMatch = bodyText.match(/status="(\d+)"/i);
+  if (!statusMatch || statusMatch[1] !== '0') {
+    return null;
+  }
+
+  const cdataMatch = bodyText.match(/<statusMessage><!\[CDATA\[(.*?)\]\]><\/statusMessage>/is);
+  const encoded = String(cdataMatch?.[1] ?? '').trim();
+  if (!encoded) {
+    return 'Sankhya XML status=0 (sem mensagem detalhada).';
+  }
+
+  try {
+    const decoded = Buffer.from(encoded, 'base64').toString('latin1').trim();
+    return decoded || `Sankhya XML status=0: ${encoded}`;
+  } catch {
+    return `Sankhya XML status=0: ${encoded}`;
+  }
 }
 
 function normalizeDbExplorerRows(payload) {
@@ -2329,9 +2363,10 @@ SELECT DISTINCT
     TO_CHAR(ICM.PERCSTFCPINT) AS PERCSTFCPINTERNO,
     TO_CHAR(ICM.CSOSN) AS CST_CSOSN,
     CASE
-        WHEN NVL(TRIM(TO_CHAR(ICM.MVAORIGINAL)), 'N') <> 'N' THEN TO_CHAR(ICM.MVAORIGINAL)
-        WHEN NVL(TRIM(TO_CHAR(ICM.MVASIMPLIFICADO)), 'N') <> 'N' THEN TO_CHAR(ICM.MVASIMPLIFICADO)
-        ELSE '0'
+      WHEN NVL(TRIM(TO_CHAR(ICM.MARGLUCRO)), 'N') NOT IN ('N', '0', '0,0', '0,00', '0.0', '0.00') THEN TO_CHAR(ICM.MARGLUCRO)
+      WHEN NVL(TRIM(TO_CHAR(ICM.MVASTUFDEST)), 'N') NOT IN ('N', '0', '0,0', '0,00', '0.0', '0.00') THEN TO_CHAR(ICM.MVASTUFDEST)
+      WHEN NVL(TRIM(TO_CHAR(ICM.MARGLUCROEST)), 'N') NOT IN ('N', '0', '0,0', '0,00', '0.0', '0.00') THEN TO_CHAR(ICM.MARGLUCROEST)
+      ELSE '0'
     END AS MVA,
     (
         'TIPRESTRICAO=' || NVL(TO_CHAR(ICM.TIPRESTRICAO), '-') ||
@@ -2448,7 +2483,19 @@ function mapSankhyaTaxRuleRow({
   const aliquotaCredito = toNumberOrNull(
     readRowValueByAliases(row, ['ALIQUOTACREDITO']),
   );
-  const mvaIva = toNumberOrNull(readRowValueByAliases(row, ['MVA']));
+  const mvaIva = toNumberOrNull(
+    readRowValueByAliases(row, [
+      'MVA',
+      'MARGLUCRO',
+      'MVASTUFDEST',
+      'MARGLUCROEST',
+      'MVAORIGINAL',
+      'MVASIMPLIFICADO',
+      'IVA_ORIGINAL',
+      'IVAORIGINAL',
+      'IVA',
+    ]),
+  );
   const stBaseReductionPercent = toNumberOrNull(
     readRowValueByAliases(row, ['REDUCAOBASEICMSST', 'REDBASEST']),
   );

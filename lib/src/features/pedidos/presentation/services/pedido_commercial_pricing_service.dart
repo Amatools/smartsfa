@@ -3,6 +3,16 @@ import '../../../auth/services/workspace_profile_service.dart';
 import '../models/computed_pedido_item_values.dart';
 import 'pedido_format_utils.dart';
 
+class PointDiscountBreakdown {
+  const PointDiscountBreakdown({
+    this.beforeTax = const <double>[],
+    this.afterTax = const <double>[],
+  });
+
+  final List<double> beforeTax;
+  final List<double> afterTax;
+}
+
 /// Resolves commercial adjustment rules (per product/brand/category/general
 /// scope) and point-discount stacking on top of a base computed price.
 /// Extracted from `pedidos_page.dart` (SRP) — this service is pure/stateless
@@ -10,12 +20,38 @@ import 'pedido_format_utils.dart';
 class PedidoCommercialPricingService {
   const PedidoCommercialPricingService._();
 
+  static PointDiscountBreakdown splitPointDiscountsByMode({
+    required List<double> discountPercents,
+    required List<OrderDiscountFieldRule> policyFields,
+  }) {
+    if (discountPercents.isEmpty) {
+      return const PointDiscountBreakdown();
+    }
+
+    final beforeTax = <double>[];
+    final afterTax = <double>[];
+    for (var index = 0; index < discountPercents.length; index++) {
+      final discount = discountPercents[index];
+      final safeDiscount = discount < 0 ? 0.0 : discount;
+      if (safeDiscount <= 0) {
+        continue;
+      }
+
+      final mode = index < policyFields.length
+          ? policyFields[index].applyMode
+          : OrderDiscountApplyMode.afterTax;
+      if (mode == OrderDiscountApplyMode.beforeTax) {
+        beforeTax.add(safeDiscount);
+      } else {
+        afterTax.add(safeDiscount);
+      }
+    }
+
+    return PointDiscountBreakdown(beforeTax: beforeTax, afterTax: afterTax);
+  }
+
   static String resolveCommercialCode(Produto product) {
-    final codeCandidates = [
-      product.codigoFabricante,
-      product.sku,
-      product.ean,
-    ];
+    final codeCandidates = [product.codigoFabricante, product.sku, product.ean];
     for (final candidate in codeCandidates) {
       final normalized = (candidate ?? '').trim();
       if (normalized.isNotEmpty) {
@@ -145,7 +181,9 @@ class PedidoCommercialPricingService {
       final factor = adjustmentType == 'discount'
           ? (1 - (amount / 100))
           : (1 + (amount / 100));
-      unitPrice = PedidoFormatUtils.roundCurrency(baseValues.unitPrice * factor);
+      unitPrice = PedidoFormatUtils.roundCurrency(
+        baseValues.unitPrice * factor,
+      );
     } else {
       final delta = adjustmentType == 'discount' ? -amount : amount;
       unitPrice = PedidoFormatUtils.roundCurrency(baseValues.unitPrice + delta);
@@ -211,5 +249,29 @@ class PedidoCommercialPricingService {
       taxSnapshot: snapshot,
       usedFallback: baseValues.usedFallback,
     );
+  }
+
+  static double applyDiscountPercentsToUnitPrice({
+    required double unitPrice,
+    required List<double> discountPercents,
+  }) {
+    if (discountPercents.isEmpty) {
+      return unitPrice;
+    }
+
+    var adjusted = unitPrice;
+    for (final discount in discountPercents) {
+      final safeDiscount = discount < 0 ? 0 : discount;
+      if (safeDiscount <= 0) {
+        continue;
+      }
+      adjusted = PedidoFormatUtils.roundCurrency(
+        adjusted * (1 - (safeDiscount / 100)),
+      );
+    }
+    if (adjusted < 0) {
+      return 0;
+    }
+    return adjusted;
   }
 }

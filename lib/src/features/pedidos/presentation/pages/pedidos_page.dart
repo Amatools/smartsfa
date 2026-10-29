@@ -5,7 +5,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../../../../core/models/app_identity.dart';
 import '../../../../core/data/firestore/firestore_cliente_repository.dart';
@@ -36,9 +35,14 @@ import '../services/pedido_format_utils.dart';
 import '../services/pedido_item_pricing_service.dart';
 import '../services/pedido_product_search_service.dart';
 import '../widgets/pedido_customer_selector_section.dart';
+import '../widgets/pedido_editor_desktop_search_header.dart';
+import '../widgets/pedido_editor_top_bar.dart';
+import '../widgets/pedido_item_row.dart';
 import '../widgets/pedido_item_tax_details_dialog.dart';
 import '../widgets/pedido_list_widgets.dart';
 import '../widgets/pedido_mobile_add_item_sheet.dart';
+import '../widgets/pedido_search_results_dialog.dart';
+import '../widgets/pedido_search_results_preview_list.dart';
 
 String _pedidoDisplayNumber(String id) {
   return PedidoFormatUtils.pedidoDisplayNumber(id);
@@ -152,9 +156,7 @@ class _PedidosPageState extends State<PedidosPage> {
     final isOffline = await _resolveIsOffline();
     if (!isOffline) {
       try {
-        await widget.repository
-            .save(order)
-            .timeout(const Duration(seconds: 8));
+        await widget.repository.save(order).timeout(const Duration(seconds: 8));
         await OfflineSyncQueue.markSynced(order.id);
         syncedRemotely = true;
       } catch (error) {
@@ -180,15 +182,16 @@ class _PedidosPageState extends State<PedidosPage> {
       final isOfflineFallback = isOfflineMarker || isTimeout;
       if (isOfflineFallback) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Salvo no dispositivo Local (off-line)')),
+          const SnackBar(
+            content: Text('Salvo no dispositivo Local (off-line)'),
+          ),
         );
       } else {
         final reason = firebaseError == 'permission-denied'
             ? 'Sem permissao no Firestore para este usuario.'
             : 'Sem sincronizar no servidor agora.';
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(reason)));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(reason)));
       }
     }
 
@@ -1110,8 +1113,6 @@ class _RepresentedOriginContextOption {
   }
 }
 
-
-
 class _PedidoInlineEditor extends StatefulWidget {
   const _PedidoInlineEditor({
     required this.pedido,
@@ -1520,9 +1521,9 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
     _clienteReferenciaSelecionada = widget.pedido?.clienteReferencia;
     _selectedSalePurpose = widget.pedido?.salePurpose ?? SalePurpose.revenda;
     _selectedPaymentConditionDescription =
-      (widget.pedido?.formaPagamento ?? '').trim().isEmpty
-      ? null
-      : widget.pedido?.formaPagamento;
+        (widget.pedido?.formaPagamento ?? '').trim().isEmpty
+        ? null
+        : widget.pedido?.formaPagamento;
     _customerController.text = _selectedCustomerDisplayLabel();
     _customerInputError = null;
     _searchController.clear();
@@ -1698,10 +1699,7 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
     PedidoItem item,
     int slotCount,
   ) {
-    return _discountControllerManager.ensureControllersForItem(
-      item,
-      slotCount,
-    );
+    return _discountControllerManager.ensureControllersForItem(item, slotCount);
   }
 
   InputDecoration _inputDecoration({required String label}) {
@@ -2154,6 +2152,7 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
       previousSnapshot: previousSnapshot,
       previousQuantity: previousQuantity,
       appliedDiscountPercents: appliedDiscountPercents,
+      discountPolicyFields: _orderDiscountPolicy.fields,
       selectedCliente: _findClienteById(customerId ?? ''),
       customerId: customerId,
       representedCompanyId: _effectiveRepresentedCompanyId,
@@ -2428,80 +2427,15 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
       return;
     }
 
-    final limitedResults = searchResults.take(200).toList();
-    final hasTruncated = searchResults.length > limitedResults.length;
-
     await showDialog<void>(
       context: context,
       builder: (dialogContext) {
-        return Dialog(
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxWidth: 860,
-              maxHeight: MediaQuery.of(dialogContext).size.height * 0.84,
-            ),
-            child: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'Resultados da busca (${searchResults.length})',
-                          style: Theme.of(dialogContext).textTheme.titleMedium,
-                        ),
-                      ),
-                      IconButton(
-                        tooltip: 'Fechar busca',
-                        onPressed: () => Navigator.of(dialogContext).pop(),
-                        icon: const Icon(Icons.close),
-                      ),
-                    ],
-                  ),
-                ),
-                if (hasTruncated)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-                    child: Text(
-                      'Exibindo ${limitedResults.length} de ${searchResults.length}. Refine a busca para reduzir o volume.',
-                      style: Theme.of(dialogContext).textTheme.bodySmall,
-                    ),
-                  ),
-                const Divider(height: 1),
-                Expanded(
-                  child: ListView.separated(
-                    itemCount: limitedResults.length,
-                    separatorBuilder: (_, index) => const Divider(height: 1),
-                    itemBuilder: (context, index) {
-                      final product = limitedResults[index];
-                      final displayCode = _resolveCommercialCode(product);
-                      return Material(
-                        type: MaterialType.transparency,
-                        child: ListTile(
-                          dense: true,
-                          onTap: widget.saving
-                              ? null
-                              : () => _addProduct(product),
-                          title: Text(product.descricao),
-                          subtitle: Text(
-                            '${displayCode.isEmpty ? '-' : displayCode} · ${product.marca?.trim().isEmpty ?? true ? '-' : product.marca} · NCM ${product.ncm?.trim().isEmpty ?? true ? '-' : product.ncm} · R\$ ${_formatMoneyBr(product.valorBruto ?? 0)}',
-                          ),
-                          trailing: IconButton.filledTonal(
-                            tooltip: 'Adicionar ao pedido',
-                            onPressed: widget.saving
-                                ? null
-                                : () => _addProduct(product),
-                            icon: const Icon(Icons.add),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
+        return PedidoSearchResultsDialog(
+          searchResults: searchResults,
+          saving: widget.saving,
+          resolveCommercialCode: _resolveCommercialCode,
+          formatMoneyBr: _formatMoneyBr,
+          onAddProduct: _addProduct,
         );
       },
     );
@@ -2609,18 +2543,14 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
       return;
     }
 
-    _sanitizeSelectedPaymentConditionIfNeeded(
-      forceClearWhenUnavailable: false,
-    );
+    _sanitizeSelectedPaymentConditionIfNeeded(forceClearWhenUnavailable: false);
 
     final eligiblePaymentRules = _eligiblePaymentConditionRules();
     if (eligiblePaymentRules.isNotEmpty) {
       final selected = (_selectedPaymentConditionDescription ?? '').trim();
       if (selected.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Selecione uma forma de pagamento.'),
-          ),
+          const SnackBar(content: Text('Selecione uma forma de pagamento.')),
         );
         return;
       }
@@ -2678,13 +2608,6 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
     const itemThumbnailSlotWidth = 54.0;
     const itemActionSlotWidth = 48.0;
     final isCompactItems = MediaQuery.sizeOf(context).shortestSide < 700;
-    final topBarPadding = isCompactItems
-        ? const EdgeInsets.fromLTRB(6, 0, 2, 0)
-        : const EdgeInsets.fromLTRB(8, 2, 4, 2);
-    final topBarIconConstraints = BoxConstraints(
-      minWidth: isCompactItems ? 24 : 34,
-      minHeight: isCompactItems ? 24 : 34,
-    );
     final bottomBarMinimum = isCompactItems
         ? const EdgeInsets.fromLTRB(8, 4, 8, 4)
         : const EdgeInsets.fromLTRB(10, 8, 10, 8);
@@ -2700,49 +2623,14 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
           child: Column(
             mainAxisSize: MainAxisSize.max,
             children: [
-              Container(
-                width: double.infinity,
-                color: _chromeColor,
-                padding: topBarPadding,
-                child: Row(
-                  children: [
-                    IconButton(
-                      tooltip: 'Voltar para pedidos',
-                      onPressed: canClose ? widget.onClose : null,
-                      icon: Icon(
-                        Icons.arrow_back_outlined,
-                        size: isCompactItems ? 20 : 24,
-                      ),
-                      visualDensity: VisualDensity.compact,
-                      constraints: topBarIconConstraints,
-                      padding: EdgeInsets.zero,
-                    ),
-                    SizedBox(width: isCompactItems ? 2 : 4),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            hasSelection
-                                ? 'Pedido ${_pedidoDisplayNumber(pedido.id)}'
-                                : 'Editor de pedido',
-                            style: isCompactItems
-                                ? Theme.of(context).textTheme.labelLarge
-                                : Theme.of(context).textTheme.titleSmall,
-                          ),
-                        ],
-                      ),
-                    ),
-                    IconButton(
-                      tooltip: 'Fechar editor',
-                      onPressed: canClose ? widget.onClose : null,
-                      icon: Icon(Icons.close, size: isCompactItems ? 20 : 24),
-                      visualDensity: VisualDensity.compact,
-                      constraints: topBarIconConstraints,
-                      padding: EdgeInsets.zero,
-                    ),
-                  ],
-                ),
+              PedidoEditorTopBar(
+                title: hasSelection
+                    ? 'Pedido ${_pedidoDisplayNumber(pedido.id)}'
+                    : 'Editor de pedido',
+                compact: isCompactItems,
+                canClose: canClose,
+                chromeColor: _chromeColor,
+                onClose: widget.onClose,
               ),
               if (hasSelection && !isCompactItems)
                 _buildCustomerSelectorSection(compact: false),
@@ -2765,116 +2653,29 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             if (!isCompactItems) ...[
-                              LayoutBuilder(
-                                builder: (context, constraints) {
-                                  final isCompact = constraints.maxWidth < 560;
-
-                                  final searchField = TextField(
-                                    controller: _searchController,
-                                    focusNode: _searchFocusNode,
-                                    enabled: !widget.saving,
-                                    textInputAction: TextInputAction.search,
-                                    onChanged: (value) {
-                                      setState(() {
-                                        _searchQuery = value;
-                                      });
-                                    },
-                                    onSubmitted: (_) {
-                                      if (!widget.saving) {
-                                        _openSearchResultsModal(searchResults);
-                                      }
-                                    },
-                                    decoration:
-                                        _inputDecoration(
-                                          label: 'Pesquisar produto (descrição, código, marca, NCM)',
-                                        ).copyWith(
-                                          prefixIcon: const Icon(Icons.search),
-                                          suffixIcon: IconButton(
-                                            tooltip: 'Abrir busca completa',
-                                            onPressed: widget.saving
-                                                ? null
-                                                : () => _openSearchResultsModal(
-                                                    searchResults,
-                                                  ),
-                                            icon: const Icon(
-                                              Icons.manage_search_outlined,
-                                            ),
-                                          ),
-                                        ),
-                                  );
-
-                                  final quantityField = TextField(
-                                    controller: _quantityController,
-                                    enabled: !widget.saving,
-                                    keyboardType: TextInputType.number,
-                                    inputFormatters: [
-                                      FilteringTextInputFormatter.digitsOnly,
-                                      LengthLimitingTextInputFormatter(5),
-                                    ],
-                                    decoration: _inputDecoration(label: 'Qtd'),
-                                  );
-
-                                  final addButton = FilledButton.icon(
-                                    onPressed:
-                                        visibleResults.isEmpty || widget.saving
-                                        ? null
-                                        : () =>
-                                              _addProduct(visibleResults.first),
-                                    icon: const Icon(
-                                      Icons.add_shopping_cart_outlined,
-                                    ),
-                                    label: const Text('Adicionar'),
-                                  );
-
-                                  if (!isCompact) {
-                                    return Row(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Expanded(child: searchField),
-                                        const SizedBox(width: 12),
-                                        SizedBox(
-                                          width: 110,
-                                          child: quantityField,
-                                        ),
-                                        const SizedBox(width: 12),
-                                        addButton,
-                                      ],
-                                    );
-                                  }
-
-                                  return Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      searchField,
-                                      const SizedBox(height: 8),
-                                      Row(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          SizedBox(
-                                            width: 110,
-                                            child: quantityField,
-                                          ),
-                                          const SizedBox(width: 10),
-                                          Expanded(child: addButton),
-                                        ],
-                                      ),
-                                    ],
-                                  );
+                              PedidoEditorDesktopSearchHeader(
+                                searchController: _searchController,
+                                searchFocusNode: _searchFocusNode,
+                                quantityController: _quantityController,
+                                saving: widget.saving,
+                                hasQuery: hasQuery,
+                                visibleResultsCount: visibleResults.length,
+                                searchResultsCount: searchResults.length,
+                                inputDecoration: _inputDecoration,
+                                onSearchChanged: (value) {
+                                  setState(() {
+                                    _searchQuery = value;
+                                  });
                                 },
+                                onSubmitSearch: () =>
+                                    _openSearchResultsModal(searchResults),
+                                onOpenSearchModal: () =>
+                                    _openSearchResultsModal(searchResults),
+                                onAddFirstVisibleResult:
+                                    visibleResults.isEmpty || widget.saving
+                                    ? null
+                                    : () => _addProduct(visibleResults.first),
                               ),
-                              const SizedBox(height: 8),
-                              Text(
-                                !hasQuery
-                                    ? 'Digite na busca para listar produtos.'
-                                    : visibleResults.isEmpty
-                                    ? 'Nenhum item compatível com essa busca.'
-                                    : 'Resultados: ${searchResults.length} (exibindo ${visibleResults.length}).',
-                                style: Theme.of(context).textTheme.bodySmall,
-                              ),
-                              const SizedBox(height: 6),
                             ] else ...[
                               Row(
                                 children: [
@@ -2931,65 +2732,21 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
                                         )
                                       else if (!isCompactItems &&
                                           visibleResults.isNotEmpty)
-                                        ListView.separated(
-                                          shrinkWrap: true,
-                                          physics:
-                                              const NeverScrollableScrollPhysics(),
-                                          itemCount: visibleResults.length,
-                                          separatorBuilder: (_, index) =>
-                                              const Divider(height: 1),
-                                          itemBuilder: (context, index) {
-                                            final product =
-                                                visibleResults[index];
-                                            final displayCode =
-                                                _resolveCommercialCode(product);
-                                            return Material(
-                                              type: MaterialType.transparency,
-                                              child: ListTile(
-                                                dense: true,
-                                                onTap: widget.saving
-                                                    ? null
-                                                    : () =>
-                                                          _addProduct(product),
-                                                title: Text(product.descricao),
-                                                subtitle: Text(
-                                                  '${displayCode.isEmpty ? '-' : displayCode} · ${product.marca?.trim().isEmpty ?? true ? '-' : product.marca} · NCM ${product.ncm?.trim().isEmpty ?? true ? '-' : product.ncm} · R\$ ${_formatMoneyBr(product.valorBruto ?? 0)}',
-                                                ),
-                                                trailing:
-                                                    IconButton.filledTonal(
-                                                      tooltip:
-                                                          'Adicionar ao pedido',
-                                                      onPressed: widget.saving
-                                                          ? null
-                                                          : () => _addProduct(
-                                                              product,
-                                                            ),
-                                                      icon: const Icon(
-                                                        Icons.add,
-                                                      ),
-                                                    ),
+                                        PedidoSearchResultsPreviewList(
+                                          visibleResults: visibleResults,
+                                          searchResultsCount:
+                                              searchResults.length,
+                                          hasMoreResults: hasMoreResults,
+                                          saving: widget.saving,
+                                          resolveCommercialCode:
+                                              _resolveCommercialCode,
+                                          formatMoneyBr: _formatMoneyBr,
+                                          onAddProduct: _addProduct,
+                                          onViewAllResults: () =>
+                                              _openSearchResultsModal(
+                                                searchResults,
                                               ),
-                                            );
-                                          },
                                         ),
-                                      if (!isCompactItems &&
-                                          hasMoreResults) ...[
-                                        const SizedBox(height: 6),
-                                        Align(
-                                          alignment: Alignment.centerLeft,
-                                          child: TextButton.icon(
-                                            onPressed: widget.saving
-                                                ? null
-                                                : () => _openSearchResultsModal(
-                                                    searchResults,
-                                                  ),
-                                            icon: const Icon(Icons.open_in_new),
-                                            label: Text(
-                                              'Ver todos os resultados (${searchResults.length})',
-                                            ),
-                                          ),
-                                        ),
-                                      ],
                                       if (!isCompactItems)
                                         const SizedBox(height: 8),
                                       if (_items.isEmpty)
@@ -3101,920 +2858,58 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
                                                 final product =
                                                     productsById[item
                                                         .productId];
-                                                final snapshot =
-                                                    item.taxSnapshot;
-                                                final displayCode =
-                                                    _resolveItemDisplayCode(
-                                                      item,
-                                                      product,
-                                                    );
-                                                final ipi =
-                                                    snapshot
-                                                        ?.aliquotaIpiPercent ??
-                                                    product?.aliquotaIpiBase;
-                                                final ncm =
-                                                    (snapshot?.ncm ??
-                                                            item.ncm ??
-                                                            '')
-                                                        .trim();
-                                                final cest =
-                                                    (snapshot?.cest ?? '')
-                                                        .trim();
-                                                final ipiText = ipi == null
-                                                    ? 'IPI -'
-                                                    : 'IPI ${_formatPercent(ipi)}';
-                                                final fiscalMetaText = [
-                                                  if (ncm.isNotEmpty)
-                                                    'NCM $ncm',
-                                                  if (cest.isNotEmpty)
-                                                    'CEST $cest',
-                                                ].join(' · ');
-                                                final discountSummary =
-                                                    _formatPointDiscountSummary(
-                                                      item.appliedDiscountPercents,
-                                                    );
-                                                final policyFields =
-                                                    _orderDiscountPolicy.fields;
-                                                final maxDiscountSlots =
-                                                    policyFields.length;
-                                                final activeDiscountSlots = item
-                                                    .appliedDiscountPercents
-                                                    .length;
-                                                final canAddDiscountSlot =
-                                                    maxDiscountSlots > 0 &&
-                                                    activeDiscountSlots <
-                                                        maxDiscountSlots;
-                                                final inlineDiscountControllers =
-                                                    activeDiscountSlots > 0
-                                                    ? _ensureDiscountControllersForItem(
-                                                        item,
-                                                        activeDiscountSlots,
-                                                      )
-                                                    : const <
-                                                        TextEditingController
-                                                      >[];
-
-                                                if (isCompactItems) {
-                                                  return Padding(
-                                                    padding:
-                                                        const EdgeInsets.symmetric(
-                                                          horizontal: 4,
-                                                          vertical: 6,
-                                                        ),
-                                                    child: Container(
-                                                      width: double.infinity,
-                                                      padding:
-                                                          const EdgeInsets.all(
-                                                            10,
-                                                          ),
-                                                      decoration: BoxDecoration(
-                                                        borderRadius:
-                                                            BorderRadius.circular(
-                                                              10,
-                                                            ),
-                                                        border: Border.all(
-                                                          color: Theme.of(
-                                                            context,
-                                                          ).dividerColor,
-                                                        ),
-                                                      ),
-                                                      child: Column(
-                                                        crossAxisAlignment:
-                                                            CrossAxisAlignment
-                                                                .start,
-                                                        children: [
-                                                          Row(
-                                                            crossAxisAlignment:
-                                                                CrossAxisAlignment
-                                                                    .start,
-                                                            children: [
-                                                              _buildItemThumbnail(
-                                                                product,
-                                                                item.productName,
-                                                              ),
-                                                              const SizedBox(
-                                                                width: 10,
-                                                              ),
-                                                              Expanded(
-                                                                child: Column(
-                                                                  crossAxisAlignment:
-                                                                      CrossAxisAlignment
-                                                                          .start,
-                                                                  children: [
-                                                                    Text(
-                                                                      '$displayCode · ${item.productName}',
-                                                                      maxLines:
-                                                                          2,
-                                                                      overflow:
-                                                                          TextOverflow
-                                                                              .ellipsis,
-                                                                    ),
-                                                                    const SizedBox(
-                                                                      height: 4,
-                                                                    ),
-                                                                    InkWell(
-                                                                      onTap: () =>
-                                                                          _showItemTaxDetailsDialog(
-                                                                            item,
-                                                                          ),
-                                                                      child: Row(
-                                                                        mainAxisSize:
-                                                                            MainAxisSize.min,
-                                                                        children: [
-                                                                          Flexible(
-                                                                            child: Text(
-                                                                              fiscalMetaText.isEmpty
-                                                                                  ? '$ipiText · ICMS-ST por regra fiscal'
-                                                                                  : '$ipiText · $fiscalMetaText · ICMS-ST por regra fiscal',
-                                                                              style: Theme.of(
-                                                                                context,
-                                                                              ).textTheme.bodySmall,
-                                                                              overflow:
-                                                                                  TextOverflow.ellipsis,
-                                                                            ),
-                                                                          ),
-                                                                          const SizedBox(
-                                                                            width: 4,
-                                                                          ),
-                                                                          Icon(
-                                                                            Icons.info_outline,
-                                                                            size: 14,
-                                                                            color: Theme.of(
-                                                                              context,
-                                                                            ).colorScheme.outline,
-                                                                          ),
-                                                                        ],
-                                                                      ),
-                                                                    ),
-                                                                  ],
-                                                                ),
-                                                              ),
-                                                              IconButton(
-                                                                tooltip: 'Remover item',
-                                                                onPressed:
-                                                                    widget
-                                                                        .saving
-                                                                    ? null
-                                                                    : () {
-                                                                        setState(() {
-                                                                          _disposeDiscountControllersForItem(
-                                                                            item.id,
-                                                                          );
-                                                                          _items.removeAt(
-                                                                            index,
-                                                                          );
-                                                                        });
-                                                                      },
-                                                                icon: const Icon(
-                                                                  Icons
-                                                                      .delete_outline,
-                                                                ),
-                                                              ),
-                                                            ],
-                                                          ),
-                                                          const SizedBox(
-                                                            height: 8,
-                                                          ),
-                                                          Text(
-                                                            'Quantidade',
-                                                            style:
-                                                                Theme.of(
-                                                                      context,
-                                                                    )
-                                                                    .textTheme
-                                                                    .labelMedium,
-                                                          ),
-                                                          const SizedBox(
-                                                            height: 4,
-                                                          ),
-                                                          Row(
-                                                            children: [
-                                                              IconButton(
-                                                                tooltip: 'Diminuir quantidade',
-                                                                onPressed:
-                                                                    widget
-                                                                        .saving
-                                                                    ? null
-                                                                    : () => _decrementItemQuantity(
-                                                                        index,
-                                                                      ),
-                                                                icon: const Icon(
-                                                                  Icons
-                                                                      .remove_circle_outline,
-                                                                  size: 18,
-                                                                ),
-                                                                visualDensity:
-                                                                    VisualDensity
-                                                                        .compact,
-                                                                constraints:
-                                                                    const BoxConstraints(
-                                                                      minWidth:
-                                                                          30,
-                                                                      minHeight:
-                                                                          30,
-                                                                    ),
-                                                                padding:
-                                                                    EdgeInsets
-                                                                        .zero,
-                                                              ),
-                                                              const SizedBox(
-                                                                width: 6,
-                                                              ),
-                                                              SizedBox(
-                                                                width: 72,
-                                                                child: TextFormField(
-                                                                  key: ValueKey(
-                                                                    'qtd_${item.id}_${_formatQuantity(item.quantity)}',
-                                                                  ),
-                                                                  initialValue:
-                                                                      _formatQuantity(
-                                                                        item.quantity,
-                                                                      ),
-                                                                  enabled: !widget
-                                                                      .saving,
-                                                                  keyboardType:
-                                                                      TextInputType
-                                                                          .number,
-                                                                  inputFormatters: [
-                                                                    FilteringTextInputFormatter
-                                                                        .digitsOnly,
-                                                                    LengthLimitingTextInputFormatter(
-                                                                      5,
-                                                                    ),
-                                                                  ],
-                                                                  textAlign:
-                                                                      TextAlign
-                                                                          .center,
-                                                                  decoration: const InputDecoration(
-                                                                    isDense:
-                                                                        true,
-                                                                    contentPadding:
-                                                                        EdgeInsets.symmetric(
-                                                                          horizontal:
-                                                                              6,
-                                                                          vertical:
-                                                                              6,
-                                                                        ),
-                                                                    border:
-                                                                        OutlineInputBorder(),
-                                                                  ),
-                                                                  onFieldSubmitted: (value) {
-                                                                    final parsed =
-                                                                        _readIntegerQuantity(
-                                                                          value,
-                                                                        );
-                                                                    _setItemQuantity(
-                                                                      index,
-                                                                      parsed,
-                                                                    );
-                                                                  },
-                                                                ),
-                                                              ),
-                                                              const SizedBox(
-                                                                width: 6,
-                                                              ),
-                                                              IconButton(
-                                                                tooltip: 'Aumentar quantidade',
-                                                                onPressed:
-                                                                    widget
-                                                                        .saving
-                                                                    ? null
-                                                                    : () => _incrementItemQuantity(
-                                                                        index,
-                                                                      ),
-                                                                icon: const Icon(
-                                                                  Icons
-                                                                      .add_circle_outline,
-                                                                  size: 18,
-                                                                ),
-                                                                visualDensity:
-                                                                    VisualDensity
-                                                                        .compact,
-                                                                constraints:
-                                                                    const BoxConstraints(
-                                                                      minWidth:
-                                                                          30,
-                                                                      minHeight:
-                                                                          30,
-                                                                    ),
-                                                                padding:
-                                                                    EdgeInsets
-                                                                        .zero,
-                                                              ),
-                                                            ],
-                                                          ),
-                                                          const SizedBox(
-                                                            height: 8,
-                                                          ),
-                                                          Text(
-                                                            discountSummary,
-                                                            style:
-                                                                Theme.of(
-                                                                      context,
-                                                                    )
-                                                                    .textTheme
-                                                                    .bodySmall,
-                                                          ),
-                                                          const SizedBox(
-                                                            height: 4,
-                                                          ),
-                                                          Wrap(
-                                                            spacing: 8,
-                                                            runSpacing: 6,
-                                                            crossAxisAlignment:
-                                                                WrapCrossAlignment
-                                                                    .center,
-                                                            children: [
-                                                              if (activeDiscountSlots ==
-                                                                  0)
-                                                                TextButton.icon(
-                                                                  onPressed:
-                                                                      widget
-                                                                          .saving
-                                                                      ? null
-                                                                      : () => _addPointDiscountField(
-                                                                          index,
-                                                                        ),
-                                                                  icon: const Icon(
-                                                                    Icons
-                                                                        .percent_outlined,
-                                                                    size: 16,
-                                                                  ),
-                                                                  label:
-                                                                      const Text(
-                                                                        'Adicionar desconto',
-                                                                      ),
-                                                                  style: TextButton.styleFrom(
-                                                                    padding: const EdgeInsets.symmetric(
-                                                                      horizontal:
-                                                                          4,
-                                                                      vertical:
-                                                                          0,
-                                                                    ),
-                                                                    minimumSize:
-                                                                        const Size(
-                                                                          0,
-                                                                          30,
-                                                                        ),
-                                                                    tapTargetSize:
-                                                                        MaterialTapTargetSize
-                                                                            .shrinkWrap,
-                                                                  ),
-                                                                ),
-                                                            ],
-                                                          ),
-                                                          if (activeDiscountSlots >
-                                                              0) ...[
-                                                            const SizedBox(
-                                                              height: 6,
-                                                            ),
-                                                            Wrap(
-                                                              spacing: 8,
-                                                              runSpacing: 8,
-                                                              crossAxisAlignment:
-                                                                  WrapCrossAlignment
-                                                                      .center,
-                                                              children: [
-                                                                for (
-                                                                  var i = 0;
-                                                                  i < activeDiscountSlots;
-                                                                  i++
-                                                                )
-                                                                  Container(
-                                                                    padding: const EdgeInsets.symmetric(
-                                                                      horizontal:
-                                                                          6,
-                                                                      vertical:
-                                                                          4,
-                                                                    ),
-                                                                    decoration: BoxDecoration(
-                                                                      borderRadius:
-                                                                          BorderRadius.circular(
-                                                                            10,
-                                                                          ),
-                                                                      color: Theme.of(context)
-                                                                          .colorScheme
-                                                                          .surfaceContainerHighest
-                                                                          .withValues(alpha: 0.35),
-                                                                      border: Border.all(
-                                                                        color: Theme.of(
-                                                                          context,
-                                                                        ).colorScheme.outlineVariant.withValues(alpha: 0.55),
-                                                                      ),
-                                                                    ),
-                                                                    child: Row(
-                                                                      mainAxisSize:
-                                                                          MainAxisSize
-                                                                              .min,
-                                                                      children: [
-                                                                        SizedBox(
-                                                                          width:
-                                                                              96,
-                                                                          child: TextField(
-                                                                            controller:
-                                                                                inlineDiscountControllers[i],
-                                                                            enabled:
-                                                                                !widget.saving,
-                                                                            keyboardType: const TextInputType.numberWithOptions(
-                                                                              decimal: true,
-                                                                            ),
-                                                                            decoration: InputDecoration(
-                                                                              labelText: i < policyFields.length ? policyFields[i].label : 'Desconto ${i + 1}',
-                                                                              suffixText: '%',
-                                                                              isDense: true,
-                                                                              contentPadding: const EdgeInsets.symmetric(
-                                                                                horizontal: 8,
-                                                                                vertical: 8,
-                                                                              ),
-                                                                              border: const OutlineInputBorder(),
-                                                                            ),
-                                                                            onSubmitted: (_) => _applyInlineItemDiscounts(
-                                                                              index,
-                                                                              showErrors: true,
-                                                                            ),
-                                                                            onChanged: (_) => _applyInlineItemDiscounts(
-                                                                              index,
-                                                                              showErrors: false,
-                                                                            ),
-                                                                          ),
-                                                                        ),
-                                                                        const SizedBox(
-                                                                          width:
-                                                                              4,
-                                                                        ),
-                                                                        IconButton(
-                                                                          tooltip: 'Remover este desconto',
-                                                                          onPressed:
-                                                                              widget.saving
-                                                                              ? null
-                                                                              : () => _removeInlineItemDiscountField(index, i),
-                                                                          icon: const Icon(
-                                                                            Icons.close,
-                                                                            size:
-                                                                                16,
-                                                                          ),
-                                                                          visualDensity:
-                                                                              VisualDensity.compact,
-                                                                          constraints: const BoxConstraints(
-                                                                            minWidth:
-                                                                                24,
-                                                                            minHeight:
-                                                                                24,
-                                                                          ),
-                                                                          padding:
-                                                                              EdgeInsets.zero,
-                                                                        ),
-                                                                      ],
-                                                                    ),
-                                                                  ),
-                                                                if (canAddDiscountSlot)
-                                                                  Padding(
-                                                                    padding:
-                                                                        const EdgeInsets.only(
-                                                                          top:
-                                                                              2,
-                                                                        ),
-                                                                    child: FloatingActionButton.small(
-                                                                      heroTag:
-                                                                          'item_discount_fab_${item.id}_$activeDiscountSlots',
-                                                                      tooltip: 'Adicionar próximo campo',
-                                                                      onPressed:
-                                                                          widget
-                                                                              .saving
-                                                                          ? null
-                                                                          : () => _addPointDiscountField(
-                                                                              index,
-                                                                            ),
-                                                                      child: const Icon(
-                                                                        Icons
-                                                                            .add,
-                                                                        size:
-                                                                            18,
-                                                                      ),
-                                                                    ),
-                                                                  ),
-                                                              ],
-                                                            ),
-                                                          ],
-                                                          const SizedBox(
-                                                            height: 8,
-                                                          ),
-                                                          Text(
-                                                            'Preco unitario: R\$ ${_formatMoney(item.unitPrice)}',
-                                                            style:
-                                                                Theme.of(
-                                                                      context,
-                                                                    )
-                                                                    .textTheme
-                                                                    .bodyMedium,
-                                                          ),
-                                                          const SizedBox(
-                                                            height: 2,
-                                                          ),
-                                                          Text(
-                                                            'Total: R\$ ${_formatMoney(item.totalPrice)}',
-                                                            style:
-                                                                Theme.of(
-                                                                      context,
-                                                                    )
-                                                                    .textTheme
-                                                                    .titleSmall,
-                                                          ),
-                                                        ],
-                                                      ),
-                                                    ),
-                                                  );
-                                                }
-
-                                                return Padding(
-                                                  padding:
-                                                      const EdgeInsets.symmetric(
-                                                        horizontal:
-                                                            itemRowHorizontalPadding,
-                                                        vertical: 6,
-                                                      ),
-                                                  child: Row(
-                                                    crossAxisAlignment:
-                                                        CrossAxisAlignment
-                                                            .start,
-                                                    children: [
-                                                      _buildItemThumbnail(
-                                                        product,
-                                                        item.productName,
-                                                      ),
-                                                      const SizedBox(width: 10),
-                                                      Expanded(
-                                                        child: Table(
-                                                          columnWidths:
-                                                              itemTableColumnWidths,
-                                                          defaultVerticalAlignment:
-                                                              TableCellVerticalAlignment
-                                                                  .middle,
-                                                          children: [
-                                                            TableRow(
-                                                              children: [
-                                                                Padding(
-                                                                  padding:
-                                                                      const EdgeInsets.only(
-                                                                        right:
-                                                                            8,
-                                                                      ),
-                                                                  child: Text(
-                                                                    '$displayCode · ${item.productName}',
-                                                                    maxLines: 1,
-                                                                    overflow:
-                                                                        TextOverflow
-                                                                            .ellipsis,
-                                                                  ),
-                                                                ),
-                                                                Align(
-                                                                  alignment:
-                                                                      Alignment
-                                                                          .centerRight,
-                                                                  child: Row(
-                                                                    mainAxisSize:
-                                                                        MainAxisSize
-                                                                            .min,
-                                                                    children: [
-                                                                      IconButton(
-                                                                        tooltip: 'Diminuir quantidade',
-                                                                        onPressed:
-                                                                            widget.saving
-                                                                            ? null
-                                                                            : () => _decrementItemQuantity(
-                                                                                index,
-                                                                              ),
-                                                                        icon: const Icon(
-                                                                          Icons
-                                                                              .remove_circle_outline,
-                                                                          size:
-                                                                              18,
-                                                                        ),
-                                                                        visualDensity:
-                                                                            VisualDensity.compact,
-                                                                        constraints: const BoxConstraints(
-                                                                          minWidth:
-                                                                              26,
-                                                                          minHeight:
-                                                                              26,
-                                                                        ),
-                                                                        padding:
-                                                                            EdgeInsets.zero,
-                                                                      ),
-                                                                      const SizedBox(
-                                                                        width:
-                                                                            4,
-                                                                      ),
-                                                                      SizedBox(
-                                                                        width:
-                                                                            52,
-                                                                        child: TextFormField(
-                                                                          key: ValueKey(
-                                                                            'qtd_${item.id}_${_formatQuantity(item.quantity)}',
-                                                                          ),
-                                                                          initialValue: _formatQuantity(
-                                                                            item.quantity,
-                                                                          ),
-                                                                          enabled:
-                                                                              !widget.saving,
-                                                                          keyboardType:
-                                                                              TextInputType.number,
-                                                                          inputFormatters: [
-                                                                            FilteringTextInputFormatter.digitsOnly,
-                                                                            LengthLimitingTextInputFormatter(
-                                                                              5,
-                                                                            ),
-                                                                          ],
-                                                                          textAlign:
-                                                                              TextAlign.center,
-                                                                          decoration: const InputDecoration(
-                                                                            isDense:
-                                                                                true,
-                                                                            contentPadding: EdgeInsets.symmetric(
-                                                                              horizontal: 6,
-                                                                              vertical: 6,
-                                                                            ),
-                                                                            border:
-                                                                                OutlineInputBorder(),
-                                                                          ),
-                                                                          onFieldSubmitted: (value) {
-                                                                            final parsed = _readIntegerQuantity(
-                                                                              value,
-                                                                            );
-                                                                            _setItemQuantity(
-                                                                              index,
-                                                                              parsed,
-                                                                            );
-                                                                          },
-                                                                        ),
-                                                                      ),
-                                                                      const SizedBox(
-                                                                        width:
-                                                                            4,
-                                                                      ),
-                                                                      IconButton(
-                                                                        tooltip: 'Aumentar quantidade',
-                                                                        onPressed:
-                                                                            widget.saving
-                                                                            ? null
-                                                                            : () => _incrementItemQuantity(
-                                                                                index,
-                                                                              ),
-                                                                        icon: const Icon(
-                                                                          Icons
-                                                                              .add_circle_outline,
-                                                                          size:
-                                                                              18,
-                                                                        ),
-                                                                        visualDensity:
-                                                                            VisualDensity.compact,
-                                                                        constraints: const BoxConstraints(
-                                                                          minWidth:
-                                                                              26,
-                                                                          minHeight:
-                                                                              26,
-                                                                        ),
-                                                                        padding:
-                                                                            EdgeInsets.zero,
-                                                                      ),
-                                                                    ],
-                                                                  ),
-                                                                ),
-                                                                Align(
-                                                                  alignment:
-                                                                      Alignment
-                                                                          .centerRight,
-                                                                  child: Text(
-                                                                    _formatMoney(
-                                                                      item.unitPrice,
-                                                                    ),
-                                                                  ),
-                                                                ),
-                                                                Align(
-                                                                  alignment:
-                                                                      Alignment
-                                                                          .centerRight,
-                                                                  child: Text(
-                                                                    _formatMoney(
-                                                                      item.totalPrice,
-                                                                    ),
-                                                                  ),
-                                                                ),
-                                                              ],
-                                                            ),
-                                                            TableRow(
-                                                              children: [
-                                                                Padding(
-                                                                  padding:
-                                                                      const EdgeInsets.only(
-                                                                        top: 3,
-                                                                      ),
-                                                                  child: InkWell(
-                                                                    onTap: () =>
-                                                                        _showItemTaxDetailsDialog(
-                                                                          item,
-                                                                        ),
-                                                                    child: Row(
-                                                                      mainAxisSize:
-                                                                          MainAxisSize.min,
-                                                                      children: [
-                                                                        Flexible(
-                                                                          child: Text(
-                                                                            fiscalMetaText.isEmpty
-                                                                                ? '$ipiText · ICMS-ST por regra fiscal'
-                                                                                : '$ipiText · $fiscalMetaText · ICMS-ST por regra fiscal',
-                                                                            maxLines: 1,
-                                                                            overflow:
-                                                                                TextOverflow.ellipsis,
-                                                                            style: Theme.of(
-                                                                              context,
-                                                                            ).textTheme.bodySmall,
-                                                                          ),
-                                                                        ),
-                                                                        const SizedBox(
-                                                                          width: 4,
-                                                                        ),
-                                                                        Icon(
-                                                                          Icons.info_outline,
-                                                                          size: 14,
-                                                                          color: Theme.of(
-                                                                            context,
-                                                                          ).colorScheme.outline,
-                                                                        ),
-                                                                      ],
-                                                                    ),
-                                                                  ),
-                                                                ),
-                                                                const SizedBox.shrink(),
-                                                                const SizedBox.shrink(),
-                                                                const SizedBox.shrink(),
-                                                              ],
-                                                            ),
-                                                            TableRow(
-                                                              children: [
-                                                                Padding(
-                                                                  padding:
-                                                                      const EdgeInsets.only(
-                                                                        top: 2,
-                                                                      ),
-                                                                  child: Column(
-                                                                    crossAxisAlignment:
-                                                                        CrossAxisAlignment
-                                                                            .start,
-                                                                    children: [
-                                                                      Text(
-                                                                        discountSummary,
-                                                                        maxLines:
-                                                                            1,
-                                                                        overflow:
-                                                                            TextOverflow.ellipsis,
-                                                                        style: Theme.of(
-                                                                          context,
-                                                                        ).textTheme.bodySmall,
-                                                                      ),
-                                                                      const SizedBox(
-                                                                        height:
-                                                                            4,
-                                                                      ),
-                                                                      Wrap(
-                                                                        spacing:
-                                                                            8,
-                                                                        runSpacing:
-                                                                            6,
-                                                                        crossAxisAlignment:
-                                                                            WrapCrossAlignment.center,
-                                                                        children: [
-                                                                          if (activeDiscountSlots ==
-                                                                              0)
-                                                                            TextButton.icon(
-                                                                              onPressed: widget.saving ? null : () => _addPointDiscountField(index),
-                                                                              icon: const Icon(
-                                                                                Icons.percent_outlined,
-                                                                                size: 16,
-                                                                              ),
-                                                                              label: const Text(
-                                                                                'Adicionar desconto',
-                                                                              ),
-                                                                              style: TextButton.styleFrom(
-                                                                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
-                                                                                minimumSize: const Size(0, 30),
-                                                                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                                                              ),
-                                                                            ),
-                                                                        ],
-                                                                      ),
-                                                                      if (activeDiscountSlots >
-                                                                          0) ...[
-                                                                        const SizedBox(
-                                                                          height:
-                                                                              6,
-                                                                        ),
-                                                                        Wrap(
-                                                                          spacing:
-                                                                              8,
-                                                                          runSpacing:
-                                                                              8,
-                                                                          crossAxisAlignment:
-                                                                              WrapCrossAlignment.center,
-                                                                          children: [
-                                                                            for (
-                                                                              var i = 0;
-                                                                              i < activeDiscountSlots;
-                                                                              i++
-                                                                            )
-                                                                              Container(
-                                                                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                                                                                decoration: BoxDecoration(
-                                                                                  borderRadius: BorderRadius.circular(10),
-                                                                                  color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
-                                                                                  border: Border.all(color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.55)),
-                                                                                ),
-                                                                                child: Row(
-                                                                                  mainAxisSize: MainAxisSize.min,
-                                                                                  children: [
-                                                                                    SizedBox(
-                                                                                      width: 96,
-                                                                                      child: TextField(
-                                                                                        controller: inlineDiscountControllers[i],
-                                                                                        enabled: !widget.saving,
-                                                                                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                                                                        decoration: InputDecoration(
-                                                                                          labelText: i < policyFields.length ? policyFields[i].label : 'Desconto ${i + 1}',
-                                                                                          suffixText: '%',
-                                                                                          isDense: true,
-                                                                                          contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                                                                                          border: const OutlineInputBorder(),
-                                                                                        ),
-                                                                                        onSubmitted: (_) => _applyInlineItemDiscounts(index, showErrors: true),
-                                                                                        onChanged: (_) => _applyInlineItemDiscounts(index, showErrors: false),
-                                                                                      ),
-                                                                                    ),
-                                                                                    const SizedBox(width: 4),
-                                                                                    IconButton(
-                                                                                      tooltip: 'Remover este desconto',
-                                                                                      onPressed: widget.saving ? null : () => _removeInlineItemDiscountField(index, i),
-                                                                                      icon: const Icon(Icons.close, size: 16),
-                                                                                      visualDensity: VisualDensity.compact,
-                                                                                      constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
-                                                                                      padding: EdgeInsets.zero,
-                                                                                    ),
-                                                                                  ],
-                                                                                ),
-                                                                              ),
-                                                                            if (canAddDiscountSlot)
-                                                                              Padding(
-                                                                                padding: const EdgeInsets.only(top: 2),
-                                                                                child: FloatingActionButton.small(
-                                                                                  heroTag: 'item_discount_fab_${item.id}_$activeDiscountSlots',
-                                                                                  tooltip: 'Adicionar próximo campo',
-                                                                                  onPressed: widget.saving ? null : () => _addPointDiscountField(index),
-                                                                                  child: const Icon(Icons.add, size: 18),
-                                                                                ),
-                                                                              ),
-                                                                          ],
-                                                                        ),
-                                                                      ],
-                                                                    ],
-                                                                  ),
-                                                                ),
-                                                                const SizedBox.shrink(),
-                                                                const SizedBox.shrink(),
-                                                                const SizedBox.shrink(),
-                                                              ],
-                                                            ),
-                                                          ],
-                                                        ),
-                                                      ),
-                                                      SizedBox(
-                                                        width:
-                                                            itemActionSlotWidth,
-                                                        child: Column(
-                                                          children: [
-                                                            IconButton(
-                                                              tooltip: 'Remover item',
-                                                              onPressed:
-                                                                  widget.saving
-                                                                  ? null
-                                                                  : () {
-                                                                      setState(() {
-                                                                        _disposeDiscountControllersForItem(
-                                                                          item.id,
-                                                                        );
-                                                                        _items.removeAt(
-                                                                          index,
-                                                                        );
-                                                                      });
-                                                                    },
-                                                              icon: const Icon(
-                                                                Icons
-                                                                    .delete_outline,
-                                                              ),
-                                                            ),
-                                                          ],
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
+                                                return PedidoItemRow(
+                                                  item: item,
+                                                  product: product,
+                                                  index: index,
+                                                  isCompactItems:
+                                                      isCompactItems,
+                                                  saving: widget.saving,
+                                                  policyFields:
+                                                      _orderDiscountPolicy
+                                                          .fields,
+                                                  columnWidths:
+                                                      itemTableColumnWidths,
+                                                  rowHorizontalPadding:
+                                                      itemRowHorizontalPadding,
+                                                  actionSlotWidth:
+                                                      itemActionSlotWidth,
+                                                  resolveItemDisplayCode:
+                                                      _resolveItemDisplayCode,
+                                                  formatPercent: _formatPercent,
+                                                  formatMoney: _formatMoney,
+                                                  formatQuantity:
+                                                      _formatQuantity,
+                                                  readIntegerQuantity:
+                                                      _readIntegerQuantity,
+                                                  formatPointDiscountSummary:
+                                                      _formatPointDiscountSummary,
+                                                  ensureDiscountControllersForItem:
+                                                      _ensureDiscountControllersForItem,
+                                                  buildItemThumbnail:
+                                                      _buildItemThumbnail,
+                                                  showItemTaxDetailsDialog:
+                                                      _showItemTaxDetailsDialog,
+                                                  onDecrementQuantity:
+                                                      _decrementItemQuantity,
+                                                  onIncrementQuantity:
+                                                      _incrementItemQuantity,
+                                                  onSetQuantity:
+                                                      _setItemQuantity,
+                                                  onApplyInlineDiscounts:
+                                                      _applyInlineItemDiscounts,
+                                                  onRemoveDiscountField:
+                                                      _removeInlineItemDiscountField,
+                                                  onAddDiscountField:
+                                                      _addPointDiscountField,
+                                                  onRemoveItem: () {
+                                                    setState(() {
+                                                      _disposeDiscountControllersForItem(
+                                                        item.id,
+                                                      );
+                                                      _items.removeAt(index);
+                                                    });
+                                                  },
                                                 );
                                               },
                                             ),
@@ -4035,28 +2930,39 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
                                             ),
                                             const SizedBox(height: 8),
                                             FutureBuilder<void>(
-                                              future: _ensurePaymentConditionRulesLoaded(),
+                                              future:
+                                                  _ensurePaymentConditionRulesLoaded(),
                                               builder: (context, paymentSnapshot) {
                                                 final loading =
-                                                    paymentSnapshot.connectionState ==
+                                                    paymentSnapshot
+                                                        .connectionState ==
                                                     ConnectionState.waiting;
                                                 final eligibleRules =
                                                     _eligiblePaymentConditionRules();
-                                                final options = eligibleRules
-                                                    .map(
-                                                      (rule) => rule.description.trim(),
-                                                    )
-                                                    .where((value) => value.isNotEmpty)
-                                                    .toSet()
-                                                    .toList(growable: false)
-                                                  ..sort(
-                                                    (a, b) => a
-                                                        .toLowerCase()
-                                                        .compareTo(b.toLowerCase()),
-                                                  );
+                                                final options =
+                                                    eligibleRules
+                                                        .map(
+                                                          (rule) => rule
+                                                              .description
+                                                              .trim(),
+                                                        )
+                                                        .where(
+                                                          (value) =>
+                                                              value.isNotEmpty,
+                                                        )
+                                                        .toSet()
+                                                        .toList(growable: false)
+                                                      ..sort(
+                                                        (a, b) => a
+                                                            .toLowerCase()
+                                                            .compareTo(
+                                                              b.toLowerCase(),
+                                                            ),
+                                                      );
 
                                                 final selected =
-                                                    (_selectedPaymentConditionDescription ?? '')
+                                                    (_selectedPaymentConditionDescription ??
+                                                            '')
                                                         .trim();
                                                 final selectedInOptions =
                                                     selected.isNotEmpty &&
@@ -4065,7 +2971,9 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
                                                 if (!selectedInOptions &&
                                                     selected.isNotEmpty) {
                                                   WidgetsBinding.instance
-                                                      .addPostFrameCallback((_) {
+                                                      .addPostFrameCallback((
+                                                        _,
+                                                      ) {
                                                         if (!mounted) {
                                                           return;
                                                         }
@@ -4078,10 +2986,14 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
 
                                                 return Container(
                                                   width: double.infinity,
-                                                  padding: const EdgeInsets.all(12),
+                                                  padding: const EdgeInsets.all(
+                                                    12,
+                                                  ),
                                                   decoration: BoxDecoration(
                                                     borderRadius:
-                                                        BorderRadius.circular(8),
+                                                        BorderRadius.circular(
+                                                          8,
+                                                        ),
                                                     color: Theme.of(context)
                                                         .colorScheme
                                                         .surface,
@@ -4092,7 +3004,8 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
                                                   ),
                                                   child: Column(
                                                     crossAxisAlignment:
-                                                        CrossAxisAlignment.start,
+                                                        CrossAxisAlignment
+                                                            .start,
                                                     children: [
                                                       Text(
                                                         'Forma de Pagamento',
@@ -4108,39 +3021,51 @@ class _PedidoInlineEditorState extends State<_PedidoInlineEditor> {
                                                       else if (options.isEmpty)
                                                         Text(
                                                           'Nenhuma condição disponível para o total atual.',
-                                                          style: Theme.of(context)
-                                                              .textTheme
-                                                              .bodySmall,
+                                                          style: Theme.of(
+                                                            context,
+                                                          ).textTheme.bodySmall,
                                                         )
                                                       else
-                                                        DropdownButtonFormField<String>(
-                                                          initialValue: selectedInOptions
+                                                        DropdownButtonFormField<
+                                                          String
+                                                        >(
+                                                          initialValue:
+                                                              selectedInOptions
                                                               ? selected
                                                               : null,
-                                                          decoration: _inputDecoration(
-                                                            label:
-                                                                'Selecione uma condição',
-                                                          ),
+                                                          decoration:
+                                                              _inputDecoration(
+                                                                label: 'Selecione uma condição',
+                                                              ),
                                                           isExpanded: true,
                                                           items: options
                                                               .map(
-                                                                (description) =>
-                                                                    DropdownMenuItem<String>(
-                                                                  value: description,
+                                                                (
+                                                                  description,
+                                                                ) => DropdownMenuItem<String>(
+                                                                  value:
+                                                                      description,
                                                                   child: Text(
                                                                     description,
                                                                     overflow:
-                                                                        TextOverflow.ellipsis,
+                                                                        TextOverflow
+                                                                            .ellipsis,
                                                                   ),
                                                                 ),
                                                               )
-                                                              .toList(growable: false),
-                                                          onChanged: widget.saving
+                                                              .toList(
+                                                                growable: false,
+                                                              ),
+                                                          onChanged:
+                                                              widget.saving
                                                               ? null
                                                               : (value) {
                                                                   setState(() {
                                                                     _selectedPaymentConditionDescription =
-                                                                        (value ?? '').trim().isEmpty
+                                                                        (value ??
+                                                                                '')
+                                                                            .trim()
+                                                                            .isEmpty
                                                                         ? null
                                                                         : value;
                                                                   });

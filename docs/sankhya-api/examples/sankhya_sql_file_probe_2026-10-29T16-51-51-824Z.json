@@ -1,0 +1,248 @@
+{
+  "marker": "SQL_FILE_PROBE",
+  "ok": true,
+  "tenantId": "self_T8oqTD0UBtWATPbITOGsqAEZt3d2_smartsfa-enterprise-teste",
+  "environment": "prod",
+  "sqlFile": "G:\\smartsfa\\scripts\\bootstrap_owner\\sql\\probe_tgficm_mva_columns.sql",
+  "baseUrl": "https://api.sankhya.com.br",
+  "endpointPath": "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+  "status": 200,
+  "responseIsJson": true,
+  "rowCount": 11,
+  "fields": [
+    {
+      "name": "COLUMN_NAME",
+      "order": 1,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "DATA_TYPE",
+      "order": 2,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "DATA_LENGTH",
+      "order": 3,
+      "userType": "F",
+      "precision": 2
+    },
+    {
+      "name": "DATA_PRECISION",
+      "order": 4,
+      "userType": "F",
+      "precision": 2
+    },
+    {
+      "name": "DATA_SCALE",
+      "order": 5,
+      "userType": "F",
+      "precision": 2
+    }
+  ],
+  "rows": [
+    [
+      "BASESTUFDEST",
+      "VARCHAR2",
+      1,
+      null,
+      null
+    ],
+    [
+      "CALCMVAAJUSTADO",
+      "CHAR",
+      1,
+      null,
+      null
+    ],
+    [
+      "CODFORMVA",
+      "NUMBER",
+      22,
+      10,
+      0
+    ],
+    [
+      "CODTABSTUFDEST",
+      "NUMBER",
+      22,
+      5,
+      0
+    ],
+    [
+      "CONSPMVABCICM",
+      "CHAR",
+      1,
+      null,
+      null
+    ],
+    [
+      "MARGLUCRO",
+      "FLOAT",
+      22,
+      126,
+      null
+    ],
+    [
+      "MARGLUCROEST",
+      "FLOAT",
+      22,
+      126,
+      null
+    ],
+    [
+      "MVAORIGINAL",
+      "CHAR",
+      1,
+      null,
+      null
+    ],
+    [
+      "MVASIMPLIFICADO",
+      "CHAR",
+      1,
+      null,
+      null
+    ],
+    [
+      "MVASTUFDEST",
+      "FLOAT",
+      22,
+      126,
+      null
+    ],
+    [
+      "NAOCONSIDMVA",
+      "CHAR",
+      1,
+      null,
+      null
+    ]
+  ],
+  "responseBody": {
+    "serviceName": "DbExplorerSP.executeQuery",
+    "status": "1",
+    "pendingPrinting": "false",
+    "transactionId": "2A12005D0AAFA2FCF56ED55DF9E7EE04",
+    "responseBody": {
+      "fieldsMetadata": [
+        {
+          "name": "COLUMN_NAME",
+          "description": "COLUMN_NAME",
+          "order": 1,
+          "userType": "S"
+        },
+        {
+          "name": "DATA_TYPE",
+          "description": "DATA_TYPE",
+          "order": 2,
+          "userType": "S"
+        },
+        {
+          "name": "DATA_LENGTH",
+          "description": "DATA_LENGTH",
+          "order": 3,
+          "userType": "F",
+          "precision": 2
+        },
+        {
+          "name": "DATA_PRECISION",
+          "description": "DATA_PRECISION",
+          "order": 4,
+          "userType": "F",
+          "precision": 2
+        },
+        {
+          "name": "DATA_SCALE",
+          "description": "DATA_SCALE",
+          "order": 5,
+          "userType": "F",
+          "precision": 2
+        }
+      ],
+      "rows": [
+        [
+          "BASESTUFDEST",
+          "VARCHAR2",
+          1,
+          null,
+          null
+        ],
+        [
+          "CALCMVAAJUSTADO",
+          "CHAR",
+          1,
+          null,
+          null
+        ],
+        [
+          "CODFORMVA",
+          "NUMBER",
+          22,
+          10,
+          0
+        ],
+        [
+          "CODTABSTUFDEST",
+          "NUMBER",
+          22,
+          5,
+          0
+        ],
+        [
+          "CONSPMVABCICM",
+          "CHAR",
+          1,
+          null,
+          null
+        ],
+        [
+          "MARGLUCRO",
+          "FLOAT",
+          22,
+          126,
+          null
+        ],
+        [
+          "MARGLUCROEST",
+          "FLOAT",
+          22,
+          126,
+          null
+        ],
+        [
+          "MVAORIGINAL",
+          "CHAR",
+          1,
+          null,
+          null
+        ],
+        [
+          "MVASIMPLIFICADO",
+          "CHAR",
+          1,
+          null,
+          null
+        ],
+        [
+          "MVASTUFDEST",
+          "FLOAT",
+          22,
+          126,
+          null
+        ],
+        [
+          "NAOCONSIDMVA",
+          "CHAR",
+          1,
+          null,
+          null
+        ]
+      ],
+      "burstLimit": false,
+      "timeQuery": "47ms",
+      "timeResultSet": "1ms"
+    }
+  }
+}

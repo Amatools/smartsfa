@@ -221,6 +221,8 @@ class PedidoItemPricingService {
     PedidoItemTaxSnapshot? previousSnapshot,
     double? previousQuantity,
     List<double> appliedDiscountPercents = const <double>[],
+    List<OrderDiscountFieldRule> discountPolicyFields =
+        const <OrderDiscountFieldRule>[],
     required Cliente? selectedCliente,
     required String? customerId,
     required String? representedCompanyId,
@@ -231,18 +233,28 @@ class PedidoItemPricingService {
     final fallbackUnitPrice = PedidoFormatUtils.roundCurrency(
       product.valorBruto ?? 0,
     );
+    final discountBreakdown =
+        PedidoCommercialPricingService.splitPointDiscountsByMode(
+          discountPercents: appliedDiscountPercents,
+          policyFields: discountPolicyFields,
+        );
+    final unitPriceBeforeTax =
+        PedidoCommercialPricingService.applyDiscountPercentsToUnitPrice(
+          unitPrice: fallbackUnitPrice,
+          discountPercents: discountBreakdown.beforeTax,
+        );
     final fallbackSnapshot = buildFallbackSnapshotFromProduct(
       product: product,
       quantity: quantity,
-      unitPrice: fallbackUnitPrice,
+      unitPrice: unitPriceBeforeTax,
       previous: previousSnapshot,
       previousQuantity: previousQuantity,
     );
 
     final fallback = ComputedPedidoItemValues(
-      unitPrice: fallbackUnitPrice,
+      unitPrice: unitPriceBeforeTax,
       totalPrice: PedidoFormatUtils.roundCurrency(
-        quantity * fallbackUnitPrice,
+        quantity * unitPriceBeforeTax,
       ),
       taxSnapshot: fallbackSnapshot,
       usedFallback: true,
@@ -257,7 +269,7 @@ class PedidoItemPricingService {
       );
       return PedidoCommercialPricingService.applyPointDiscounts(
         baseValues: adjusted,
-        discountPercents: appliedDiscountPercents,
+        discountPercents: discountBreakdown.afterTax,
       );
     }
 
@@ -295,6 +307,7 @@ class PedidoItemPricingService {
         tabelaId: tableId,
         clienteUf: destinationUf,
         quantidade: quantity,
+        preTaxDiscountPercents: discountBreakdown.beforeTax,
         salePurpose: salePurpose,
         customerTaxProfile: customerTaxProfile,
         isZonaFrancaSuframa: isZonaFrancaSuframa,

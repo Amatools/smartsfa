@@ -1,0 +1,385 @@
+{
+  "marker": "SQL_FILE_PROBE",
+  "ok": true,
+  "tenantId": "self_T8oqTD0UBtWATPbITOGsqAEZt3d2_smartsfa-enterprise-teste",
+  "environment": "prod",
+  "sqlFile": "G:\\smartsfa\\scripts\\bootstrap_owner\\sql\\probe_rule_2512_and_group98.sql",
+  "baseUrl": "https://api.sankhya.com.br",
+  "endpointPath": "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+  "status": 200,
+  "responseIsJson": true,
+  "rowCount": 1,
+  "fields": [
+    {
+      "name": "IDALIQ",
+      "order": 1,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "CODTAB",
+      "order": 2,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "SEQUENCIA",
+      "order": 3,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "TIPRESTRICAO",
+      "order": 4,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "CODRESTRICAO",
+      "order": 5,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "TIPRESTRICAO2",
+      "order": 6,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "CODRESTRICAO2",
+      "order": 7,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "UFORIGEM",
+      "order": 8,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "UFDESTINO",
+      "order": 9,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "ALIQUOTA",
+      "order": 10,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "ALIQSUBTRIB",
+      "order": 11,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "ALIQINTDEST",
+      "order": 12,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "MARGLUCRO",
+      "order": 13,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "MARGLUCROEST",
+      "order": 14,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "MVASTUFDEST",
+      "order": 15,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "MVAORIGINAL",
+      "order": 16,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "MVASIMPLIFICADO",
+      "order": 17,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "CALCMVAAJUSTADO",
+      "order": 18,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "CALCSTEXTRANOTA",
+      "order": 19,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "CONSPMVABCICM",
+      "order": 20,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "CODFORMVA",
+      "order": 21,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "PAUTAVLRSTFIXO",
+      "order": 22,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "REDBASEST",
+      "order": 23,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "DTINICIOVIGENCIA",
+      "order": 24,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "DTFIMVIGENCIA",
+      "order": 25,
+      "userType": "S",
+      "precision": null
+    }
+  ],
+  "rows": [
+    [
+      "2512",
+      null,
+      "1",
+      "I",
+      "98",
+      "S",
+      "-1",
+      "SP",
+      "SP",
+      "18",
+      "18",
+      null,
+      "98",
+      "0",
+      null,
+      "N",
+      "N",
+      "N",
+      "N",
+      null,
+      null,
+      "N",
+      null,
+      null,
+      null
+    ]
+  ],
+  "responseBody": {
+    "serviceName": "DbExplorerSP.executeQuery",
+    "status": "1",
+    "pendingPrinting": "false",
+    "transactionId": "485926B6271A3A3244BCCAD19C81247D",
+    "responseBody": {
+      "fieldsMetadata": [
+        {
+          "name": "IDALIQ",
+          "description": "IDALIQ",
+          "order": 1,
+          "userType": "S"
+        },
+        {
+          "name": "CODTAB",
+          "description": "CODTAB",
+          "order": 2,
+          "userType": "S"
+        },
+        {
+          "name": "SEQUENCIA",
+          "description": "SEQUENCIA",
+          "order": 3,
+          "userType": "S"
+        },
+        {
+          "name": "TIPRESTRICAO",
+          "description": "TIPRESTRICAO",
+          "order": 4,
+          "userType": "S"
+        },
+        {
+          "name": "CODRESTRICAO",
+          "description": "CODRESTRICAO",
+          "order": 5,
+          "userType": "S"
+        },
+        {
+          "name": "TIPRESTRICAO2",
+          "description": "TIPRESTRICAO2",
+          "order": 6,
+          "userType": "S"
+        },
+        {
+          "name": "CODRESTRICAO2",
+          "description": "CODRESTRICAO2",
+          "order": 7,
+          "userType": "S"
+        },
+        {
+          "name": "UFORIGEM",
+          "description": "UFORIGEM",
+          "order": 8,
+          "userType": "S"
+        },
+        {
+          "name": "UFDESTINO",
+          "description": "UFDESTINO",
+          "order": 9,
+          "userType": "S"
+        },
+        {
+          "name": "ALIQUOTA",
+          "description": "ALIQUOTA",
+          "order": 10,
+          "userType": "S"
+        },
+        {
+          "name": "ALIQSUBTRIB",
+          "description": "ALIQSUBTRIB",
+          "order": 11,
+          "userType": "S"
+        },
+        {
+          "name": "ALIQINTDEST",
+          "description": "ALIQINTDEST",
+          "order": 12,
+          "userType": "S"
+        },
+        {
+          "name": "MARGLUCRO",
+          "description": "MARGLUCRO",
+          "order": 13,
+          "userType": "S"
+        },
+        {
+          "name": "MARGLUCROEST",
+          "description": "MARGLUCROEST",
+          "order": 14,
+          "userType": "S"
+        },
+        {
+          "name": "MVASTUFDEST",
+          "description": "MVASTUFDEST",
+          "order": 15,
+          "userType": "S"
+        },
+        {
+          "name": "MVAORIGINAL",
+          "description": "MVAORIGINAL",
+          "order": 16,
+          "userType": "S"
+        },
+        {
+          "name": "MVASIMPLIFICADO",
+          "description": "MVASIMPLIFICADO",
+          "order": 17,
+          "userType": "S"
+        },
+        {
+          "name": "CALCMVAAJUSTADO",
+          "description": "CALCMVAAJUSTADO",
+          "order": 18,
+          "userType": "S"
+        },
+        {
+          "name": "CALCSTEXTRANOTA",
+          "description": "CALCSTEXTRANOTA",
+          "order": 19,
+          "userType": "S"
+        },
+        {
+          "name": "CONSPMVABCICM",
+          "description": "CONSPMVABCICM",
+          "order": 20,
+          "userType": "S"
+        },
+        {
+          "name": "CODFORMVA",
+          "description": "CODFORMVA",
+          "order": 21,
+          "userType": "S"
+        },
+        {
+          "name": "PAUTAVLRSTFIXO",
+          "description": "PAUTAVLRSTFIXO",
+          "order": 22,
+          "userType": "S"
+        },
+        {
+          "name": "REDBASEST",
+          "description": "REDBASEST",
+          "order": 23,
+          "userType": "S"
+        },
+        {
+          "name": "DTINICIOVIGENCIA",
+          "description": "DTINICIOVIGENCIA",
+          "order": 24,
+          "userType": "S"
+        },
+        {
+          "name": "DTFIMVIGENCIA",
+          "description": "DTFIMVIGENCIA",
+          "order": 25,
+          "userType": "S"
+        }
+      ],
+      "rows": [
+        [
+          "2512",
+          null,
+          "1",
+          "I",
+          "98",
+          "S",
+          "-1",
+          "SP",
+          "SP",
+          "18",
+          "18",
+          null,
+          "98",
+          "0",
+          null,
+          "N",
+          "N",
+          "N",
+          "N",
+          null,
+          null,
+          "N",
+          null,
+          null,
+          null
+        ]
+      ],
+      "burstLimit": false,
+      "timeQuery": "40ms",
+      "timeResultSet": "1ms"
+    }
+  }
+}

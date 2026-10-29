@@ -98,9 +98,8 @@ class _OrderDiscountPoliciesSectionState
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
             side: BorderSide(
-              color: Theme.of(
-                context,
-              ).colorScheme.outlineVariant.withValues(alpha: 0.35),
+              color: Theme.of(context).colorScheme.outlineVariant
+                  .withValues(alpha: 0.35),
             ),
           ),
           child: Padding(
@@ -138,13 +137,11 @@ class _OrderDiscountPoliciesSectionState
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(12),
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.2),
+                    color: Theme.of(context).colorScheme.surfaceContainerHighest
+                        .withValues(alpha: 0.2),
                     border: Border.all(
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.outlineVariant.withValues(alpha: 0.3),
+                      color: Theme.of(context).colorScheme.outlineVariant
+                          .withValues(alpha: 0.3),
                     ),
                   ),
                   child: Wrap(
@@ -191,8 +188,7 @@ class _OrderDiscountPoliciesSectionState
                   const SizedBox(height: 10),
                   _ownerOnlyReadOnlyNotice(
                     context,
-                    message:
-                        'Política em modo somente leitura para este perfil. Apenas o owner pode alterar.',
+                    message: 'Política em modo somente leitura para este perfil. Apenas o owner pode alterar.',
                   ),
                 ],
                 const SizedBox(height: 12),
@@ -203,9 +199,7 @@ class _OrderDiscountPoliciesSectionState
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .outlineVariant
+                        color: Theme.of(context).colorScheme.outlineVariant
                             .withValues(alpha: 0.4),
                       ),
                     ),
@@ -225,8 +219,9 @@ class _OrderDiscountPoliciesSectionState
                 Align(
                   alignment: Alignment.centerRight,
                   child: FilledButton.icon(
-                    onPressed:
-                        canEditSettings && !_saving && _dirty ? _save : null,
+                    onPressed: canEditSettings && !_saving && _dirty
+                        ? _save
+                        : null,
                     icon: _saving
                         ? const SizedBox(
                             width: 16,
@@ -257,7 +252,9 @@ class _OrderDiscountPoliciesSectionState
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(14),
         color: colors.surfaceContainerHighest.withValues(alpha: 0.16),
-        border: Border.all(color: colors.outlineVariant.withValues(alpha: 0.45)),
+        border: Border.all(
+          color: colors.outlineVariant.withValues(alpha: 0.45),
+        ),
       ),
       child: Column(
         children: [
@@ -321,6 +318,35 @@ class _OrderDiscountPoliciesSectionState
                       ),
                       onChanged: (_) => _markDirty(),
                     ),
+                    const SizedBox(height: 8),
+                    DropdownButtonFormField<OrderDiscountApplyMode>(
+                      initialValue: row.applyMode,
+                      decoration: _fieldDecoration(
+                        label: 'Aplicação do desconto',
+                        icon: Icons.calculate_outlined,
+                      ),
+                      items: const <DropdownMenuItem<OrderDiscountApplyMode>>[
+                        DropdownMenuItem<OrderDiscountApplyMode>(
+                          value: OrderDiscountApplyMode.afterTax,
+                          child: Text('Depois dos impostos'),
+                        ),
+                        DropdownMenuItem<OrderDiscountApplyMode>(
+                          value: OrderDiscountApplyMode.beforeTax,
+                          child: Text('Antes dos impostos'),
+                        ),
+                      ],
+                      onChanged: canEditSettings && !_saving
+                          ? (value) {
+                              if (value == null || row.applyMode == value) {
+                                return;
+                              }
+                              setState(() {
+                                row.applyMode = value;
+                                _dirty = true;
+                              });
+                            }
+                          : null,
+                    ),
                   ],
                 );
               }
@@ -371,6 +397,38 @@ class _OrderDiscountPoliciesSectionState
                       onChanged: (_) => _markDirty(),
                     ),
                   ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    flex: 2,
+                    child: DropdownButtonFormField<OrderDiscountApplyMode>(
+                      initialValue: row.applyMode,
+                      decoration: _fieldDecoration(
+                        label: 'Aplicação do desconto',
+                        icon: Icons.calculate_outlined,
+                      ),
+                      items: const <DropdownMenuItem<OrderDiscountApplyMode>>[
+                        DropdownMenuItem<OrderDiscountApplyMode>(
+                          value: OrderDiscountApplyMode.afterTax,
+                          child: Text('Depois dos impostos'),
+                        ),
+                        DropdownMenuItem<OrderDiscountApplyMode>(
+                          value: OrderDiscountApplyMode.beforeTax,
+                          child: Text('Antes dos impostos'),
+                        ),
+                      ],
+                      onChanged: canEditSettings && !_saving
+                          ? (value) {
+                              if (value == null || row.applyMode == value) {
+                                return;
+                              }
+                              setState(() {
+                                row.applyMode = value;
+                                _dirty = true;
+                              });
+                            }
+                          : null,
+                    ),
+                  ),
                 ],
               );
             },
@@ -400,6 +458,7 @@ class _OrderDiscountPoliciesSectionState
               label: 'Desconto ${i + 1}',
               minPercent: '0',
               maxPercent: '100',
+              applyMode: OrderDiscountApplyMode.afterTax,
             ),
           );
         }
@@ -441,6 +500,7 @@ class _OrderDiscountPoliciesSectionState
             label: field.label,
             minPercent: _formatPercent(field.minPercent),
             maxPercent: _formatPercent(field.maxPercent),
+            applyMode: field.applyMode,
           ),
         ),
       );
@@ -458,7 +518,9 @@ class _OrderDiscountPoliciesSectionState
     if (normalized.isEmpty) {
       return null;
     }
-    return double.tryParse(normalized.replaceAll('.', '').replaceAll(',', '.')) ??
+    return double.tryParse(
+          normalized.replaceAll('.', '').replaceAll(',', '.'),
+        ) ??
         double.tryParse(normalized.replaceAll(',', '.'));
   }
 
@@ -488,6 +550,7 @@ class _OrderDiscountPoliciesSectionState
           label: label,
           minPercent: minPercent,
           maxPercent: maxPercent,
+          applyMode: row.applyMode,
         ),
       );
     }
@@ -515,9 +578,9 @@ class _OrderDiscountPoliciesSectionState
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Falha ao salvar política: $error')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Falha ao salvar política: $error')),
+      );
     } finally {
       if (mounted) {
         setState(() {
@@ -538,6 +601,7 @@ class _OrderDiscountFieldDraftRow {
     required String label,
     required String minPercent,
     required String maxPercent,
+    this.applyMode = OrderDiscountApplyMode.afterTax,
   }) : labelController = TextEditingController(text: label),
        minController = TextEditingController(text: minPercent),
        maxController = TextEditingController(text: maxPercent);
@@ -545,6 +609,7 @@ class _OrderDiscountFieldDraftRow {
   final TextEditingController labelController;
   final TextEditingController minController;
   final TextEditingController maxController;
+  OrderDiscountApplyMode applyMode;
 
   void dispose() {
     labelController.dispose();

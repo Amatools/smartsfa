@@ -77,6 +77,215 @@
 			},
 			"isBackground": false,
 			"group": "build"
+		},
+		{
+			"label": "firebase deploy sync function",
+			"type": "shell",
+			"command": "C:/Users/Aureo.Filho/AppData/Roaming/npm/firebase.cmd",
+			"args": [
+				"deploy",
+				"--project=smart-sfa",
+				"--only",
+				"functions:syncSankhyaCatalogModule"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "sync tax rules verify mva",
+			"type": "shell",
+			"command": "node",
+			"args": [
+				"scripts/bootstrap_owner/tmp_sync_tax_rules_only.mjs"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "probe sankhya tax sql",
+			"type": "shell",
+			"command": "node",
+			"args": [
+				"scripts/bootstrap_owner/tmp_probe_full_sql_aliquota.mjs"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "sync tax rules now",
+			"type": "shell",
+			"command": "node",
+			"args": [
+				"scripts/bootstrap_owner/tmp_sync_tax_rules_only.mjs"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "logs sync function",
+			"type": "shell",
+			"command": "C:/Users/Aureo.Filho/AppData/Roaming/npm/firebase.cmd",
+			"args": [
+				"functions:log",
+				"--only",
+				"syncSankhyaCatalogModule",
+				"-n",
+				"40",
+				"--project=smart-sfa"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "probe tax sql from functions",
+			"type": "shell",
+			"command": "node",
+			"args": [
+				"scripts/bootstrap_owner/tmp_probe_tax_sql_from_functions.mjs"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "probe tax sql from functions after fix",
+			"type": "shell",
+			"command": "node",
+			"args": [
+				"scripts/bootstrap_owner/tmp_probe_tax_sql_from_functions.mjs"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "firebase deploy sync function fixed mva",
+			"type": "shell",
+			"command": "C:/Users/Aureo.Filho/AppData/Roaming/npm/firebase.cmd",
+			"args": [
+				"deploy",
+				"--project=smart-sfa",
+				"--only",
+				"functions:syncSankhyaCatalogModule"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "sync tax rules after deploy fix",
+			"type": "shell",
+			"command": "node",
+			"args": [
+				"scripts/bootstrap_owner/tmp_sync_tax_rules_only.mjs"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "check mva98 rules",
+			"type": "shell",
+			"command": "node",
+			"args": [
+				"scripts/bootstrap_owner/tmp_check_mva98_rules.mjs"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "probe mva group 98 sp",
+			"type": "shell",
+			"command": "node",
+			"args": [
+				"scripts/bootstrap_owner/tmp_probe_sql_file_execute_query.mjs",
+				"--sqlFile=scripts/bootstrap_owner/sql/probe_mva_group_98_sp.sql"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "probe tgficm mva columns",
+			"type": "shell",
+			"command": "node",
+			"args": [
+				"scripts/bootstrap_owner/tmp_probe_sql_file_execute_query.mjs",
+				"--sqlFile=scripts/bootstrap_owner/sql/probe_tgficm_mva_columns.sql"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "probe rule 2512 group98",
+			"type": "shell",
+			"command": "node",
+			"args": [
+				"scripts/bootstrap_owner/tmp_probe_sql_file_execute_query.mjs",
+				"--sqlFile=scripts/bootstrap_owner/sql/probe_rule_2512_and_group98.sql"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "check functions syntax",
+			"type": "shell",
+			"command": "node",
+			"args": [
+				"--check",
+				"functions/index.js"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "probe tax sql from functions final",
+			"type": "shell",
+			"command": "node",
+			"args": [
+				"scripts/bootstrap_owner/tmp_probe_tax_sql_from_functions.mjs"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "probe effective mva 2512",
+			"type": "shell",
+			"command": "node",
+			"args": [
+				"scripts/bootstrap_owner/tmp_probe_sql_file_execute_query.mjs",
+				"--sqlFile=scripts/bootstrap_owner/sql/probe_effective_mva_2512.sql"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "deploy sync function mva marglucro",
+			"type": "shell",
+			"command": "C:/Users/Aureo.Filho/AppData/Roaming/npm/firebase.cmd",
+			"args": [
+				"deploy",
+				"--project=smart-sfa",
+				"--only",
+				"functions:syncSankhyaCatalogModule"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "sync tax rules after mva fix",
+			"type": "shell",
+			"command": "node",
+			"args": [
+				"scripts/bootstrap_owner/tmp_sync_tax_rules_only.mjs"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "check mva98 rules after fix",
+			"type": "shell",
+			"command": "node",
+			"args": [
+				"scripts/bootstrap_owner/tmp_check_mva98_rules.mjs"
+			],
+			"isBackground": false,
+			"group": "build"
 		}
 	]
 }

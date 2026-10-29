@@ -106,7 +106,7 @@ class ProductTaxEngineService {
   final ProductBasePriceRepository basePriceRepository;
   final TaxRuleRepository taxRuleRepository;
   final TaxOperationProfileRepository? taxOperationProfileRepository;
-    final TaxOperationClassifierService _operationClassifier =
+  final TaxOperationClassifierService _operationClassifier =
       const TaxOperationClassifierService();
   final Map<String, List<ProductBasePrice>> _basePricesCache =
       <String, List<ProductBasePrice>>{};
@@ -120,6 +120,7 @@ class ProductTaxEngineService {
     required String tabelaId,
     required String clienteUf,
     required double quantidade,
+    List<double> preTaxDiscountPercents = const <double>[],
     SalePurpose salePurpose = SalePurpose.revenda,
     CustomerTaxProfile customerTaxProfile = CustomerTaxProfile.contribuinte,
     bool isZonaFrancaSuframa = false,
@@ -166,6 +167,11 @@ class ProductTaxEngineService {
       );
     }
 
+    final precoUnitarioComDescontoPreTax = _applyPreTaxDiscountPercents(
+      precoBaseRegistro.basePrice,
+      preTaxDiscountPercents,
+    );
+
     final regras = await _loadTaxRules(normalizedTenantId);
     final scopedRules = regras
         .where((rule) {
@@ -188,8 +194,8 @@ class ProductTaxEngineService {
     );
     final regra = ruleMatch?.regra;
 
-    final precoBaseOriginal = precoBaseRegistro.basePrice * quantidade;
-    final precoUnitario = precoBaseRegistro.basePrice;
+    final precoBaseOriginal = precoUnitarioComDescontoPreTax * quantidade;
+    final precoUnitario = precoUnitarioComDescontoPreTax;
     final operationProfiles = await _loadTaxOperationProfiles(
       normalizedTenantId,
     );
@@ -206,32 +212,34 @@ class ProductTaxEngineService {
 
     // For ZFM/SUFRAMA, instead of adding tax over the item total, we discount
     // the product value by the configured ICMS destination rate.
-    final zfmDiscountRate = isZonaFrancaSuframa &&
-          operationResolution.reduceIcmsForZfm
-      ? (regra?.aliquotaDestino ??
-          regra?.aliquotaSt ??
-          regra?.aliquotaIcms ??
-          regra?.aliquotaCredito ??
-          0.0)
-      : 0.0;
+    final zfmDiscountRate =
+        isZonaFrancaSuframa && operationResolution.reduceIcmsForZfm
+        ? (regra?.aliquotaDestino ??
+              regra?.aliquotaSt ??
+              regra?.aliquotaIcms ??
+              regra?.aliquotaCredito ??
+              0.0)
+        : 0.0;
     final zfmDiscountValue = isZonaFrancaSuframa
-      ? precoBaseOriginal * (zfmDiscountRate / 100)
-      : 0.0;
+        ? precoBaseOriginal * (zfmDiscountRate / 100)
+        : 0.0;
     final precoBase = isZonaFrancaSuframa
-      ? math.max(precoBaseOriginal - zfmDiscountValue, 0.0)
-      : precoBaseOriginal;
+        ? math.max(precoBaseOriginal - zfmDiscountValue, 0.0)
+        : precoBaseOriginal;
 
     final aliquotaIpi = produto.aliquotaIpiBase ?? 0;
     final valorIpiCalculado = precoBase * (aliquotaIpi / 100);
-    final valorIpi = operationResolution.addIpiToTotal ? valorIpiCalculado : 0.0;
+    final valorIpi = operationResolution.addIpiToTotal
+        ? valorIpiCalculado
+        : 0.0;
     final baseIcms = operationResolution.includeIpiInIcmsBase
         ? precoBase + valorIpiCalculado
         : precoBase;
 
     final double aliquotaCredito =
-      regra?.aliquotaCredito ?? regra?.aliquotaIcms ?? 0.0;
+        regra?.aliquotaCredito ?? regra?.aliquotaIcms ?? 0.0;
     final double aliquotaDestino =
-      regra?.aliquotaDestino ?? regra?.aliquotaSt ?? 0.0;
+        regra?.aliquotaDestino ?? regra?.aliquotaSt ?? 0.0;
     final double mvaIva = regra?.mvaIva ?? 0.0;
     final tipoSt = (regra?.stCalculationType ?? 'mva').trim().toLowerCase();
     final isMva = tipoSt != 'pmc';
@@ -333,6 +341,31 @@ class ProductTaxEngineService {
     );
   }
 
+  double _applyPreTaxDiscountPercents(
+    double unitPrice,
+    List<double> discountPercents,
+  ) {
+    if (discountPercents.isEmpty) {
+      return unitPrice;
+    }
+
+    var adjusted = unitPrice;
+    for (final discount in discountPercents) {
+      final safeDiscount = discount < 0 ? 0 : discount;
+      if (safeDiscount <= 0) {
+        continue;
+      }
+      adjusted = TaxRoundingPolicy.roundCurrency(
+        adjusted * (1 - (safeDiscount / 100)),
+      );
+    }
+
+    if (adjusted < 0) {
+      return 0;
+    }
+    return adjusted;
+  }
+
   Future<ProductBasePrice?> _resolveBasePrice({
     required String tenantId,
     required String produtoId,
@@ -382,7 +415,9 @@ class ProductTaxEngineService {
     final normalizedTaxGroupId = (productTaxGroupId ?? '').trim().toLowerCase();
     final normalizedNcm = _normalizeNcm(ncm);
     final normalizedCest = _normalizeCest(cest);
-    final normalizedBuyerRegime = (customerTaxRegime ?? '').trim().toLowerCase();
+    final normalizedBuyerRegime = (customerTaxRegime ?? '')
+        .trim()
+        .toLowerCase();
     final now = DateTime.now().toUtc();
 
     // Cadeia de fallback (do mais especifico para o mais generico), ver
@@ -449,23 +484,22 @@ class ProductTaxEngineService {
           .trim()
           .toLowerCase();
       final matchedByBuyerRegime =
-          regraBuyerRegime.isNotEmpty && regraBuyerRegime == normalizedBuyerRegime;
+          regraBuyerRegime.isNotEmpty &&
+          regraBuyerRegime == normalizedBuyerRegime;
       if (regraBuyerRegime.isNotEmpty && !matchedByBuyerRegime) {
         continue;
       }
 
       final isGenericRule =
-          regraProdutoId.isEmpty &&
-          regraTaxGroupId.isEmpty &&
-          regraNcm.isEmpty;
+          regraProdutoId.isEmpty && regraTaxGroupId.isEmpty && regraNcm.isEmpty;
 
       final tier = matchedByProduto
           ? 0
           : matchedByTaxGroup
-              ? 1
-              : matchedByNcm
-                  ? 2
-                  : (isGenericRule ? 3 : -1);
+          ? 1
+          : matchedByNcm
+          ? 2
+          : (isGenericRule ? 3 : -1);
       if (tier < 0) {
         // Segurança: nenhum nivel tecnico reconhecido (nao deveria ocorrer
         // dado os 'continue' acima), descarta candidato ambiguo.

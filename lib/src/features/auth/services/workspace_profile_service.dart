@@ -82,22 +82,51 @@ class CommercialAdjustmentTargetCatalog {
   final List<String> products;
 }
 
+enum OrderDiscountApplyMode {
+  beforeTax('before_tax'),
+  afterTax('after_tax');
+
+  const OrderDiscountApplyMode(this.storageValue);
+
+  final String storageValue;
+
+  static OrderDiscountApplyMode fromStorage(Object? raw) {
+    final normalized = (raw ?? '').toString().trim().toLowerCase();
+    if (normalized == beforeTax.storageValue ||
+        normalized == 'before' ||
+        normalized == 'antes' ||
+        normalized == 'pre_tax') {
+      return beforeTax;
+    }
+    if (normalized == afterTax.storageValue ||
+        normalized == 'after' ||
+        normalized == 'depois' ||
+        normalized == 'post_tax') {
+      return afterTax;
+    }
+    return afterTax;
+  }
+}
+
 class OrderDiscountFieldRule {
   const OrderDiscountFieldRule({
     required this.label,
     required this.minPercent,
     required this.maxPercent,
+    this.applyMode = OrderDiscountApplyMode.afterTax,
   });
 
   final String label;
   final double minPercent;
   final double maxPercent;
+  final OrderDiscountApplyMode applyMode;
 
   Map<String, Object> toMap() {
     return <String, Object>{
       'label': label,
       'minPercent': minPercent,
       'maxPercent': maxPercent,
+      'applyMode': applyMode.storageValue,
     };
   }
 }
@@ -656,6 +685,7 @@ class WorkspaceProfileService {
           label: label,
           minPercent: minPercent,
           maxPercent: maxPercent,
+          applyMode: field.applyMode,
         ),
       );
     }
@@ -1747,6 +1777,7 @@ class WorkspaceProfileService {
           label: label,
           minPercent: minPercent,
           maxPercent: maxPercent,
+          applyMode: OrderDiscountApplyMode.fromStorage(map['applyMode']),
         ),
       );
     }

@@ -1,0 +1,17 @@
+{
+  "marker": "SQL_FILE_PROBE",
+  "ok": true,
+  "tenantId": "self_T8oqTD0UBtWATPbITOGsqAEZt3d2_smartsfa-enterprise-teste",
+  "environment": "prod",
+  "sqlFile": "G:\\smartsfa\\scripts\\bootstrap_owner\\sql\\probe_mva_group_98_sp.sql",
+  "baseUrl": "https://api.sankhya.com.br",
+  "endpointPath": "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+  "status": 200,
+  "responseIsJson": false,
+  "rowCount": 0,
+  "fields": [],
+  "rows": [],
+  "responseBody": {
+    "raw": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<serviceResponse serviceName=\"DbExplorerSP.executeQuery\" status=\"0\" pendingPrinting=\"false\" transactionId=\"6AAB8E77B81E624FBFFE3DE96884E191\"><statusMessage><![CDATA[T1JBLTAwOTA0OiAiSUNNIi4iTUFSR0xVQ1JPQ0VTVCI6IGlkZW50aWZpY2Fkb3IgaW524WxpZG8=\n]]></statusMessage></serviceResponse>\n"
+  }
+}
