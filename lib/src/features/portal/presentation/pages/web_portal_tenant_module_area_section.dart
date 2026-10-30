@@ -40,255 +40,235 @@ class _TenantWorkspaceModuleAreaState
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<Map<String, dynamic>?>(
-      stream: WorkspaceProfileService(FirebaseFirestore.instance)
-          .watchWorkspace(widget.activeTenant.tenantId),
-      builder: (context, workspaceSnapshot) {
-        final workspaceData =
-            workspaceSnapshot.data ?? const <String, dynamic>{};
-        final planTier = _workspacePlanTier(workspaceData);
-        final canUseAdvancedPricing = _isFeatureAvailableByPlan(
-          workspaceType: widget.activeTenant.workspaceType,
-          planTier: planTier,
-          featureKey: _featureAdvancedPricing,
-        );
-        final advancedPricingEnabled =
-            _featureFlagEnabled(
-              workspaceData,
-              _featureAdvancedPricing,
-              legacyField: 'advancedPricingEnabled',
-            ) &&
-            canUseAdvancedPricing;
-        final isEnterpriseWorkspace =
-            widget.activeTenant.workspaceType == 'brand_owner_workspace';
-        final modules = _buildTenantCommercialModules(
-          widget.tenantItems,
-          advancedPricingEnabled: advancedPricingEnabled,
-          isEnterpriseWorkspace: isEnterpriseWorkspace,
-        );
-        if (modules.isEmpty) {
-          return const SizedBox.shrink();
+    final modules = _buildTenantCommercialModules(
+      widget.tenantItems,
+    );
+    if (modules.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    if (_virtualSubmenuKey != null &&
+        !_hasSubmenuKey(modules, _virtualSubmenuKey!)) {
+      _virtualSubmenuKey = null;
+    }
+
+    final externalSubmenuKey = widget.selectedSubmenuKey?.trim();
+    if (externalSubmenuKey != null &&
+        externalSubmenuKey.isNotEmpty &&
+        _hasSubmenuKey(modules, externalSubmenuKey)) {
+      _virtualSubmenuKey = externalSubmenuKey;
+    }
+
+    if (_virtualSubmenuKey == null) {
+      final fallback =
+          _findSubmenuByLabel(modules, widget.selectedItemLabel) ??
+          _firstEnabledSubmenu(modules);
+      _virtualSubmenuKey = fallback?.key;
+      if (_virtualSubmenuKey != null) {
+        final normalizedExternalSubmenuKey =
+            (widget.selectedSubmenuKey ?? '').trim();
+        if (normalizedExternalSubmenuKey != _virtualSubmenuKey) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) {
+              return;
+            }
+            widget.onSubmenuChanged?.call(_virtualSubmenuKey!);
+          });
         }
+      }
+    }
 
-        if (_virtualSubmenuKey != null &&
-            !_hasSubmenuKey(modules, _virtualSubmenuKey!)) {
-          _virtualSubmenuKey = null;
-        }
+    final activeSubmenu = _findSubmenuByKey(modules, _virtualSubmenuKey);
+    final activeModule = _findModuleBySubmenu(modules, activeSubmenu?.key);
 
-        final externalSubmenuKey = widget.selectedSubmenuKey?.trim();
-        if (externalSubmenuKey != null &&
-            externalSubmenuKey.isNotEmpty &&
-            _hasSubmenuKey(modules, externalSubmenuKey)) {
-          _virtualSubmenuKey = externalSubmenuKey;
-        }
+    Widget content;
+    if (widget.tenantSectionLocked) {
+      content = const _SimpleCardSection(
+        title: 'Selecione a representada',
+        subtitle:
+            'Para editar os módulos comerciais, selecione uma representada ativa no topo do portal.',
+        items: ['Contexto da empresa', 'Produtos', 'Políticas comerciais'],
+      );
+    } else if (activeSubmenu == null) {
+      content = const SizedBox.shrink();
+    } else if (activeSubmenu.key == 'detalhes_cadastro_representada') {
+      content = _RepresentedDetailsSection(
+        activeTenant: widget.activeTenant,
+        selectedRepresentedCompanyId: widget.selectedRepresentedCompanyId,
+        activeRepresentedCompanyName: widget.activeRepresentedCompanyName,
+      );
+    } else if (activeSubmenu.key == 'categorias') {
+      content = _CategoriesSection(
+        activeTenant: widget.activeTenant,
+        selectedRepresentedCompanyId: widget.selectedRepresentedCompanyId,
+        activeRepresentedCompanyName: widget.activeRepresentedCompanyName,
+      );
+    } else if (activeSubmenu.key == 'unidades') {
+      content = _UnitsSection(
+        activeTenant: widget.activeTenant,
+        activeRepresentedCompanyName: widget.activeRepresentedCompanyName,
+      );
+    } else if (activeSubmenu.key == 'fotos') {
+      content = _MediaLibrarySection(
+        activeTenant: widget.activeTenant,
+        selectedRepresentedCompanyId: widget.selectedRepresentedCompanyId,
+        activeRepresentedCompanyName: widget.activeRepresentedCompanyName,
+      );
+    } else if (activeSubmenu.key == 'condicoes_pagamento') {
+      content = _PaymentConditionsSection(
+        activeTenant: widget.activeTenant,
+        selectedRepresentedCompanyId: widget.selectedRepresentedCompanyId,
+        activeRepresentedCompanyName: widget.activeRepresentedCompanyName,
+      );
+    } else if (activeSubmenu.key == 'acrescimos_descontos') {
+      content = _CommercialAdjustmentsSection(
+        activeTenant: widget.activeTenant,
+        selectedRepresentedCompanyId: widget.selectedRepresentedCompanyId,
+        activeRepresentedCompanyName: widget.activeRepresentedCompanyName,
+      );
+    } else if (activeSubmenu.key == 'descontos_pontuais') {
+      content = _OrderDiscountPoliciesSection(
+        activeTenant: widget.activeTenant,
+        selectedRepresentedCompanyId: widget.selectedRepresentedCompanyId,
+        activeRepresentedCompanyName: widget.activeRepresentedCompanyName,
+      );
+    } else if (activeSubmenu.key == 'parametros_workspace') {
+      content = _WorkspaceParametersSection(
+        activeTenant: widget.activeTenant,
+      );
+    } else if (activeSubmenu.key == 'tributacoes') {
+      content = _TaxationSection(
+        activeTenant: widget.activeTenant,
+        selectedRepresentedCompanyId: widget.selectedRepresentedCompanyId,
+        activeRepresentedCompanyName: widget.activeRepresentedCompanyName,
+      );
+    } else if (activeSubmenu.key == 'produtos_tabelas') {
+      content = _ProductsCatalogSection(
+        activeTenant: widget.activeTenant,
+        selectedRepresentedCompanyId: widget.selectedRepresentedCompanyId,
+        activeRepresentedCompanyName: widget.activeRepresentedCompanyName,
+      );
+    } else if (activeSubmenu.key == 'tabelas_preco_avancadas') {
+      content = _PricingCatalogSection(
+        activeTenant: widget.activeTenant,
+        selectedRepresentedCompanyId: widget.selectedRepresentedCompanyId,
+        activeRepresentedCompanyName: widget.activeRepresentedCompanyName,
+      );
+    } else if (activeSubmenu.linkedItemLabel == null) {
+      content = _SimpleCardSection(
+        title: activeSubmenu.label,
+        subtitle:
+            'Submenu criado para evolução. A implementação detalhada entra no próximo ciclo.',
+        items: const [
+          'Estrutura de tela pronta',
+          'Regras de permissão herdam o módulo',
+          'Persistência será conectada quando iniciar o desenvolvimento',
+        ],
+      );
+    } else {
+      final linkedItem = widget.tenantItems.firstWhere(
+        (item) => item.label == activeSubmenu.linkedItemLabel,
+      );
+      content = linkedItem.builder(
+        activeTenant: widget.activeTenant,
+        activeRepresentedCompanyName: widget.activeRepresentedCompanyName,
+      );
+    }
 
-        if (_virtualSubmenuKey == null) {
-          final fallback =
-              _findSubmenuByLabel(modules, widget.selectedItemLabel) ??
-              _firstEnabledSubmenu(modules);
-          _virtualSubmenuKey = fallback?.key;
-          if (_virtualSubmenuKey != null) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (!mounted) {
-                return;
-              }
-              widget.onSubmenuChanged?.call(_virtualSubmenuKey!);
-            });
-          }
-        }
-
-        final activeSubmenu = _findSubmenuByKey(modules, _virtualSubmenuKey);
-
-        final activeModule = _findModuleBySubmenu(modules, activeSubmenu?.key);
-
-        Widget content;
-        if (widget.tenantSectionLocked) {
-          content = const _SimpleCardSection(
-            title: 'Selecione a representada',
-            subtitle: 'Para editar os módulos comerciais, selecione uma representada ativa no topo do portal.',
-            items: ['Contexto da empresa', 'Produtos', 'Políticas comerciais'],
-          );
-        } else if (activeSubmenu == null) {
-          content = const SizedBox.shrink();
-        } else if (activeSubmenu.key == 'detalhes_cadastro_representada') {
-          content = _RepresentedDetailsSection(
-            activeTenant: widget.activeTenant,
-            selectedRepresentedCompanyId: widget.selectedRepresentedCompanyId,
-            activeRepresentedCompanyName: widget.activeRepresentedCompanyName,
-          );
-        } else if (activeSubmenu.key == 'categorias') {
-          content = _CategoriesSection(
-            activeTenant: widget.activeTenant,
-            selectedRepresentedCompanyId: widget.selectedRepresentedCompanyId,
-            activeRepresentedCompanyName: widget.activeRepresentedCompanyName,
-          );
-        } else if (activeSubmenu.key == 'unidades') {
-          content = _UnitsSection(
-            activeTenant: widget.activeTenant,
-            activeRepresentedCompanyName: widget.activeRepresentedCompanyName,
-          );
-        } else if (activeSubmenu.key == 'fotos') {
-          content = _MediaLibrarySection(
-            activeTenant: widget.activeTenant,
-            selectedRepresentedCompanyId: widget.selectedRepresentedCompanyId,
-            activeRepresentedCompanyName: widget.activeRepresentedCompanyName,
-          );
-        } else if (activeSubmenu.key == 'condicoes_pagamento') {
-          content = _PaymentConditionsSection(
-            activeTenant: widget.activeTenant,
-            selectedRepresentedCompanyId: widget.selectedRepresentedCompanyId,
-            activeRepresentedCompanyName: widget.activeRepresentedCompanyName,
-          );
-        } else if (activeSubmenu.key == 'acrescimos_descontos') {
-          content = _CommercialAdjustmentsSection(
-            activeTenant: widget.activeTenant,
-            selectedRepresentedCompanyId: widget.selectedRepresentedCompanyId,
-            activeRepresentedCompanyName: widget.activeRepresentedCompanyName,
-          );
-        } else if (activeSubmenu.key == 'descontos_pontuais') {
-          content = _OrderDiscountPoliciesSection(
-            activeTenant: widget.activeTenant,
-            selectedRepresentedCompanyId: widget.selectedRepresentedCompanyId,
-            activeRepresentedCompanyName: widget.activeRepresentedCompanyName,
-          );
-        } else if (activeSubmenu.key == 'parametros_workspace') {
-          content = _WorkspaceParametersSection(
-            activeTenant: widget.activeTenant,
-          );
-        } else if (activeSubmenu.key == 'tributacoes') {
-          content = _TaxationSection(
-            activeTenant: widget.activeTenant,
-            selectedRepresentedCompanyId: widget.selectedRepresentedCompanyId,
-            activeRepresentedCompanyName: widget.activeRepresentedCompanyName,
-          );
-        } else if (activeSubmenu.key == 'produtos_tabelas') {
-          content = _ProductsCatalogSection(
-            activeTenant: widget.activeTenant,
-            selectedRepresentedCompanyId: widget.selectedRepresentedCompanyId,
-            activeRepresentedCompanyName: widget.activeRepresentedCompanyName,
-          );
-        } else if (activeSubmenu.key == 'tabelas_preco_avancadas') {
-          content = _PricingCatalogSection(
-            activeTenant: widget.activeTenant,
-            selectedRepresentedCompanyId: widget.selectedRepresentedCompanyId,
-            activeRepresentedCompanyName: widget.activeRepresentedCompanyName,
-          );
-        } else if (activeSubmenu.linkedItemLabel == null) {
-          content = _SimpleCardSection(
-            title: activeSubmenu.label,
-            subtitle: 'Submenu criado para evolução. A implementação detalhada entra no próximo ciclo.',
-            items: const [
-              'Estrutura de tela pronta',
-              'Regras de permissão herdam o módulo',
-              'Persistência será conectada quando iniciar o desenvolvimento',
-            ],
-          );
-        } else {
-          final linkedItem = widget.tenantItems.firstWhere(
-            (item) => item.label == activeSubmenu.linkedItemLabel,
-          );
-          content = linkedItem.builder(
-            activeTenant: widget.activeTenant,
-            activeRepresentedCompanyName: widget.activeRepresentedCompanyName,
-          );
-        }
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(4, 4, 4, 0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.fromLTRB(8, 8, 8, 6),
-                    color: Colors.white,
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          for (final module in modules)
-                            ChoiceChip(
-                              avatar: Icon(module.icon, size: 16),
-                              label: Text(
-                                module.label,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              side: BorderSide.none,
-                              shape: const StadiumBorder(),
-                              selectedColor: Theme.of(context)
-                                  .colorScheme
-                                  .primaryContainer
-                                  .withValues(alpha: 0.85),
-                              backgroundColor: Theme.of(context)
-                                  .colorScheme
-                                  .surfaceContainerHighest
-                                  .withValues(alpha: 0.35),
-                              selected: activeModule?.key == module.key,
-                              onSelected: (_) {
-                                final firstSubmenu = _firstEnabledSubmenu([
-                                  module,
-                                ]);
-                                if (firstSubmenu == null) {
-                                  return;
-                                }
-                                _navigateToSubmenu(firstSubmenu);
-                              },
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(4, 4, 4, 0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(8, 8, 8, 6),
+                color: Colors.white,
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final module in modules)
+                        ChoiceChip(
+                          avatar: Icon(module.icon, size: 16),
+                          label: Text(
+                            module.label,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w600,
                             ),
-                        ],
-                      ),
-                    ),
+                          ),
+                          side: BorderSide.none,
+                          shape: const StadiumBorder(),
+                          selectedColor: Theme.of(context)
+                              .colorScheme
+                              .primaryContainer
+                              .withValues(alpha: 0.85),
+                          backgroundColor: Theme.of(context)
+                              .colorScheme
+                              .surfaceContainerHighest
+                              .withValues(alpha: 0.35),
+                          selected: activeModule?.key == module.key,
+                          onSelected: (_) {
+                            final firstSubmenu = _firstEnabledSubmenu([
+                              module,
+                            ]);
+                            if (firstSubmenu == null) {
+                              return;
+                            }
+                            _navigateToSubmenu(firstSubmenu);
+                          },
+                        ),
+                    ],
                   ),
-                  const SizedBox(height: 8),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.fromLTRB(8, 8, 8, 6),
-                    color: Theme.of(context).colorScheme.surfaceContainerHighest
-                        .withValues(alpha: 0.45),
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: [
-                          for (final submenu
-                              in (activeModule?.submenus ??
-                                  const <_TenantCommercialSubmenu>[]))
-                            FilterChip(
-                              label: Text(
-                                submenu.label,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              side: BorderSide.none,
-                              shape: const StadiumBorder(),
-                              selectedColor: Theme.of(context)
-                                  .colorScheme
-                                  .primaryContainer
-                                  .withValues(alpha: 0.8),
-                              backgroundColor: Colors.white,
-                              selected: submenu.key == activeSubmenu?.key,
-                              onSelected: (_) => _navigateToSubmenu(submenu),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
-            Expanded(child: SingleChildScrollView(child: content)),
-          ],
-        );
-      },
+              const SizedBox(height: 8),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(8, 8, 8, 6),
+                color: Theme.of(context).colorScheme.surfaceContainerHighest
+                    .withValues(alpha: 0.45),
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      for (final submenu
+                          in (activeModule?.submenus ??
+                              const <_TenantCommercialSubmenu>[]))
+                        FilterChip(
+                          label: Text(
+                            submenu.label,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          side: BorderSide.none,
+                          shape: const StadiumBorder(),
+                          selectedColor: Theme.of(context)
+                              .colorScheme
+                              .primaryContainer
+                              .withValues(alpha: 0.8),
+                          backgroundColor: Colors.white,
+                          selected: submenu.key == activeSubmenu?.key,
+                          onSelected: (_) => _navigateToSubmenu(submenu),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        Expanded(child: SingleChildScrollView(child: content)),
+      ],
     );
   }
 
@@ -408,10 +388,8 @@ class _TenantCommercialSubmenu {
 }
 
 List<_TenantCommercialModule> _buildTenantCommercialModules(
-  List<_PortalNavItem> tenantItems, {
-  required bool advancedPricingEnabled,
-  required bool isEnterpriseWorkspace,
-}) {
+  List<_PortalNavItem> tenantItems,
+) {
   bool hasItem(String label) => tenantItems.any((item) => item.label == label);
 
   String? linkIfExists(String label) => hasItem(label) ? label : null;
@@ -438,7 +416,7 @@ List<_TenantCommercialModule> _buildTenantCommercialModules(
           label: 'Produtos e tabelas',
           linkedItemLabel: linkIfExists('Produtos'),
         ),
-        if (advancedPricingEnabled)
+        if (linkIfExists('Tabelas de preço') != null)
           _TenantCommercialSubmenu(
             key: 'tabelas_preco_avancadas',
             label: 'Tabelas de preço',

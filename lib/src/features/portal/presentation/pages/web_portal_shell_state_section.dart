@@ -21,26 +21,28 @@ class _WebPortalShellState extends State<_WebPortalShell> {
   }
 
   String? _effectiveRepresentedCompanyId(TenantEntryOption tenant) {
+    if (_isEnterpriseWorkspace(tenant)) {
+      return _enterpriseDefaultRepresentedId(tenant);
+    }
+
     final selected = (_activeRepresentedCompanyByTenant[tenant.tenantId] ?? '')
         .trim();
     if (selected.isNotEmpty) {
       return selected;
     }
-    if (_isEnterpriseWorkspace(tenant)) {
-      return _enterpriseDefaultRepresentedId(tenant);
-    }
     return null;
   }
 
   String? _effectiveRepresentedCompanyName(TenantEntryOption tenant) {
+    if (_isEnterpriseWorkspace(tenant)) {
+      final fallbackName = tenant.tenantName.trim();
+      return fallbackName.isEmpty ? 'Empresa do workspace' : fallbackName;
+    }
+
     final selected =
         (_activeRepresentedCompanyNameByTenant[tenant.tenantId] ?? '').trim();
     if (selected.isNotEmpty) {
       return selected;
-    }
-    if (_isEnterpriseWorkspace(tenant)) {
-      final fallbackName = tenant.tenantName.trim();
-      return fallbackName.isEmpty ? 'Empresa do workspace' : fallbackName;
     }
     return null;
   }
@@ -388,9 +390,23 @@ class _WebPortalShellState extends State<_WebPortalShell> {
     required String? companyId,
     String? companyName,
   }) {
+    final normalizedCompanyId = (companyId ?? '').trim();
+    final normalizedCompanyName = (companyName ?? '').trim();
+    final currentCompanyId =
+        (_activeRepresentedCompanyByTenant[tenantId] ?? '').trim();
+    final currentCompanyName =
+        (_activeRepresentedCompanyNameByTenant[tenantId] ?? '').trim();
+
+    if (currentCompanyId == normalizedCompanyId &&
+        currentCompanyName == normalizedCompanyName) {
+      return;
+    }
+
     setState(() {
-      _activeRepresentedCompanyByTenant[tenantId] = companyId;
-      _activeRepresentedCompanyNameByTenant[tenantId] = companyName;
+      _activeRepresentedCompanyByTenant[tenantId] =
+          normalizedCompanyId.isEmpty ? null : normalizedCompanyId;
+      _activeRepresentedCompanyNameByTenant[tenantId] =
+          normalizedCompanyName.isEmpty ? null : normalizedCompanyName;
     });
   }
 

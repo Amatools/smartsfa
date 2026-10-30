@@ -231,48 +231,53 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
   }
 
   Widget _buildFiltersSection() {
+    final colors = Theme.of(context).colorScheme;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+        borderRadius: BorderRadius.circular(12),
+        color: colors.surfaceContainerHighest.withValues(alpha: 0.2),
+        border: Border.all(
+          color: colors.outlineVariant.withValues(alpha: 0.3),
+        ),
       ),
       child: Wrap(
-        spacing: 10,
+        spacing: 12,
         runSpacing: 10,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
           SizedBox(
-            width: 180,
+            width: 220,
             child: TextFormField(
               controller: _filterNcmController,
-              decoration: const InputDecoration(
-                isDense: true,
+              decoration: _filterFieldDecoration(
                 labelText: 'Filtrar NCM',
                 hintText: 'Ex.: 8421',
+                icon: Icons.tag_outlined,
               ),
             ),
           ),
           SizedBox(
-            width: 180,
+            width: 220,
             child: TextFormField(
               controller: _filterCestController,
-              decoration: const InputDecoration(
-                isDense: true,
+              decoration: _filterFieldDecoration(
                 labelText: 'Filtrar CEST',
                 hintText: 'Ex.: 21.117',
+                icon: Icons.qr_code_2_outlined,
               ),
             ),
           ),
           SizedBox(
-            width: 180,
+            width: 220,
             child: DropdownButtonFormField<String>(
               initialValue: _filterUfDestino,
               isDense: true,
-              decoration: const InputDecoration(
-                isDense: true,
+              decoration: _filterFieldDecoration(
                 labelText: 'Filtrar UF destino',
+                hintText: 'Ex.: SP',
+                icon: Icons.map_outlined,
               ),
               items: _ufFilterOptions
                   .map(
@@ -309,9 +314,43 @@ class _TaxRulesSectionState extends State<_TaxRulesSection> {
               },
               icon: const Icon(Icons.clear),
               label: const Text('Limpar filtros'),
+              style: OutlinedButton.styleFrom(
+                shape: const StadiumBorder(),
+                side: BorderSide(
+                  color: colors.primary.withValues(alpha: 0.35),
+                ),
+              ),
             ),
         ],
       ),
+    );
+  }
+
+  InputDecoration _filterFieldDecoration({
+    required String labelText,
+    required String hintText,
+    IconData? icon,
+  }) {
+    final colors = Theme.of(context).colorScheme;
+    OutlineInputBorder border(Color color, {double width = 1}) {
+      return OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: color, width: width),
+      );
+    }
+
+    return InputDecoration(
+      isDense: true,
+      labelText: labelText,
+      hintText: hintText,
+      filled: true,
+      fillColor: colors.surfaceContainerHighest.withValues(alpha: 0.35),
+      prefixIcon: icon == null ? null : Icon(icon, size: 18),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      enabledBorder: border(colors.outlineVariant.withValues(alpha: 0.45)),
+      focusedBorder: border(colors.primary.withValues(alpha: 0.75), width: 1.4),
+      errorBorder: border(colors.error.withValues(alpha: 0.75)),
+      focusedErrorBorder: border(colors.error, width: 1.4),
     );
   }
 

@@ -461,6 +461,43 @@ class _WebPortalTopBar extends StatelessWidget {
   }
 
   Widget _buildRepresentedSelector(BuildContext context) {
+    final isEnterpriseWorkspace =
+        activeTenant.workspaceType == 'brand_owner_workspace';
+    final normalizedEnterpriseDefaultId =
+        (enterpriseDefaultRepresentedCompanyId ?? '').trim();
+    final normalizedEnterpriseDefaultName =
+        (enterpriseDefaultRepresentedCompanyName ?? '').trim();
+
+    if (isEnterpriseWorkspace && normalizedEnterpriseDefaultId.isNotEmpty) {
+      final label = normalizedEnterpriseDefaultName.isEmpty
+          ? 'Empresa do workspace'
+          : normalizedEnterpriseDefaultName;
+
+      return InputDecorator(
+        decoration: const InputDecoration(
+          labelText: 'Representada ativa',
+          border: OutlineInputBorder(),
+          isDense: true,
+        ),
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 16,
+              backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+              child: const Icon(Icons.apartment, size: 16),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                label,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     return StreamBuilder<Map<String, dynamic>?>(
       stream: WorkspaceProfileService(FirebaseFirestore.instance)
           .watchWorkspace(activeTenant.tenantId),
@@ -484,11 +521,6 @@ class _WebPortalTopBar extends StatelessWidget {
             final representedCompanies = _representedCompaniesFromStorage(
               representedSnapshot.data ?? const <Map<String, Object?>>[],
             );
-            final normalizedEnterpriseDefaultId =
-                (enterpriseDefaultRepresentedCompanyId ?? '').trim();
-            final normalizedEnterpriseDefaultName =
-                (enterpriseDefaultRepresentedCompanyName ?? '')
-                    .trim();
             final selectedId =
                 representedCompanies.any(
                   (company) => company.id == selectedRepresentedCompanyId,
@@ -512,7 +544,8 @@ class _WebPortalTopBar extends StatelessWidget {
               effectiveSelectedId = representedCompanies.first.id;
             }
             if (effectiveSelectedId != null &&
-                effectiveSelectedId != selectedRepresentedCompanyId) {
+              effectiveSelectedId.trim() !=
+                (selectedRepresentedCompanyId ?? '').trim()) {
               _RepresentedCompany? selectedCompany;
               for (final company in representedCompanies) {
                 if (company.id == effectiveSelectedId) {
