@@ -100,6 +100,7 @@ class _AppShellPageState extends State<AppShellPage> {
   List<_RepresentedScopeOption> _representedScopeOptions =
       const <_RepresentedScopeOption>[];
   _RepresentedScopeOption? _selectedRepresentedScope;
+  bool _isEnterpriseWorkspaceScope = false;
   DateTime? _lastCloudDeltaCheckAt;
   SyncCostMetricsSnapshot _costMetrics = const SyncCostMetricsSnapshot.empty();
   SyncCostAlert? _costAlert;
@@ -133,6 +134,7 @@ class _AppShellPageState extends State<AppShellPage> {
     if (oldWidget.identity.tenantId.trim() != widget.identity.tenantId.trim()) {
       _representedScopeOptions = const <_RepresentedScopeOption>[];
       _selectedRepresentedScope = null;
+      _isEnterpriseWorkspaceScope = false;
       _representedScopeBackfillDone = false;
       _syncStatus = AppShellSyncStatus.initial();
       _lastCloudDeltaCheckAt = null;
@@ -183,8 +185,15 @@ class _AppShellPageState extends State<AppShellPage> {
     }
 
     _seedFirestoreMocksIfNeeded();
+    // Status local (fila pendente) e barato/instantaneo - mostra algo na UI
+    // de imediato. O status completo com contagem de pendencias na nuvem
+    // (5 queries ao Firestore) e caro e ja acontece ao final do ciclo
+    // automatico abaixo; chama-lo aqui de novo em paralelo so duplicava
+    // essas 5 queries bem no momento mais sensivel (abertura do app),
+    // competindo com o warmup de catalogo pelo mesmo tempo de CPU/rede e
+    // deixando a interface mais lenta logo no inicio.
+    unawaited(_refreshSyncStatusSnapshot(includeCloudDeltaCheck: false));
     unawaited(_runAutomaticSyncCycle());
-    unawaited(_refreshSyncStatusSnapshot(includeCloudDeltaCheck: true));
     _loadRepresentedScopeContext();
   }
 
@@ -758,8 +767,14 @@ class _AppShellPageState extends State<AppShellPage> {
             .trim();
         final enterpriseUf =
             (workspace?['uf'] ?? '').toString().trim().toUpperCase();
+        // Mesmo id sintetico usado pelo portal web para brand_owner_workspace
+        // (ver _enterpriseDefaultRepresentedId em web_portal_shell_state_section.dart).
+        // Sem isso, configuracoes escopadas por representada (condicoes de
+        // pagamento, acrescimos/descontos, taxonomia) gravadas no Chrome ficam
+        // invisiveis/divergentes no app mobile, que cairia no escopo
+        // tenant-level (representedCompanyId vazio) em vez do mesmo documento.
         final fallbackOption = _RepresentedScopeOption(
-          representedCompanyId: '',
+          representedCompanyId: 'enterprise_default_$tenantId',
           representedCompanyName: enterpriseName.isEmpty
               ? 'Empresa do workspace'
               : enterpriseName,
@@ -787,12 +802,14 @@ class _AppShellPageState extends State<AppShellPage> {
           options,
         );
         _selectedRepresentedScope = selected;
+        _isEnterpriseWorkspaceScope = isEnterpriseWorkspace;
       });
 
       unawaited(
         _runRepresentedScopeBackfillIfNeeded(
           options: options,
           selected: selected,
+          isEnterpriseWorkspace: isEnterpriseWorkspace,
         ),
       );
     } finally {
@@ -806,11 +823,25 @@ class _AppShellPageState extends State<AppShellPage> {
   Future<void> _runRepresentedScopeBackfillIfNeeded({
     required List<_RepresentedScopeOption> options,
     required _RepresentedScopeOption? selected,
+    required bool isEnterpriseWorkspace,
   }) async {
     if (_representedScopeBackfillDone || _representedScopeBackfillRunning) {
       return;
     }
     if (_usingLocalFallback) {
+      return;
+    }
+    // Contas brand_owner_workspace (enterprise) so tem o escopo sintetico
+    // `enterprise_default_<tenantId>` (ver fallbackOption acima) - nao existe
+    // "representada" de verdade pra migrar docs legados, entao essa migracao
+    // nao faz sentido semantico aqui. Alem disso, quando o tenant tem sync
+    // ERP de produtos habilitado, `canManageProductCatalogWrite` bloqueia
+    // QUALQUER escrita manual em `produtos` (regra deliberada - ERP e a unica
+    // fonte de verdade nesse caso), o que faz essa migracao falhar com
+    // permission-denied assim que tenta gravar `representedCompanyId` nos
+    // produtos legados. Pular por completo evita o erro e a escrita inutil.
+    if (isEnterpriseWorkspace) {
+      _representedScopeBackfillDone = true;
       return;
     }
 
@@ -1121,7 +1152,12 @@ class _AppShellPageState extends State<AppShellPage> {
       showRepresentedScopeBar:
           !_usingLocalFallback &&
           (_supportsRepresentedScope() || _representedScopeOptions.isNotEmpty),
-      onRepresentedScopeTap: _supportsRepresentedScope()
+      // Contas brand_owner_workspace (enterprise) tem sempre uma unica
+      // representada sintetica (a propria empresa) - nao faz sentido
+      // oferecer o botao de trocar, que so existe para rep/seller_solo
+      // workspaces com multiplas representadas reais cadastradas.
+      onRepresentedScopeTap:
+          _supportsRepresentedScope() && !_isEnterpriseWorkspaceScope
           ? ((_selectedRepresentedScope?.representedCompanyId ?? '')
                 .trim()
                 .isEmpty

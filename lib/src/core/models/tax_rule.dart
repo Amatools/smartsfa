@@ -32,10 +32,12 @@ class TaxRule implements TenantScopedEntity {
     this.aliquotaFcp,
     this.aliquotaFcpSt,
     this.aliquotaFcpDifal,
-    this.reformaClassificacaoTributaria,
-    this.reformaAliquotaReferenciaIbs,
+    this.reformaAliquotaIbsEstadual,
+    this.reformaAliquotaIbsMunicipal,
+    this.reformaPercentualReducaoIbs,
     this.reformaAliquotaReferenciaCbs,
-    this.reformaPercentualReducao,
+    this.reformaPercentualReducaoCbs,
+    this.reformaAliquotaReferenciaIs,
     this.applicableBuyerTaxRegime,
     this.priority = 0,
     this.validFrom,
@@ -93,16 +95,24 @@ class TaxRule implements TenantScopedEntity {
       aliquotaFcp: _readDouble(map['aliquotaFcp']),
       aliquotaFcpSt: _readDouble(map['aliquotaFcpSt']),
       aliquotaFcpDifal: _readDouble(map['aliquotaFcpDifal']),
-      reformaClassificacaoTributaria: _readTrimmedStringOrNull(
-        map['reformaClassificacaoTributaria'] ?? map['cClassTrib'],
+      reformaAliquotaIbsEstadual: _readDouble(
+        map['reformaAliquotaIbsEstadual'],
       ),
-      reformaAliquotaReferenciaIbs: _readDouble(
-        map['reformaAliquotaReferenciaIbs'],
+      reformaAliquotaIbsMunicipal: _readDouble(
+        map['reformaAliquotaIbsMunicipal'],
+      ),
+      reformaPercentualReducaoIbs: _readDouble(
+        map['reformaPercentualReducaoIbs'],
       ),
       reformaAliquotaReferenciaCbs: _readDouble(
         map['reformaAliquotaReferenciaCbs'],
       ),
-      reformaPercentualReducao: _readDouble(map['reformaPercentualReducao']),
+      reformaPercentualReducaoCbs: _readDouble(
+        map['reformaPercentualReducaoCbs'],
+      ),
+      reformaAliquotaReferenciaIs: _readDouble(
+        map['reformaAliquotaReferenciaIs'],
+      ),
       applicableBuyerTaxRegime: _readTrimmedStringOrNull(
         map['applicableBuyerTaxRegime'],
       ),
@@ -148,10 +158,12 @@ class TaxRule implements TenantScopedEntity {
   final double? aliquotaFcp;
   final double? aliquotaFcpSt;
   final double? aliquotaFcpDifal;
-  final String? reformaClassificacaoTributaria;
-  final double? reformaAliquotaReferenciaIbs;
+  final double? reformaAliquotaIbsEstadual;
+  final double? reformaAliquotaIbsMunicipal;
+  final double? reformaPercentualReducaoIbs;
   final double? reformaAliquotaReferenciaCbs;
-  final double? reformaPercentualReducao;
+  final double? reformaPercentualReducaoCbs;
+  final double? reformaAliquotaReferenciaIs;
   final String? applicableBuyerTaxRegime;
   final int priority;
   final DateTime? validFrom;
@@ -195,10 +207,12 @@ class TaxRule implements TenantScopedEntity {
       'aliquotaFcp': aliquotaFcp,
       'aliquotaFcpSt': aliquotaFcpSt,
       'aliquotaFcpDifal': aliquotaFcpDifal,
-      'reformaClassificacaoTributaria': reformaClassificacaoTributaria,
-      'reformaAliquotaReferenciaIbs': reformaAliquotaReferenciaIbs,
+      'reformaAliquotaIbsEstadual': reformaAliquotaIbsEstadual,
+      'reformaAliquotaIbsMunicipal': reformaAliquotaIbsMunicipal,
+      'reformaPercentualReducaoIbs': reformaPercentualReducaoIbs,
       'reformaAliquotaReferenciaCbs': reformaAliquotaReferenciaCbs,
-      'reformaPercentualReducao': reformaPercentualReducao,
+      'reformaPercentualReducaoCbs': reformaPercentualReducaoCbs,
+      'reformaAliquotaReferenciaIs': reformaAliquotaReferenciaIs,
       'applicableBuyerTaxRegime': applicableBuyerTaxRegime,
       'priority': priority,
       'validFrom': validFrom?.toIso8601String(),

@@ -628,11 +628,8 @@ service cloud.firestore {
     }
 
     function canUpdateTenantCoreDocument(tenantId) {
-      return !isRepresentedPreferenceOnlyTenantUpdate()
-        && (
-          canTenantOwnerManageTenantDocumentUpdate(tenantId)
-          || canSelfServiceOwnerUpdateTenant(tenantId)
-        );
+      return canTenantOwnerManageTenantDocumentUpdate(tenantId)
+        || canSelfServiceOwnerUpdateTenant(tenantId);
     }
 
     function canUpdateTenantAsNonAdmin(tenantId) {

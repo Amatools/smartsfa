@@ -1,0 +1,155 @@
+{
+  "marker": "SQL_FILE_PROBE",
+  "ok": true,
+  "tenantId": "self_T8oqTD0UBtWATPbITOGsqAEZt3d2_smartsfa-enterprise-teste",
+  "environment": "prod",
+  "sqlFile": "G:\\smartsfa\\scripts\\bootstrap_owner\\sql\\probe_reforma_sample_ibs.sql",
+  "baseUrl": "https://api.sankhya.com.br",
+  "endpointPath": "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+  "status": 200,
+  "responseIsJson": true,
+  "rowCount": 3,
+  "fields": [
+    {
+      "name": "IDIBS",
+      "order": 1,
+      "userType": "I",
+      "precision": null
+    },
+    {
+      "name": "GRUPOIBSCBS",
+      "order": 2,
+      "userType": "I",
+      "precision": null
+    },
+    {
+      "name": "PIBSUF",
+      "order": 3,
+      "userType": "F",
+      "precision": 2
+    },
+    {
+      "name": "PIBSMUN",
+      "order": 4,
+      "userType": "F",
+      "precision": 2
+    },
+    {
+      "name": "PREDALIQIBSUF",
+      "order": 5,
+      "userType": "F",
+      "precision": 2
+    },
+    {
+      "name": "PREDALIQIBSMUN",
+      "order": 6,
+      "userType": "F",
+      "precision": 2
+    }
+  ],
+  "rows": [
+    [
+      1,
+      null,
+      0.1,
+      0,
+      null,
+      null
+    ],
+    [
+      2,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    [
+      3,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  ],
+  "responseBody": {
+    "serviceName": "DbExplorerSP.executeQuery",
+    "status": "1",
+    "pendingPrinting": "false",
+    "transactionId": "3C0D5A91C5B501A2FDC43C84E18B633A",
+    "responseBody": {
+      "fieldsMetadata": [
+        {
+          "name": "IDIBS",
+          "description": "IDIBS",
+          "order": 1,
+          "userType": "I"
+        },
+        {
+          "name": "GRUPOIBSCBS",
+          "description": "GRUPOIBSCBS",
+          "order": 2,
+          "userType": "I"
+        },
+        {
+          "name": "PIBSUF",
+          "description": "PIBSUF",
+          "order": 3,
+          "userType": "F",
+          "precision": 2
+        },
+        {
+          "name": "PIBSMUN",
+          "description": "PIBSMUN",
+          "order": 4,
+          "userType": "F",
+          "precision": 2
+        },
+        {
+          "name": "PREDALIQIBSUF",
+          "description": "PREDALIQIBSUF",
+          "order": 5,
+          "userType": "F",
+          "precision": 2
+        },
+        {
+          "name": "PREDALIQIBSMUN",
+          "description": "PREDALIQIBSMUN",
+          "order": 6,
+          "userType": "F",
+          "precision": 2
+        }
+      ],
+      "rows": [
+        [
+          1,
+          null,
+          0.1,
+          0,
+          null,
+          null
+        ],
+        [
+          2,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        [
+          3,
+          null,
+          null,
+          null,
+          null,
+          null
+        ]
+      ],
+      "burstLimit": false,
+      "timeQuery": "4ms",
+      "timeResultSet": "1ms"
+    }
+  }
+}

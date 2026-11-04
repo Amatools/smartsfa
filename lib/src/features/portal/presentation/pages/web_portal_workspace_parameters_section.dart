@@ -17,6 +17,21 @@ class _WorkspaceParametersSectionState
   );
   bool _updating = false;
 
+  Stream<Map<String, dynamic>?>? _workspaceStream;
+  String _workspaceStreamKey = '';
+
+  // Evita recriar a subscricao do Firestore a cada build (ex.: quando
+  // _updating alterna via setState), o que causava um "flicker" visual dos
+  // switches voltando ao valor anterior logo apos alterar.
+  Stream<Map<String, dynamic>?> _watchWorkspaceStream() {
+    final key = widget.activeTenant.tenantId;
+    if (_workspaceStream == null || _workspaceStreamKey != key) {
+      _workspaceStreamKey = key;
+      _workspaceStream = _service.watchWorkspace(key);
+    }
+    return _workspaceStream!;
+  }
+
   @override
   Widget build(BuildContext context) {
     final canEditSettings = _canEditRepresentedModuleSettings(
@@ -25,7 +40,7 @@ class _WorkspaceParametersSectionState
     );
 
     return StreamBuilder<Map<String, dynamic>?>(
-      stream: _service.watchWorkspace(widget.activeTenant.tenantId),
+      stream: _watchWorkspaceStream(),
       builder: (context, snapshot) {
         final workspaceData = snapshot.data ?? const <String, dynamic>{};
         final workspaceType = widget.activeTenant.workspaceType;
@@ -51,6 +66,11 @@ class _WorkspaceParametersSectionState
           workspaceData,
           'allowDiscountApprovalOverrideEnabled',
         );
+        final reformaTributariaEnabled = _featureFlagEnabled(
+          workspaceData,
+          'reformaTributariaEnabled',
+        );
+        final reformaPhase = TaxReformCalendar.currentPhase();
 
         return Stack(
           children: [
@@ -167,6 +187,39 @@ class _WorkspaceParametersSectionState
                         'Placeholder para fluxo futuro de aprovacao comercial.',
                       ),
                     ),
+                    const Divider(),
+                    if (widget.activeTenant.workspaceType ==
+                        'brand_owner_workspace')
+                      SwitchListTile(
+                        value: reformaTributariaEnabled,
+                        onChanged: canEditSettings && !_updating
+                            ? (value) => _setFeatureFlag(
+                                key: 'reformaTributariaEnabled',
+                                value: value,
+                                enabledMessage:
+                                    'Reforma Tributaria ativada: campos de IBS/CBS/Imposto Seletivo aparecem na Matriz tributaria.',
+                                disabledMessage:
+                                    'Reforma Tributaria desativada: campos de IBS/CBS ficam ocultos na Matriz tributaria.',
+                              )
+                            : null,
+                        title: const Text('Ativar Reforma Tributaria (IBS/CBS/IS)'),
+                        subtitle: Text(
+                          'Fase atual do calendario legal: ${TaxReformCalendar.phaseLabel(reformaPhase)}. '
+                          'Ativar aqui libera o preenchimento manual e por planilha dos campos da Reforma na Matriz tributaria, '
+                          'sem alterar o preco final calculado hoje.',
+                        ),
+                      )
+                    else
+                      ListTile(
+                        leading: const Icon(Icons.auto_graph_outlined),
+                        title: const Text('Reforma Tributaria (IBS/CBS/IS)'),
+                        subtitle: Text(
+                          'Este workspace pode representar mais de uma empresa, entao a Reforma Tributaria e ativada '
+                          'por representada, nao por workspace. Va em Tributacoes > Matriz tributaria com a representada '
+                          'desejada selecionada e use o interruptor exibido no topo da tela. '
+                          'Fase atual do calendario legal: ${TaxReformCalendar.phaseLabel(reformaPhase)}.',
+                        ),
+                      ),
                     const SizedBox(height: 8),
                     Text(
                       !canUseAdvancedPricing

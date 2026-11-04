@@ -1,0 +1,105 @@
+{
+  "marker": "SQL_FILE_PROBE",
+  "ok": true,
+  "tenantId": "self_T8oqTD0UBtWATPbITOGsqAEZt3d2_smartsfa-enterprise-teste",
+  "environment": "prod",
+  "sqlFile": "G:\\smartsfa\\scripts\\bootstrap_owner\\sql\\probe_reforma_data_presence.sql",
+  "baseUrl": "https://api.sankhya.com.br",
+  "endpointPath": "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+  "status": 200,
+  "responseIsJson": true,
+  "rowCount": 1,
+  "fields": [
+    {
+      "name": "QTD_TLFALIQIBS",
+      "order": 1,
+      "userType": "I",
+      "precision": null
+    },
+    {
+      "name": "QTD_TLFALIQCBS",
+      "order": 2,
+      "userType": "I",
+      "precision": null
+    },
+    {
+      "name": "QTD_TLFCLASTRIBIC",
+      "order": 3,
+      "userType": "I",
+      "precision": null
+    },
+    {
+      "name": "QTD_PRODUTOS_COM_GRUPO",
+      "order": 4,
+      "userType": "I",
+      "precision": null
+    },
+    {
+      "name": "QTD_GRUPOS_DISTINTOS_EM_USO",
+      "order": 5,
+      "userType": "I",
+      "precision": null
+    }
+  ],
+  "rows": [
+    [
+      3,
+      1,
+      160,
+      0,
+      0
+    ]
+  ],
+  "responseBody": {
+    "serviceName": "DbExplorerSP.executeQuery",
+    "status": "1",
+    "pendingPrinting": "false",
+    "transactionId": "5B0A6241E32FA59CCE792396E3021343",
+    "responseBody": {
+      "fieldsMetadata": [
+        {
+          "name": "QTD_TLFALIQIBS",
+          "description": "QTD_TLFALIQIBS",
+          "order": 1,
+          "userType": "I"
+        },
+        {
+          "name": "QTD_TLFALIQCBS",
+          "description": "QTD_TLFALIQCBS",
+          "order": 2,
+          "userType": "I"
+        },
+        {
+          "name": "QTD_TLFCLASTRIBIC",
+          "description": "QTD_TLFCLASTRIBIC",
+          "order": 3,
+          "userType": "I"
+        },
+        {
+          "name": "QTD_PRODUTOS_COM_GRUPO",
+          "description": "QTD_PRODUTOS_COM_GRUPO",
+          "order": 4,
+          "userType": "I"
+        },
+        {
+          "name": "QTD_GRUPOS_DISTINTOS_EM_USO",
+          "description": "QTD_GRUPOS_DISTINTOS_EM_USO",
+          "order": 5,
+          "userType": "I"
+        }
+      ],
+      "rows": [
+        [
+          3,
+          1,
+          160,
+          0,
+          0
+        ]
+      ],
+      "burstLimit": false,
+      "timeQuery": "30ms",
+      "timeResultSet": "1ms"
+    }
+  }
+}
