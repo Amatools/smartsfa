@@ -17,7 +17,12 @@ void showPedidoItemTaxDetailsDialog(BuildContext context, PedidoItem item) {
     showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Detalhes fiscais'),
+        title: Text(
+          'Detalhes fiscais',
+          style: Theme.of(
+            dialogContext,
+          ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+        ),
         content: Text(
           'Nenhum dado fiscal foi calculado para "${item.productName}".',
         ),
@@ -44,7 +49,10 @@ void showPedidoItemTaxDetailsDialog(BuildContext context, PedidoItem item) {
       ? 'Override dinamico${snapshot.operationProfileOverrideId != null ? ' (id ${snapshot.operationProfileOverrideId})' : ''}'
       : 'Padrao nativo do motor';
 
-  final rows = <(String, String)>[
+  // Linhas de cima: exibidas em linha inteira (label + valor lado a lado),
+  // uma por vez - conteudo costuma ser mais longo (id de regra, lista de
+  // criterios de desempate etc.) e nao cabe bem em 2 colunas estreitas.
+  final fullWidthRows = <(String, String)>[
     ('Regra fiscal aplicada', snapshot.regraFiscalId ?? '-'),
     (
       'Nivel do casamento',
@@ -53,6 +61,11 @@ void showPedidoItemTaxDetailsDialog(BuildContext context, PedidoItem item) {
     if (tieBreaks.isNotEmpty) ('Criterios de desempate', tieBreaks.join(', ')),
     ('Perfil de operacao', profileLabel),
     ('Origem do perfil', profileSourceLabel),
+  ];
+
+  // Dali pra baixo (a partir do NCM): campos curtos, exibidos em grade de
+  // 2 colunas pra aproveitar melhor a largura em telas pequenas de mobile.
+  final gridRows = <(String, String)>[
     ('NCM', (snapshot.ncm ?? '-').isEmpty ? '-' : snapshot.ncm!),
     ('CEST', (snapshot.cest ?? '-').isEmpty ? '-' : snapshot.cest!),
     ('UF destino', snapshot.ufDestino ?? '-'),
@@ -67,45 +80,111 @@ void showPedidoItemTaxDetailsDialog(BuildContext context, PedidoItem item) {
       PedidoFormatUtils.formatMoney(snapshot.valorTotalItem ?? item.totalPrice),
     ),
   ];
+  final gridPairs = <List<(String, String)>>[
+    for (var i = 0; i < gridRows.length; i += 2)
+      gridRows.sublist(i, i + 2 > gridRows.length ? i + 1 : i + 2),
+  ];
 
   showDialog<void>(
     context: context,
-    builder: (dialogContext) => AlertDialog(
-      title: Text('Detalhes fiscais — ${item.productName}'),
-      content: SizedBox(
-        width: 420,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+    builder: (dialogContext) {
+      final theme = Theme.of(dialogContext);
+      final screenWidth = MediaQuery.of(dialogContext).size.width;
+      const insetPadding = EdgeInsets.symmetric(horizontal: 8, vertical: 16);
+      const titlePadding = EdgeInsets.fromLTRB(16, 16, 16, 8);
+      const contentPadding = EdgeInsets.fromLTRB(16, 8, 16, 8);
+      final dialogWidth =
+          screenWidth - insetPadding.horizontal - contentPadding.horizontal;
+
+      Widget buildFullWidthRow(String label, String value) {
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              for (final row in rows)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      SizedBox(
-                        width: 160,
-                        child: Text(
-                          row.$1,
-                          style: Theme.of(dialogContext).textTheme.labelMedium,
-                        ),
-                      ),
-                      Expanded(child: Text(row.$2)),
-                    ],
-                  ),
-                ),
+              SizedBox(
+                width: 150,
+                child: Text(label, style: theme.textTheme.labelMedium),
+              ),
+              Expanded(child: Text(value)),
             ],
           ),
+        );
+      }
+
+      Widget buildGridCell(String label, String value) {
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 70,
+              child: Text(label, style: theme.textTheme.labelMedium),
+            ),
+            Expanded(child: Text(value)),
+          ],
+        );
+      }
+
+      return AlertDialog(
+        insetPadding: insetPadding,
+        titlePadding: titlePadding,
+        contentPadding: contentPadding,
+        title: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Detalhes fiscais',
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              item.productName,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.hintColor,
+              ),
+            ),
+          ],
         ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(dialogContext).pop(),
-          child: const Text('Fechar'),
+        content: SizedBox(
+          width: dialogWidth,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final row in fullWidthRows)
+                  buildFullWidthRow(row.$1, row.$2),
+                const Divider(height: 12),
+                for (final pair in gridPairs)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 1),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(child: buildGridCell(pair[0].$1, pair[0].$2)),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: pair.length > 1
+                              ? buildGridCell(pair[1].$1, pair[1].$2)
+                              : const SizedBox.shrink(),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
         ),
-      ],
-    ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Fechar'),
+          ),
+        ],
+      );
+    },
   );
 }

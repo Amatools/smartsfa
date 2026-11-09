@@ -1,0 +1,92 @@
+{
+  "marker": "SQL_FILE_PROBE",
+  "ok": true,
+  "tenantId": "self_T8oqTD0UBtWATPbITOGsqAEZt3d2_smartsfa-enterprise-teste",
+  "environment": "prod",
+  "sqlFile": "G:\\smartsfa\\scripts\\bootstrap_owner\\sql\\probe_sankhya_blob_extract_sample.sql",
+  "baseUrl": "https://api.sankhya.com.br",
+  "endpointPath": "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+  "status": 200,
+  "responseIsJson": true,
+  "rowCount": 1,
+  "fields": [
+    {
+      "name": "CODPROD",
+      "order": 1,
+      "userType": "I",
+      "precision": null
+    },
+    {
+      "name": "DESCRPROD",
+      "order": 2,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "IMAGEM_BYTES",
+      "order": 3,
+      "userType": "F",
+      "precision": 2
+    },
+    {
+      "name": "IMAGEM_PREFIX_HEX",
+      "order": 4,
+      "userType": "S",
+      "precision": null
+    }
+  ],
+  "rows": [
+    [
+      489690,
+      "MICROMETRO EXTERNO - 6 PECAS BIT: 0-150 MM FAB: ZAAS",
+      81048,
+      "FFD8FFE000104A464946000101010048"
+    ]
+  ],
+  "responseBody": {
+    "serviceName": "DbExplorerSP.executeQuery",
+    "status": "1",
+    "pendingPrinting": "false",
+    "transactionId": "0A76DA94ADD9944F60569C89EA29CA30",
+    "responseBody": {
+      "fieldsMetadata": [
+        {
+          "name": "CODPROD",
+          "description": "CODPROD",
+          "order": 1,
+          "userType": "I"
+        },
+        {
+          "name": "DESCRPROD",
+          "description": "DESCRPROD",
+          "order": 2,
+          "userType": "S"
+        },
+        {
+          "name": "IMAGEM_BYTES",
+          "description": "IMAGEM_BYTES",
+          "order": 3,
+          "userType": "F",
+          "precision": 2
+        },
+        {
+          "name": "IMAGEM_PREFIX_HEX",
+          "description": "IMAGEM_PREFIX_HEX",
+          "order": 4,
+          "userType": "S"
+        }
+      ],
+      "rows": [
+        [
+          489690,
+          "MICROMETRO EXTERNO - 6 PECAS BIT: 0-150 MM FAB: ZAAS",
+          81048,
+          "FFD8FFE000104A464946000101010048"
+        ]
+      ],
+      "burstLimit": false,
+      "timeQuery": "8ms",
+      "timeResultSet": "1ms"
+    }
+  }
+}

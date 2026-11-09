@@ -358,7 +358,12 @@ class PedidoItemPricingService {
       if (primary != null) {
         return finalize(primary);
       }
-    } catch (_) {
+    } catch (e) {
+      // ignore: avoid_print
+      print(
+        '[TAX-DEBUG] tryTable(resolvedTableId=$resolvedTableId) falhou para '
+        'produtoId=${product.id}: $e',
+      );
       final legacyDefaultTableId =
           DefaultPriceTableGuard.legacyDefaultPriceTableIdForScope(
             tenantId: tenantId,
@@ -371,12 +376,21 @@ class PedidoItemPricingService {
           if (legacy != null) {
             return finalize(legacy);
           }
-        } catch (_) {
-          // Keeps fallback below.
+        } catch (e2) {
+          // ignore: avoid_print
+          print(
+            '[TAX-DEBUG] tryTable(legacyDefaultTableId=$legacyDefaultTableId) '
+            'tambem falhou para produtoId=${product.id}: $e2',
+          );
         }
       }
     }
 
+    // ignore: avoid_print
+    print(
+      '[TAX-DEBUG] resolveItemValues caiu no fallback (preco bruto) para '
+      'produtoId=${product.id} resolvedTableId=$resolvedTableId',
+    );
     return finalize(fallback);
   }
 }

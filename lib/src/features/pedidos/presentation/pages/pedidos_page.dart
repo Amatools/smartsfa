@@ -6,12 +6,14 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/models/app_identity.dart';
+import '../../../../core/data/firestore/catalog_snapshot_tax_rule_repository.dart';
 import '../../../../core/data/firestore/firestore_cliente_repository.dart';
 import '../../../../core/data/firestore/firestore_customer_price_table_assignment_repository.dart';
 import '../../../../core/data/firestore/firestore_product_base_price_repository.dart';
 import '../../../../core/data/firestore/firestore_tax_operation_profile_repository.dart';
 import '../../../../core/data/firestore/firestore_tax_rule_repository.dart';
 import '../../../../core/models/domain_types.dart';
+import '../../../../core/models/cliente.dart';
 import '../../../../core/models/cliente_reference.dart';
 import '../../../../core/models/pedido.dart';
 import '../../../../core/repositories/cliente_repository.dart';
@@ -20,12 +22,14 @@ import '../../../../core/repositories/pedido_repository.dart';
 import '../../../../core/repositories/produto_repository.dart';
 import '../../../../core/services/catalog_incremental_sync_service.dart';
 import '../../../../core/services/catalog_snapshot_store.dart';
+import '../../../../core/services/enterprise_represented_scope.dart';
 import '../../../../core/services/offline_sync_queue.dart';
 import '../../../../core/models/produto.dart';
 import '../../../auth/services/tenant_membership_service.dart';
 import '../../../auth/services/workspace_profile_service.dart';
 import '../../../precos/services/product_tax_engine_service.dart';
 import '../services/pedido_format_utils.dart';
+import '../services/pedido_pdf_service.dart';
 import '../widgets/pedido_inline_editor.dart';
 import '../widgets/pedido_list_widgets.dart';
 
@@ -75,6 +79,7 @@ class _PedidosPageState extends State<PedidosPage> {
   late final CustomerPriceTableAssignmentRepository
   _customerPriceTableAssignmentRepository;
   late final ProductTaxEngineService _taxEngineService;
+  final PedidoPdfService _pedidoPdfService = const PedidoPdfService();
   final CatalogSnapshotStore _catalogSnapshotStore = CatalogSnapshotStore();
 
   @override
@@ -88,7 +93,12 @@ class _PedidosPageState extends State<PedidosPage> {
     _taxEngineService = ProductTaxEngineService(
       produtoRepository: widget.produtoRepository,
       basePriceRepository: FirestoreProductBasePriceRepository(firestore),
-      taxRuleRepository: FirestoreTaxRuleRepository(firestore),
+      // Offline-first: le o snapshot local ja sincronizado (mesmo padrao de
+      // produtos no editor) antes de depender de uma consulta ao vivo no
+      // Firestore para calcular o imposto do item.
+      taxRuleRepository: CatalogSnapshotTaxRuleRepository(
+        remote: FirestoreTaxRuleRepository(firestore),
+      ),
       taxOperationProfileRepository: FirestoreTaxOperationProfileRepository(
         firestore,
       ),
@@ -375,11 +385,20 @@ class _PedidosPageState extends State<PedidosPage> {
 
   String? get _effectiveRepresentedCompanyId {
     final fromWidget = (widget.representedCompanyId ?? '').trim();
-    if (fromWidget.isNotEmpty) {
-      return fromWidget;
+    final raw = fromWidget.isNotEmpty
+        ? fromWidget
+        : (_selectedRepresentedCompanyId ?? '').trim();
+    if (raw.isEmpty) {
+      return null;
     }
-    final fromState = (_selectedRepresentedCompanyId ?? '').trim();
-    return fromState.isEmpty ? null : fromState;
+    // Ver `EnterpriseRepresentedScope`: contas enterprise usam um id
+    // sintetico que nunca deve chegar "cru" em consumidores escopados (motor
+    // fiscal, descontos de pedido/comerciais) - normaliza aqui, na origem,
+    // para que todo consumidor downstream receba o mesmo valor ja guardado.
+    return EnterpriseRepresentedScope.effectiveRepresentedCompanyId(
+      tenantId: widget.identity.tenantId,
+      representedCompanyId: raw,
+    );
   }
 
   String? get _effectiveOriginCompanyUnitId {
@@ -619,7 +638,36 @@ class _PedidosPageState extends State<PedidosPage> {
     return productScope == selectedRepresentedCompanyId;
   }
 
+  bool _canEditOrder(Pedido pedido) {
+    return pedido.statusFila != OrderStatus.sent;
+  }
+
+  bool _canDeleteOrder(Pedido pedido) {
+    return pedido.statusFila == OrderStatus.draft ||
+        pedido.statusFila == OrderStatus.pendingCustomer;
+  }
+
+  bool _canApproveOrder(Pedido pedido) {
+    return pedido.statusFila == OrderStatus.pendingCustomer;
+  }
+
+  bool _canSendOrder(Pedido pedido) {
+    return pedido.statusFila == OrderStatus.pendingSend;
+  }
+
   Future<void> _selectOrderForEditing(Pedido pedido) async {
+    if (!_canEditOrder(pedido)) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Pedido enviado nao pode mais ser editado.'),
+        ),
+      );
+      return;
+    }
+
     final tenantId = widget.identity.tenantId.trim();
     if (tenantId.isEmpty) {
       return;
@@ -747,6 +795,10 @@ class _PedidosPageState extends State<PedidosPage> {
 
     try {
       final now = DateTime.now().toUtc();
+      final hasAnyItem = editedItems.isNotEmpty;
+      final nextStatus = pedido.statusFila == OrderStatus.draft && hasAnyItem
+          ? OrderStatus.pendingCustomer
+          : pedido.statusFila;
       final updatedOrder = pedido.copyWith(
         clienteReferencia: editedClienteReferencia,
         clearClienteReferencia: editedClienteReferencia == null,
@@ -754,16 +806,21 @@ class _PedidosPageState extends State<PedidosPage> {
         formaPagamento: (editedFormaPagamento ?? '').trim().isEmpty
             ? null
             : editedFormaPagamento?.trim(),
+        statusFila: nextStatus,
         itens: editedItems,
         totalItens: _roundCurrency(_totalQuantity(editedItems)),
         totalBruto: _roundCurrency(_totalGross(editedItems)),
         updatedAt: now,
       );
 
+      final movedToPendingCustomer =
+          pedido.statusFila == OrderStatus.draft &&
+          nextStatus == OrderStatus.pendingCustomer;
       await _saveOrderLocalFirst(
         order: updatedOrder,
-        syncedMessage:
-            'Pedido ${_pedidoDisplayNumber(pedido.id)} atualizado com ${editedItems.length} item(ns).',
+        syncedMessage: movedToPendingCustomer
+            ? 'Pedido ${_pedidoDisplayNumber(pedido.id)} salvo e movido para pendente cliente.'
+            : 'Pedido ${_pedidoDisplayNumber(pedido.id)} atualizado com ${editedItems.length} item(ns).',
         pendingActionLabel: 'atualizado',
       );
     } finally {
@@ -772,6 +829,405 @@ class _PedidosPageState extends State<PedidosPage> {
           _savingDraftEdition = false;
         });
       }
+    }
+  }
+
+  Future<void> _approveOrder(Pedido pedido) async {
+    if (!_canApproveOrder(pedido)) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Aprovacao disponivel apenas para pendente cliente.'),
+        ),
+      );
+      return;
+    }
+
+    final now = DateTime.now().toUtc();
+    final updatedOrder = pedido.copyWith(
+      statusFila: OrderStatus.pendingSend,
+      updatedAt: now,
+    );
+
+    await _saveOrderLocalFirst(
+      order: updatedOrder,
+      syncedMessage:
+          'Pedido ${_pedidoDisplayNumber(pedido.id)} aprovado e movido para pendente de envio.',
+      pendingActionLabel: 'aprovado',
+    );
+  }
+
+  Future<void> _sendOrder(Pedido pedido) async {
+    if (!_canSendOrder(pedido)) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Envio disponivel apenas para pendente envio.'),
+        ),
+      );
+      return;
+    }
+
+    final hasErpIntegration = await _hasErpIntegrationConfigured(
+      pedido.tenantId,
+    );
+    if (hasErpIntegration) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Envio ERP ainda sera conectado nesta acao. Enquanto isso, use o fluxo sem integracao para gerar o PDF.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    try {
+      final headerContext = await _buildPdfHeaderContext(pedido);
+
+      await _pedidoPdfService.openOrderPdfWithDefaultApp(
+        pedido: pedido,
+        headerContext: headerContext,
+      );
+
+      final shouldMarkAsSent = await _confirmMarkAsSent(pedido);
+      if (!shouldMarkAsSent) {
+        return;
+      }
+
+      final now = DateTime.now().toUtc();
+      final sentOrder = pedido.copyWith(
+        statusFila: OrderStatus.sent,
+        updatedAt: now,
+      );
+      await _saveOrderLocalFirst(
+        order: sentOrder,
+        syncedMessage:
+            'Pedido ${_pedidoDisplayNumber(pedido.id)} marcado como enviado.',
+        pendingActionLabel: 'enviado',
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Falha ao abrir PDF do pedido: $error')),
+      );
+    }
+  }
+
+  Future<void> _openOrderPdfPreview(Pedido pedido) async {
+    if (!mounted) {
+      return;
+    }
+
+    try {
+      final headerContext = await _buildPdfHeaderContext(pedido);
+      await _pedidoPdfService.openOrderPdfWithDefaultApp(
+        pedido: pedido,
+        headerContext: headerContext,
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Falha ao abrir PDF: $error')));
+    }
+  }
+
+  Future<PedidoPdfHeaderContext> _buildPdfHeaderContext(Pedido pedido) async {
+    final cliente = await _resolveClienteForPdf(pedido);
+    final represented = await _resolveRepresentedForPdf(pedido);
+    final userLogoDataUrl = await _resolveUserLogoDataUrlForPdf();
+
+    final contractingCompanyName = (widget.identity.tenantName).trim();
+    return PedidoPdfHeaderContext(
+      contractingCompanyName: contractingCompanyName.isEmpty
+          ? 'Empresa contratante'
+          : contractingCompanyName,
+      represented: represented,
+      customer: _buildCustomerForPdf(pedido: pedido, cliente: cliente),
+      sellerName: _buildSellerDisplayName(),
+      userLogoDataUrl: userLogoDataUrl,
+      transportadora: null,
+      observacoes: null,
+    );
+  }
+
+  Future<String?> _resolveUserLogoDataUrlForPdf() async {
+    final uid = (FirebaseAuth.instance.currentUser?.uid ?? '').trim();
+    if (uid.isEmpty) {
+      return null;
+    }
+
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('usuarios')
+          .doc(uid)
+          .get();
+      final data = doc.data() ?? const <String, dynamic>{};
+      final primary = (data['logoDataUrl'] ?? '').toString().trim();
+      if (primary.isNotEmpty) {
+        return primary;
+      }
+      final legacy = (data['logoUrl'] ?? '').toString().trim();
+      return legacy.isEmpty ? null : legacy;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String _buildSellerDisplayName() {
+    final sellerName = (widget.identity.userLabel).trim();
+    final sellerEmail = (FirebaseAuth.instance.currentUser?.email ?? '')
+        .trim()
+        .toLowerCase();
+
+    if (sellerName.isEmpty && sellerEmail.isEmpty) {
+      return '-';
+    }
+    if (sellerName.isEmpty) {
+      return sellerEmail;
+    }
+    if (sellerEmail.isEmpty) {
+      return sellerName;
+    }
+    if (sellerName.toLowerCase() == sellerEmail) {
+      return sellerName;
+    }
+    return '$sellerName - $sellerEmail';
+  }
+
+  Future<Cliente?> _resolveClienteForPdf(Pedido pedido) async {
+    final clienteId = (pedido.clienteReferencia?.id ?? '').trim();
+    if (clienteId.isEmpty) {
+      return null;
+    }
+
+    try {
+      return await _clienteRepository.fetchById(
+        tenantId: pedido.tenantId,
+        id: clienteId,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<PedidoPdfRepresentedData?> _resolveRepresentedForPdf(
+    Pedido pedido,
+  ) async {
+    final representedId = (pedido.representedCompanyId ?? '').trim();
+    // Em contas enterprise o representedCompanyId efetivo e vazio (id
+    // sintetico e normalizado fora), entao omitimos essa secao.
+    if (representedId.isEmpty) {
+      return null;
+    }
+
+    final fallbackName = (pedido.originCompanyUnitLabel ?? '').trim();
+    String name = fallbackName;
+    String? phone;
+    String? email;
+
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('tenant_represented_companies')
+          .doc('${pedido.tenantId}_$representedId')
+          .get();
+      final data = doc.data();
+      if (data != null) {
+        final mappedName = (data['nomeFantasia'] ?? '').toString().trim();
+        if (mappedName.isNotEmpty) {
+          name = mappedName;
+        }
+        phone = (data['telefone'] ?? '').toString().trim();
+        email = (data['email'] ?? '').toString().trim();
+      }
+    } catch (_) {
+      // Best-effort: segue com snapshot do pedido.
+    }
+
+    if (name.isEmpty) {
+      name = representedId;
+    }
+
+    return PedidoPdfRepresentedData(name: name, phone: phone, email: email);
+  }
+
+  PedidoPdfCustomerData _buildCustomerForPdf({
+    required Pedido pedido,
+    required Cliente? cliente,
+  }) {
+    final snapshotName = (pedido.clienteReferencia?.nomeSnapshot ?? '').trim();
+    final snapshotDoc = (pedido.clienteReferencia?.documentoSnapshot ?? '')
+        .trim();
+
+    return PedidoPdfCustomerData(
+      cliente: _firstNonEmpty([cliente?.nome, snapshotName]),
+      nomeFantasia: _firstNonEmpty([cliente?.nomeFantasia]),
+      cnpj: _firstNonEmpty([cliente?.documento, snapshotDoc]),
+      ie: _firstNonEmpty([cliente?.inscricaoEstadual]),
+      endereco: _buildCustomerAddress(cliente),
+      bairro: _firstNonEmpty([cliente?.bairro]),
+      cep: _firstNonEmpty([cliente?.cep]),
+      cidade: _firstNonEmpty([cliente?.cidade]),
+      estado: _firstNonEmpty([cliente?.estado]),
+      telefone: _firstNonEmpty([cliente?.telefone, cliente?.celular]),
+      email: _firstNonEmpty([cliente?.email]),
+    );
+  }
+
+  String _buildCustomerAddress(Cliente? cliente) {
+    if (cliente == null) {
+      return '-';
+    }
+
+    final parts = <String>[];
+    final logradouro = cliente.logradouro.trim();
+    final numero = cliente.numero.trim();
+    final complemento = cliente.complemento.trim();
+
+    if (logradouro.isNotEmpty) {
+      parts.add(logradouro);
+    }
+    if (numero.isNotEmpty) {
+      parts.add(numero);
+    }
+    if (complemento.isNotEmpty) {
+      parts.add(complemento);
+    }
+
+    if (parts.isEmpty) {
+      return '-';
+    }
+    return parts.join(', ');
+  }
+
+  String _firstNonEmpty(List<String?> values, {String fallback = '-'}) {
+    for (final raw in values) {
+      final normalized = (raw ?? '').trim();
+      if (normalized.isNotEmpty) {
+        return normalized;
+      }
+    }
+    return fallback;
+  }
+
+  Future<void> _showOrderReadOnlyDialog(Pedido pedido) async {
+    if (!mounted) {
+      return;
+    }
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text('Pedido ${_pedidoDisplayNumber(pedido.id)}'),
+          content: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('Status: ${pedido.statusFila.label}'),
+                const SizedBox(height: 6),
+                Text(
+                  'Cliente: ${pedido.clienteReferencia?.nomeSnapshot ?? '-'}',
+                ),
+                Text('Itens: ${pedido.itens.length}'),
+                Text(
+                  'Quantidade total: ${pedido.totalItens.toStringAsFixed(2)}',
+                ),
+                Text(
+                  'Total bruto: R\$ ${PedidoFormatUtils.formatMoneyBr(pedido.totalBruto)}',
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'Forma de pagamento: ${((pedido.formaPagamento ?? '').trim().isEmpty ? '-' : pedido.formaPagamento)}',
+                ),
+                Text('Finalidade: ${pedido.salePurpose.label}'),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Fechar'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<bool> _confirmMarkAsSent(Pedido pedido) async {
+    if (!mounted) {
+      return false;
+    }
+
+    final confirmed =
+        await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) {
+            return AlertDialog(
+              title: const Text('Marcar como enviado'),
+              content: Text(
+                'Voce concluiu o compartilhamento do PDF do pedido ${_pedidoDisplayNumber(pedido.id)}?',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(false),
+                  child: const Text('Ainda nao'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(true),
+                  child: const Text('Sim, enviado'),
+                ),
+              ],
+            );
+          },
+        ) ??
+        false;
+    return confirmed;
+  }
+
+  Future<bool> _hasErpIntegrationConfigured(String tenantId) async {
+    final normalizedTenantId = tenantId.trim();
+    if (normalizedTenantId.isEmpty) {
+      return false;
+    }
+
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('tenants')
+          .doc(normalizedTenantId)
+          .get();
+      final data = snapshot.data();
+      if (data == null) {
+        return false;
+      }
+
+      final rootProvider = (data['erpProvider'] ?? '').toString().trim();
+      final integrationRaw = data['erpIntegration'];
+      String nestedProvider = '';
+      if (integrationRaw is Map) {
+        nestedProvider = (integrationRaw['provider'] ?? '').toString().trim();
+      }
+
+      final effectiveProvider = nestedProvider.isNotEmpty
+          ? nestedProvider
+          : rootProvider;
+      final normalizedProvider = effectiveProvider.toLowerCase();
+      return normalizedProvider == 'sankhya' || normalizedProvider == 'custom';
+    } catch (_) {
+      return false;
     }
   }
 
@@ -862,6 +1318,18 @@ class _PedidosPageState extends State<PedidosPage> {
   }
 
   Future<void> _deleteOrderLocalFirst(Pedido order) async {
+    if (!_canDeleteOrder(order)) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Exclusao permitida apenas antes de pendente envio.'),
+        ),
+      );
+      return;
+    }
+
     if (!mounted) {
       return;
     }
@@ -1030,16 +1498,55 @@ class _PedidosPageState extends State<PedidosPage> {
                             subtitle: 'Os pedidos locais aparecerão aqui assim que a fila for preenchida.',
                           )
                         else
-                          ...pedidos.map(
-                            (entry) => PedidoCard(
+                          ...pedidos.map((entry) {
+                            final canSend = _canSendOrder(entry.pedido);
+                            final canApprove = _canApproveOrder(entry.pedido);
+                            final isSentOrder =
+                                entry.pedido.statusFila == OrderStatus.sent;
+                            final primaryTooltip = canSend
+                                ? 'Enviar pedido'
+                                : (canApprove
+                                      ? 'Aprovar pedido'
+                                      : (isSentOrder
+                                            ? 'Pedido enviado'
+                                            : 'Ação indisponível'));
+                            final primaryIcon = canSend
+                                ? Icons.send_outlined
+                                : (canApprove
+                                      ? Icons.check_circle_outline
+                                      : (isSentOrder
+                                            ? Icons.task_alt_outlined
+                                            : Icons.block_outlined));
+                            final primaryAction = canSend
+                                ? () => _sendOrder(entry.pedido)
+                                : (canApprove
+                                      ? () => _approveOrder(entry.pedido)
+                                      : null);
+
+                            return PedidoCard(
                               entry.pedido,
                               syncedRemotely: entry.syncedRemotely,
                               selected: false,
-                              onTap: () => _selectOrderForEditing(entry.pedido),
-                              onDelete: () =>
-                                  _deleteOrderLocalFirst(entry.pedido),
-                            ),
-                          ),
+                              onTap: () {
+                                if (_canEditOrder(entry.pedido)) {
+                                  _selectOrderForEditing(entry.pedido);
+                                  return;
+                                }
+                                _showOrderReadOnlyDialog(entry.pedido);
+                              },
+                              onPrimaryAction: primaryAction,
+                              primaryActionTooltip: primaryTooltip,
+                              primaryActionIcon: primaryIcon,
+                              onEdit: _canEditOrder(entry.pedido)
+                                  ? () => _selectOrderForEditing(entry.pedido)
+                                  : null,
+                              onPreviewPdf: () =>
+                                  _openOrderPdfPreview(entry.pedido),
+                              onDelete: _canDeleteOrder(entry.pedido)
+                                  ? () => _deleteOrderLocalFirst(entry.pedido)
+                                  : null,
+                            );
+                          }),
                       ],
                     ),
                   ),

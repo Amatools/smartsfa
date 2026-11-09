@@ -14,6 +14,9 @@ const SANKHYA_DBEXPLORER_ENDPOINT_PATHS = [
   '/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery',
 ];
 const TEMPORARY_IMPORT_LIMIT = 5;
+const SANKHYA_IMAGE_CHUNK_BYTES = 1800;
+const DEFAULT_PRODUCT_MEDIA_SCOPE_KEY = 'tenant_default';
+const DEFAULT_STORAGE_BUCKET = 'smart-sfa.firebasestorage.app';
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -136,12 +139,26 @@ exports.syncSankhyaCatalogModule = onRequest(
       return;
     }
 
-    if (!['produtos', 'tabelas_preco', 'tax_rules', 'clientes'].includes(moduleId)) {
+    if (!['produtos', 'tabelas_preco', 'tax_rules', 'clientes', 'product_images'].includes(moduleId)) {
       response.status(400).json({
         error: 'module_not_enabled',
         message:
           'Modulo ainda nao habilitado para ingestao. Valide endpoint/permissao e ative o modulo.',
         module: moduleId,
+      });
+      return;
+    }
+
+    const firestore = admin.firestore();
+    const accessValidation = await validateEnterpriseOwnerAccess({
+      firestore,
+      request,
+      tenantId,
+    });
+    if (!accessValidation.allowed) {
+      response.status(accessValidation.status).json({
+        error: accessValidation.error,
+        message: accessValidation.message,
       });
       return;
     }
@@ -168,7 +185,6 @@ exports.syncSankhyaCatalogModule = onRequest(
         });
         return;
       }
-      const firestore = admin.firestore();
       let result;
       if (moduleId === 'produtos') {
         result = await syncSankhyaProductsModule({
@@ -195,6 +211,14 @@ exports.syncSankhyaCatalogModule = onRequest(
           xToken,
           codigosFiltro,
         });
+      } else if (moduleId === 'product_images') {
+        result = await syncSankhyaProductImagesModule({
+          firestore,
+          tenantId,
+          baseUrl,
+          bearerToken,
+          xToken,
+        });
       } else {
         result = await syncSankhyaPriceTablesModule({
           firestore,
@@ -219,6 +243,127 @@ exports.syncSankhyaCatalogModule = onRequest(
     }
   },
 );
+
+async function validateEnterpriseOwnerAccess({ firestore, request, tenantId }) {
+  const authHeader = String(request.headers?.authorization ?? '').trim();
+  if (!authHeader.toLowerCase().startsWith('bearer ')) {
+    return {
+      allowed: false,
+      status: 401,
+      error: 'missing_firebase_auth',
+      message: 'Envie Authorization: Bearer <Firebase ID token>.',
+    };
+  }
+
+  const idToken = authHeader.substring(7).trim();
+  if (!idToken) {
+    return {
+      allowed: false,
+      status: 401,
+      error: 'invalid_firebase_auth',
+      message: 'Token Firebase invalido ou ausente.',
+    };
+  }
+
+  let decodedToken;
+  try {
+    decodedToken = await admin.auth().verifyIdToken(idToken);
+  } catch (_) {
+    return {
+      allowed: false,
+      status: 401,
+      error: 'firebase_auth_failed',
+      message: 'Falha ao validar autenticacao Firebase para sync ERP.',
+    };
+  }
+
+  const uid = String(decodedToken?.uid ?? '').trim();
+  if (!uid) {
+    return {
+      allowed: false,
+      status: 401,
+      error: 'missing_uid',
+      message: 'Usuario autenticado sem UID valido.',
+    };
+  }
+
+  const tenantDoc = await firestore.collection('tenants').doc(tenantId).get();
+  if (!tenantDoc.exists) {
+    return {
+      allowed: false,
+      status: 404,
+      error: 'tenant_not_found',
+      message: 'Tenant nao encontrado para o sync ERP.',
+    };
+  }
+
+  const tenantData = tenantDoc.data() || {};
+  const workspaceType = String(tenantData.workspaceType ?? '').trim();
+  if (workspaceType !== 'brand_owner_workspace') {
+    return {
+      allowed: false,
+      status: 403,
+      error: 'workspace_not_allowed',
+      message:
+        'Sincronizacao ERP permitida apenas para contas enterprise (brand_owner_workspace).',
+    };
+  }
+
+  const membership = await loadTenantMembershipByTenantAndUser({
+    firestore,
+    tenantId,
+    uid,
+  });
+
+  if (!membership) {
+    return {
+      allowed: false,
+      status: 403,
+      error: 'membership_not_found',
+      message: 'Usuario sem membership ativa neste tenant.',
+    };
+  }
+
+  const role = String(membership.role ?? '').trim().toLowerCase();
+  const state = String(membership.state ?? 'active').trim().toLowerCase();
+  const ativo = membership.ativo !== false;
+
+  if (role !== 'owner' || !ativo || state !== 'active') {
+    return {
+      allowed: false,
+      status: 403,
+      error: 'owner_required',
+      message:
+        'Somente owner ativo do tenant enterprise pode configurar e executar sync ERP.',
+    };
+  }
+
+  return {
+    allowed: true,
+    status: 200,
+    error: '',
+    message: '',
+  };
+}
+
+async function loadTenantMembershipByTenantAndUser({ firestore, tenantId, uid }) {
+  const memberships = firestore.collection('tenant_memberships');
+  const patternDoc = await memberships.doc(`${tenantId}_${uid}`).get();
+  if (patternDoc.exists) {
+    return patternDoc.data() || null;
+  }
+
+  const byUidSnapshot = await memberships.where('uid', '==', uid).limit(20).get();
+  for (const doc of byUidSnapshot.docs) {
+    const data = doc.data() || {};
+    const rowTenantId = String(data.tenantId ?? '').trim();
+    if (rowTenantId === tenantId) {
+      return data;
+    }
+  }
+
+  return null;
+}
 
 exports.fetchSankhyaOperationTypes = onRequest(
   { cors: true, region: 'us-central1', timeoutSeconds: 30 },
@@ -2838,4 +2983,394 @@ function toIsoDateOrNull(value, endOfDay) {
   }
 
   return null;
+}
+
+async function syncSankhyaProductImagesModule({
+  firestore,
+  tenantId,
+  baseUrl,
+  bearerToken,
+  xToken,
+}) {
+  const sourceUrl = `${baseUrl}${SANKHYA_PRODUCTS_PATH}`;
+  const sankhyaResponse = await fetch(sourceUrl, {
+    method: 'GET',
+    headers: {
+      Accept: 'application/json',
+      Authorization: `Bearer ${bearerToken}`,
+      'x-token': xToken,
+    },
+    signal: AbortSignal.timeout(30000),
+  });
+
+  const sourceText = await sankhyaResponse.text();
+  if (sankhyaResponse.status !== 200) {
+    throw new Error(
+      `Falha ao consultar modulo produtos para sync de imagens (HTTP ${sankhyaResponse.status}): ${sourceText.slice(0, 300)}`,
+    );
+  }
+
+  const sourceData = tryParseJson(sourceText);
+  const sourceProducts = Array.isArray(sourceData?.produtos)
+    ? sourceData.produtos
+    : [];
+
+  const validProducts = [];
+  let filteredOutZeroCodeCount = 0;
+  for (const rawItem of sourceProducts) {
+    if (!rawItem || typeof rawItem !== 'object') {
+      continue;
+    }
+
+    const productCode = toCodeString(rawItem.codigoProduto);
+    if (!productCode || isZeroCode(productCode)) {
+      filteredOutZeroCodeCount += 1;
+      continue;
+    }
+
+    validProducts.push(rawItem);
+    if (validProducts.length >= TEMPORARY_IMPORT_LIMIT) {
+      break;
+    }
+  }
+
+  const validProductCodes = validProducts
+    .map((item) => toCodeString(item?.codigoProduto))
+    .filter((item) => item && !isZeroCode(item));
+
+  if (validProductCodes.length === 0) {
+    return {
+      message:
+        'Nenhum produto valido foi encontrado no lote temporario para sincronizacao de imagens.',
+      endpoint: SANKHYA_PRODUCTS_PATH,
+      sourceStatus: sankhyaResponse.status,
+      sourceCount: sourceProducts.length,
+      importedCount: 0,
+      filteredOutZeroCodeCount,
+      skippedNotFoundCount: 0,
+      appliedLimit: TEMPORARY_IMPORT_LIMIT,
+    };
+  }
+
+  const imageSql = buildSankhyaProductImageChunksSql(validProductCodes);
+  const queryResult = await executeSankhyaDbExplorerQuery({
+    baseUrl,
+    bearerToken,
+    xToken,
+    sql: imageSql,
+  });
+
+  const chunksByProduct = new Map();
+  for (const row of queryResult.rows) {
+    const productCode = toCodeString(
+      readRowValueByAliases(row, ['CodigoProduto', 'CODPROD']),
+    );
+    if (!productCode) {
+      continue;
+    }
+
+    const chunkIndex =
+      readInt(readRowValueByAliases(row, ['ChunkIndex', 'CHUNKINDEX'])) || 0;
+    const chunkHex = String(
+      readRowValueByAliases(row, ['ChunkHex', 'CHUNKHEX']) ?? '',
+    )
+      .trim()
+      .toUpperCase();
+
+    if (!chunkHex) {
+      continue;
+    }
+
+    const productChunks = chunksByProduct.get(productCode) || [];
+    productChunks.push({ chunkIndex, chunkHex });
+    chunksByProduct.set(productCode, productChunks);
+  }
+
+  const imageByProductCode = new Map();
+  for (const [productCode, chunks] of chunksByProduct.entries()) {
+    chunks.sort((left, right) => left.chunkIndex - right.chunkIndex);
+    const mergedHex = chunks.map((item) => item.chunkHex).join('');
+    if (!mergedHex) {
+      continue;
+    }
+
+    const imageBuffer = Buffer.from(mergedHex, 'hex');
+    if (!imageBuffer || imageBuffer.length === 0) {
+      continue;
+    }
+
+    const imageHash = crypto
+      .createHash('sha256')
+      .update(imageBuffer)
+      .digest('hex');
+    imageByProductCode.set(productCode, {
+      imageBuffer,
+      imageHash,
+    });
+  }
+
+  const nowIso = new Date().toISOString();
+  const syncBatchId = `sankhya_img_${Date.now()}`;
+  const productsCollection = firestore.collection('produtos');
+  const mediaCollection = firestore.collection('product_media_assets');
+
+  const existingAssetsSnapshot = await mediaCollection
+    .where('tenantId', '==', tenantId)
+    .get();
+  const existingAssetByHash = new Map();
+  for (const doc of existingAssetsSnapshot.docs) {
+    const data = doc.data() || {};
+    const scopeKey = String(data.scopeKey ?? '').trim();
+    const imageHash = String(data.imageHash ?? '').trim().toLowerCase();
+    if (
+      scopeKey !== DEFAULT_PRODUCT_MEDIA_SCOPE_KEY ||
+      !imageHash ||
+      !data.downloadUrl ||
+      !data.storagePath
+    ) {
+      continue;
+    }
+    existingAssetByHash.set(imageHash, {
+      assetId: doc.id,
+      downloadUrl: String(data.downloadUrl ?? '').trim(),
+      storagePath: String(data.storagePath ?? '').trim(),
+      thumbnailBase64: String(data.thumbnailBase64 ?? '').trim(),
+    });
+  }
+
+  const uploadedAssetByHash = new Map();
+  const bucketName =
+    process.env.FIREBASE_STORAGE_BUCKET ||
+    process.env.GCLOUD_STORAGE_BUCKET ||
+    DEFAULT_STORAGE_BUCKET;
+  const bucket = admin.storage().bucket(bucketName);
+
+  let sourceCount = validProductCodes.length;
+  let importedCount = 0;
+  let skippedNotFoundCount = 0;
+  let productsWithoutImageCount = 0;
+  let reusedWithinBatchCount = 0;
+  let reusedExistingAssetCount = 0;
+  let uploadedAssetCount = 0;
+  let alreadyUpToDateCount = 0;
+
+  for (const productCode of validProductCodes) {
+    const docId = buildProductDocId(tenantId, productCode);
+    const docRef = productsCollection.doc(docId);
+    const existingDoc = await docRef.get();
+    if (!existingDoc.exists) {
+      skippedNotFoundCount += 1;
+      continue;
+    }
+
+    const existingData = existingDoc.data() || {};
+    const imageData = imageByProductCode.get(productCode);
+    if (!imageData) {
+      productsWithoutImageCount += 1;
+      continue;
+    }
+
+    const { imageBuffer, imageHash } = imageData;
+    const normalizedHash = String(imageHash).trim().toLowerCase();
+    let resolvedAsset = uploadedAssetByHash.get(normalizedHash);
+
+    if (!resolvedAsset) {
+      const existingAsset = existingAssetByHash.get(normalizedHash);
+      if (existingAsset) {
+        resolvedAsset = existingAsset;
+        uploadedAssetByHash.set(normalizedHash, resolvedAsset);
+        reusedExistingAssetCount += 1;
+      }
+    } else {
+      reusedWithinBatchCount += 1;
+    }
+
+    if (!resolvedAsset) {
+      const imageFormat = detectImageFormat(imageBuffer);
+      const extension = imageFormat === 'png' ? 'png' : 'jpg';
+      const contentType = imageFormat === 'png' ? 'image/png' : 'image/jpeg';
+      const thumbnailBase64 = imageBuffer.toString('base64');
+
+      const assetId = `erp_pma_${tenantId}_${normalizedHash.slice(0, 24)}`;
+      const storagePath =
+        `tenants/${tenantId}/product_media/${DEFAULT_PRODUCT_MEDIA_SCOPE_KEY}/erp_sync/${assetId}.${extension}`;
+      const downloadToken = crypto.randomUUID();
+      const file = bucket.file(storagePath);
+
+      await file.save(imageBuffer, {
+        resumable: false,
+        metadata: {
+          contentType,
+          metadata: {
+            firebaseStorageDownloadTokens: downloadToken,
+            origin: 'erp-sync-product-images',
+            scopeKey: DEFAULT_PRODUCT_MEDIA_SCOPE_KEY,
+            imageHash: normalizedHash,
+            erpProvider: 'sankhya',
+          },
+        },
+      });
+
+      const downloadUrl = buildFirebaseDownloadUrl({
+        bucketName,
+        storagePath,
+        token: downloadToken,
+      });
+
+      await mediaCollection.doc(assetId).set(
+        {
+          id: assetId,
+          tenantId,
+          representedCompanyId: null,
+          scopeKey: DEFAULT_PRODUCT_MEDIA_SCOPE_KEY,
+          fileName: `${assetId}.${extension}`,
+          downloadUrl,
+          storagePath,
+          thumbnailBase64,
+          width: 500,
+          height: 500,
+          imageHash: normalizedHash,
+          source: 'erp_sync',
+          erpProvider: 'sankhya',
+          erpSyncId: syncBatchId,
+          createdAt: existingDoc.createTime
+            ? admin.firestore.Timestamp.fromDate(
+                new Date(existingDoc.createTime.toDate()),
+              )
+            : admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+
+      resolvedAsset = {
+        assetId,
+        downloadUrl,
+        storagePath,
+        thumbnailBase64,
+      };
+      uploadedAssetByHash.set(normalizedHash, resolvedAsset);
+      existingAssetByHash.set(normalizedHash, resolvedAsset);
+      uploadedAssetCount += 1;
+    }
+
+    if (!resolvedAsset) {
+      continue;
+    }
+
+    const existingPhotoUrl = String(existingData.fotoUrl ?? '').trim();
+    const existingStoragePath = String(existingData.storagePath ?? '').trim();
+    const existingThumb = String(existingData.thumbnailBase64 ?? '').trim();
+    const isAlreadyLinked =
+      existingPhotoUrl === resolvedAsset.downloadUrl &&
+      existingStoragePath === resolvedAsset.storagePath &&
+      existingThumb.length > 0;
+
+    if (isAlreadyLinked) {
+      alreadyUpToDateCount += 1;
+      continue;
+    }
+
+    const nextSyncVersion = readInt(existingData.syncVersion) + 1;
+    await docRef.set(
+      {
+        fotoUrl: resolvedAsset.downloadUrl,
+        storagePath: resolvedAsset.storagePath,
+        thumbnailBase64: resolvedAsset.thumbnailBase64,
+        erpSyncId: syncBatchId,
+        syncVersion: nextSyncVersion,
+        updatedAt: nowIso,
+      },
+      { merge: true },
+    );
+    importedCount += 1;
+  }
+
+  await updateTenantSyncState({
+    firestore,
+    tenantId,
+    patch: {
+      lastProductImagesSyncedAt: nowIso,
+      lastProductImagesSyncAt: nowIso,
+      lastProductImagesSourceCount: sourceCount,
+      lastProductImagesImportedCount: importedCount,
+      lastProductImagesFilteredOutZeroCodeCount: filteredOutZeroCodeCount,
+      lastProductImagesSkippedNotFoundCount: skippedNotFoundCount,
+      lastProductImagesWithoutImageCount: productsWithoutImageCount,
+      lastProductImagesUploadedAssetCount: uploadedAssetCount,
+      lastProductImagesReusedWithinBatchCount: reusedWithinBatchCount,
+      lastProductImagesReusedExistingAssetCount: reusedExistingAssetCount,
+      lastProductImagesAlreadyUpToDateCount: alreadyUpToDateCount,
+      lastProductImagesAppliedLimit: TEMPORARY_IMPORT_LIMIT,
+    },
+  });
+
+  return {
+    message:
+      'Sincronizacao manual de fotos concluida. Imagens repetidas foram deduplicadas e vinculadas aos produtos do lote temporario.',
+    endpoint: queryResult.endpointPath,
+    sourceStatus: sankhyaResponse.status,
+    sourceCount,
+    importedCount,
+    filteredOutZeroCodeCount,
+    skippedNotFoundCount,
+    productsWithoutImageCount,
+    uploadedAssetCount,
+    reusedWithinBatchCount,
+    reusedExistingAssetCount,
+    alreadyUpToDateCount,
+    appliedLimit: TEMPORARY_IMPORT_LIMIT,
+  };
+}
+
+function buildSankhyaProductImageChunksSql(productCodes) {
+  const safeCodes = normalizeSankhyaNumericCodeList(productCodes);
+  if (safeCodes.length === 0) {
+    return '';
+  }
+
+  const chunkSize = SANKHYA_IMAGE_CHUNK_BYTES;
+  const codesInClause = safeCodes.join(', ');
+  return `
+SELECT
+    TO_CHAR(P.CODPROD) AS CodigoProduto,
+    LEVEL AS ChunkIndex,
+    RAWTOHEX(
+      DBMS_LOB.SUBSTR(
+        P.IMAGEM,
+        ${chunkSize},
+        ((LEVEL - 1) * ${chunkSize}) + 1
+      )
+    ) AS ChunkHex
+FROM TGFPRO P
+WHERE P.CODPROD IN (${codesInClause})
+  AND P.ATIVO = 'S'
+  AND P.IMAGEM IS NOT NULL
+CONNECT BY PRIOR P.CODPROD = P.CODPROD
+   AND PRIOR SYS_GUID() IS NOT NULL
+   AND LEVEL <= CEIL(DBMS_LOB.GETLENGTH(P.IMAGEM) / ${chunkSize})
+ORDER BY P.CODPROD, LEVEL
+`.trim();
+}
+
+function detectImageFormat(buffer) {
+  if (!buffer || buffer.length < 4) {
+    return 'jpg';
+  }
+
+  if (
+    buffer[0] === 0x89 &&
+    buffer[1] === 0x50 &&
+    buffer[2] === 0x4e &&
+    buffer[3] === 0x47
+  ) {
+    return 'png';
+  }
+
+  return 'jpg';
+}
+
+function buildFirebaseDownloadUrl({ bucketName, storagePath, token }) {
+  const encodedPath = encodeURIComponent(storagePath);
+  return `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodedPath}?alt=media&token=${token}`;
 }

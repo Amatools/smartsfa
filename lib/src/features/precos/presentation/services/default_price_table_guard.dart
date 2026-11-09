@@ -5,6 +5,7 @@ import '../../../../core/models/app_identity.dart';
 import '../../../../core/models/tabela_preco.dart';
 import '../../../../core/models/tenant_entry_decision.dart';
 import '../../../../core/repositories/tabela_preco_repository.dart';
+import '../../../../core/services/enterprise_represented_scope.dart';
 
 const String reservedSystemDefaultPriceTableName = 'tabela padrao';
 
@@ -30,11 +31,38 @@ class DefaultPriceTableGuard {
     return normalized.replaceAll('/', '_');
   }
 
+  /// Contas `brand_owner_workspace` (enterprise) usam um id sintetico de UI
+  /// (`enterprise_default_<tenantId>`, ver `app_shell.dart`) so para manter a
+  /// mesma selecao de "representada" entre mobile e portal web (condicoes de
+  /// pagamento, acrescimos/descontos, taxonomia) - nao ha representada de
+  /// verdade para essas contas, so a propria empresa. `tabelas_preco` e
+  /// `product_base_prices` para essas contas SEMPRE foram sincronizados no
+  /// escopo tenant-level (sem sufixo de escopo). Tratar esse id sintetico
+  /// como "sem representada" aqui evita gerar um id de tabela de preco que
+  /// nunca existe, o que fazia o item cair silenciosamente no preco bruto por
+  /// falta de tabela/regra fiscal aplicavel. Mesmo padrao ja aplicado em
+  /// `workspace_profile_service_payment_conditions.dart`
+  /// (`_tenantScopedRepresentedCompanyId`).
+  static String? effectiveRepresentedCompanyId({
+    required String tenantId,
+    String? representedCompanyId,
+  }) {
+    return EnterpriseRepresentedScope.effectiveRepresentedCompanyId(
+      tenantId: tenantId,
+      representedCompanyId: representedCompanyId,
+    );
+  }
+
   static String defaultPriceTableIdForScope({
     required String tenantId,
     String? representedCompanyId,
   }) {
-    final scopeKey = normalizeDefaultPricingScopeKey(representedCompanyId);
+    final scopeKey = normalizeDefaultPricingScopeKey(
+      effectiveRepresentedCompanyId(
+        tenantId: tenantId,
+        representedCompanyId: representedCompanyId,
+      ),
+    );
     final base = 'pt_default_${tenantId.trim()}';
     if (scopeKey == 'tenant_default') {
       return base;
@@ -46,7 +74,12 @@ class DefaultPriceTableGuard {
     required String tenantId,
     String? representedCompanyId,
   }) {
-    final scopeKey = legacyDefaultPricingScopeKey(representedCompanyId);
+    final scopeKey = legacyDefaultPricingScopeKey(
+      effectiveRepresentedCompanyId(
+        tenantId: tenantId,
+        representedCompanyId: representedCompanyId,
+      ),
+    );
     final base = 'pt_default_${tenantId.trim()}';
     if (scopeKey == 'tenant_default') {
       return base;
@@ -58,7 +91,12 @@ class DefaultPriceTableGuard {
     required String tenantId,
     String? representedCompanyId,
   }) {
-    final scopeKey = normalizeDefaultPricingScopeKey(representedCompanyId);
+    final scopeKey = normalizeDefaultPricingScopeKey(
+      effectiveRepresentedCompanyId(
+        tenantId: tenantId,
+        representedCompanyId: representedCompanyId,
+      ),
+    );
     return 'products_default_${tenantId.trim()}_$scopeKey';
   }
 
@@ -68,17 +106,21 @@ class DefaultPriceTableGuard {
     required String? selectedRepresentedCompanyId,
     Set<String>? ensuredScopes,
   }) async {
-    final scopeKey = normalizeDefaultPricingScopeKey(selectedRepresentedCompanyId);
-    final legacyScopeKey = legacyDefaultPricingScopeKey(selectedRepresentedCompanyId);
+    final normalizedRepresentedCompanyId = effectiveRepresentedCompanyId(
+      tenantId: identity.tenantId,
+      representedCompanyId: selectedRepresentedCompanyId,
+    );
+    final scopeKey = normalizeDefaultPricingScopeKey(normalizedRepresentedCompanyId);
+    final legacyScopeKey = legacyDefaultPricingScopeKey(normalizedRepresentedCompanyId);
     if (ensuredScopes?.contains(scopeKey) == true) {
       return;
     }
 
     final defaultPriceTableId = defaultPriceTableIdForScope(
       tenantId: identity.tenantId,
-      representedCompanyId: selectedRepresentedCompanyId,
+      representedCompanyId: normalizedRepresentedCompanyId,
     );
-    final representedCompanyId = (selectedRepresentedCompanyId ?? '').trim();
+    final representedCompanyId = (normalizedRepresentedCompanyId ?? '').trim();
 
     try {
       final now = DateTime.now().toUtc();
@@ -108,7 +150,7 @@ class DefaultPriceTableGuard {
           'defaultProductCatalogIds': {
             scopeKey: defaultProductCatalogIdForScope(
               tenantId: identity.tenantId,
-              representedCompanyId: selectedRepresentedCompanyId,
+              representedCompanyId: normalizedRepresentedCompanyId,
             ),
           },
           'updatedAt': FieldValue.serverTimestamp(),
@@ -119,7 +161,7 @@ class DefaultPriceTableGuard {
       if (legacyScopeKey != scopeKey) {
         final legacyDefaultPriceTableId = legacyDefaultPriceTableIdForScope(
           tenantId: identity.tenantId,
-          representedCompanyId: selectedRepresentedCompanyId,
+          representedCompanyId: normalizedRepresentedCompanyId,
         );
         if (legacyDefaultPriceTableId != defaultPriceTableId) {
           final legacy = await repository.fetchById(
@@ -165,7 +207,12 @@ class DefaultPriceTableGuard {
     required String? activeRepresentedCompanyName,
   }) {
     final workspaceType = activeTenant.workspaceType.trim().toLowerCase();
-    final representedId = (selectedRepresentedCompanyId ?? '').trim();
+    final representedId = (effectiveRepresentedCompanyId(
+              tenantId: identity.tenantId,
+              representedCompanyId: selectedRepresentedCompanyId,
+            ) ??
+            '')
+        .trim();
     final representedName = (activeRepresentedCompanyName ?? '').trim();
     final representedContext = workspaceType == 'rep_workspace' || representedName.isNotEmpty;
     final shouldUseRepresentedScope = representedContext && representedId.isNotEmpty;
@@ -261,7 +308,12 @@ class DefaultPriceTableGuard {
     required String? activeRepresentedCompanyName,
   }) {
     final workspaceType = activeTenant.workspaceType.trim().toLowerCase();
-    final representedId = (selectedRepresentedCompanyId ?? '').trim();
+    final representedId = (effectiveRepresentedCompanyId(
+              tenantId: identity.tenantId,
+              representedCompanyId: selectedRepresentedCompanyId,
+            ) ??
+            '')
+        .trim();
     final representedName = (activeRepresentedCompanyName ?? '').trim();
     final representedContext = workspaceType == 'rep_workspace' || representedName.isNotEmpty;
     final shouldUseRepresentedScope = representedContext && representedId.isNotEmpty;

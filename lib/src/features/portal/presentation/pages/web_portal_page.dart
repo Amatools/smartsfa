@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
@@ -19,9 +20,13 @@ import '../../../../core/data/firestore/firestore_tabela_preco_repository.dart';
 import '../../../../core/data/firestore/firestore_tax_rule_repository.dart';
 import '../../../../core/models/app_identity.dart';
 import '../../../../core/models/domain_types.dart';
+import '../../../../core/models/pedido.dart';
 import '../../../../core/models/tax_rule.dart';
 import '../../../../core/models/tenant_entry_decision.dart';
+import '../../../../core/models/tenant_membership.dart';
+import '../../../../core/services/enterprise_represented_scope.dart';
 import '../../../../core/services/tax_reform_calendar.dart';
+import '../../../../navigation/services/app_shell_dashboard_sales_service.dart';
 import '../../../../shared/services/tabular_spreadsheet_service.dart';
 import '../../../../shared/utils/file_download.dart';
 import '../../../auth/services/solo_workspace_service.dart';
@@ -38,6 +43,7 @@ import '../../../produtos/presentation/services/product_editor_defaults.dart';
 import '../../../produtos/presentation/services/product_unit_catalog_service.dart';
 import '../services/tax_rule_formatting_utils.dart';
 import '../services/tax_rule_import_export_service.dart';
+import '../services/web_logo_webp_converter.dart';
 import '../widgets/tax_rule_form_dialog.dart';
 
 part 'web_portal_units_section.dart';
@@ -51,6 +57,7 @@ part 'web_portal_payment_conditions_section.dart';
 part 'web_portal_workspace_parameters_section.dart';
 part 'web_portal_media_library_section.dart';
 part 'web_portal_categories_section.dart';
+part 'web_portal_inactivity_period_section.dart';
 part 'web_portal_workspace_profile_section.dart';
 part 'web_portal_account_represented_sections.dart';
 part 'web_portal_represented_company_editor_dialog.dart';
@@ -72,7 +79,7 @@ String _normalizeDefaultScopeKey(String? representedCompanyId) {
 }
 
 String _enterpriseDefaultRepresentedCompanyId(TenantEntryOption tenant) {
-  return 'enterprise_default_${tenant.tenantId}';
+  return EnterpriseRepresentedScope.syntheticId(tenant.tenantId);
 }
 
 const String _defaultTaxRegime = defaultTaxRegime;

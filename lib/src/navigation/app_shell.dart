@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import '../core/models/app_identity.dart';
 import '../core/constants/app_environment.dart';
 import '../core/services/catalog_incremental_sync_service.dart';
+import '../core/services/enterprise_represented_scope.dart';
 import '../core/services/offline_sync_queue.dart';
 import '../core/services/represented_scope_backfill_service.dart';
 import '../core/services/sync_cost_metrics_service.dart';
@@ -768,13 +769,14 @@ class _AppShellPageState extends State<AppShellPage> {
         final enterpriseUf =
             (workspace?['uf'] ?? '').toString().trim().toUpperCase();
         // Mesmo id sintetico usado pelo portal web para brand_owner_workspace
-        // (ver _enterpriseDefaultRepresentedId em web_portal_shell_state_section.dart).
-        // Sem isso, configuracoes escopadas por representada (condicoes de
-        // pagamento, acrescimos/descontos, taxonomia) gravadas no Chrome ficam
+        // (ver EnterpriseRepresentedScope.syntheticId - fonte unica de
+        // verdade compartilhada entre mobile e portal). Sem isso,
+        // configuracoes escopadas por representada (condicoes de pagamento,
+        // acrescimos/descontos, taxonomia) gravadas no Chrome ficam
         // invisiveis/divergentes no app mobile, que cairia no escopo
         // tenant-level (representedCompanyId vazio) em vez do mesmo documento.
         final fallbackOption = _RepresentedScopeOption(
-          representedCompanyId: 'enterprise_default_$tenantId',
+          representedCompanyId: EnterpriseRepresentedScope.syntheticId(tenantId),
           representedCompanyName: enterpriseName.isEmpty
               ? 'Empresa do workspace'
               : enterpriseName,

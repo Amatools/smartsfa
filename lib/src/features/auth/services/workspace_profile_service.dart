@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../../../core/services/enterprise_represented_scope.dart';
+
 part 'workspace_profile_service_payment_conditions.dart';
 part 'workspace_profile_service_commercial_adjustments.dart';
 part 'workspace_profile_service_order_discounts.dart';
@@ -432,6 +434,28 @@ String _scopeKey(String? representedCompanyId) {
     return 'tenant_default';
   }
   return normalized.replaceAll('.', '_');
+}
+
+/// Contas `brand_owner_workspace` (enterprise) usam um id sintetico de UI
+/// (`enterprise_default_<tenantId>`, ver `app_shell.dart`/
+/// `web_portal_shell_state_section.dart`) que NUNCA vira um documento ou
+/// escopo real cadastrado - nao ha "representada" de verdade para essas
+/// contas, so a propria empresa. Tratar esse id sintetico como "sem
+/// representada" antes de calcular `_scopeKey`/`_normalizeDefaultPricingScopeKey`
+/// evita gravar/ler configuracoes escopadas (acrescimos/descontos comerciais,
+/// descontos de pedido, taxonomia de produtos) numa chave que nunca
+/// corresponde ao escopo `tenant_default` historicamente usado por essas
+/// contas. Mesmo padrao ja aplicado em `_tenantScopedRepresentedCompanyId`
+/// (`workspace_profile_service_payment_conditions.dart`) e em
+/// `DefaultPriceTableGuard.effectiveRepresentedCompanyId`.
+String? _effectiveRepresentedCompanyId(
+  String tenantId,
+  String? representedCompanyId,
+) {
+  return EnterpriseRepresentedScope.effectiveRepresentedCompanyId(
+    tenantId: tenantId,
+    representedCompanyId: representedCompanyId,
+  );
 }
 
 String _normalizeDefaultPricingScopeKey(String? representedCompanyId) {

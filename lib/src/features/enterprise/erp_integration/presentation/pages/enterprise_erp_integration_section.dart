@@ -41,21 +41,19 @@ class _EnterpriseErpIntegrationSectionState
       TextEditingController();
   final TextEditingController _topUsoConsumoContribuinteSameUfController =
       TextEditingController();
-  final TextEditingController
-  _topUsoConsumoContribuinteInterstateController =
+  final TextEditingController _topUsoConsumoContribuinteInterstateController =
       TextEditingController();
   final TextEditingController _topUsoConsumoNaoContribuinteSameUfController =
       TextEditingController();
   final TextEditingController
-  _topUsoConsumoNaoContribuinteInterstateController =
-      TextEditingController();
+  _topUsoConsumoNaoContribuinteInterstateController = TextEditingController();
   final TextEditingController _topIndustrializacaoSameUfController =
       TextEditingController();
   final TextEditingController _topIndustrializacaoInterstateController =
       TextEditingController();
-    final TextEditingController _topZfmIndustrializacaoController =
+  final TextEditingController _topZfmIndustrializacaoController =
       TextEditingController();
-    final TextEditingController _topZfmComercializacaoRevendaController =
+  final TextEditingController _topZfmComercializacaoRevendaController =
       TextEditingController();
 
   String? _selectedConnectorId;
@@ -256,10 +254,7 @@ class _EnterpriseErpIntegrationSectionState
                           subtitle: 'Ative um conector na aba Integracoes para liberar a configuracao de credenciais.',
                         ),
                   hasActiveConnector
-                      ? _buildSyncModulesTab(
-                          canEdit: canEdit,
-                          data: data,
-                        )
+                      ? _buildSyncModulesTab(canEdit: canEdit, data: data)
                       : const _LockedTabContent(
                           title: 'Sincronizacao bloqueada',
                           subtitle: 'Selecione e ative um conector para abrir esta aba.',
@@ -936,20 +931,18 @@ class _EnterpriseErpIntegrationSectionState
     final hasSavedPriceTableCodes = data.priceTableCodes.isNotEmpty;
     final isPriceTablesModule = module.id == 'tabelas_preco';
     final actionEnabled =
-      canEdit &&
-      module.enabled &&
-      !_syncingModule &&
-      data.credentialsReady &&
-      (!isPriceTablesModule || hasSavedPriceTableCodes);
+        canEdit &&
+        module.enabled &&
+        !_syncingModule &&
+        data.credentialsReady &&
+        (!isPriceTablesModule || hasSavedPriceTableCodes);
 
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: Theme.of(context).colorScheme.outlineVariant,
-        ),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -962,9 +955,7 @@ class _EnterpriseErpIntegrationSectionState
                   style: Theme.of(context).textTheme.titleSmall,
                 ),
               ),
-              Chip(
-                label: Text(module.enabled ? 'Disponivel' : 'Pendente'),
-              ),
+              Chip(label: Text(module.enabled ? 'Disponivel' : 'Pendente')),
             ],
           ),
           const SizedBox(height: 6),
@@ -1014,7 +1005,9 @@ class _EnterpriseErpIntegrationSectionState
             ),
             const SizedBox(height: 10),
             OutlinedButton.icon(
-              onPressed: actionEnabled ? () => _runModuleSync(module: module) : null,
+              onPressed: actionEnabled
+                  ? () => _runModuleSync(module: module)
+                  : null,
               icon: isRunning
                   ? const SizedBox(
                       width: 16,
@@ -1023,9 +1016,7 @@ class _EnterpriseErpIntegrationSectionState
                     )
                   : const Icon(Icons.sync),
               label: Text(
-                isRunning
-                    ? 'Sincronizando...'
-                    : 'Sincronizar ${module.label}',
+                isRunning ? 'Sincronizando...' : 'Sincronizar ${module.label}',
               ),
             ),
             if (!hasSavedPriceTableCodes)
@@ -1049,9 +1040,7 @@ class _EnterpriseErpIntegrationSectionState
                     )
                   : const Icon(Icons.sync),
               label: Text(
-                isRunning
-                    ? 'Sincronizando...'
-                    : 'Sincronizar ${module.label}',
+                isRunning ? 'Sincronizando...' : 'Sincronizar ${module.label}',
               ),
             ),
           ],
@@ -1080,9 +1069,7 @@ class _EnterpriseErpIntegrationSectionState
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: Theme.of(context).colorScheme.outlineVariant,
-        ),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1106,7 +1093,9 @@ class _EnterpriseErpIntegrationSectionState
           Row(
             children: [
               OutlinedButton.icon(
-                onPressed: _fetchingOperationTypes ? null : _fetchOperationTypes,
+                onPressed: _fetchingOperationTypes
+                    ? null
+                    : _fetchOperationTypes,
                 icon: _fetchingOperationTypes
                     ? const SizedBox(
                         width: 16,
@@ -1147,15 +1136,13 @@ class _EnterpriseErpIntegrationSectionState
           const SizedBox(height: 8),
           _buildTopCodeField(
             controller: _topUsoConsumoContribuinteSameUfController,
-            label:
-                'Uso/consumo - contribuinte - operacao estadual (mesma UF)',
+            label: 'Uso/consumo - contribuinte - operacao estadual (mesma UF)',
             canEdit: canEdit,
           ),
           const SizedBox(height: 8),
           _buildTopCodeField(
             controller: _topUsoConsumoContribuinteInterstateController,
-            label:
-                'Uso/consumo - contribuinte - operacao interestadual (UF diferente)',
+            label: 'Uso/consumo - contribuinte - operacao interestadual (UF diferente)',
             canEdit: canEdit,
           ),
           const SizedBox(height: 8),
@@ -1168,8 +1155,7 @@ class _EnterpriseErpIntegrationSectionState
           const SizedBox(height: 8),
           _buildTopCodeField(
             controller: _topUsoConsumoNaoContribuinteInterstateController,
-            label:
-                'Uso/consumo - nao contribuinte - operacao interestadual (UF diferente)',
+            label: 'Uso/consumo - nao contribuinte - operacao interestadual (UF diferente)',
             canEdit: canEdit,
           ),
           const SizedBox(height: 8),
@@ -1229,21 +1215,22 @@ class _EnterpriseErpIntegrationSectionState
       controller: controller,
       enabled: fieldEnabled,
       keyboardType: TextInputType.number,
-      decoration: _authInputDecoration(
-        label: label,
-        icon: Icons.tag_outlined,
-        hintText: 'Ex.: 1200',
-      ).copyWith(
-        suffixIcon: _operationTypes.isEmpty
-            ? null
-            : IconButton(
-                tooltip: 'Escolher TOP pela descricao',
-                icon: const Icon(Icons.search),
-                onPressed: fieldEnabled
-                    ? () => _pickOperationType(controller)
-                    : null,
-              ),
-      ),
+      decoration:
+          _authInputDecoration(
+            label: label,
+            icon: Icons.tag_outlined,
+            hintText: 'Ex.: 1200',
+          ).copyWith(
+            suffixIcon: _operationTypes.isEmpty
+                ? null
+                : IconButton(
+                    tooltip: 'Escolher TOP pela descricao',
+                    icon: const Icon(Icons.search),
+                    onPressed: fieldEnabled
+                        ? () => _pickOperationType(controller)
+                        : null,
+                  ),
+          ),
     );
   }
 
@@ -1292,9 +1279,11 @@ class _EnterpriseErpIntegrationSectionState
                               itemBuilder: (context, index) {
                                 final item = filtered[index];
                                 return ListTile(
-                                  title: Text(item.description.isEmpty
-                                      ? item.code
-                                      : item.description),
+                                  title: Text(
+                                    item.description.isEmpty
+                                        ? item.code
+                                        : item.description,
+                                  ),
                                   subtitle: Text('Codigo: ${item.code}'),
                                   onTap: () =>
                                       Navigator.of(dialogContext).pop(item),
@@ -1357,7 +1346,10 @@ class _EnterpriseErpIntegrationSectionState
             style: TextStyle(color: foreground),
           ),
           const SizedBox(height: 4),
-          Text('Proxy: ${result.requestUrl}', style: TextStyle(color: foreground)),
+          Text(
+            'Proxy: ${result.requestUrl}',
+            style: TextStyle(color: foreground),
+          ),
         ],
       ),
     );
@@ -1446,6 +1438,7 @@ class _EnterpriseErpIntegrationSectionState
       'tabelas_preco',
       'tax_rules',
       'parceiros',
+      'product_images',
     ]) {
       final module = byId[id];
       if (module != null) {
@@ -1583,9 +1576,8 @@ class _EnterpriseErpIntegrationSectionState
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(validationError)));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(validationError)));
       return;
     }
 
@@ -1643,9 +1635,8 @@ class _EnterpriseErpIntegrationSectionState
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(firstError)));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(firstError)));
       return;
     }
 
@@ -1660,21 +1651,22 @@ class _EnterpriseErpIntegrationSectionState
           revendaSameUf: _topRevendaSameUfController.text.trim(),
           revendaInterstate: _topRevendaInterstateController.text.trim(),
           usoConsumoContribuinteSameUf:
-            _topUsoConsumoContribuinteSameUfController.text.trim(),
+              _topUsoConsumoContribuinteSameUfController.text.trim(),
           usoConsumoContribuinteInterstate:
-            _topUsoConsumoContribuinteInterstateController.text.trim(),
+              _topUsoConsumoContribuinteInterstateController.text.trim(),
           usoConsumoNaoContribuinteSameUf:
-            _topUsoConsumoNaoContribuinteSameUfController.text.trim(),
+              _topUsoConsumoNaoContribuinteSameUfController.text.trim(),
           usoConsumoNaoContribuinteInterstate:
-            _topUsoConsumoNaoContribuinteInterstateController.text.trim(),
-          industrializacaoSameUf:
-              _topIndustrializacaoSameUfController.text.trim(),
-          industrializacaoInterstate:
-              _topIndustrializacaoInterstateController.text.trim(),
-            zfmIndustrializacao:
-              _topZfmIndustrializacaoController.text.trim(),
-            zfmComercializacaoRevenda:
-              _topZfmComercializacaoRevendaController.text.trim(),
+              _topUsoConsumoNaoContribuinteInterstateController.text.trim(),
+          industrializacaoSameUf: _topIndustrializacaoSameUfController.text
+              .trim(),
+          industrializacaoInterstate: _topIndustrializacaoInterstateController
+              .text
+              .trim(),
+          zfmIndustrializacao: _topZfmIndustrializacaoController.text.trim(),
+          zfmComercializacaoRevenda: _topZfmComercializacaoRevendaController
+              .text
+              .trim(),
         ),
       );
       if (!mounted) {
@@ -1735,9 +1727,8 @@ class _EnterpriseErpIntegrationSectionState
       _lastModuleSyncResult = result;
     });
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(result.message)),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(result.message)));
   }
 }
 

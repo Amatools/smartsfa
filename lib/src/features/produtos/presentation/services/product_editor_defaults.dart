@@ -29,6 +29,13 @@ class ProductEditorDefaults {
     'Frasco',
   ];
 
+  static const Map<String, String> standardUnitShortCodes = <String, String>{
+    'unidade': 'un',
+    'kit': 'kit',
+    'jogo': 'jg',
+    'frasco': 'fr',
+  };
+
   static const Map<String, String> currencyLabels = <String, String>{
     'BRL': 'R\$',
     'USD': 'US\$',

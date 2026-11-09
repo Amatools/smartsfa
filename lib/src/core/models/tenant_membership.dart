@@ -38,6 +38,11 @@ class TenantMembership {
     this.revokedReason,
     this.revokedAt,
     this.lastSyncedAt,
+    this.inactivityStartAt,
+    this.inactivityEndAt,
+    this.inactivityReason,
+    this.inactivityUpdatedByUid,
+    this.inactivityUpdatedAt,
   });
 
   final String membershipId;
@@ -60,8 +65,26 @@ class TenantMembership {
   final String? revokedReason;
   final DateTime? revokedAt;
   final DateTime? lastSyncedAt;
+  final DateTime? inactivityStartAt;
+  final DateTime? inactivityEndAt;
+  final String? inactivityReason;
+  final String? inactivityUpdatedByUid;
+  final DateTime? inactivityUpdatedAt;
 
   bool get isActive => ativo && state == TenantMembershipState.active;
+
+  bool isInInactivityPeriod({DateTime? now}) {
+    final start = inactivityStartAt;
+    final end = inactivityEndAt;
+    if (start == null || end == null) {
+      return false;
+    }
+
+    final nowUtc = (now ?? DateTime.now()).toUtc();
+    final startUtc = start.toUtc();
+    final endUtc = end.toUtc();
+    return !nowUtc.isBefore(startUtc) && !nowUtc.isAfter(endUtc);
+  }
 
   TenantMembership copyWith({
     String? membershipId,
@@ -84,6 +107,11 @@ class TenantMembership {
     String? revokedReason,
     DateTime? revokedAt,
     DateTime? lastSyncedAt,
+    DateTime? inactivityStartAt,
+    DateTime? inactivityEndAt,
+    String? inactivityReason,
+    String? inactivityUpdatedByUid,
+    DateTime? inactivityUpdatedAt,
   }) {
     return TenantMembership(
       membershipId: membershipId ?? this.membershipId,
@@ -96,12 +124,12 @@ class TenantMembership {
       gerenteId: gerenteId ?? this.gerenteId,
       representanteId: representanteId ?? this.representanteId,
       vendedorId: vendedorId ?? this.vendedorId,
-        activeSellerChildrenCount:
+      activeSellerChildrenCount:
           activeSellerChildrenCount ?? this.activeSellerChildrenCount,
-        activeRepresentativeChildrenCount:
+      activeRepresentativeChildrenCount:
           activeRepresentativeChildrenCount ??
           this.activeRepresentativeChildrenCount,
-        activeSubordinateCount:
+      activeSubordinateCount:
           activeSubordinateCount ?? this.activeSubordinateCount,
       userName: userName ?? this.userName,
       userEmail: userEmail ?? this.userEmail,
@@ -110,6 +138,12 @@ class TenantMembership {
       revokedReason: revokedReason ?? this.revokedReason,
       revokedAt: revokedAt ?? this.revokedAt,
       lastSyncedAt: lastSyncedAt ?? this.lastSyncedAt,
+      inactivityStartAt: inactivityStartAt ?? this.inactivityStartAt,
+      inactivityEndAt: inactivityEndAt ?? this.inactivityEndAt,
+      inactivityReason: inactivityReason ?? this.inactivityReason,
+      inactivityUpdatedByUid:
+          inactivityUpdatedByUid ?? this.inactivityUpdatedByUid,
+      inactivityUpdatedAt: inactivityUpdatedAt ?? this.inactivityUpdatedAt,
     );
   }
 
@@ -174,6 +208,11 @@ class TenantMembership {
       'revokedReason': revokedReason,
       'revokedAt': revokedAt?.toIso8601String(),
       'lastSyncedAt': lastSyncedAt?.toIso8601String(),
+      'inactivityStartAt': inactivityStartAt?.toIso8601String(),
+      'inactivityEndAt': inactivityEndAt?.toIso8601String(),
+      'inactivityReason': inactivityReason,
+      'inactivityUpdatedByUid': inactivityUpdatedByUid,
+      'inactivityUpdatedAt': inactivityUpdatedAt?.toIso8601String(),
     };
   }
 
@@ -198,8 +237,7 @@ class TenantMembership {
           map['userName'] as String? ??
           map['displayName'] as String? ??
           map['name'] as String?,
-      userEmail:
-          map['userEmail'] as String? ?? map['email'] as String?,
+      userEmail: map['userEmail'] as String? ?? map['email'] as String?,
       state: TenantMembershipState.fromValue(
         map['state'] as String? ?? TenantMembershipState.active.value,
       ),
@@ -207,11 +245,26 @@ class TenantMembership {
       revokedReason: map['revokedReason'] as String?,
       revokedAt: _readDateTime(map['revokedAt']),
       lastSyncedAt: _readDateTime(map['lastSyncedAt']),
+      inactivityStartAt: _readDateTime(map['inactivityStartAt']),
+      inactivityEndAt: _readDateTime(map['inactivityEndAt']),
+      inactivityReason: map['inactivityReason'] as String?,
+      inactivityUpdatedByUid: map['inactivityUpdatedByUid'] as String?,
+      inactivityUpdatedAt: _readDateTime(map['inactivityUpdatedAt']),
     );
   }
 }
 
 DateTime? _readDateTime(Object? value) {
+  final dynamic dynamicValue = value;
+  if (dynamicValue != null &&
+      dynamicValue.runtimeType.toString() == 'Timestamp') {
+    try {
+      return dynamicValue.toDate() as DateTime;
+    } catch (_) {
+      // Fallback to other parsers below.
+    }
+  }
+
   if (value is DateTime) {
     return value;
   }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/models/produto.dart';
+import '../../../../shared/presentation/widgets/product_image_preview_dialog.dart';
 import 'product_thumbnail.dart';
 import 'products_table.dart';
 
@@ -30,7 +31,11 @@ class ProductCatalogTableSection extends StatelessWidget {
           updatingStatusProductIds: updatingStatusProductIds,
           onToggleStatus: onToggleStatus,
           onOpen: onOpen,
-          thumbnailBuilder: (produto) => ProductThumbnail(produto: produto, size: 28),
+          onPreviewImage: (produto) {
+            showProductImagePreviewDialog(context: context, produto: produto);
+          },
+          thumbnailBuilder: (produto) =>
+              ProductThumbnail(produto: produto, size: 28),
           priceFormatter: priceFormatter,
         ),
         if (visibleProducts.isEmpty)

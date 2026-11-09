@@ -40,9 +40,7 @@ class _TenantWorkspaceModuleAreaState
 
   @override
   Widget build(BuildContext context) {
-    final modules = _buildTenantCommercialModules(
-      widget.tenantItems,
-    );
+    final modules = _buildTenantCommercialModules(widget.tenantItems);
     if (modules.isEmpty) {
       return const SizedBox.shrink();
     }
@@ -65,8 +63,8 @@ class _TenantWorkspaceModuleAreaState
           _firstEnabledSubmenu(modules);
       _virtualSubmenuKey = fallback?.key;
       if (_virtualSubmenuKey != null) {
-        final normalizedExternalSubmenuKey =
-            (widget.selectedSubmenuKey ?? '').trim();
+        final normalizedExternalSubmenuKey = (widget.selectedSubmenuKey ?? '')
+            .trim();
         if (normalizedExternalSubmenuKey != _virtualSubmenuKey) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (!mounted) {
@@ -85,8 +83,7 @@ class _TenantWorkspaceModuleAreaState
     if (widget.tenantSectionLocked) {
       content = const _SimpleCardSection(
         title: 'Selecione a representada',
-        subtitle:
-            'Para editar os módulos comerciais, selecione uma representada ativa no topo do portal.',
+        subtitle: 'Para editar os módulos comerciais, selecione uma representada ativa no topo do portal.',
         items: ['Contexto da empresa', 'Produtos', 'Políticas comerciais'],
       );
     } else if (activeSubmenu == null) {
@@ -114,6 +111,11 @@ class _TenantWorkspaceModuleAreaState
         selectedRepresentedCompanyId: widget.selectedRepresentedCompanyId,
         activeRepresentedCompanyName: widget.activeRepresentedCompanyName,
       );
+    } else if (activeSubmenu.key == 'periodo_inatividade') {
+      content = _InactivityPeriodSection(
+        activeTenant: widget.activeTenant,
+        activeRepresentedCompanyName: widget.activeRepresentedCompanyName,
+      );
     } else if (activeSubmenu.key == 'condicoes_pagamento') {
       content = _PaymentConditionsSection(
         activeTenant: widget.activeTenant,
@@ -135,6 +137,7 @@ class _TenantWorkspaceModuleAreaState
     } else if (activeSubmenu.key == 'parametros_workspace') {
       content = _WorkspaceParametersSection(
         activeTenant: widget.activeTenant,
+        selectedRepresentedCompanyId: widget.selectedRepresentedCompanyId,
       );
     } else if (activeSubmenu.key == 'tributacoes') {
       content = _TaxationSection(
@@ -157,8 +160,7 @@ class _TenantWorkspaceModuleAreaState
     } else if (activeSubmenu.linkedItemLabel == null) {
       content = _SimpleCardSection(
         title: activeSubmenu.label,
-        subtitle:
-            'Submenu criado para evolução. A implementação detalhada entra no próximo ciclo.',
+        subtitle: 'Submenu criado para evolução. A implementação detalhada entra no próximo ciclo.',
         items: const [
           'Estrutura de tela pronta',
           'Regras de permissão herdam o módulo',
@@ -198,9 +200,7 @@ class _TenantWorkspaceModuleAreaState
                           avatar: Icon(module.icon, size: 16),
                           label: Text(
                             module.label,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w600,
-                            ),
+                            style: const TextStyle(fontWeight: FontWeight.w600),
                           ),
                           side: BorderSide.none,
                           shape: const StadiumBorder(),
@@ -214,9 +214,7 @@ class _TenantWorkspaceModuleAreaState
                               .withValues(alpha: 0.35),
                           selected: activeModule?.key == module.key,
                           onSelected: (_) {
-                            final firstSubmenu = _firstEnabledSubmenu([
-                              module,
-                            ]);
+                            final firstSubmenu = _firstEnabledSubmenu([module]);
                             if (firstSubmenu == null) {
                               return;
                             }
@@ -245,9 +243,7 @@ class _TenantWorkspaceModuleAreaState
                         FilterChip(
                           label: Text(
                             submenu.label,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w600,
-                            ),
+                            style: const TextStyle(fontWeight: FontWeight.w600),
                           ),
                           side: BorderSide.none,
                           shape: const StadiumBorder(),

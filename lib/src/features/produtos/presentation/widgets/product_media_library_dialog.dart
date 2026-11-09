@@ -108,7 +108,10 @@ class _ProductMediaLibraryDialogState extends State<ProductMediaLibraryDialog> {
   @override
   Widget build(BuildContext context) {
     final scopeKey = DefaultPriceTableGuard.normalizeDefaultPricingScopeKey(
-      widget.representedCompanyId,
+      DefaultPriceTableGuard.effectiveRepresentedCompanyId(
+        tenantId: widget.tenantId,
+        representedCompanyId: widget.representedCompanyId,
+      ),
     );
     final scopeLabel = (widget.representedCompanyName ?? '').trim().isNotEmpty
         ? widget.representedCompanyName!.trim()

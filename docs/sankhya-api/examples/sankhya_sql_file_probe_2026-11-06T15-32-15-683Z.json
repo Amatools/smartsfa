@@ -1,0 +1,568 @@
+{
+  "marker": "SQL_FILE_PROBE",
+  "ok": true,
+  "tenantId": "self_T8oqTD0UBtWATPbITOGsqAEZt3d2_smartsfa-enterprise-teste",
+  "environment": "prod",
+  "sqlFile": "G:\\smartsfa\\scripts\\bootstrap_owner\\sql\\probe_sankhya_product_image_columns.sql",
+  "baseUrl": "https://api.sankhya.com.br",
+  "endpointPath": "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+  "status": 200,
+  "responseIsJson": true,
+  "rowCount": 34,
+  "fields": [
+    {
+      "name": "TABLE_NAME",
+      "order": 1,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "COLUMN_NAME",
+      "order": 2,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "DATA_TYPE",
+      "order": 3,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "DATA_LENGTH",
+      "order": 4,
+      "userType": "F",
+      "precision": 2
+    },
+    {
+      "name": "NULLABLE",
+      "order": 5,
+      "userType": "S",
+      "precision": null
+    }
+  ],
+  "rows": [
+    [
+      "TGFALV",
+      "IDFOTO",
+      "VARCHAR2",
+      200,
+      "Y"
+    ],
+    [
+      "TGFAPSN",
+      "TIPOANEXO",
+      "NUMBER",
+      22,
+      "N"
+    ],
+    [
+      "TGFASN",
+      "NUANEXO",
+      "NUMBER",
+      22,
+      "N"
+    ],
+    [
+      "TGFASN",
+      "TIPOANEXO",
+      "NUMBER",
+      22,
+      "N"
+    ],
+    [
+      "TGFCCO",
+      "EXIBIRIMGPROD",
+      "CHAR",
+      1,
+      "N"
+    ],
+    [
+      "TGFCMB",
+      "IMAGEM",
+      "BLOB",
+      4000,
+      "Y"
+    ],
+    [
+      "TGFCPL",
+      "IMAGEM",
+      "BLOB",
+      4000,
+      "Y"
+    ],
+    [
+      "TGFCTT",
+      "TIMAGENCIA",
+      "VARCHAR2",
+      10,
+      "Y"
+    ],
+    [
+      "TGFEMP",
+      "NFECANEXTCANMES",
+      "VARCHAR2",
+      1,
+      "Y"
+    ],
+    [
+      "TGFEMP",
+      "URLPIXCHECKOUT",
+      "VARCHAR2",
+      254,
+      "Y"
+    ],
+    [
+      "TGFFAV",
+      "SEQFOTO",
+      "NUMBER",
+      22,
+      "N"
+    ],
+    [
+      "TGFFAV",
+      "FOTO",
+      "BLOB",
+      4000,
+      "Y"
+    ],
+    [
+      "TGFFAV",
+      "OBSFOTO",
+      "VARCHAR2",
+      500,
+      "Y"
+    ],
+    [
+      "TGFFSN",
+      "NUANEXO",
+      "NUMBER",
+      22,
+      "N"
+    ],
+    [
+      "TGFGRU",
+      "IMAGEM",
+      "BLOB",
+      4000,
+      "Y"
+    ],
+    [
+      "TGFGTT",
+      "IMAGEM",
+      "BLOB",
+      4000,
+      "Y"
+    ],
+    [
+      "TGFIAL",
+      "IDFOTO",
+      "VARCHAR2",
+      200,
+      "Y"
+    ],
+    [
+      "TGFIAL",
+      "TIPOFOTO",
+      "CHAR",
+      1,
+      "Y"
+    ],
+    [
+      "TGFIMAL",
+      "NUIMG",
+      "NUMBER",
+      22,
+      "N"
+    ],
+    [
+      "TGFIMG",
+      "CODIMAGEM",
+      "NUMBER",
+      22,
+      "N"
+    ],
+    [
+      "TGFIMG",
+      "DESCRIMAGEM",
+      "VARCHAR2",
+      40,
+      "Y"
+    ],
+    [
+      "TGFIMG",
+      "CODGRUPOIMAGEM",
+      "NUMBER",
+      22,
+      "Y"
+    ],
+    [
+      "TGFITE",
+      "ENDIMAGEM",
+      "VARCHAR2",
+      100,
+      "Y"
+    ],
+    [
+      "TGFITE_BCK14092022",
+      "ENDIMAGEM",
+      "VARCHAR2",
+      100,
+      "Y"
+    ],
+    [
+      "TGFPAR",
+      "TIPANEXONFE",
+      "VARCHAR2",
+      1,
+      "N"
+    ],
+    [
+      "TGFPEV",
+      "TIMQTDFOTOS",
+      "NUMBER",
+      22,
+      "Y"
+    ],
+    [
+      "TGFPIM",
+      "CODIMAGEM",
+      "NUMBER",
+      22,
+      "N"
+    ],
+    [
+      "TGFPRO",
+      "IMAGEM",
+      "BLOB",
+      4000,
+      "Y"
+    ],
+    [
+      "TGFPRO",
+      "ENDIMAGEM",
+      "VARCHAR2",
+      200,
+      "Y"
+    ],
+    [
+      "TGFPRO",
+      "NUVERSAOIMG",
+      "NUMBER",
+      22,
+      "Y"
+    ],
+    [
+      "TGFRPC",
+      "IMAGEM",
+      "BLOB",
+      4000,
+      "Y"
+    ],
+    [
+      "TGFTIT",
+      "IMAGEM",
+      "BLOB",
+      4000,
+      "Y"
+    ],
+    [
+      "TGFURL",
+      "URLPRODUCAO",
+      "VARCHAR2",
+      255,
+      "Y"
+    ],
+    [
+      "TGFURL",
+      "URLHOMOLOGACAO",
+      "VARCHAR2",
+      255,
+      "Y"
+    ]
+  ],
+  "responseBody": {
+    "serviceName": "DbExplorerSP.executeQuery",
+    "status": "1",
+    "pendingPrinting": "false",
+    "transactionId": "7DB964A86CDC80AE6ED23462E745FB65",
+    "responseBody": {
+      "fieldsMetadata": [
+        {
+          "name": "TABLE_NAME",
+          "description": "TABLE_NAME",
+          "order": 1,
+          "userType": "S"
+        },
+        {
+          "name": "COLUMN_NAME",
+          "description": "COLUMN_NAME",
+          "order": 2,
+          "userType": "S"
+        },
+        {
+          "name": "DATA_TYPE",
+          "description": "DATA_TYPE",
+          "order": 3,
+          "userType": "S"
+        },
+        {
+          "name": "DATA_LENGTH",
+          "description": "DATA_LENGTH",
+          "order": 4,
+          "userType": "F",
+          "precision": 2
+        },
+        {
+          "name": "NULLABLE",
+          "description": "NULLABLE",
+          "order": 5,
+          "userType": "S"
+        }
+      ],
+      "rows": [
+        [
+          "TGFALV",
+          "IDFOTO",
+          "VARCHAR2",
+          200,
+          "Y"
+        ],
+        [
+          "TGFAPSN",
+          "TIPOANEXO",
+          "NUMBER",
+          22,
+          "N"
+        ],
+        [
+          "TGFASN",
+          "NUANEXO",
+          "NUMBER",
+          22,
+          "N"
+        ],
+        [
+          "TGFASN",
+          "TIPOANEXO",
+          "NUMBER",
+          22,
+          "N"
+        ],
+        [
+          "TGFCCO",
+          "EXIBIRIMGPROD",
+          "CHAR",
+          1,
+          "N"
+        ],
+        [
+          "TGFCMB",
+          "IMAGEM",
+          "BLOB",
+          4000,
+          "Y"
+        ],
+        [
+          "TGFCPL",
+          "IMAGEM",
+          "BLOB",
+          4000,
+          "Y"
+        ],
+        [
+          "TGFCTT",
+          "TIMAGENCIA",
+          "VARCHAR2",
+          10,
+          "Y"
+        ],
+        [
+          "TGFEMP",
+          "NFECANEXTCANMES",
+          "VARCHAR2",
+          1,
+          "Y"
+        ],
+        [
+          "TGFEMP",
+          "URLPIXCHECKOUT",
+          "VARCHAR2",
+          254,
+          "Y"
+        ],
+        [
+          "TGFFAV",
+          "SEQFOTO",
+          "NUMBER",
+          22,
+          "N"
+        ],
+        [
+          "TGFFAV",
+          "FOTO",
+          "BLOB",
+          4000,
+          "Y"
+        ],
+        [
+          "TGFFAV",
+          "OBSFOTO",
+          "VARCHAR2",
+          500,
+          "Y"
+        ],
+        [
+          "TGFFSN",
+          "NUANEXO",
+          "NUMBER",
+          22,
+          "N"
+        ],
+        [
+          "TGFGRU",
+          "IMAGEM",
+          "BLOB",
+          4000,
+          "Y"
+        ],
+        [
+          "TGFGTT",
+          "IMAGEM",
+          "BLOB",
+          4000,
+          "Y"
+        ],
+        [
+          "TGFIAL",
+          "IDFOTO",
+          "VARCHAR2",
+          200,
+          "Y"
+        ],
+        [
+          "TGFIAL",
+          "TIPOFOTO",
+          "CHAR",
+          1,
+          "Y"
+        ],
+        [
+          "TGFIMAL",
+          "NUIMG",
+          "NUMBER",
+          22,
+          "N"
+        ],
+        [
+          "TGFIMG",
+          "CODIMAGEM",
+          "NUMBER",
+          22,
+          "N"
+        ],
+        [
+          "TGFIMG",
+          "DESCRIMAGEM",
+          "VARCHAR2",
+          40,
+          "Y"
+        ],
+        [
+          "TGFIMG",
+          "CODGRUPOIMAGEM",
+          "NUMBER",
+          22,
+          "Y"
+        ],
+        [
+          "TGFITE",
+          "ENDIMAGEM",
+          "VARCHAR2",
+          100,
+          "Y"
+        ],
+        [
+          "TGFITE_BCK14092022",
+          "ENDIMAGEM",
+          "VARCHAR2",
+          100,
+          "Y"
+        ],
+        [
+          "TGFPAR",
+          "TIPANEXONFE",
+          "VARCHAR2",
+          1,
+          "N"
+        ],
+        [
+          "TGFPEV",
+          "TIMQTDFOTOS",
+          "NUMBER",
+          22,
+          "Y"
+        ],
+        [
+          "TGFPIM",
+          "CODIMAGEM",
+          "NUMBER",
+          22,
+          "N"
+        ],
+        [
+          "TGFPRO",
+          "IMAGEM",
+          "BLOB",
+          4000,
+          "Y"
+        ],
+        [
+          "TGFPRO",
+          "ENDIMAGEM",
+          "VARCHAR2",
+          200,
+          "Y"
+        ],
+        [
+          "TGFPRO",
+          "NUVERSAOIMG",
+          "NUMBER",
+          22,
+          "Y"
+        ],
+        [
+          "TGFRPC",
+          "IMAGEM",
+          "BLOB",
+          4000,
+          "Y"
+        ],
+        [
+          "TGFTIT",
+          "IMAGEM",
+          "BLOB",
+          4000,
+          "Y"
+        ],
+        [
+          "TGFURL",
+          "URLPRODUCAO",
+          "VARCHAR2",
+          255,
+          "Y"
+        ],
+        [
+          "TGFURL",
+          "URLHOMOLOGACAO",
+          "VARCHAR2",
+          255,
+          "Y"
+        ]
+      ],
+      "burstLimit": false,
+      "timeQuery": "508ms",
+      "timeResultSet": "1ms"
+    }
+  }
+}

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/models/cliente.dart';
@@ -12,7 +13,10 @@ import '../../../../core/models/produto.dart';
 import '../../../../core/repositories/cliente_repository.dart';
 import '../../../../core/repositories/customer_price_table_assignment_repository.dart';
 import '../../../../core/services/catalog_snapshot_store.dart';
+import '../../../../core/services/enterprise_represented_scope.dart';
+import '../../../../core/services/mobile_product_image_cache_service.dart';
 import '../../../../core/services/offline_sync_queue.dart';
+import '../../../../shared/presentation/widgets/product_image_preview_dialog.dart';
 import '../../../auth/services/workspace_profile_service.dart';
 import '../../../precos/services/product_tax_engine_service.dart';
 import '../models/computed_pedido_item_values.dart';
@@ -130,16 +134,20 @@ class _PedidoInlineEditorState extends State<PedidoInlineEditor> {
 
   String? _effectiveRepresentedCompanyIdForWidget(PedidoInlineEditor source) {
     final fromOrder = (source.pedido?.representedCompanyId ?? '').trim();
-    if (fromOrder.isNotEmpty) {
-      return fromOrder;
-    }
-
     final fromSelection = (source.representedCompanyId ?? '').trim();
-    if (fromSelection.isNotEmpty) {
-      return fromSelection;
+    final raw = fromOrder.isNotEmpty ? fromOrder : fromSelection;
+    if (raw.isEmpty) {
+      return null;
     }
-
-    return null;
+    // Ver `EnterpriseRepresentedScope`: normaliza aqui, na origem, o id
+    // sintetico enterprise para que todo consumidor downstream (motor
+    // fiscal, politicas de desconto/acrescimo) receba um valor ja guardado,
+    // mesmo quando `pedido.representedCompanyId` foi persistido com o id
+    // sintetico cru em algum momento anterior a esta correcao.
+    return EnterpriseRepresentedScope.effectiveRepresentedCompanyId(
+      tenantId: source.tenantId,
+      representedCompanyId: raw,
+    );
   }
 
   String? get _effectiveRepresentedCompanyId =>
@@ -1017,18 +1025,41 @@ class _PedidoInlineEditorState extends State<PedidoInlineEditor> {
     }
 
     final photoUrl = (product.fotoUrl ?? '').trim();
+    if (!kIsWeb) {
+      return null;
+    }
+
     if (photoUrl.isNotEmpty) {
       return NetworkImage(photoUrl);
     }
     return null;
   }
 
-  Widget _buildItemThumbnail(Produto? product, String productName) {
-    final imageProvider = _buildProductImageProvider(product);
-    final fallbackText = productName.trim().isEmpty
-        ? '?'
-        : productName.trim()[0].toUpperCase();
+  ImageProvider<Object>? _buildMemoryProvider(Uint8List? bytes) {
+    if (bytes == null || bytes.isEmpty) {
+      return null;
+    }
+    return MemoryImage(bytes);
+  }
 
+  Uint8List? _decodeThumbnailBytes(String? value) {
+    final normalized = (value ?? '').trim();
+    if (normalized.isEmpty) {
+      return null;
+    }
+
+    try {
+      final bytes = base64Decode(normalized);
+      return bytes.isEmpty ? null : bytes;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Widget _buildItemThumbContainer({
+    required String fallbackText,
+    required ImageProvider<Object>? imageProvider,
+  }) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(8),
       child: Container(
@@ -1054,6 +1085,59 @@ class _PedidoInlineEditorState extends State<PedidoInlineEditor> {
                   );
                 },
               ),
+      ),
+    );
+  }
+
+  Widget _buildItemThumbnail(Produto? product, String productName) {
+    final imageProvider = _buildProductImageProvider(product);
+    final hasImageSource =
+        (((product?.fotoUrl ?? '').trim().isNotEmpty) ||
+        ((product?.storagePath ?? '').trim().isNotEmpty) ||
+        ((product?.thumbnailBase64 ?? '').trim().isNotEmpty));
+    final fallbackText = productName.trim().isEmpty
+        ? '?'
+        : productName.trim()[0].toUpperCase();
+
+    final localInitialThumb = product == null
+        ? null
+        : _buildMemoryProvider(_decodeThumbnailBytes(product.thumbnailBase64));
+
+    final thumbContent = !kIsWeb && product != null
+        ? FutureBuilder<Uint8List?>(
+            future: MobileProductImageCacheService.instance.readThumbnailBytes(
+              produto: product,
+            ),
+            builder: (context, snapshot) {
+              final provider =
+                  _buildMemoryProvider(snapshot.data) ?? localInitialThumb;
+              return _buildItemThumbContainer(
+                fallbackText: fallbackText,
+                imageProvider: provider,
+              );
+            },
+          )
+        : _buildItemThumbContainer(
+            fallbackText: fallbackText,
+            imageProvider: imageProvider,
+          );
+
+    final previewProduct = product;
+    if (!hasImageSource || previewProduct == null) {
+      return thumbContent;
+    }
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          showProductImagePreviewDialog(
+            context: context,
+            produto: previewProduct,
+          );
+        },
+        borderRadius: BorderRadius.circular(8),
+        child: thumbContent,
       ),
     );
   }

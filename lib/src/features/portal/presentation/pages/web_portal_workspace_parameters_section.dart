@@ -1,9 +1,13 @@
 part of 'web_portal_page.dart';
 
 class _WorkspaceParametersSection extends StatefulWidget {
-  const _WorkspaceParametersSection({required this.activeTenant});
+  const _WorkspaceParametersSection({
+    required this.activeTenant,
+    this.selectedRepresentedCompanyId,
+  });
 
   final TenantEntryOption activeTenant;
+  final String? selectedRepresentedCompanyId;
 
   @override
   State<_WorkspaceParametersSection> createState() =>
@@ -19,6 +23,12 @@ class _WorkspaceParametersSectionState
 
   Stream<Map<String, dynamic>?>? _workspaceStream;
   String _workspaceStreamKey = '';
+  Stream<bool>? _reformaStream;
+  String _reformaStreamKey = '';
+
+  String get _selectedRepresentedCompanyId {
+    return (widget.selectedRepresentedCompanyId ?? '').trim();
+  }
 
   // Evita recriar a subscricao do Firestore a cada build (ex.: quando
   // _updating alterna via setState), o que causava um "flicker" visual dos
@@ -30,6 +40,20 @@ class _WorkspaceParametersSectionState
       _workspaceStream = _service.watchWorkspace(key);
     }
     return _workspaceStream!;
+  }
+
+  Stream<bool> _watchReformaStream() {
+    final key =
+        '${widget.activeTenant.tenantId}|${widget.activeTenant.workspaceType}|$_selectedRepresentedCompanyId';
+    if (_reformaStream == null || _reformaStreamKey != key) {
+      _reformaStreamKey = key;
+      _reformaStream = _service.watchReformaTributariaEnabled(
+        tenantId: widget.activeTenant.tenantId,
+        workspaceType: widget.activeTenant.workspaceType,
+        representedCompanyId: _selectedRepresentedCompanyId,
+      );
+    }
+    return _reformaStream!;
   }
 
   @override
@@ -44,6 +68,9 @@ class _WorkspaceParametersSectionState
       builder: (context, snapshot) {
         final workspaceData = snapshot.data ?? const <String, dynamic>{};
         final workspaceType = widget.activeTenant.workspaceType;
+        final isEnterpriseWorkspace =
+            workspaceType.trim() == 'brand_owner_workspace';
+        final hasRepresentedScope = _selectedRepresentedCompanyId.isNotEmpty;
         final planBaseLabel = _planBaseLabelFromWorkspaceType(workspaceType);
         final planTier = _workspacePlanTier(workspaceData);
         final canUseAdvancedPricing = _isFeatureAvailableByPlan(
@@ -66,20 +93,21 @@ class _WorkspaceParametersSectionState
           workspaceData,
           'allowDiscountApprovalOverrideEnabled',
         );
-        final reformaTributariaEnabled = _featureFlagEnabled(
-          workspaceData,
-          'reformaTributariaEnabled',
-        );
         final reformaPhase = TaxReformCalendar.currentPhase();
 
-        return Stack(
-          children: [
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+        return StreamBuilder<bool>(
+          stream: _watchReformaStream(),
+          builder: (context, reformaSnapshot) {
+            final reformaTributariaEnabled = reformaSnapshot.data ?? false;
+
+            return Stack(
+              children: [
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                     Text(
                       'Parametros',
                       style: Theme.of(context).textTheme.titleLarge,
@@ -187,39 +215,28 @@ class _WorkspaceParametersSectionState
                         'Placeholder para fluxo futuro de aprovacao comercial.',
                       ),
                     ),
-                    const Divider(),
-                    if (widget.activeTenant.workspaceType ==
-                        'brand_owner_workspace')
-                      SwitchListTile(
-                        value: reformaTributariaEnabled,
-                        onChanged: canEditSettings && !_updating
-                            ? (value) => _setFeatureFlag(
-                                key: 'reformaTributariaEnabled',
-                                value: value,
-                                enabledMessage:
-                                    'Reforma Tributaria ativada: campos de IBS/CBS/Imposto Seletivo aparecem na Matriz tributaria.',
-                                disabledMessage:
-                                    'Reforma Tributaria desativada: campos de IBS/CBS ficam ocultos na Matriz tributaria.',
-                              )
-                            : null,
-                        title: const Text('Ativar Reforma Tributaria (IBS/CBS/IS)'),
-                        subtitle: Text(
-                          'Fase atual do calendario legal: ${TaxReformCalendar.phaseLabel(reformaPhase)}. '
-                          'Ativar aqui libera o preenchimento manual e por planilha dos campos da Reforma na Matriz tributaria, '
-                          'sem alterar o preco final calculado hoje.',
+                        const Divider(),
+                        SwitchListTile(
+                          value: reformaTributariaEnabled,
+                          onChanged:
+                              canEditSettings &&
+                                  !_updating &&
+                                  (isEnterpriseWorkspace ||
+                                      hasRepresentedScope)
+                              ? _setReformaTributariaEnabled
+                              : null,
+                          title: const Text(
+                            'Ativar Reforma Tributaria (IBS/CBS/IS)',
+                          ),
+                          subtitle: Text(
+                            hasRepresentedScope || isEnterpriseWorkspace
+                                ? 'Fase atual do calendario legal: ${TaxReformCalendar.phaseLabel(reformaPhase)}. '
+                                      'Ativar aqui libera o preenchimento manual e por planilha dos campos da Reforma na Matriz tributaria, '
+                                      'sem alterar o preco final calculado hoje.'
+                                : 'Selecione uma representada ativa para alterar este parametro. '
+                                      'Fase atual do calendario legal: ${TaxReformCalendar.phaseLabel(reformaPhase)}.',
+                          ),
                         ),
-                      )
-                    else
-                      ListTile(
-                        leading: const Icon(Icons.auto_graph_outlined),
-                        title: const Text('Reforma Tributaria (IBS/CBS/IS)'),
-                        subtitle: Text(
-                          'Este workspace pode representar mais de uma empresa, entao a Reforma Tributaria e ativada '
-                          'por representada, nao por workspace. Va em Tributacoes > Matriz tributaria com a representada '
-                          'desejada selecionada e use o interruptor exibido no topo da tela. '
-                          'Fase atual do calendario legal: ${TaxReformCalendar.phaseLabel(reformaPhase)}.',
-                        ),
-                      ),
                     const SizedBox(height: 8),
                     Text(
                       !canUseAdvancedPricing
@@ -229,46 +246,90 @@ class _WorkspaceParametersSectionState
                           : 'Status: inativa. O submenu de Tabelas de preço fica oculto.',
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
-                  ],
-                ),
-              ),
-            ),
-            if (_updating)
-              Positioned.fill(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surface
-                        .withValues(alpha: 0.72),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        CircleAvatar(
-                          radius: 24,
-                          child: Text(
-                            'S',
-                            style: Theme.of(context).textTheme.titleLarge,
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        const SizedBox(
-                          width: 28,
-                          height: 28,
-                          child: CircularProgressIndicator(strokeWidth: 2.5),
-                        ),
-                        const SizedBox(height: 8),
-                        const Text('Atualizando parametros...'),
                       ],
                     ),
                   ),
                 ),
-              ),
-          ],
+                if (_updating)
+                  Positioned.fill(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.surface
+                            .withValues(alpha: 0.72),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            CircleAvatar(
+                              radius: 24,
+                              child: Text(
+                                'S',
+                                style: Theme.of(context).textTheme.titleLarge,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            const SizedBox(
+                              width: 28,
+                              height: 28,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.5,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            const Text('Atualizando parametros...'),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          },
         );
       },
     );
+  }
+
+  Future<void> _setReformaTributariaEnabled(bool enabled) async {
+    setState(() {
+      _updating = true;
+    });
+
+    try {
+      await _service.setReformaTributariaEnabled(
+        tenantId: widget.activeTenant.tenantId,
+        workspaceType: widget.activeTenant.workspaceType,
+        representedCompanyId: _selectedRepresentedCompanyId,
+        enabled: enabled,
+      );
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            enabled
+                ? 'Reforma Tributaria ativada: campos de IBS/CBS/Imposto Seletivo aparecem na Matriz tributaria.'
+                : 'Reforma Tributaria desativada: campos de IBS/CBS ficam ocultos na Matriz tributaria.',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Falha ao atualizar parametro: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _updating = false;
+        });
+      }
+    }
   }
 
   Future<void> _setAdvancedPricingEnabled(bool enabled) async {

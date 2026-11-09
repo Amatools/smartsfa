@@ -1,8 +1,13 @@
 part of 'web_portal_page.dart';
 
-Future<String?> _pickAndResizeLogoDataUrl() async {
+Future<String?> _pickAndResizeLogoDataUrl({
+  int maxWidth = 256,
+  int maxHeight = 256,
+}) async {
+  const allowedExtensions = <String>['jpg', 'jpeg', 'png', 'gif', 'webp'];
   final result = await FilePicker.platform.pickFiles(
-    type: FileType.image,
+    type: FileType.custom,
+    allowedExtensions: allowedExtensions,
     withData: true,
     allowMultiple: false,
   );
@@ -13,6 +18,15 @@ Future<String?> _pickAndResizeLogoDataUrl() async {
   }
 
   final file = files.first;
+  final normalizedExtension = (file.extension ?? '')
+      .toString()
+      .trim()
+      .toLowerCase();
+  if (normalizedExtension.isNotEmpty &&
+      !allowedExtensions.contains(normalizedExtension)) {
+    return null;
+  }
+
   final bytes = file.bytes;
   if (bytes == null || bytes.isEmpty) {
     return null;
@@ -24,17 +38,25 @@ Future<String?> _pickAndResizeLogoDataUrl() async {
   }
 
   var resized = decoded;
-  if (decoded.width > 256 || decoded.height > 256) {
-    final width = decoded.width;
-    final height = decoded.height;
-    if (width >= height) {
-      resized = image_lib.copyResize(decoded, width: 256);
-    } else {
-      resized = image_lib.copyResize(decoded, height: 256);
-    }
+  if (decoded.width > maxWidth || decoded.height > maxHeight) {
+    final widthRatio = maxWidth / decoded.width;
+    final heightRatio = maxHeight / decoded.height;
+    final resizeRatio = widthRatio < heightRatio ? widthRatio : heightRatio;
+    final targetWidth = (decoded.width * resizeRatio).round();
+    final targetHeight = (decoded.height * resizeRatio).round();
+    resized = image_lib.copyResize(
+      decoded,
+      width: targetWidth < 1 ? 1 : targetWidth,
+      height: targetHeight < 1 ? 1 : targetHeight,
+      interpolation: image_lib.Interpolation.cubic,
+    );
   }
 
   final pngBytes = image_lib.encodePng(resized);
+  final webpBytes = await convertPngBytesToWebp(pngBytes);
+  if (webpBytes != null && webpBytes.isNotEmpty) {
+    return 'data:image/webp;base64,${base64Encode(webpBytes)}';
+  }
   return 'data:image/png;base64,${base64Encode(pngBytes)}';
 }
 

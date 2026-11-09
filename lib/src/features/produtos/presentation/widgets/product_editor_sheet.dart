@@ -26,6 +26,7 @@ import '../services/product_editor_sheet_bootstrap_coordinator.dart';
 import '../services/product_editor_thumbnail_preview_builder.dart';
 import '../services/product_editor_title_builder.dart';
 import '../services/product_editor_view_state.dart';
+import '../services/product_form_value_codec.dart';
 import '../services/product_media_editor_coordinator.dart';
 import '../services/product_tax_group_catalog_service.dart';
 import '../services/product_media_upload_service.dart';
@@ -164,6 +165,7 @@ class _ProductEditorSheetState extends State<ProductEditorSheet>
           tenantId: widget.identity.tenantId,
           type: ProductUnitCatalogType.standard,
           defaultValues: ProductEditorDefaults.standardUnits,
+          defaultShortCodes: ProductEditorDefaults.standardUnitShortCodes,
         );
       } catch (_) {
         // Best effort: if seeding fails, editor still loads with current values.
@@ -213,9 +215,31 @@ class _ProductEditorSheetState extends State<ProductEditorSheet>
   }
 
   void _setEditorCurrencyCode(String value) {
+    final normalized = value.trim().toUpperCase();
+    if (normalized.isNotEmpty && normalized != _currencyCode) {
+      _reformatMoneyControllersForCurrency(normalized);
+    }
+
     _updateEditorState(
       (state) => _bindingCoordinator.applyCurrencyCode(state, value),
     );
+  }
+
+  void _reformatMoneyControllersForCurrency(String currencyCode) {
+    void reformatController(TextEditingController controller) {
+      final parsed = ProductFormValueCodec.parseDecimal(controller.text);
+      if (parsed == null) {
+        return;
+      }
+
+      controller.text = ProductFormValueCodec.formatMoneyForCurrency(
+        value: parsed,
+        currencyCode: currencyCode,
+      );
+    }
+
+    reformatController(_formControllers.precoTabela);
+    reformatController(_formControllers.precoMinimo);
   }
 
   void _setEditorBrand(String brand) {
@@ -438,7 +462,10 @@ class _ProductEditorSheetState extends State<ProductEditorSheet>
 
   String get _mediaScopeKey =>
       DefaultPriceTableGuard.normalizeDefaultPricingScopeKey(
-        widget.representedCompanyId,
+        DefaultPriceTableGuard.effectiveRepresentedCompanyId(
+          tenantId: widget.identity.tenantId,
+          representedCompanyId: widget.representedCompanyId,
+        ),
       );
 
   Future<void> _openProductMediaLibrary() async {

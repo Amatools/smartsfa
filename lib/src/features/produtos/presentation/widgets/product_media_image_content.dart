@@ -1,7 +1,6 @@
-import 'dart:typed_data';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../services/product_media_path_utils.dart';
@@ -30,8 +29,8 @@ class ProductMediaImageContent extends StatelessWidget {
     final normalizedStoragePath = providedStoragePath.isNotEmpty
         ? providedStoragePath
         : (ProductMediaPathUtils.looksLikeStorageObjectPath(normalizedPhotoUrl)
-            ? normalizedPhotoUrl
-            : '');
+              ? normalizedPhotoUrl
+              : '');
     if (preview != null && preview.isNotEmpty) {
       return ClipRRect(
         borderRadius: BorderRadius.circular(9),
@@ -39,7 +38,12 @@ class ProductMediaImageContent extends StatelessWidget {
       );
     }
 
-    final hasDirectUrl = normalizedPhotoUrl.isNotEmpty &&
+    if (!kIsWeb) {
+      return _MediaImageFallback(fallbackText: fallbackText);
+    }
+
+    final hasDirectUrl =
+        normalizedPhotoUrl.isNotEmpty &&
         (ProductMediaPathUtils.isHttpImageUrl(normalizedPhotoUrl) ||
             ProductMediaPathUtils.isFirebaseStorageUrl(normalizedPhotoUrl));
     if (hasDirectUrl) {
@@ -109,7 +113,8 @@ class _FirebaseStorageImageState extends State<_FirebaseStorageImage> {
   @override
   void didUpdateWidget(covariant _FirebaseStorageImage oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.photoUrl != widget.photoUrl || oldWidget.storagePath != widget.storagePath) {
+    if (oldWidget.photoUrl != widget.photoUrl ||
+        oldWidget.storagePath != widget.storagePath) {
       _candidateUrlsFuture = _resolveCandidateUrls(
         widget.photoUrl,
         storagePath: widget.storagePath,
@@ -145,7 +150,10 @@ class _FirebaseStorageImageState extends State<_FirebaseStorageImage> {
     );
   }
 
-  Future<List<String>> _resolveCandidateUrls(String photoUrl, {String? storagePath}) async {
+  Future<List<String>> _resolveCandidateUrls(
+    String photoUrl, {
+    String? storagePath,
+  }) async {
     final urls = <String>[];
     void addUrl(String value) {
       final normalized = value.trim();
@@ -178,7 +186,9 @@ class _FirebaseStorageImageState extends State<_FirebaseStorageImage> {
     try {
       final ref = _storageRefFromUrl(photoUrl);
       if (ref != null) {
-        final byRef = await ref.getDownloadURL().timeout(const Duration(seconds: 20));
+        final byRef = await ref.getDownloadURL().timeout(
+          const Duration(seconds: 20),
+        );
         addUrl(byRef);
       }
     } catch (_) {
@@ -206,7 +216,8 @@ class _FirebaseStorageImageState extends State<_FirebaseStorageImage> {
           .limit(1)
           .get();
       if (snapshot.docs.isNotEmpty) {
-        final storagePath = (snapshot.docs.first.data()['storagePath'] as String? ?? '').trim();
+        final storagePath =
+            (snapshot.docs.first.data()['storagePath'] as String? ?? '').trim();
         if (storagePath.isNotEmpty) {
           return await FirebaseStorage.instance
               .ref(storagePath)
@@ -223,7 +234,8 @@ class _FirebaseStorageImageState extends State<_FirebaseStorageImage> {
       if (byPath.docs.isEmpty) {
         return null;
       }
-      final storagePath = (byPath.docs.first.data()['storagePath'] as String? ?? '').trim();
+      final storagePath =
+          (byPath.docs.first.data()['storagePath'] as String? ?? '').trim();
       if (storagePath.isEmpty) {
         return null;
       }

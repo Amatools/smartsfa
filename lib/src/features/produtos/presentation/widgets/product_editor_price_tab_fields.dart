@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../../shared/presentation/widgets/app_medium_controls.dart';
 
@@ -127,11 +128,10 @@ class ProductGroupedMoneyField extends StatelessWidget {
                       bottomLeft: Radius.circular(6),
                     ),
                     border: Border.all(
-                      color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.45),
+                      color: Theme.of(context).colorScheme.outline
+                          .withValues(alpha: 0.45),
                     ),
-                    color: Theme.of(context)
-                        .colorScheme
-                        .surfaceContainerHighest
+                    color: Theme.of(context).colorScheme.surfaceContainerHighest
                         .withValues(alpha: 0.35),
                     boxShadow: [
                       BoxShadow(
@@ -143,10 +143,7 @@ class ProductGroupedMoneyField extends StatelessWidget {
                       ),
                     ],
                   ),
-                  child: Text(
-                    currencyLabel,
-                    style: inputTextStyle,
-                  ),
+                  child: Text(currencyLabel, style: inputTextStyle),
                 ),
               ),
               Expanded(
@@ -155,7 +152,16 @@ class ProductGroupedMoneyField extends StatelessWidget {
                   child: AppMediumTextField(
                     controller: controller,
                     readOnly: readOnly,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    inputFormatters: readOnly
+                        ? null
+                        : <TextInputFormatter>[
+                            _GroupedMoneyInputFormatter(
+                              currencyCode: currencyCode,
+                            ),
+                          ],
                     style: inputTextStyle,
                     hintText: hint,
                     hintStyle: inputTextStyle,
@@ -165,7 +171,10 @@ class ProductGroupedMoneyField extends StatelessWidget {
                       topRight: Radius.circular(6),
                       bottomRight: Radius.circular(6),
                     ),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 8,
+                    ),
                   ),
                 ),
               ),
@@ -174,5 +183,66 @@ class ProductGroupedMoneyField extends StatelessWidget {
         ),
       ],
     );
+  }
+}
+
+class _GroupedMoneyInputFormatter extends TextInputFormatter {
+  const _GroupedMoneyInputFormatter({required this.currencyCode});
+
+  final String currencyCode;
+  static const int _maxDigits = 14;
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    if (newValue.text.isEmpty) {
+      return const TextEditingValue(text: '');
+    }
+
+    final digitsOnly = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
+    if (digitsOnly.isEmpty) {
+      return const TextEditingValue(text: '');
+    }
+
+    final normalizedDigits = digitsOnly.length > _maxDigits
+        ? digitsOnly.substring(digitsOnly.length - _maxDigits)
+        : digitsOnly;
+    final cents = BigInt.parse(normalizedDigits);
+    final integerPart = (cents ~/ BigInt.from(100)).toString();
+    final decimalPart = (cents % BigInt.from(100)).toString().padLeft(2, '0');
+
+    final isUsd = currencyCode.trim().toUpperCase() == 'USD';
+    final groupedInteger = _groupThousands(
+      integerPart,
+      separator: isUsd ? ',' : '.',
+    );
+    final formatted = isUsd
+        ? '$groupedInteger.$decimalPart'
+        : '$groupedInteger,$decimalPart';
+
+    return TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: formatted.length),
+      composing: TextRange.empty,
+    );
+  }
+
+  static String _groupThousands(String digits, {required String separator}) {
+    if (digits.length <= 3) {
+      return digits;
+    }
+
+    final buffer = StringBuffer();
+    for (var i = 0; i < digits.length; i++) {
+      final reverseIndex = digits.length - i;
+      buffer.write(digits[i]);
+      if (reverseIndex > 1 && reverseIndex % 3 == 1) {
+        buffer.write(separator);
+      }
+    }
+
+    return buffer.toString();
   }
 }

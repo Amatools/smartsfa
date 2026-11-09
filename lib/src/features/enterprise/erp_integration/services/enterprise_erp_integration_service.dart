@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 import 'package:smartsfa/src/core/models/domain_types.dart';
 import 'package:smartsfa/src/features/auth/services/workspace_profile_service.dart';
@@ -90,14 +91,13 @@ class EnterpriseErpIntegrationService {
     'SANKHYA_AUTH_PROXY_URL',
     defaultValue: '',
   );
-  static const String _syncCatalogModuleProxyUrlOverride = String.fromEnvironment(
-    'SANKHYA_SYNC_PROXY_URL',
-    defaultValue: '',
-  );
-  static const String _fetchOperationTypesProxyUrlOverride = String.fromEnvironment(
-    'SANKHYA_OPERATION_TYPES_PROXY_URL',
-    defaultValue: '',
-  );
+  static const String _syncCatalogModuleProxyUrlOverride =
+      String.fromEnvironment('SANKHYA_SYNC_PROXY_URL', defaultValue: '');
+  static const String _fetchOperationTypesProxyUrlOverride =
+      String.fromEnvironment(
+        'SANKHYA_OPERATION_TYPES_PROXY_URL',
+        defaultValue: '',
+      );
   static const int temporaryModuleImportLimit = 5;
 
   static String get authenticationProxyUrl => _resolveProxyUrl(
@@ -129,8 +129,7 @@ class EnterpriseErpIntegrationService {
     EnterpriseErpSyncModuleOption(
       id: 'tax_rules',
       label: 'Regras fiscais (tributacao)',
-      description:
-          'Sincroniza regras fiscais completas via DbExplorer SQL para alimentar o motor tributario local.',
+      description: 'Sincroniza regras fiscais completas via DbExplorer SQL para alimentar o motor tributario local.',
       endpointPath:
           '/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery',
       enabled: true,
@@ -138,17 +137,22 @@ class EnterpriseErpIntegrationService {
     EnterpriseErpSyncModuleOption(
       id: 'parceiros',
       label: 'Parceiros (clientes)',
-      description:
-          'Aguardando validacao final de endpoint/permissao no Gateway Sankhya.',
+      description: 'Aguardando validacao final de endpoint/permissao no Gateway Sankhya.',
       endpointPath: '/v1/parceiros?page=0',
       enabled: false,
     ),
     EnterpriseErpSyncModuleOption(
       id: 'tabelas_preco',
       label: 'Tabelas de preco',
-      description:
-          'Sincroniza precos por codigos de tabela configurados no card de sincronizacao.',
+      description: 'Sincroniza precos por codigos de tabela configurados no card de sincronizacao.',
       endpointPath: '/v1/precos/tabela/{codigoTabela}?pagina=1',
+      enabled: true,
+    ),
+    EnterpriseErpSyncModuleOption(
+      id: 'product_images',
+      label: 'Fotos de produtos',
+      description: 'Sincroniza fotos dos produtos do lote temporario (max. 5), com deduplicacao para imagens repetidas.',
+      endpointPath: '/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery (TGFPRO.IMAGEM)',
       enabled: true,
     ),
   ];
@@ -257,8 +261,7 @@ class EnterpriseErpIntegrationService {
       tenantId: tenantId,
       revendaSameUf: orderTopCodes.revendaSameUf,
       revendaInterstate: orderTopCodes.revendaInterstate,
-      usoConsumoContribuinteSameUf:
-          orderTopCodes.usoConsumoContribuinteSameUf,
+      usoConsumoContribuinteSameUf: orderTopCodes.usoConsumoContribuinteSameUf,
       usoConsumoContribuinteInterstate:
           orderTopCodes.usoConsumoContribuinteInterstate,
       usoConsumoNaoContribuinteSameUf:
@@ -508,8 +511,7 @@ class EnterpriseErpIntegrationService {
       return EnterpriseErpModuleSyncResult(
         success: false,
         moduleId: module.id,
-        message:
-            'Modulo ainda nao habilitado. Valide endpoint/permissoes antes de sincronizar.',
+        message: 'Modulo ainda nao habilitado. Valide endpoint/permissoes antes de sincronizar.',
         statusCode: null,
         requestUrl: syncCatalogModuleProxyUrl,
         importedCount: 0,
@@ -551,6 +553,22 @@ class EnterpriseErpIntegrationService {
       );
     }
 
+    final user = FirebaseAuth.instance.currentUser;
+    final idToken = await user?.getIdToken();
+    if ((idToken ?? '').trim().isEmpty) {
+      return EnterpriseErpModuleSyncResult(
+        success: false,
+        moduleId: module.id,
+        message: 'Sessao Firebase invalida para sincronizacao ERP. Faca login novamente com usuario owner.',
+        statusCode: 401,
+        requestUrl: syncCatalogModuleProxyUrl,
+        importedCount: 0,
+        filteredOutZeroCodeCount: 0,
+        skippedNotFoundCount: 0,
+        sourceCount: 0,
+      );
+    }
+
     final body = jsonEncode(<String, Object?>{
       'tenantId': normalizedTenantId,
       'module': module.id,
@@ -565,9 +583,10 @@ class EnterpriseErpIntegrationService {
       final response = await _httpClient
           .post(
             uri,
-            headers: const <String, String>{
+            headers: <String, String>{
               'Accept': 'application/json',
               'Content-Type': 'application/json',
+              'Authorization': 'Bearer ${idToken!.trim()}',
             },
             body: body,
           )
@@ -577,7 +596,7 @@ class EnterpriseErpIntegrationService {
       final importedCount = _readInt(payload['importedCount']) ?? 0;
       final filteredOutZeroCodeCount =
           _readInt(payload['filteredOutZeroCodeCount']) ?? 0;
-        final skippedNotFoundCount =
+      final skippedNotFoundCount =
           _readInt(payload['skippedNotFoundCount']) ?? 0;
       final sourceCount = _readInt(payload['sourceCount']) ?? 0;
       final messageFromApi = _readString(payload['message']);
@@ -884,10 +903,12 @@ class EnterpriseErpIntegrationService {
     return EnterpriseErpOrderTopCodes(
       revendaSameUf: readCode('revenda_same_uf'),
       revendaInterstate: readCode('revenda_interstate'),
-      usoConsumoContribuinteSameUf:
-          readCode('uso_consumo_contribuinte_same_uf'),
-      usoConsumoContribuinteInterstate:
-          readCode('uso_consumo_contribuinte_interstate'),
+      usoConsumoContribuinteSameUf: readCode(
+        'uso_consumo_contribuinte_same_uf',
+      ),
+      usoConsumoContribuinteInterstate: readCode(
+        'uso_consumo_contribuinte_interstate',
+      ),
       usoConsumoNaoContribuinteSameUf:
           readCode('uso_consumo_nao_contribuinte_same_uf').isNotEmpty
           ? readCode('uso_consumo_nao_contribuinte_same_uf')

@@ -1,0 +1,216 @@
+{
+  "marker": "SQL_FILE_PROBE",
+  "ok": true,
+  "tenantId": "self_T8oqTD0UBtWATPbITOGsqAEZt3d2_smartsfa-enterprise-teste",
+  "environment": "prod",
+  "sqlFile": "G:\\smartsfa\\scripts\\bootstrap_owner\\sql\\probe_sankhya_tgfpim_tgfimg_columns.sql",
+  "baseUrl": "https://api.sankhya.com.br",
+  "endpointPath": "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+  "status": 200,
+  "responseIsJson": true,
+  "rowCount": 7,
+  "fields": [
+    {
+      "name": "TABLE_NAME",
+      "order": 1,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "COLUMN_ID",
+      "order": 2,
+      "userType": "I",
+      "precision": null
+    },
+    {
+      "name": "COLUMN_NAME",
+      "order": 3,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "DATA_TYPE",
+      "order": 4,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "DATA_LENGTH",
+      "order": 5,
+      "userType": "F",
+      "precision": 2
+    },
+    {
+      "name": "NULLABLE",
+      "order": 6,
+      "userType": "S",
+      "precision": null
+    }
+  ],
+  "rows": [
+    [
+      "TGFIMG",
+      1,
+      "CODIMAGEM",
+      "NUMBER",
+      22,
+      "N"
+    ],
+    [
+      "TGFIMG",
+      2,
+      "DESCRIMAGEM",
+      "VARCHAR2",
+      40,
+      "Y"
+    ],
+    [
+      "TGFIMG",
+      3,
+      "CODGRUPOIMAGEM",
+      "NUMBER",
+      22,
+      "Y"
+    ],
+    [
+      "TGFIMG",
+      4,
+      "REFERENCIAETQ",
+      "CHAR",
+      1,
+      "Y"
+    ],
+    [
+      "TGFIMG",
+      5,
+      "REFERENCIAGRUPO",
+      "VARCHAR2",
+      2,
+      "Y"
+    ],
+    [
+      "TGFPIM",
+      1,
+      "CODPROD",
+      "NUMBER",
+      22,
+      "N"
+    ],
+    [
+      "TGFPIM",
+      2,
+      "CODIMAGEM",
+      "NUMBER",
+      22,
+      "N"
+    ]
+  ],
+  "responseBody": {
+    "serviceName": "DbExplorerSP.executeQuery",
+    "status": "1",
+    "pendingPrinting": "false",
+    "transactionId": "A2D953B28327A77D39EFFB98BED9A8D1",
+    "responseBody": {
+      "fieldsMetadata": [
+        {
+          "name": "TABLE_NAME",
+          "description": "TABLE_NAME",
+          "order": 1,
+          "userType": "S"
+        },
+        {
+          "name": "COLUMN_ID",
+          "description": "COLUMN_ID",
+          "order": 2,
+          "userType": "I"
+        },
+        {
+          "name": "COLUMN_NAME",
+          "description": "COLUMN_NAME",
+          "order": 3,
+          "userType": "S"
+        },
+        {
+          "name": "DATA_TYPE",
+          "description": "DATA_TYPE",
+          "order": 4,
+          "userType": "S"
+        },
+        {
+          "name": "DATA_LENGTH",
+          "description": "DATA_LENGTH",
+          "order": 5,
+          "userType": "F",
+          "precision": 2
+        },
+        {
+          "name": "NULLABLE",
+          "description": "NULLABLE",
+          "order": 6,
+          "userType": "S"
+        }
+      ],
+      "rows": [
+        [
+          "TGFIMG",
+          1,
+          "CODIMAGEM",
+          "NUMBER",
+          22,
+          "N"
+        ],
+        [
+          "TGFIMG",
+          2,
+          "DESCRIMAGEM",
+          "VARCHAR2",
+          40,
+          "Y"
+        ],
+        [
+          "TGFIMG",
+          3,
+          "CODGRUPOIMAGEM",
+          "NUMBER",
+          22,
+          "Y"
+        ],
+        [
+          "TGFIMG",
+          4,
+          "REFERENCIAETQ",
+          "CHAR",
+          1,
+          "Y"
+        ],
+        [
+          "TGFIMG",
+          5,
+          "REFERENCIAGRUPO",
+          "VARCHAR2",
+          2,
+          "Y"
+        ],
+        [
+          "TGFPIM",
+          1,
+          "CODPROD",
+          "NUMBER",
+          22,
+          "N"
+        ],
+        [
+          "TGFPIM",
+          2,
+          "CODIMAGEM",
+          "NUMBER",
+          22,
+          "N"
+        ]
+      ],
+      "burstLimit": false,
+      "timeQuery": "105ms",
+      "timeResultSet": "1ms"
+    }
+  }
+}

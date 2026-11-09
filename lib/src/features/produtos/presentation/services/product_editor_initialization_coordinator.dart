@@ -63,6 +63,14 @@ class ProductEditorFormControllers {
   final TextEditingController erpSyncId;
 
   factory ProductEditorFormControllers.fromProduto(Produto produto) {
+    final normalizedCurrency =
+        (produto.moeda ?? ProductEditorDefaults.defaultCurrencyCode)
+            .trim()
+            .toUpperCase();
+    final resolvedCurrency = normalizedCurrency.isEmpty
+        ? ProductEditorDefaults.defaultCurrencyCode
+        : normalizedCurrency;
+
     return ProductEditorFormControllers._(
       codigo: TextEditingController(text: produto.codigoInterno),
       codigoFabricante: TextEditingController(
@@ -71,10 +79,20 @@ class ProductEditorFormControllers {
       ean: TextEditingController(text: produto.ean ?? ''),
       descricao: TextEditingController(text: produto.descricao),
       precoTabela: TextEditingController(
-        text: ProductFormValueCodec.toText(produto.valorBruto),
+        text: produto.valorBruto == null
+            ? ''
+            : ProductFormValueCodec.formatMoneyForCurrency(
+                value: produto.valorBruto!,
+                currencyCode: resolvedCurrency,
+              ),
       ),
       precoMinimo: TextEditingController(
-        text: ProductFormValueCodec.toText(produto.precoMinimo),
+        text: produto.precoMinimo == null
+            ? ''
+            : ProductFormValueCodec.formatMoneyForCurrency(
+                value: produto.precoMinimo!,
+                currencyCode: resolvedCurrency,
+              ),
       ),
       descricaoLonga: TextEditingController(
         text: produto.descricaoLonga ?? produto.descricaoResumida ?? '',

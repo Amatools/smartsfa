@@ -12,7 +12,9 @@ mixin _WorkspaceProfileOrderDiscountsMixin {
       return Stream.value(const OrderDiscountPolicy());
     }
 
-    final scopeKey = _scopeKey(representedCompanyId);
+    final scopeKey = _scopeKey(
+      _effectiveRepresentedCompanyId(normalizedTenantId, representedCompanyId),
+    );
     return _firestore
         .collection('tenants')
         .doc(normalizedTenantId)
@@ -37,7 +39,9 @@ mixin _WorkspaceProfileOrderDiscountsMixin {
       return const OrderDiscountPolicy();
     }
 
-    final scopeKey = _scopeKey(representedCompanyId);
+    final scopeKey = _scopeKey(
+      _effectiveRepresentedCompanyId(normalizedTenantId, representedCompanyId),
+    );
     final doc = await _firestore
         .collection('tenants')
         .doc(normalizedTenantId)
@@ -56,7 +60,9 @@ mixin _WorkspaceProfileOrderDiscountsMixin {
       throw StateError('Dados invalidos para salvar politica de descontos.');
     }
 
-    final scopeKey = _scopeKey(representedCompanyId);
+    final scopeKey = _scopeKey(
+      _effectiveRepresentedCompanyId(normalizedTenantId, representedCompanyId),
+    );
     final normalizedFields = <OrderDiscountFieldRule>[];
     for (var index = 0; index < policy.fields.length; index++) {
       final field = policy.fields[index];

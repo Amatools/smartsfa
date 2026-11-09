@@ -19,6 +19,7 @@ class _CategoriesSectionState extends State<_CategoriesSection> {
   final WorkspaceProfileService _service = WorkspaceProfileService(
     FirebaseFirestore.instance,
   );
+  static final Set<String> _autoPrimedScopes = <String>{};
   final TextEditingController _newCategoryController = TextEditingController();
   final TextEditingController _inlineEditController = TextEditingController();
   List<ProductCategoryTaxonomyItem> _draftTaxonomy = const [];
@@ -30,6 +31,26 @@ class _CategoriesSectionState extends State<_CategoriesSection> {
   String _loadedScope = '';
   bool _dirty = false;
   bool _saving = false;
+  bool _syncingFromProducts = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _autoPrimeCategoriesFromProducts();
+  }
+
+  @override
+  void didUpdateWidget(covariant _CategoriesSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final tenantChanged =
+        oldWidget.activeTenant.tenantId != widget.activeTenant.tenantId;
+    final scopeChanged =
+        (oldWidget.selectedRepresentedCompanyId ?? '').trim() !=
+        (widget.selectedRepresentedCompanyId ?? '').trim();
+    if (tenantChanged || scopeChanged) {
+      _autoPrimeCategoriesFromProducts();
+    }
+  }
 
   @override
   void dispose() {
@@ -123,6 +144,24 @@ class _CategoriesSectionState extends State<_CategoriesSection> {
                           : null,
                       icon: const Icon(Icons.add),
                       label: const Text('Adicionar categoria pai'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed:
+                          canEditSettings && !_saving && !_syncingFromProducts
+                          ? () => _syncFromSankhyaProducts(showFeedback: true)
+                          : null,
+                      icon: _syncingFromProducts
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.download_for_offline_outlined),
+                      label: Text(
+                        _syncingFromProducts
+                            ? 'Importando...'
+                            : 'Importar do Sankhya',
+                      ),
                     ),
                   ],
                 ),
@@ -789,6 +828,71 @@ class _CategoriesSectionState extends State<_CategoriesSection> {
       if (mounted) {
         setState(() {
           _saving = false;
+        });
+      }
+    }
+  }
+
+  void _autoPrimeCategoriesFromProducts() {
+    final scopeIdentity =
+        '${widget.activeTenant.tenantId}|${(widget.selectedRepresentedCompanyId ?? '').trim()}';
+    if (_autoPrimedScopes.contains(scopeIdentity)) {
+      return;
+    }
+    _autoPrimedScopes.add(scopeIdentity);
+    _syncFromSankhyaProducts(showFeedback: false);
+  }
+
+  Future<void> _syncFromSankhyaProducts({required bool showFeedback}) async {
+    if (_syncingFromProducts) {
+      return;
+    }
+
+    setState(() {
+      _syncingFromProducts = true;
+    });
+
+    try {
+      final addedCount = await _service
+          .syncRepresentedProductTaxonomyFromProducts(
+            tenantId: widget.activeTenant.tenantId,
+            representedCompanyId: widget.selectedRepresentedCompanyId,
+          );
+
+      if (!mounted || !showFeedback) {
+        return;
+      }
+
+      if (addedCount > 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '$addedCount categoria(s) importada(s) dos produtos sincronizados.',
+            ),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Nenhuma nova categoria encontrada nos produtos sincronizados.',
+            ),
+          ),
+        );
+      }
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      if (showFeedback) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Falha ao importar categorias: $error')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _syncingFromProducts = false;
         });
       }
     }

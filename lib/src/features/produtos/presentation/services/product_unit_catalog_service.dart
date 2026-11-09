@@ -126,14 +126,12 @@ class ProductUnitCatalogService {
         }
 
         final configuredShortCode = defaultShortCodes[normalized] ?? '';
-        final inferredShortCode = _inferMeasureShortCode(value);
+        final inferredShortCode = _inferShortCode(type: type, unitName: value);
         final resolvedShortCode = configuredShortCode.isNotEmpty
             ? configuredShortCode
             : inferredShortCode;
         final normalizedShortCode = _normalizeUnitShortCode(resolvedShortCode);
-        final shouldPersistShortCode =
-            type == ProductUnitCatalogType.measure &&
-            normalizedShortCode.isNotEmpty;
+        final shouldPersistShortCode = normalizedShortCode.isNotEmpty;
 
         final payload = <String, Object?>{
           'name': value,
@@ -161,6 +159,93 @@ class ProductUnitCatalogService {
     }
   }
 
+  Future<int> syncStandardUnitsFromProducts({required String tenantId}) async {
+    final normalizedTenantId = tenantId.trim();
+    if (normalizedTenantId.isEmpty) {
+      throw StateError('Tenant invalido para sincronizar unidades padrao.');
+    }
+
+    final productsSnapshot = await _firestore
+        .collection('produtos')
+        .where('tenantId', isEqualTo: normalizedTenantId)
+        .get();
+
+    final candidateByNormalizedName = <String, String>{};
+    for (final doc in productsSnapshot.docs) {
+      final data = doc.data();
+      final unitName = (data['unidade'] ?? '').toString().trim();
+      final normalizedName = _normalizeUnitName(unitName);
+      if (normalizedName.isEmpty) {
+        continue;
+      }
+
+      candidateByNormalizedName.putIfAbsent(normalizedName, () => unitName);
+    }
+
+    if (candidateByNormalizedName.isEmpty) {
+      return 0;
+    }
+
+    final standardCollection = _collection(
+      tenantId: normalizedTenantId,
+      type: ProductUnitCatalogType.standard,
+    );
+    final existingUnitsSnapshot = await standardCollection.get();
+    final existingNormalizedNames = <String>{};
+    for (final doc in existingUnitsSnapshot.docs) {
+      if (doc.id == _metaDocId) {
+        continue;
+      }
+
+      final normalized = _normalizeUnitName(
+        (doc.data()['normalizedName'] ?? doc.data()['name'] ?? '')
+            .toString()
+            .trim(),
+      );
+      if (normalized.isNotEmpty) {
+        existingNormalizedNames.add(normalized);
+      }
+    }
+
+    final sortedNormalizedNames = candidateByNormalizedName.keys.toList()
+      ..sort();
+    final batch = _firestore.batch();
+    var createdCount = 0;
+
+    for (final normalizedName in sortedNormalizedNames) {
+      if (existingNormalizedNames.contains(normalizedName)) {
+        continue;
+      }
+
+      final rawName = candidateByNormalizedName[normalizedName] ?? '';
+      final displayName = rawName.trim().isEmpty ? normalizedName : rawName;
+      final inferredShortCode = _inferShortCode(
+        type: ProductUnitCatalogType.standard,
+        unitName: displayName,
+      );
+      if (inferredShortCode.isEmpty) {
+        continue;
+      }
+      final docRef = standardCollection.doc();
+      batch.set(docRef, {
+        'name': displayName,
+        'normalizedName': normalizedName,
+        'shortCode': inferredShortCode,
+        'normalizedShortCode': inferredShortCode,
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      createdCount += 1;
+      existingNormalizedNames.add(normalizedName);
+    }
+
+    if (createdCount > 0) {
+      await batch.commit();
+    }
+
+    return createdCount;
+  }
+
   Future<void> createUnit({
     required String tenantId,
     required ProductUnitCatalogType type,
@@ -177,7 +262,7 @@ class ProductUnitCatalogService {
       throw StateError('Nome de unidade invalido.');
     }
 
-    if (type == ProductUnitCatalogType.measure && normalizedShortCode.isEmpty) {
+    if (normalizedShortCode.isEmpty) {
       throw StateError('Informe uma sigla valida com ate 4 letras.');
     }
 
@@ -190,15 +275,13 @@ class ProductUnitCatalogService {
       throw StateError('Ja existe uma unidade com esse nome.');
     }
 
-    if (type == ProductUnitCatalogType.measure) {
-      final existingByShortCode = await _findByNormalizedShortCode(
-        tenantId: normalizedTenantId,
-        type: type,
-        normalizedShortCode: normalizedShortCode,
-      );
-      if (existingByShortCode != null) {
-        throw StateError('Ja existe uma unidade com essa sigla.');
-      }
+    final existingByShortCode = await _findByNormalizedShortCode(
+      tenantId: normalizedTenantId,
+      type: type,
+      normalizedShortCode: normalizedShortCode,
+    );
+    if (existingByShortCode != null) {
+      throw StateError('Ja existe uma unidade com essa sigla.');
     }
 
     final payload = <String, Object?>{
@@ -208,10 +291,8 @@ class ProductUnitCatalogService {
       'updatedAt': FieldValue.serverTimestamp(),
     };
 
-    if (type == ProductUnitCatalogType.measure) {
-      payload['shortCode'] = trimmedShortCode.toLowerCase();
-      payload['normalizedShortCode'] = normalizedShortCode;
-    }
+    payload['shortCode'] = trimmedShortCode.toLowerCase();
+    payload['normalizedShortCode'] = normalizedShortCode;
 
     await _collection(tenantId: normalizedTenantId, type: type).add(payload);
   }
@@ -236,7 +317,7 @@ class ProductUnitCatalogService {
       throw StateError('Dados invalidos para atualizar unidade.');
     }
 
-    if (type == ProductUnitCatalogType.measure && normalizedShortCode.isEmpty) {
+    if (normalizedShortCode.isEmpty) {
       throw StateError('Informe uma sigla valida com ate 4 letras.');
     }
 
@@ -249,16 +330,13 @@ class ProductUnitCatalogService {
       throw StateError('Ja existe uma unidade com esse nome.');
     }
 
-    if (type == ProductUnitCatalogType.measure) {
-      final existingByShortCode = await _findByNormalizedShortCode(
-        tenantId: normalizedTenantId,
-        type: type,
-        normalizedShortCode: normalizedShortCode,
-      );
-      if (existingByShortCode != null &&
-          existingByShortCode.id != normalizedId) {
-        throw StateError('Ja existe uma unidade com essa sigla.');
-      }
+    final existingByShortCode = await _findByNormalizedShortCode(
+      tenantId: normalizedTenantId,
+      type: type,
+      normalizedShortCode: normalizedShortCode,
+    );
+    if (existingByShortCode != null && existingByShortCode.id != normalizedId) {
+      throw StateError('Ja existe uma unidade com essa sigla.');
     }
 
     final payload = <String, Object?>{
@@ -267,10 +345,8 @@ class ProductUnitCatalogService {
       'updatedAt': FieldValue.serverTimestamp(),
     };
 
-    if (type == ProductUnitCatalogType.measure) {
-      payload['shortCode'] = trimmedShortCode.toLowerCase();
-      payload['normalizedShortCode'] = normalizedShortCode;
-    }
+    payload['shortCode'] = trimmedShortCode.toLowerCase();
+    payload['normalizedShortCode'] = normalizedShortCode;
 
     await _collection(
       tenantId: normalizedTenantId,
@@ -349,9 +425,7 @@ class ProductUnitCatalogService {
         .toString()
         .trim();
     final parsedShortCode = (data['shortCode'] ?? '').toString().trim();
-    final fallbackShortCode = type == ProductUnitCatalogType.measure
-        ? _inferMeasureShortCode(name)
-        : '';
+    final fallbackShortCode = _inferShortCode(type: type, unitName: name);
     final shortCode = parsedShortCode.isNotEmpty
         ? parsedShortCode.toLowerCase()
         : fallbackShortCode;
@@ -392,6 +466,16 @@ class ProductUnitCatalogService {
     return normalized;
   }
 
+  String _inferShortCode({
+    required ProductUnitCatalogType type,
+    required String unitName,
+  }) {
+    if (type == ProductUnitCatalogType.measure) {
+      return _inferMeasureShortCode(unitName);
+    }
+    return _inferStandardShortCode(unitName);
+  }
+
   String _inferMeasureShortCode(String unitName) {
     switch (_normalizeUnitName(unitName)) {
       case 'milimetro':
@@ -404,6 +488,32 @@ class ProductUnitCatalogService {
         return 'l';
       default:
         return _normalizeUnitShortCode(unitName);
+    }
+  }
+
+  String _inferStandardShortCode(String unitName) {
+    switch (_normalizeUnitName(unitName)) {
+      case 'unidade':
+      case 'unitario':
+      case 'unitaria':
+      case 'un':
+        return 'un';
+      case 'kit':
+        return 'kit';
+      case 'jogo':
+        return 'jg';
+      case 'frasco':
+        return 'fr';
+      default:
+        final sanitized = _normalizeUnitName(unitName)
+            .replaceAll(RegExp(r'[^a-z]'), '');
+        if (sanitized.isEmpty) {
+          return '';
+        }
+        if (sanitized.length <= 4) {
+          return sanitized;
+        }
+        return sanitized.substring(0, 4);
     }
   }
 }

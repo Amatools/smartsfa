@@ -65,7 +65,9 @@ mixin _WorkspaceProfileCommercialAdjustmentsMixin {
       return Stream.value(const <CommercialAdjustmentRule>[]);
     }
 
-    final scopeKey = _scopeKey(representedCompanyId);
+    final scopeKey = _scopeKey(
+      _effectiveRepresentedCompanyId(normalizedTenantId, representedCompanyId),
+    );
     return _firestore
         .collection('tenants')
         .doc(normalizedTenantId)
@@ -90,7 +92,9 @@ mixin _WorkspaceProfileCommercialAdjustmentsMixin {
       return const <CommercialAdjustmentRule>[];
     }
 
-    final scopeKey = _scopeKey(representedCompanyId);
+    final scopeKey = _scopeKey(
+      _effectiveRepresentedCompanyId(normalizedTenantId, representedCompanyId),
+    );
     final doc = await _firestore
         .collection('tenants')
         .doc(normalizedTenantId)
@@ -186,7 +190,9 @@ mixin _WorkspaceProfileCommercialAdjustmentsMixin {
         )
         .map((rule) => rule.toMap())
         .toList(growable: false);
-    final scopeKey = _scopeKey(representedCompanyId);
+    final scopeKey = _scopeKey(
+      _effectiveRepresentedCompanyId(normalizedTenantId, representedCompanyId),
+    );
 
     await _firestore.collection('tenants').doc(normalizedTenantId).set({
       'representedCommercialAdjustments': {scopeKey: normalizedRules},

@@ -1,0 +1,442 @@
+{
+  "marker": "SQL_FILE_PROBE",
+  "ok": true,
+  "tenantId": "self_T8oqTD0UBtWATPbITOGsqAEZt3d2_smartsfa-enterprise-teste",
+  "environment": "prod",
+  "sqlFile": "G:\\smartsfa\\scripts\\bootstrap_owner\\sql\\probe_sankhya_tgfpro_image_sample.sql",
+  "baseUrl": "https://api.sankhya.com.br",
+  "endpointPath": "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+  "status": 200,
+  "responseIsJson": true,
+  "rowCount": 25,
+  "fields": [
+    {
+      "name": "CODPROD",
+      "order": 1,
+      "userType": "I",
+      "precision": null
+    },
+    {
+      "name": "DESCRPROD",
+      "order": 2,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "ENDIMAGEM",
+      "order": 3,
+      "userType": "S",
+      "precision": null
+    },
+    {
+      "name": "NUVERSAOIMG",
+      "order": 4,
+      "userType": "I",
+      "precision": null
+    },
+    {
+      "name": "IMAGEM_BYTES",
+      "order": 5,
+      "userType": "F",
+      "precision": 2
+    }
+  ],
+  "rows": [
+    [
+      489690,
+      "MICROMETRO EXTERNO - 6 PECAS BIT: 0-150 MM FAB: ZAAS",
+      null,
+      null,
+      81048
+    ],
+    [
+      489703,
+      "COMPASSO INTERNO BIT: 300 MM / 12\" FAB: ZAAS",
+      null,
+      null,
+      25771
+    ],
+    [
+      489751,
+      "CONE RIGIDO PLT LARANJA/BRANCO BIT: 50 CM REF: PPS 03 FAB: PROTEPLUS",
+      null,
+      null,
+      56292
+    ],
+    [
+      490180,
+      "ÓCULOS TITAN ANTIRRISCO BIT: VERDE REF: PPO 17 FAB: PROTEPLUS",
+      null,
+      null,
+      66088
+    ],
+    [
+      490335,
+      "PISTOLA DE PINTURA AR DIRETO BIT: 1.3 MM REF: 1000ML ALUMINIO FAB: NOLL",
+      null,
+      null,
+      93492
+    ],
+    [
+      490383,
+      "PAQUIMETRO UNIV ANALOGICO BIT: 150 MM FAB: ZAAS",
+      null,
+      null,
+      55752
+    ],
+    [
+      490396,
+      "RODÍZIO BLACK FIXO PLACA BIT: 40 MM PRETO REF: FP 1.5/8 PP FAB: NOLL",
+      null,
+      null,
+      106226
+    ],
+    [
+      490397,
+      "RODÍZIO BLACK FIXO PLACA BIT: 50 MM PRETO REF: FP 210 PP FAB: NOLL",
+      null,
+      null,
+      106226
+    ],
+    [
+      490398,
+      "RODÍZIO BLACK FIXO PLACA BIT: 75 MM PRETO REF: FP 312 PP FAB: NOLL",
+      null,
+      null,
+      106226
+    ],
+    [
+      490399,
+      "RODÍZIO BLACK FIXO PLACA BIT: 100 MM PRETO REF: FP 412 PP FAB: NOLL",
+      null,
+      null,
+      106226
+    ],
+    [
+      490400,
+      "RODÍZIO BLACK GIRATÓRIO PLACA BIT: 40 MM PRETO REF: GP 1.5/8 PP FAB: NOLL",
+      null,
+      null,
+      95320
+    ],
+    [
+      490401,
+      "RODÍZIO BLACK GIRATÓRIO PLACA BIT: 75 MM PRETO REF: GP 312 PP FAB: NOLL",
+      null,
+      null,
+      95320
+    ],
+    [
+      490402,
+      "RODÍZIO BLACK GIRATÓRIO PLACA C/FREIO BIT: 40 MM PRETO REF: GP 1.5/8 PP - F FAB: NOLL",
+      null,
+      null,
+      87288
+    ],
+    [
+      490403,
+      "RODÍZIO BLACK GIRATÓRIO PLACA C/FREIO BIT: 100 MM PRETO REF: GP 412 PP - F FAB: NOLL",
+      null,
+      null,
+      87288
+    ],
+    [
+      490404,
+      "RODÍZIO BLACK GIRATÓRIO ESPIGA C/PORCA ROSQUEADA BIT: 40 MM PRETO REF: GE 1.5/8 PP FAB: NOLL",
+      null,
+      null,
+      83313
+    ],
+    [
+      490405,
+      "RODIZIO BLACK GIRATÓRIO ESPIGA C/PORCA ROSQUEADA BIT: 50 MM PRETO REF: GE 210 PP FAB: NOLL",
+      null,
+      null,
+      83313
+    ],
+    [
+      490406,
+      "RODÍZIO BLACK GIRATÓRIO ESPIGA C/PORCA ROSQUEADA BIT: 75 MM PRETO REF: GE 312 PP FAB: NOLL",
+      null,
+      null,
+      83313
+    ],
+    [
+      490407,
+      "RODÍZIO BLACK GIRATÓRIO ESPIGA C/PORCA ROSQUEADA BIT: 100 MM PRETO REF: GE 412 PP FAB: NOLL",
+      null,
+      null,
+      83313
+    ],
+    [
+      490408,
+      "RODÍZIO BLACK GIRATÓRIO ESPIGA C/PORCA ROSCA C/FREIO BIT: 40 MM PRETO REF: GE 1.5/8 PP - F FAB: NOLL",
+      null,
+      null,
+      98824
+    ],
+    [
+      490409,
+      "RODÍZIO BLACK GIRATÓRIO ESPIGA C/PORCA ROSCA C/FREIO BIT: 50 MM PRETO REF: GE 210 PP - F FAB: NOLL",
+      null,
+      null,
+      98824
+    ],
+    [
+      490410,
+      "RODÍZIO BLACK GIRATÓRIO ESPIGA C/PORCA ROSCA C/FREIO BIT: 75 MM PRETO REF: GE 312 PP - F FAB: NOLL",
+      null,
+      null,
+      98824
+    ],
+    [
+      490411,
+      "RODÍZIO BLACK GIRATÓRIO ESPIGA C/PORCA ROSCA C/FREIO BIT: 100 MM PRETO REF: GE 412 PP - F FAB: NOLL",
+      null,
+      null,
+      98824
+    ],
+    [
+      490440,
+      "FURADEIRA DE IMPACTO/PARAFUSADEIRA + KIT ACESSORIO BIT: 20V - BATERIA REF: NFP20V3/8 - I+K FAB: NOLL",
+      null,
+      null,
+      150837
+    ],
+    [
+      490441,
+      "BATERIA P/FURADEIRA NOLL 1.5 AH BIT: 20V REF: NB20V FAB: NOLL",
+      null,
+      null,
+      109911
+    ],
+    [
+      490442,
+      "PORTA ELETRODO BIT: 500 A FAB: NOLL",
+      null,
+      null,
+      36619
+    ]
+  ],
+  "responseBody": {
+    "serviceName": "DbExplorerSP.executeQuery",
+    "status": "1",
+    "pendingPrinting": "false",
+    "transactionId": "E2458E0284E2EEE4303A741E442070A2",
+    "responseBody": {
+      "fieldsMetadata": [
+        {
+          "name": "CODPROD",
+          "description": "CODPROD",
+          "order": 1,
+          "userType": "I"
+        },
+        {
+          "name": "DESCRPROD",
+          "description": "DESCRPROD",
+          "order": 2,
+          "userType": "S"
+        },
+        {
+          "name": "ENDIMAGEM",
+          "description": "ENDIMAGEM",
+          "order": 3,
+          "userType": "S"
+        },
+        {
+          "name": "NUVERSAOIMG",
+          "description": "NUVERSAOIMG",
+          "order": 4,
+          "userType": "I"
+        },
+        {
+          "name": "IMAGEM_BYTES",
+          "description": "IMAGEM_BYTES",
+          "order": 5,
+          "userType": "F",
+          "precision": 2
+        }
+      ],
+      "rows": [
+        [
+          489690,
+          "MICROMETRO EXTERNO - 6 PECAS BIT: 0-150 MM FAB: ZAAS",
+          null,
+          null,
+          81048
+        ],
+        [
+          489703,
+          "COMPASSO INTERNO BIT: 300 MM / 12\" FAB: ZAAS",
+          null,
+          null,
+          25771
+        ],
+        [
+          489751,
+          "CONE RIGIDO PLT LARANJA/BRANCO BIT: 50 CM REF: PPS 03 FAB: PROTEPLUS",
+          null,
+          null,
+          56292
+        ],
+        [
+          490180,
+          "ÓCULOS TITAN ANTIRRISCO BIT: VERDE REF: PPO 17 FAB: PROTEPLUS",
+          null,
+          null,
+          66088
+        ],
+        [
+          490335,
+          "PISTOLA DE PINTURA AR DIRETO BIT: 1.3 MM REF: 1000ML ALUMINIO FAB: NOLL",
+          null,
+          null,
+          93492
+        ],
+        [
+          490383,
+          "PAQUIMETRO UNIV ANALOGICO BIT: 150 MM FAB: ZAAS",
+          null,
+          null,
+          55752
+        ],
+        [
+          490396,
+          "RODÍZIO BLACK FIXO PLACA BIT: 40 MM PRETO REF: FP 1.5/8 PP FAB: NOLL",
+          null,
+          null,
+          106226
+        ],
+        [
+          490397,
+          "RODÍZIO BLACK FIXO PLACA BIT: 50 MM PRETO REF: FP 210 PP FAB: NOLL",
+          null,
+          null,
+          106226
+        ],
+        [
+          490398,
+          "RODÍZIO BLACK FIXO PLACA BIT: 75 MM PRETO REF: FP 312 PP FAB: NOLL",
+          null,
+          null,
+          106226
+        ],
+        [
+          490399,
+          "RODÍZIO BLACK FIXO PLACA BIT: 100 MM PRETO REF: FP 412 PP FAB: NOLL",
+          null,
+          null,
+          106226
+        ],
+        [
+          490400,
+          "RODÍZIO BLACK GIRATÓRIO PLACA BIT: 40 MM PRETO REF: GP 1.5/8 PP FAB: NOLL",
+          null,
+          null,
+          95320
+        ],
+        [
+          490401,
+          "RODÍZIO BLACK GIRATÓRIO PLACA BIT: 75 MM PRETO REF: GP 312 PP FAB: NOLL",
+          null,
+          null,
+          95320
+        ],
+        [
+          490402,
+          "RODÍZIO BLACK GIRATÓRIO PLACA C/FREIO BIT: 40 MM PRETO REF: GP 1.5/8 PP - F FAB: NOLL",
+          null,
+          null,
+          87288
+        ],
+        [
+          490403,
+          "RODÍZIO BLACK GIRATÓRIO PLACA C/FREIO BIT: 100 MM PRETO REF: GP 412 PP - F FAB: NOLL",
+          null,
+          null,
+          87288
+        ],
+        [
+          490404,
+          "RODÍZIO BLACK GIRATÓRIO ESPIGA C/PORCA ROSQUEADA BIT: 40 MM PRETO REF: GE 1.5/8 PP FAB: NOLL",
+          null,
+          null,
+          83313
+        ],
+        [
+          490405,
+          "RODIZIO BLACK GIRATÓRIO ESPIGA C/PORCA ROSQUEADA BIT: 50 MM PRETO REF: GE 210 PP FAB: NOLL",
+          null,
+          null,
+          83313
+        ],
+        [
+          490406,
+          "RODÍZIO BLACK GIRATÓRIO ESPIGA C/PORCA ROSQUEADA BIT: 75 MM PRETO REF: GE 312 PP FAB: NOLL",
+          null,
+          null,
+          83313
+        ],
+        [
+          490407,
+          "RODÍZIO BLACK GIRATÓRIO ESPIGA C/PORCA ROSQUEADA BIT: 100 MM PRETO REF: GE 412 PP FAB: NOLL",
+          null,
+          null,
+          83313
+        ],
+        [
+          490408,
+          "RODÍZIO BLACK GIRATÓRIO ESPIGA C/PORCA ROSCA C/FREIO BIT: 40 MM PRETO REF: GE 1.5/8 PP - F FAB: NOLL",
+          null,
+          null,
+          98824
+        ],
+        [
+          490409,
+          "RODÍZIO BLACK GIRATÓRIO ESPIGA C/PORCA ROSCA C/FREIO BIT: 50 MM PRETO REF: GE 210 PP - F FAB: NOLL",
+          null,
+          null,
+          98824
+        ],
+        [
+          490410,
+          "RODÍZIO BLACK GIRATÓRIO ESPIGA C/PORCA ROSCA C/FREIO BIT: 75 MM PRETO REF: GE 312 PP - F FAB: NOLL",
+          null,
+          null,
+          98824
+        ],
+        [
+          490411,
+          "RODÍZIO BLACK GIRATÓRIO ESPIGA C/PORCA ROSCA C/FREIO BIT: 100 MM PRETO REF: GE 412 PP - F FAB: NOLL",
+          null,
+          null,
+          98824
+        ],
+        [
+          490440,
+          "FURADEIRA DE IMPACTO/PARAFUSADEIRA + KIT ACESSORIO BIT: 20V - BATERIA REF: NFP20V3/8 - I+K FAB: NOLL",
+          null,
+          null,
+          150837
+        ],
+        [
+          490441,
+          "BATERIA P/FURADEIRA NOLL 1.5 AH BIT: 20V REF: NB20V FAB: NOLL",
+          null,
+          null,
+          109911
+        ],
+        [
+          490442,
+          "PORTA ELETRODO BIT: 500 A FAB: NOLL",
+          null,
+          null,
+          36619
+        ]
+      ],
+      "burstLimit": false,
+      "timeQuery": "48ms",
+      "timeResultSet": "1ms"
+    }
+  }
+}

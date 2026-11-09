@@ -1,0 +1,105 @@
+{
+  "marker": "SQL_FILE_PROBE",
+  "ok": true,
+  "tenantId": "self_T8oqTD0UBtWATPbITOGsqAEZt3d2_smartsfa-enterprise-teste",
+  "environment": "prod",
+  "sqlFile": "G:\\smartsfa\\scripts\\bootstrap_owner\\sql\\probe_sankhya_image_linkage_counts.sql",
+  "baseUrl": "https://api.sankhya.com.br",
+  "endpointPath": "/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery",
+  "status": 200,
+  "responseIsJson": true,
+  "rowCount": 1,
+  "fields": [
+    {
+      "name": "TOTAL_PRODUTOS",
+      "order": 1,
+      "userType": "I",
+      "precision": null
+    },
+    {
+      "name": "PROD_COM_IMAGEM_BLOB",
+      "order": 2,
+      "userType": "I",
+      "precision": null
+    },
+    {
+      "name": "TOTAL_VINCULOS_TGFPIM",
+      "order": 3,
+      "userType": "I",
+      "precision": null
+    },
+    {
+      "name": "PRODUTOS_COM_VINCULO_TGFPIM",
+      "order": 4,
+      "userType": "I",
+      "precision": null
+    },
+    {
+      "name": "PROD_COM_BLOB_E_TGFPIM",
+      "order": 5,
+      "userType": "I",
+      "precision": null
+    }
+  ],
+  "rows": [
+    [
+      9080,
+      1638,
+      0,
+      0,
+      0
+    ]
+  ],
+  "responseBody": {
+    "serviceName": "DbExplorerSP.executeQuery",
+    "status": "1",
+    "pendingPrinting": "false",
+    "transactionId": "BB0B7C463FAF5B84A3D60EBF23FF2DD3",
+    "responseBody": {
+      "fieldsMetadata": [
+        {
+          "name": "TOTAL_PRODUTOS",
+          "description": "TOTAL_PRODUTOS",
+          "order": 1,
+          "userType": "I"
+        },
+        {
+          "name": "PROD_COM_IMAGEM_BLOB",
+          "description": "PROD_COM_IMAGEM_BLOB",
+          "order": 2,
+          "userType": "I"
+        },
+        {
+          "name": "TOTAL_VINCULOS_TGFPIM",
+          "description": "TOTAL_VINCULOS_TGFPIM",
+          "order": 3,
+          "userType": "I"
+        },
+        {
+          "name": "PRODUTOS_COM_VINCULO_TGFPIM",
+          "description": "PRODUTOS_COM_VINCULO_TGFPIM",
+          "order": 4,
+          "userType": "I"
+        },
+        {
+          "name": "PROD_COM_BLOB_E_TGFPIM",
+          "description": "PROD_COM_BLOB_E_TGFPIM",
+          "order": 5,
+          "userType": "I"
+        }
+      ],
+      "rows": [
+        [
+          9080,
+          1638,
+          0,
+          0,
+          0
+        ]
+      ],
+      "burstLimit": false,
+      "timeQuery": "51ms",
+      "timeResultSet": "1ms"
+    }
+  }
+}

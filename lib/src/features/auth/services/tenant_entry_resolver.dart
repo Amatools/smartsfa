@@ -38,8 +38,7 @@ class TenantEntryResolver {
 
       throw const TenantEntryResolverException(
         code: 'permission-denied',
-        message:
-            'Sem permissao temporaria para validar memberships. Tente novamente em instantes.',
+        message: 'Sem permissao temporaria para validar memberships. Tente novamente em instantes.',
       );
     }
   }
@@ -84,7 +83,9 @@ class TenantEntryResolver {
         tenantId: selected.tenantId,
         tenantName: selected.tenantName,
         role: selected.role,
-        defaultTenantId: selected.defaultTenant ? selected.tenantId : selected.tenantId,
+        defaultTenantId: selected.defaultTenant
+            ? selected.tenantId
+            : selected.tenantId,
       );
     }
 
@@ -93,7 +94,9 @@ class TenantEntryResolver {
       uid: user.uid,
       path: TenantEntryPath.selector,
       options: seeds,
-      defaultTenantId: defaultOption.isNotEmpty ? defaultOption.first.tenantId : null,
+      defaultTenantId: defaultOption.isNotEmpty
+          ? defaultOption.first.tenantId
+          : null,
     );
   }
 
@@ -117,8 +120,15 @@ class TenantEntryResolver {
       return null;
     }
 
+    if (_isMembershipInInactivityPeriod(data)) {
+      return null;
+    }
+
     try {
-      final tenantDoc = await _firestore.collection('tenants').doc(tenantId).get();
+      final tenantDoc = await _firestore
+          .collection('tenants')
+          .doc(tenantId)
+          .get();
       if (!tenantDoc.exists) {
         return null;
       }
@@ -149,15 +159,45 @@ class TenantEntryResolver {
         tenantId: tenantId,
         tenantName: tenantId,
         role: role,
-        workspaceType:
-            (data['workspaceType'] ?? 'brand_owner_workspace').toString(),
+        workspaceType: (data['workspaceType'] ?? 'brand_owner_workspace')
+            .toString(),
         defaultTenant: data['defaultTenant'] == true,
       );
     }
   }
 
   bool _isPermissionDenied(FirebaseException error) {
-    return error.code == 'permission-denied' || error.code == 'failed-precondition';
+    return error.code == 'permission-denied' ||
+        error.code == 'failed-precondition';
+  }
+
+  bool _isMembershipInInactivityPeriod(Map<String, dynamic> data) {
+    final start = _readDateTime(data['inactivityStartAt']);
+    final end = _readDateTime(data['inactivityEndAt']);
+    if (start == null || end == null) {
+      return false;
+    }
+
+    final nowUtc = DateTime.now().toUtc();
+    final startUtc = start.toUtc();
+    final endUtc = end.toUtc();
+    return !nowUtc.isBefore(startUtc) && !nowUtc.isAfter(endUtc);
+  }
+
+  DateTime? _readDateTime(Object? value) {
+    if (value is Timestamp) {
+      return value.toDate();
+    }
+    if (value is DateTime) {
+      return value;
+    }
+    if (value is String) {
+      return DateTime.tryParse(value);
+    }
+    if (value is int) {
+      return DateTime.fromMillisecondsSinceEpoch(value);
+    }
+    return null;
   }
 }
 

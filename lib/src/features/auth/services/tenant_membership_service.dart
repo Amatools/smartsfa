@@ -63,6 +63,12 @@ class TenantMembershipService {
 
           for (final doc in snapshot.docs) {
             final data = doc.data();
+            data.putIfAbsent('membershipId', () => doc.id);
+            final membership = TenantMembership.fromMap(data);
+            if (!membership.isActive || membership.isInInactivityPeriod()) {
+              continue;
+            }
+
             final tenantId = (data['tenantId'] ?? '').toString().trim();
             if (tenantId.isEmpty) {
               continue;
@@ -192,7 +198,9 @@ class TenantMembershipService {
       return null;
     }
 
-    return TenantMembership.fromMap(doc.data() ?? <String, Object?>{});
+    final data = doc.data() ?? <String, Object?>{};
+    data.putIfAbsent('membershipId', () => doc.id);
+    return TenantMembership.fromMap(data);
   }
 
   Future<TenantMembership?> loadActiveByTenantAndUid({
@@ -209,7 +217,8 @@ class TenantMembershipService {
     if (byPatternId != null &&
         byPatternId.tenantId == normalizedTenantId &&
         byPatternId.uid == normalizedUid &&
-        byPatternId.isActive) {
+        byPatternId.isActive &&
+        !byPatternId.isInInactivityPeriod()) {
       return byPatternId;
     }
 
@@ -228,10 +237,166 @@ class TenantMembershipService {
     final data = snapshot.docs.first.data();
     data.putIfAbsent('membershipId', () => snapshot.docs.first.id);
     final membership = TenantMembership.fromMap(data);
-    if (!membership.isActive) {
+    if (!membership.isActive || membership.isInInactivityPeriod()) {
       return null;
     }
     return membership;
+  }
+
+  Future<void> setMembershipInactivityPeriodByOwner({
+    required String tenantId,
+    required String membershipId,
+    required String actorUid,
+    required DateTime startAt,
+    required DateTime endAt,
+    String? reason,
+  }) async {
+    final normalizedTenantId = tenantId.trim();
+    final normalizedMembershipId = membershipId.trim();
+    final normalizedActorUid = actorUid.trim();
+    if (normalizedTenantId.isEmpty ||
+        normalizedMembershipId.isEmpty ||
+        normalizedActorUid.isEmpty) {
+      throw StateError(
+        'Contexto invalido para definir periodo de inatividade.',
+      );
+    }
+
+    final startUtc = DateTime.utc(
+      startAt.year,
+      startAt.month,
+      startAt.day,
+      0,
+      0,
+      0,
+      0,
+      0,
+    );
+    final endUtc = DateTime.utc(
+      endAt.year,
+      endAt.month,
+      endAt.day,
+      23,
+      59,
+      59,
+      999,
+      999,
+    );
+    if (endUtc.isBefore(startUtc)) {
+      throw StateError('Periodo invalido: data final anterior a inicial.');
+    }
+
+    await _assertActorIsTenantOwner(
+      tenantId: normalizedTenantId,
+      actorUid: normalizedActorUid,
+    );
+
+    final membershipRef = _firestore
+        .collection('tenant_memberships')
+        .doc(normalizedMembershipId);
+    final snapshot = await membershipRef.get();
+    if (!snapshot.exists) {
+      throw StateError('Membership nao encontrado.');
+    }
+
+    final data = snapshot.data() ?? <String, dynamic>{};
+    final targetMembership = TenantMembership.fromMap({
+      ...data,
+      'membershipId': snapshot.id,
+    });
+    if (targetMembership.tenantId != normalizedTenantId) {
+      throw StateError('Membership nao pertence ao tenant informado.');
+    }
+    if (targetMembership.role.trim().toLowerCase() == 'owner') {
+      throw StateError('Nao e permitido definir inatividade para owner.');
+    }
+
+    await membershipRef.set({
+      'inactivityStartAt': startUtc.toIso8601String(),
+      'inactivityEndAt': endUtc.toIso8601String(),
+      'inactivityReason': (reason ?? '').trim(),
+      'inactivityUpdatedByUid': normalizedActorUid,
+      'inactivityUpdatedAt': DateTime.now().toUtc().toIso8601String(),
+      'updatedAt': DateTime.now().toUtc().toIso8601String(),
+    }, SetOptions(merge: true));
+  }
+
+  Future<void> clearMembershipInactivityPeriodByOwner({
+    required String tenantId,
+    required String membershipId,
+    required String actorUid,
+  }) async {
+    final normalizedTenantId = tenantId.trim();
+    final normalizedMembershipId = membershipId.trim();
+    final normalizedActorUid = actorUid.trim();
+    if (normalizedTenantId.isEmpty ||
+        normalizedMembershipId.isEmpty ||
+        normalizedActorUid.isEmpty) {
+      throw StateError('Contexto invalido para limpar periodo de inatividade.');
+    }
+
+    await _assertActorIsTenantOwner(
+      tenantId: normalizedTenantId,
+      actorUid: normalizedActorUid,
+    );
+
+    final membershipRef = _firestore
+        .collection('tenant_memberships')
+        .doc(normalizedMembershipId);
+    final snapshot = await membershipRef.get();
+    if (!snapshot.exists) {
+      throw StateError('Membership nao encontrado.');
+    }
+
+    final data = snapshot.data() ?? <String, dynamic>{};
+    final targetMembership = TenantMembership.fromMap({
+      ...data,
+      'membershipId': snapshot.id,
+    });
+    if (targetMembership.tenantId != normalizedTenantId) {
+      throw StateError('Membership nao pertence ao tenant informado.');
+    }
+    if (targetMembership.role.trim().toLowerCase() == 'owner') {
+      throw StateError('Nao e permitido alterar inatividade do owner.');
+    }
+
+    await membershipRef.set({
+      'inactivityStartAt': FieldValue.delete(),
+      'inactivityEndAt': FieldValue.delete(),
+      'inactivityReason': FieldValue.delete(),
+      'inactivityUpdatedByUid': normalizedActorUid,
+      'inactivityUpdatedAt': DateTime.now().toUtc().toIso8601String(),
+      'updatedAt': DateTime.now().toUtc().toIso8601String(),
+    }, SetOptions(merge: true));
+  }
+
+  Future<void> _assertActorIsTenantOwner({
+    required String tenantId,
+    required String actorUid,
+  }) async {
+    final actorMemberships = await _firestore
+        .collection('tenant_memberships')
+        .where('tenantId', isEqualTo: tenantId)
+        .where('uid', isEqualTo: actorUid)
+        .where('ativo', isEqualTo: true)
+        .limit(1)
+        .get();
+
+    if (actorMemberships.docs.isEmpty) {
+      throw StateError('Owner nao encontrado para este tenant.');
+    }
+
+    final actorData = actorMemberships.docs.first.data();
+    final actorRole = (actorData['role'] ?? '').toString().trim().toLowerCase();
+    final actorState = (actorData['state'] ?? 'active')
+        .toString()
+        .trim()
+        .toLowerCase();
+    if (actorRole != 'owner' || actorState != 'active') {
+      throw StateError(
+        'Somente owner ativo pode definir periodo de inatividade.',
+      );
+    }
   }
 
   Future<TenantMembership> revokeMembership({
@@ -240,7 +405,9 @@ class TenantMembershipService {
     String? reason,
   }) async {
     final actorIdentity = await _resolveAuditActorIdentity(revokedByUid);
-    final updated = await _firestore.runTransaction<TenantMembership>((tx) async {
+    final updated = await _firestore.runTransaction<TenantMembership>((
+      tx,
+    ) async {
       final membershipRef = _firestore
           .collection('tenant_memberships')
           .doc(membershipId);
@@ -252,7 +419,10 @@ class TenantMembershipService {
       final currentData = snapshot.data() ?? <String, dynamic>{};
       currentData.putIfAbsent('membershipId', () => snapshot.id);
       final current = TenantMembership.fromMap(currentData);
-      final updated = current.revoke(revokedByUid: revokedByUid, reason: reason);
+      final updated = current.revoke(
+        revokedByUid: revokedByUid,
+        reason: reason,
+      );
 
       await _applyHierarchyAggregateDelta(
         tx: tx,
@@ -313,7 +483,9 @@ class TenantMembershipService {
     String? reason,
   }) async {
     final actorIdentity = await _resolveAuditActorIdentity(deactivatedByUid);
-    final updated = await _firestore.runTransaction<TenantMembership>((tx) async {
+    final updated = await _firestore.runTransaction<TenantMembership>((
+      tx,
+    ) async {
       final membershipRef = _firestore
           .collection('tenant_memberships')
           .doc(membershipId);
@@ -390,7 +562,9 @@ class TenantMembershipService {
   }) async {
     final actorUidForAudit = reactivatedByUid ?? 'system';
     final actorIdentity = await _resolveAuditActorIdentity(actorUidForAudit);
-    final updated = await _firestore.runTransaction<TenantMembership>((tx) async {
+    final updated = await _firestore.runTransaction<TenantMembership>((
+      tx,
+    ) async {
       final membershipRef = _firestore
           .collection('tenant_memberships')
           .doc(membershipId);
@@ -496,7 +670,9 @@ class TenantMembershipService {
       return current;
     }
 
-    final updated = await _firestore.runTransaction<TenantMembership>((tx) async {
+    final updated = await _firestore.runTransaction<TenantMembership>((
+      tx,
+    ) async {
       final membershipRef = _firestore
           .collection('tenant_memberships')
           .doc(membershipId);
@@ -516,12 +692,18 @@ class TenantMembershipService {
       final updatedInTx = currentInTx.copyWith(
         role: normalizedRole,
         ownerId: _ownerIdForRole(current: currentInTx, role: normalizedRole),
-        gerenteId: _gerenteIdForRole(current: currentInTx, role: normalizedRole),
+        gerenteId: _gerenteIdForRole(
+          current: currentInTx,
+          role: normalizedRole,
+        ),
         representanteId: _representanteIdForRole(
           current: currentInTx,
           role: normalizedRole,
         ),
-        vendedorId: _vendedorIdForRole(current: currentInTx, role: normalizedRole),
+        vendedorId: _vendedorIdForRole(
+          current: currentInTx,
+          role: normalizedRole,
+        ),
       );
 
       await _applyHierarchyAggregateDelta(
@@ -849,7 +1031,9 @@ class TenantMembershipService {
     tx.set(auditRef, payload);
   }
 
-  Future<_AuditActorIdentity> _resolveAuditActorIdentity(String actorUid) async {
+  Future<_AuditActorIdentity> _resolveAuditActorIdentity(
+    String actorUid,
+  ) async {
     final normalizedUid = actorUid.trim();
     if (normalizedUid.isEmpty) {
       return const _AuditActorIdentity(uid: 'unknown', label: 'Desconhecido');
@@ -867,10 +1051,16 @@ class TenantMembershipService {
     }
 
     try {
-      final userDoc = await _firestore.collection('usuarios').doc(normalizedUid).get();
+      final userDoc = await _firestore
+          .collection('usuarios')
+          .doc(normalizedUid)
+          .get();
       final userData = userDoc.data() ?? <String, dynamic>{};
       final displayName =
-          (userData['displayName'] ?? userData['userName'] ?? userData['nome'] ?? '')
+          (userData['displayName'] ??
+                  userData['userName'] ??
+                  userData['nome'] ??
+                  '')
               .toString()
               .trim();
       final email = (userData['email'] ?? userData['userEmail'] ?? '')
@@ -1068,7 +1258,8 @@ class TenantMembershipService {
       return;
     }
 
-    if (normalizedCurrentRole == 'gerente' || normalizedCurrentRole == 'representante') {
+    if (normalizedCurrentRole == 'gerente' ||
+        normalizedCurrentRole == 'representante') {
       await _assertNoActiveSubordinates(current);
     }
   }

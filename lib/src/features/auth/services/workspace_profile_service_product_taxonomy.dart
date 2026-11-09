@@ -3,6 +3,127 @@ part of 'workspace_profile_service.dart';
 mixin _WorkspaceProfileProductTaxonomyMixin {
   FirebaseFirestore get _firestore;
 
+  Future<int> syncRepresentedProductTaxonomyFromProducts({
+    required String tenantId,
+    required String? representedCompanyId,
+  }) async {
+    final normalizedTenantId = tenantId.trim();
+    if (normalizedTenantId.isEmpty) {
+      throw StateError('Dados invalidos para sincronizar categorias do ERP.');
+    }
+
+    final normalizedRepresentedCompanyId = _effectiveRepresentedCompanyId(
+      normalizedTenantId,
+      representedCompanyId,
+    );
+    final scopeKey = _scopeKey(normalizedRepresentedCompanyId);
+
+    final tenantDoc = await _firestore
+        .collection('tenants')
+        .doc(normalizedTenantId)
+        .get();
+    final tenantData = tenantDoc.data() ?? const <String, dynamic>{};
+    final currentTaxonomy = _readTaxonomyForScope(
+      data: tenantData,
+      scopeKey: scopeKey,
+    );
+
+    final existingCategoriesByKey = <String, ProductCategoryTaxonomyItem>{};
+    for (final item in currentTaxonomy) {
+      final name = item.name.trim();
+      if (name.isEmpty) {
+        continue;
+      }
+      existingCategoriesByKey.putIfAbsent(name.toLowerCase(), () => item);
+    }
+
+    final productsSnapshot = await _firestore
+        .collection('produtos')
+        .where('tenantId', isEqualTo: normalizedTenantId)
+        .get();
+
+    final categoriesFromProducts = <String, String>{};
+    for (final doc in productsSnapshot.docs) {
+      final data = doc.data();
+      final origin = (data['origemCadastro'] ?? '')
+          .toString()
+          .trim()
+          .toLowerCase();
+      if (origin != 'erp') {
+        continue;
+      }
+
+      if (!_productBelongsToRepresentedScope(
+        data: data,
+        representedCompanyId: normalizedRepresentedCompanyId,
+      )) {
+        continue;
+      }
+
+      final rawCategory = (data['categoria'] ?? data['nomeGrupoProduto'] ?? '')
+          .toString()
+          .trim();
+      if (rawCategory.isEmpty) {
+        continue;
+      }
+
+      categoriesFromProducts.putIfAbsent(
+        rawCategory.toLowerCase(),
+        () => rawCategory,
+      );
+    }
+
+    if (categoriesFromProducts.isEmpty) {
+      return 0;
+    }
+
+    final nextTaxonomy = currentTaxonomy
+        .map(
+          (item) => ProductCategoryTaxonomyItem(
+            name: item.name,
+            subcategories: [...item.subcategories],
+          ),
+        )
+        .toList(growable: true);
+
+    var addedCount = 0;
+    final sortedCategoryKeys = categoriesFromProducts.keys.toList()..sort();
+    for (final categoryKey in sortedCategoryKeys) {
+      if (existingCategoriesByKey.containsKey(categoryKey)) {
+        continue;
+      }
+
+      final categoryName = categoriesFromProducts[categoryKey] ?? '';
+      if (categoryName.trim().isEmpty) {
+        continue;
+      }
+
+      nextTaxonomy.add(
+        ProductCategoryTaxonomyItem(
+          name: categoryName,
+          subcategories: const <String>[],
+        ),
+      );
+      existingCategoriesByKey[categoryKey] = ProductCategoryTaxonomyItem(
+        name: categoryName,
+        subcategories: const <String>[],
+      );
+      addedCount += 1;
+    }
+
+    if (addedCount == 0) {
+      return 0;
+    }
+
+    await updateRepresentedProductTaxonomy(
+      tenantId: normalizedTenantId,
+      representedCompanyId: normalizedRepresentedCompanyId,
+      taxonomy: nextTaxonomy,
+    );
+
+    return addedCount;
+  }
+
   Stream<List<String>> watchRepresentedProductCategories({
     required String tenantId,
     required String? representedCompanyId,
@@ -12,7 +133,9 @@ mixin _WorkspaceProfileProductTaxonomyMixin {
       return Stream.value(const <String>[]);
     }
 
-    final scopeKey = _scopeKey(representedCompanyId);
+    final scopeKey = _scopeKey(
+      _effectiveRepresentedCompanyId(normalizedTenantId, representedCompanyId),
+    );
     return _firestore
         .collection('tenants')
         .doc(normalizedTenantId)
@@ -41,7 +164,9 @@ mixin _WorkspaceProfileProductTaxonomyMixin {
       return Stream.value(const <ProductCategoryTaxonomyItem>[]);
     }
 
-    final scopeKey = _scopeKey(representedCompanyId);
+    final scopeKey = _scopeKey(
+      _effectiveRepresentedCompanyId(normalizedTenantId, representedCompanyId),
+    );
     return _firestore
         .collection('tenants')
         .doc(normalizedTenantId)
@@ -73,7 +198,9 @@ mixin _WorkspaceProfileProductTaxonomyMixin {
         .map((value) => value.trim())
         .where((value) => value.isNotEmpty)
         .toList(growable: false);
-    final scopeKey = _scopeKey(representedCompanyId);
+    final scopeKey = _scopeKey(
+      _effectiveRepresentedCompanyId(normalizedTenantId, representedCompanyId),
+    );
 
     await _firestore.collection('tenants').doc(normalizedTenantId).set({
       'representedProductCategories': {scopeKey: normalizedCategories},
@@ -91,7 +218,9 @@ mixin _WorkspaceProfileProductTaxonomyMixin {
       throw StateError('Dados invalidos para salvar taxonomia de categorias.');
     }
 
-    final scopeKey = _scopeKey(representedCompanyId);
+    final scopeKey = _scopeKey(
+      _effectiveRepresentedCompanyId(normalizedTenantId, representedCompanyId),
+    );
     final normalizedTaxonomy =
         taxonomy
             .map(

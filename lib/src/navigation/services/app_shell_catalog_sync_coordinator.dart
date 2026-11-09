@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../core/services/catalog_incremental_sync_service.dart';
 import '../../core/services/catalog_snapshot_store.dart';
+import '../../core/services/mobile_product_image_cache_service.dart';
 
 class CatalogWarmupSummary {
   const CatalogWarmupSummary({
@@ -74,6 +75,15 @@ class AppShellCatalogSyncCoordinator {
           module: module,
           items: result.items,
         );
+        if (module == CatalogSyncModule.produtos && result.items.isNotEmpty) {
+          await MobileProductImageCacheService.instance
+              .syncProductsFromPayloads(
+                tenantId: normalizedTenantId,
+                payloads: result.items
+                    .where((item) => !item.isDeleted)
+                    .map((item) => item.payload),
+              );
+        }
         pages++;
         pagesPulled++;
         itemsPulled += result.items.length;

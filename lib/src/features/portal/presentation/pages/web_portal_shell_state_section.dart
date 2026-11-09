@@ -13,7 +13,7 @@ class _WebPortalShellState extends State<_WebPortalShell> {
   final Map<String, String?> _activeRepresentedCompanyNameByTenant = {};
 
   String _enterpriseDefaultRepresentedId(TenantEntryOption tenant) {
-    return 'enterprise_default_${tenant.tenantId}';
+    return EnterpriseRepresentedScope.syntheticId(tenant.tenantId);
   }
 
   bool _isEnterpriseWorkspace(TenantEntryOption tenant) {
@@ -767,6 +767,14 @@ class _WebPortalShellState extends State<_WebPortalShell> {
             icon: Icons.policy_outlined,
             section: _PortalSection.tenant,
             builder: _SimpleSectionPage.enterprisePoliticas,
+            tenantModule: true,
+            hideFromNavigation: false,
+          ),
+          _PortalNavItem(
+            label: 'Configurações',
+            icon: Icons.settings_outlined,
+            section: _PortalSection.tenant,
+            builder: _SimpleSectionPage.enterpriseConfiguracoes,
             tenantModule: true,
             hideFromNavigation: false,
           ),

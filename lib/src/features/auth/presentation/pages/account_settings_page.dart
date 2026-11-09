@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -22,6 +25,9 @@ class AccountSettingsPage extends StatefulWidget {
 }
 
 class _AccountSettingsPageState extends State<AccountSettingsPage> {
+  static const int _userLogoMaxWidthPx = 240;
+  static const int _userLogoMaxHeightPx = 96;
+
   bool _leavingTenant = false;
   bool _updatingDisplayName = false;
 
@@ -98,7 +104,10 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
           .get();
       final userData = userDoc.data() ?? <String, dynamic>{};
       currentName =
-          (userData['displayName'] ?? userData['name'] ?? userData['nome'] ?? '')
+          (userData['displayName'] ??
+                  userData['name'] ??
+                  userData['nome'] ??
+                  '')
               .toString()
               .trim();
     }
@@ -126,13 +135,16 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
 
     try {
       await user.updateDisplayName(selectedName);
-      await FirebaseFirestore.instance.collection('usuarios').doc(user.uid).set({
-        'uid': user.uid,
-        'email': user.email ?? '',
-        'displayName': selectedName,
-        'name': selectedName,
-        'updatedAt': DateTime.now().toIso8601String(),
-      }, SetOptions(merge: true));
+      await FirebaseFirestore.instance.collection('usuarios').doc(user.uid).set(
+        {
+          'uid': user.uid,
+          'email': user.email ?? '',
+          'displayName': selectedName,
+          'name': selectedName,
+          'updatedAt': DateTime.now().toIso8601String(),
+        },
+        SetOptions(merge: true),
+      );
 
       if (!mounted) {
         return;
@@ -149,6 +161,112 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
         });
       }
     }
+  }
+
+  String? _userLogoDataFromMap(Map<String, dynamic> userData) {
+    final primary = (userData['logoDataUrl'] ?? '').toString().trim();
+    if (primary.isNotEmpty) {
+      return primary;
+    }
+    final legacy = (userData['logoUrl'] ?? '').toString().trim();
+    return legacy.isEmpty ? null : legacy;
+  }
+
+  Uint8List? _decodeLogoDataUrl(String? rawData) {
+    final value = (rawData ?? '').trim();
+    if (value.isEmpty) {
+      return null;
+    }
+
+    try {
+      final base64Part = value.startsWith('data:image')
+          ? value.substring(value.indexOf(',') + 1)
+          : value;
+      final decoded = base64Decode(base64Part);
+      return decoded.isEmpty ? null : decoded;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Widget _buildUserLogoCard() {
+    final uid = (FirebaseAuth.instance.currentUser?.uid ?? '').trim();
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Logo da conta',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Usado no PDF de pedido e pronto para reaproveitar em outros pontos do app.',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Configuração é feita no portal web. No mobile este bloco é apenas visualização.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Tamanho alvo: até $_userLogoMaxWidthPx x $_userLogoMaxHeightPx px.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 12),
+            StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+              stream: uid.isEmpty
+                  ? null
+                  : FirebaseFirestore.instance
+                        .collection('usuarios')
+                        .doc(uid)
+                        .snapshots(),
+              builder: (context, snapshot) {
+                final userData =
+                    snapshot.data?.data() ?? const <String, dynamic>{};
+                final logoData = _userLogoDataFromMap(userData);
+                final logoBytes = _decodeLogoDataUrl(logoData);
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 128,
+                      height: 56,
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                          color: Theme.of(context).dividerColor,
+                        ),
+                        borderRadius: BorderRadius.circular(6),
+                        color: Colors.white,
+                      ),
+                      child: logoBytes == null
+                          ? const Center(
+                              child: Text(
+                                'Sem logo',
+                                style: TextStyle(fontSize: 11),
+                              ),
+                            )
+                          : Image.memory(
+                              logoBytes,
+                              fit: BoxFit.contain,
+                              filterQuality: FilterQuality.medium,
+                            ),
+                    ),
+                    const SizedBox(height: 4),
+                  ],
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   String _workspaceTypeLabel(String workspaceType) {
@@ -369,6 +487,8 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
               ),
             ),
             const SizedBox(height: 12),
+            _buildUserLogoCard(),
+            const SizedBox(height: 12),
             _buildWorkspaceAndBillingCard(),
             const SizedBox(height: 12),
             Card(
@@ -448,8 +568,7 @@ class _EditDisplayNameDialog extends StatefulWidget {
   final String initialName;
 
   @override
-  State<_EditDisplayNameDialog> createState() =>
-      _EditDisplayNameDialogState();
+  State<_EditDisplayNameDialog> createState() => _EditDisplayNameDialogState();
 }
 
 class _EditDisplayNameDialogState extends State<_EditDisplayNameDialog> {

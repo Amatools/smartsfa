@@ -512,9 +512,29 @@ service cloud.firestore {
         && data.activeSubordinateCount == 0;
     }
 
+    function validMembershipInactivityWindow(data) {
+      return (
+          (!('inactivityStartAt' in data) && !('inactivityEndAt' in data))
+          || (
+            data.inactivityStartAt is string
+            && data.inactivityEndAt is string
+          )
+        )
+        && (!('inactivityReason' in data) || data.inactivityReason is string)
+        && (
+          !('inactivityUpdatedByUid' in data)
+          || (
+            data.inactivityUpdatedByUid is string
+            && data.inactivityUpdatedByUid != ''
+          )
+        )
+        && (!('inactivityUpdatedAt' in data) || data.inactivityUpdatedAt is string);
+    }
+
     function validMembershipDoc(membershipKey, data) {
       return validMembershipBaseDoc(membershipKey, data)
-        && validMembershipHierarchy(data);
+        && validMembershipHierarchy(data)
+        && validMembershipInactivityWindow(data);
     }
 
     function validManagedMembershipByDirectSuperior(membershipKey, data) {
@@ -813,7 +833,8 @@ service cloud.firestore {
     }
 
     function validProductStandardUnitCatalogEntryDoc(data) {
-      return validProductUnitCatalogBaseEntryDoc(data);
+      return validProductUnitCatalogBaseEntryDoc(data)
+        && validProductUnitCatalogShortCode(data);
     }
 
     function validProductUnitCatalogMetaDoc(data) {
@@ -1076,7 +1097,16 @@ service cloud.firestore {
         && resource.data.activeSellerChildrenCount == request.resource.data.activeSellerChildrenCount
         && resource.data.activeRepresentativeChildrenCount == request.resource.data.activeRepresentativeChildrenCount
         && resource.data.activeSubordinateCount == request.resource.data.activeSubordinateCount
-        && request.resource.data.state == 'active';
+        && request.resource.data.state == 'active'
+        && unchangedMembershipInactivityFields();
+    }
+
+    function unchangedMembershipInactivityFields() {
+      return resource.data.inactivityStartAt == request.resource.data.inactivityStartAt
+        && resource.data.inactivityEndAt == request.resource.data.inactivityEndAt
+        && resource.data.inactivityReason == request.resource.data.inactivityReason
+        && resource.data.inactivityUpdatedByUid == request.resource.data.inactivityUpdatedByUid
+        && resource.data.inactivityUpdatedAt == request.resource.data.inactivityUpdatedAt;
     }
 
     function canUpdateOwnUserTenantContext(targetUid, data) {
@@ -1142,6 +1172,7 @@ service cloud.firestore {
 
     function canUpdateMembershipDocByDirectSuperior(membershipKey, data) {
       return canManageMembershipByDirectSuperior(data)
+        && unchangedMembershipInactivityFields()
         && validManagedMembershipByDirectSuperior(membershipKey, data);
     }
 
@@ -1152,7 +1183,40 @@ service cloud.firestore {
 
     function canUpdateMembershipDocBySelfServiceBootstrap(membershipKey, data) {
       return isPossibleSelfServiceBootstrapMembership(data)
+        && unchangedMembershipInactivityFields()
         && validSelfServiceBootstrapMembership(membershipKey, data);
+    }
+
+    function hasStableMembershipCoreForOwnerInactivityUpdate() {
+      return resource.data.membershipId == request.resource.data.membershipId
+        && resource.data.tenantId == request.resource.data.tenantId
+        && resource.data.uid == request.resource.data.uid
+        && resource.data.role == request.resource.data.role
+        && request.resource.data.role != 'owner'
+        && resource.data.ativo == request.resource.data.ativo
+        && resource.data.defaultTenant == request.resource.data.defaultTenant
+        && resource.data.ownerId == request.resource.data.ownerId
+        && resource.data.gerenteId == request.resource.data.gerenteId
+        && resource.data.representanteId == request.resource.data.representanteId
+        && resource.data.vendedorId == request.resource.data.vendedorId
+        && resource.data.activeSellerChildrenCount == request.resource.data.activeSellerChildrenCount
+        && resource.data.activeRepresentativeChildrenCount == request.resource.data.activeRepresentativeChildrenCount
+        && resource.data.activeSubordinateCount == request.resource.data.activeSubordinateCount
+        && resource.data.userName == request.resource.data.userName
+        && resource.data.userEmail == request.resource.data.userEmail
+        && resource.data.state == request.resource.data.state
+        && resource.data.revokedByUid == request.resource.data.revokedByUid
+        && resource.data.revokedReason == request.resource.data.revokedReason
+        && resource.data.revokedAt == request.resource.data.revokedAt
+        && resource.data.lastSyncedAt == request.resource.data.lastSyncedAt;
+    }
+
+    function canUpdateMembershipInactivityPeriodByOwner(membershipKey, data) {
+      return isEffectiveTenantOwner(data.tenantId)
+        && hasStableMembershipCoreForOwnerInactivityUpdate()
+        && validMembershipDoc(membershipKey, data)
+        && validMembershipInactivityWindow(data)
+        && data.inactivityUpdatedByUid == uid();
     }
 
     function isHierarchyLeadershipRole(role) {
@@ -1201,6 +1265,7 @@ service cloud.firestore {
         || canUpdateMembershipDocByDirectSuperior(membershipKey, data)
         || canUpdateMembershipDocByOwnTenantSelection(membershipKey, data)
         || canUpdateMembershipDocBySelfServiceBootstrap(membershipKey, data)
+        || canUpdateMembershipInactivityPeriodByOwner(membershipKey, data)
         );
     }
 

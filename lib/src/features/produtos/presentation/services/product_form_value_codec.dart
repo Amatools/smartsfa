@@ -13,10 +13,35 @@ class ProductFormValueCodec {
     required String currencyCode,
   }) {
     final normalized = value.toStringAsFixed(2);
+    final parts = normalized.split('.');
+    final integerPart = parts.first;
+    final decimalPart = parts.length > 1 ? parts[1] : '00';
+
     if (currencyCode == 'USD') {
-      return normalized;
+      return '${_groupThousands(integerPart, ',')}.$decimalPart';
     }
-    return normalized.replaceAll('.', ',');
+
+    return '${_groupThousands(integerPart, '.')},$decimalPart';
+  }
+
+  static String _groupThousands(String integerPart, String separator) {
+    final negative = integerPart.startsWith('-');
+    final digits = negative ? integerPart.substring(1) : integerPart;
+    if (digits.length <= 3) {
+      return negative ? '-$digits' : digits;
+    }
+
+    final buffer = StringBuffer();
+    for (var i = 0; i < digits.length; i++) {
+      final reverseIndex = digits.length - i;
+      buffer.write(digits[i]);
+      if (reverseIndex > 1 && reverseIndex % 3 == 1) {
+        buffer.write(separator);
+      }
+    }
+
+    final grouped = buffer.toString();
+    return negative ? '-$grouped' : grouped;
   }
 
   static double? parseDecimal(String value) {

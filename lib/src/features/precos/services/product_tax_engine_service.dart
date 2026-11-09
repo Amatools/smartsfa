@@ -8,6 +8,7 @@ import '../../../core/repositories/product_base_price_repository.dart';
 import '../../../core/repositories/produto_repository.dart';
 import '../../../core/repositories/tax_operation_profile_repository.dart';
 import '../../../core/repositories/tax_rule_repository.dart';
+import '../../../core/services/enterprise_represented_scope.dart';
 import 'tax_operation_classifier_service.dart';
 import 'tax_rounding_policy.dart';
 
@@ -133,7 +134,18 @@ class ProductTaxEngineService {
     final normalizedTabelaId = tabelaId.trim();
     final normalizedUfDestino = clienteUf.trim().toUpperCase();
     final normalizedUfOrigem = ufOrigem.trim().toUpperCase();
-    final normalizedRepresentedCompanyId = (representedCompanyId ?? '').trim();
+    // Ver `EnterpriseRepresentedScope`: contas enterprise podem repassar o id
+    // sintetico de representada ate aqui (ex.: callers que ainda nao
+    // guardam na origem) - normaliza para `null`/"sem representada" antes de
+    // comparar com `tax_rules.representedCompanyId`, senao uma regra
+    // futura escopada por representada real nunca seria encontrada para
+    // essas contas.
+    final normalizedRepresentedCompanyId =
+        EnterpriseRepresentedScope.effectiveRepresentedCompanyId(
+          tenantId: normalizedTenantId,
+          representedCompanyId: representedCompanyId,
+        ) ??
+        '';
     final sameUf = normalizedUfOrigem == normalizedUfDestino;
 
     if (normalizedTenantId.isEmpty ||
@@ -182,6 +194,14 @@ class ProductTaxEngineService {
           return scope == normalizedRepresentedCompanyId;
         })
         .toList(growable: false);
+    // TEMP DEBUG: investigacao "imposto nao calculado" (remover apos diagnostico).
+    print(
+      '[TAX-DEBUG] produtoId=$normalizedProdutoId ncm=${produto.ncm} '
+      'grupoTributarioId=${produto.grupoTributarioId} cest=${produto.cest} '
+      'regrasTotal=${regras.length} scopedRules=${scopedRules.length} '
+      'ufOrigem=$normalizedUfOrigem ufDestino=$normalizedUfDestino '
+      'representedCompanyId=$normalizedRepresentedCompanyId',
+    );
     final ruleMatch = _resolveTaxRule(
       regras: scopedRules,
       produtoId: produto.id,
@@ -193,6 +213,11 @@ class ProductTaxEngineService {
       customerTaxRegime: customerTaxRegime,
     );
     final regra = ruleMatch?.regra;
+    // TEMP DEBUG: investigacao "imposto nao calculado" (remover apos diagnostico).
+    print(
+      '[TAX-DEBUG] matchedTier=${ruleMatch?.tier} regraId=${regra?.id} '
+      'aliquotaDestino=${regra?.aliquotaDestino} aliquotaCredito=${regra?.aliquotaCredito}',
+    );
 
     final precoBaseOriginal = precoUnitarioComDescontoPreTax * quantidade;
     final precoUnitario = precoUnitarioComDescontoPreTax;
@@ -608,10 +633,14 @@ class ProductTaxEngineService {
   Future<List<TaxRule>> _loadTaxRules(String tenantId) async {
     final cached = _taxRulesCache[tenantId];
     if (cached != null) {
+      // TEMP DEBUG: investigacao "imposto nao calculado" (remover apos diagnostico).
+      print('[TAX-DEBUG] _loadTaxRules cache HIT tenant=$tenantId count=${cached.length}');
       return cached;
     }
 
     final loaded = await taxRuleRepository.fetchAll(tenantId: tenantId);
+    // TEMP DEBUG: investigacao "imposto nao calculado" (remover apos diagnostico).
+    print('[TAX-DEBUG] _loadTaxRules fetchAll tenant=$tenantId count=${loaded.length}');
     _taxRulesCache[tenantId] = List<TaxRule>.unmodifiable(loaded);
     return loaded;
   }

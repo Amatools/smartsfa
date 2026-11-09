@@ -18,11 +18,10 @@ mixin _WorkspaceProfilePaymentConditionsMixin {
     String tenantId,
     String? representedCompanyId,
   ) {
-    final normalized = (representedCompanyId ?? '').trim();
-    if (normalized.isEmpty || normalized == 'enterprise_default_$tenantId') {
-      return null;
-    }
-    return normalized;
+    return EnterpriseRepresentedScope.effectiveRepresentedCompanyId(
+      tenantId: tenantId,
+      representedCompanyId: representedCompanyId,
+    );
   }
 
   Stream<List<PaymentConditionRule>> watchPaymentConditionRules({

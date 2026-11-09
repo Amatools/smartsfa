@@ -50,7 +50,12 @@ class _TabelasPrecoPageState extends State<TabelasPrecoPage> {
     required String? representedCompanyName,
   }) {
     final normalizedWorkspaceType = workspaceType.trim().toLowerCase();
-    final representedId = (representedCompanyId ?? '').trim();
+    final representedId = (DefaultPriceTableGuard.effectiveRepresentedCompanyId(
+              tenantId: widget.identity.tenantId,
+              representedCompanyId: representedCompanyId,
+            ) ??
+            '')
+        .trim();
     final representedName = (representedCompanyName ?? '').trim();
     final representedContext =
         normalizedWorkspaceType == 'rep_workspace' || representedName.isNotEmpty;
@@ -145,8 +150,16 @@ class _TabelasPrecoPageState extends State<TabelasPrecoPage> {
 
         final workspaceType = widget.activeTenant.workspaceType.trim().toLowerCase();
         final hasRepresentedContext = representedName.isNotEmpty;
-        final selectedRepresented = (widget.selectedRepresentedCompanyId ?? '').trim();
-        final scopedTables = (workspaceType == 'rep_workspace' || hasRepresentedContext)
+        final selectedRepresented = (DefaultPriceTableGuard.effectiveRepresentedCompanyId(
+                  tenantId: widget.identity.tenantId,
+                  representedCompanyId: widget.selectedRepresentedCompanyId,
+                ) ??
+                '')
+            .trim();
+        final hasRepresentedScope =
+            (workspaceType == 'rep_workspace' || hasRepresentedContext) &&
+            selectedRepresented.isNotEmpty;
+        final scopedTables = hasRepresentedScope
             ? tabelas
                 .where(
                   (tabela) {

@@ -15,6 +15,7 @@ class ProductsTable extends StatelessWidget {
     required this.updatingStatusProductIds,
     required this.onToggleStatus,
     required this.onOpen,
+    this.onPreviewImage,
     required this.thumbnailBuilder,
     required this.priceFormatter,
   });
@@ -23,6 +24,7 @@ class ProductsTable extends StatelessWidget {
   final Set<String> updatingStatusProductIds;
   final void Function(Produto produto) onToggleStatus;
   final void Function(Produto produto) onOpen;
+  final void Function(Produto produto)? onPreviewImage;
   final ProductThumbnailBuilder thumbnailBuilder;
   final ProductPriceFormatter priceFormatter;
 
@@ -155,7 +157,9 @@ class ProductsTable extends StatelessWidget {
     final codigoSaas = produto.codigoInterno.trim();
     final codigo = codigoErp.isNotEmpty
         ? codigoErp
-        : (codigoSaas.isNotEmpty ? codigoSaas : (produto.codigoFabricante ?? '').trim());
+        : (codigoSaas.isNotEmpty
+              ? codigoSaas
+              : (produto.codigoFabricante ?? '').trim());
 
     Widget tappableCell(Widget child, {bool alignRight = false}) {
       return InkWell(
@@ -204,7 +208,18 @@ class ProductsTable extends StatelessWidget {
           ),
           SizedBox(
             width: _ProductTableLayout.thumbnailColumnWidth,
-            child: tappableCell(thumbnailBuilder(produto)),
+            child: InkWell(
+              onTap: onPreviewImage == null
+                  ? onTap
+                  : () => onPreviewImage!(produto),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: thumbnailBuilder(produto),
+                ),
+              ),
+            ),
           ),
           const SizedBox(width: _ProductTableLayout.columnGap),
           SizedBox(

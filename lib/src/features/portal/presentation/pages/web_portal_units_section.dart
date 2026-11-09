@@ -21,6 +21,8 @@ class _UnitsSectionState extends State<_UnitsSection> {
   final TextEditingController _newMeasureShortCodeController =
       TextEditingController();
   final TextEditingController _newStandardController = TextEditingController();
+  final TextEditingController _newStandardShortCodeController =
+      TextEditingController();
   bool _working = false;
 
   @override
@@ -34,6 +36,7 @@ class _UnitsSectionState extends State<_UnitsSection> {
     _newMeasureController.dispose();
     _newMeasureShortCodeController.dispose();
     _newStandardController.dispose();
+    _newStandardShortCodeController.dispose();
     super.dispose();
   }
 
@@ -50,6 +53,10 @@ class _UnitsSectionState extends State<_UnitsSection> {
           tenantId: widget.activeTenant.tenantId,
           type: ProductUnitCatalogType.standard,
           defaultValues: ProductEditorDefaults.standardUnits,
+          defaultShortCodes: ProductEditorDefaults.standardUnitShortCodes,
+        );
+        await _service.syncStandardUnitsFromProducts(
+          tenantId: widget.activeTenant.tenantId,
         );
       } catch (_) {
         // Best effort seeding for first use.
@@ -67,65 +74,62 @@ class _UnitsSectionState extends State<_UnitsSection> {
     final scopeLabel = representedName.isEmpty
         ? widget.activeTenant.tenantName
         : representedName;
+    final textTheme = Theme.of(context).textTheme;
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Unidades', style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 4),
-            Text(
-              'Gerencie os cadastros usados nos produtos de $scopeLabel. Somente unidades cadastradas aparecem no editor.',
-            ),
-            if (!canEditSettings) ...[
-              const SizedBox(height: 10),
-              _ownerOnlyReadOnlyNotice(
-                context,
-                message: 'Unidades ficam em modo somente leitura para este perfil. Apenas o owner pode alterar.',
-              ),
-            ],
-            const SizedBox(height: 16),
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final maxWidth = constraints.maxWidth;
-                final twoColumns = maxWidth >= 960;
-                final panelWidth = twoColumns ? (maxWidth - 12) / 2 : maxWidth;
-
-                return Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
-                  children: [
-                    SizedBox(
-                      width: panelWidth,
-                      child: _buildCatalogPanel(
-                        type: ProductUnitCatalogType.measure,
-                        title: 'Unidade de medida',
-                        hint: 'Ex.: milimetro, litro',
-                        inputController: _newMeasureController,
-                        shortCodeController: _newMeasureShortCodeController,
-                        canEditSettings: canEditSettings,
-                      ),
-                    ),
-                    SizedBox(
-                      width: panelWidth,
-                      child: _buildCatalogPanel(
-                        type: ProductUnitCatalogType.standard,
-                        title: 'Unidade padrão',
-                        hint: 'Ex.: Unidade, Kit',
-                        inputController: _newStandardController,
-                        shortCodeController: null,
-                        canEditSettings: canEditSettings,
-                      ),
-                    ),
-                  ],
-                );
-              },
-            ),
-          ],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Unidades', style: textTheme.headlineMedium),
+        const SizedBox(height: 8),
+        Text(
+          'Gerencie os cadastros usados nos produtos de $scopeLabel. Somente unidades cadastradas aparecem no editor.',
+          style: textTheme.bodyLarge,
         ),
-      ),
+        if (!canEditSettings) ...[
+          const SizedBox(height: 10),
+          _ownerOnlyReadOnlyNotice(
+            context,
+            message: 'Unidades ficam em modo somente leitura para este perfil. Apenas o owner pode alterar.',
+          ),
+        ],
+        const SizedBox(height: 14),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final maxWidth = constraints.maxWidth;
+            final twoColumns = maxWidth >= 980;
+            final panelWidth = twoColumns ? (maxWidth - 12) / 2 : maxWidth;
+
+            return Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                SizedBox(
+                  width: panelWidth,
+                  child: _buildCatalogPanel(
+                    type: ProductUnitCatalogType.measure,
+                    title: 'Unidade de medida',
+                    hint: 'Ex.: milimetro, litro',
+                    inputController: _newMeasureController,
+                    shortCodeController: _newMeasureShortCodeController,
+                    canEditSettings: canEditSettings,
+                  ),
+                ),
+                SizedBox(
+                  width: panelWidth,
+                  child: _buildCatalogPanel(
+                    type: ProductUnitCatalogType.standard,
+                    title: 'Unidade padrão',
+                    hint: 'Ex.: Unidade, Kit',
+                    inputController: _newStandardController,
+                    shortCodeController: _newStandardShortCodeController,
+                    canEditSettings: canEditSettings,
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      ],
     );
   }
 
@@ -137,30 +141,56 @@ class _UnitsSectionState extends State<_UnitsSection> {
     required TextEditingController? shortCodeController,
     required bool canEditSettings,
   }) {
-    final requiresShortCode = type == ProductUnitCatalogType.measure;
+    final requiresShortCode = true;
+    final colors = Theme.of(context).colorScheme;
 
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+        borderRadius: BorderRadius.circular(12),
+        color: Colors.white,
+        border: Border.all(color: colors.outlineVariant),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 8),
           Row(
             children: [
+              Icon(
+                type == ProductUnitCatalogType.measure
+                    ? Icons.straighten_outlined
+                    : Icons.inventory_2_outlined,
+                size: 18,
+              ),
+              const SizedBox(width: 8),
               Expanded(
+                child: Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              SizedBox(
+                width: 280,
                 child: TextField(
                   controller: inputController,
                   enabled: canEditSettings && !_working,
                   decoration: InputDecoration(
                     labelText: 'Nova unidade',
                     hintText: hint,
-                    border: const OutlineInputBorder(),
+                    border: const OutlineInputBorder(
+                      borderRadius: BorderRadius.all(Radius.circular(10)),
+                    ),
                     isDense: true,
+                    filled: true,
+                    fillColor: colors.surface,
                   ),
                   onSubmitted: (_) {
                     if (!canEditSettings || _working) {
@@ -175,7 +205,6 @@ class _UnitsSectionState extends State<_UnitsSection> {
                 ),
               ),
               if (requiresShortCode) ...[
-                const SizedBox(width: 8),
                 SizedBox(
                   width: 120,
                   child: TextField(
@@ -189,9 +218,11 @@ class _UnitsSectionState extends State<_UnitsSection> {
                     ],
                     decoration: const InputDecoration(
                       labelText: 'Sigla',
-                      hintText: 'mm',
+                      hintText: 'Ex.: un, mm',
                       counterText: '',
-                      border: OutlineInputBorder(),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.all(Radius.circular(10)),
+                      ),
                       isDense: true,
                     ),
                     onSubmitted: (_) {
@@ -207,7 +238,6 @@ class _UnitsSectionState extends State<_UnitsSection> {
                   ),
                 ),
               ],
-              const SizedBox(width: 8),
               FilledButton.icon(
                 onPressed: canEditSettings && !_working
                     ? () => _addUnit(
@@ -221,7 +251,7 @@ class _UnitsSectionState extends State<_UnitsSection> {
               ),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           StreamBuilder<List<ProductUnitCatalogEntry>>(
             stream: _service.watchUnits(
               tenantId: widget.activeTenant.tenantId,
@@ -253,44 +283,55 @@ class _UnitsSectionState extends State<_UnitsSection> {
                 );
               }
 
-              return ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 250),
-                child: ListView.separated(
-                  shrinkWrap: true,
-                  itemCount: units.length,
-                  separatorBuilder: (_, index) => const Divider(height: 1),
-                  itemBuilder: (context, index) {
-                    final entry = units[index];
-                    final hasShortCode = entry.shortCode.trim().isNotEmpty;
-                    return ListTile(
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(
-                        hasShortCode && requiresShortCode
-                            ? '${entry.name} (${entry.shortCode})'
-                            : entry.name,
-                      ),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            tooltip: 'Editar',
-                            icon: const Icon(Icons.edit_outlined, size: 18),
-                            onPressed: canEditSettings && !_working
-                                ? () => _editUnit(type: type, entry: entry)
-                                : null,
-                          ),
-                          IconButton(
-                            tooltip: 'Excluir',
-                            icon: const Icon(Icons.delete_outline, size: 18),
-                            onPressed: canEditSettings && !_working
-                                ? () => _deleteUnit(type: type, entry: entry)
-                                : null,
-                          ),
-                        ],
-                      ),
-                    );
-                  },
+              return Container(
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: colors.outlineVariant.withValues(alpha: 0.8),
+                  ),
+                ),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 270),
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: units.length,
+                    separatorBuilder: (_, index) => Divider(
+                      height: 1,
+                      color: colors.outlineVariant.withValues(alpha: 0.45),
+                    ),
+                    itemBuilder: (context, index) {
+                      final entry = units[index];
+                      final hasShortCode = entry.shortCode.trim().isNotEmpty;
+                      return ListTile(
+                        dense: true,
+                        title: Text(
+                          hasShortCode
+                              ? '${entry.name} (${entry.shortCode})'
+                              : entry.name,
+                        ),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              tooltip: 'Editar',
+                              icon: const Icon(Icons.edit_outlined, size: 18),
+                              onPressed: canEditSettings && !_working
+                                  ? () => _editUnit(type: type, entry: entry)
+                                  : null,
+                            ),
+                            IconButton(
+                              tooltip: 'Excluir',
+                              icon: const Icon(Icons.delete_outline, size: 18),
+                              onPressed: canEditSettings && !_working
+                                  ? () => _deleteUnit(type: type, entry: entry)
+                                  : null,
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
                 ),
               );
             },
@@ -311,7 +352,7 @@ class _UnitsSectionState extends State<_UnitsSection> {
       return;
     }
 
-    if (type == ProductUnitCatalogType.measure && shortCode.isEmpty) {
+    if (shortCode.isEmpty) {
       _showMessage('Informe a sigla com ate 4 letras.');
       return;
     }
@@ -321,7 +362,7 @@ class _UnitsSectionState extends State<_UnitsSection> {
         tenantId: widget.activeTenant.tenantId,
         type: type,
         name: value,
-        shortCode: type == ProductUnitCatalogType.measure ? shortCode : null,
+        shortCode: shortCode,
       );
       inputController.clear();
       shortCodeController?.clear();
@@ -442,7 +483,7 @@ class _UnitsSectionState extends State<_UnitsSection> {
   }) async {
     final nameController = TextEditingController(text: initialName);
     final shortCodeController = TextEditingController(text: initialShortCode);
-    final requiresShortCode = type == ProductUnitCatalogType.measure;
+    final requiresShortCode = true;
 
     final value = await showDialog<_UnitDraft>(
       context: context,

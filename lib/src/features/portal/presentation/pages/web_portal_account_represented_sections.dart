@@ -1,6 +1,6 @@
 part of 'web_portal_page.dart';
 
-class _PortalLandingSection extends StatelessWidget {
+class _PortalLandingSection extends StatefulWidget {
   const _PortalLandingSection({
     required this.activeTenant,
     this.activeRepresentedCompanyName,
@@ -8,6 +8,400 @@ class _PortalLandingSection extends StatelessWidget {
 
   final TenantEntryOption activeTenant;
   final String? activeRepresentedCompanyName;
+
+  @override
+  State<_PortalLandingSection> createState() => _PortalLandingSectionState();
+}
+
+class _PortalLandingSectionState extends State<_PortalLandingSection> {
+  final AppShellDashboardSalesService _salesService =
+      const AppShellDashboardSalesService();
+  late final FirestorePedidoRepository _pedidoRepository;
+  late Stream<List<Pedido>> _pedidosStream;
+
+  @override
+  void initState() {
+    super.initState();
+    _pedidoRepository = FirestorePedidoRepository(FirebaseFirestore.instance);
+    _pedidosStream = _buildPedidosStream();
+  }
+
+  @override
+  void didUpdateWidget(covariant _PortalLandingSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.activeTenant.tenantId.trim() !=
+        widget.activeTenant.tenantId.trim()) {
+      _pedidosStream = _buildPedidosStream();
+    }
+  }
+
+  Stream<List<Pedido>> _buildPedidosStream() {
+    return _pedidoRepository.watchAll(tenantId: widget.activeTenant.tenantId);
+  }
+
+  String _formatCurrency(double value) {
+    final negative = value < 0;
+    final normalized = value.abs();
+    final cents = (normalized * 100).round();
+    final integerPart = cents ~/ 100;
+    final decimalPart = cents % 100;
+    final digits = integerPart.toString();
+
+    final grouped = StringBuffer();
+    for (var index = 0; index < digits.length; index++) {
+      final reverseIndex = digits.length - index;
+      grouped.write(digits[index]);
+      if (reverseIndex > 1 && reverseIndex % 3 == 1) {
+        grouped.write('.');
+      }
+    }
+
+    final base =
+        '${grouped.toString()},${decimalPart.toString().padLeft(2, '0')}';
+    if (negative) {
+      return '-R\$ $base';
+    }
+    return 'R\$ $base';
+  }
+
+  String _formatCompactCurrency(double value) {
+    final absolute = value.abs();
+    if (absolute >= 1000000) {
+      return 'R\$ ${(value / 1000000).toStringAsFixed(1)}M';
+    }
+    if (absolute >= 1000) {
+      return 'R\$ ${(value / 1000).toStringAsFixed(1)}k';
+    }
+    return _formatCurrency(value);
+  }
+
+  String _formatDay(DateTime day) {
+    String twoDigits(int value) => value.toString().padLeft(2, '0');
+    return '${twoDigits(day.day)}/${twoDigits(day.month)}';
+  }
+
+  String _formatDeltaPercent({
+    required double current,
+    required double baseline,
+  }) {
+    if (baseline == 0 && current == 0) {
+      return '0.0%';
+    }
+    if (baseline == 0 && current > 0) {
+      return '+100.0%';
+    }
+    final delta = ((current - baseline) / baseline) * 100;
+    final prefix = delta >= 0 ? '+' : '';
+    return '$prefix${delta.toStringAsFixed(1)}%';
+  }
+
+  Widget _buildSalesChartCard(
+    BuildContext context,
+    AppShellDashboardSalesSummary summary,
+  ) {
+    final data = summary.dailySales;
+    final maxValue = data.fold<double>(0, (current, point) {
+      if (point.total > current) {
+        return point.total;
+      }
+      return current;
+    });
+    final maxY = maxValue <= 0 ? 1.0 : maxValue * 1.15;
+
+    final spots = <FlSpot>[];
+    for (var index = 0; index < data.length; index++) {
+      spots.add(FlSpot(index.toDouble(), data[index].total));
+    }
+
+    final lineColor = Theme.of(context).colorScheme.primary;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Grafico diario de vendas (30 dias)',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              summary.hasSalesData
+                  ? 'Vendas enviadas dentro do seu escopo de acesso.'
+                  : 'Sem vendas enviadas no periodo para exibir no grafico.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              height: 280,
+              child: LineChart(
+                LineChartData(
+                  minX: 0,
+                  maxX: data.isEmpty ? 1 : (data.length - 1).toDouble(),
+                  minY: 0,
+                  maxY: maxY,
+                  gridData: FlGridData(
+                    show: true,
+                    drawVerticalLine: false,
+                    horizontalInterval: maxY / 4,
+                  ),
+                  borderData: FlBorderData(
+                    show: true,
+                    border: Border(
+                      left: BorderSide(color: Theme.of(context).dividerColor),
+                      bottom: BorderSide(color: Theme.of(context).dividerColor),
+                      right: BorderSide.none,
+                      top: BorderSide.none,
+                    ),
+                  ),
+                  titlesData: FlTitlesData(
+                    topTitles: const AxisTitles(
+                      sideTitles: SideTitles(showTitles: false),
+                    ),
+                    rightTitles: const AxisTitles(
+                      sideTitles: SideTitles(showTitles: false),
+                    ),
+                    leftTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: 72,
+                        getTitlesWidget: (value, _) {
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: Text(
+                              _formatCompactCurrency(value),
+                              style: Theme.of(context).textTheme.bodySmall,
+                              textAlign: TextAlign.right,
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    bottomTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: 28,
+                        interval: 5,
+                        getTitlesWidget: (value, _) {
+                          final index = value.round();
+                          if (index < 0 || index >= data.length) {
+                            return const SizedBox.shrink();
+                          }
+
+                          final isEdge = index == 0 || index == data.length - 1;
+                          final isInterval = index % 5 == 0;
+                          if (!isEdge && !isInterval) {
+                            return const SizedBox.shrink();
+                          }
+
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 6),
+                            child: Text(
+                              _formatDay(data[index].day),
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                  lineBarsData: [
+                    LineChartBarData(
+                      spots: spots,
+                      isCurved: true,
+                      color: lineColor,
+                      barWidth: 3,
+                      isStrokeCapRound: true,
+                      dotData: const FlDotData(show: false),
+                      belowBarData: BarAreaData(
+                        show: true,
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            lineColor.withValues(alpha: 0.26),
+                            lineColor.withValues(alpha: 0.04),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSalesKpiCard(
+    BuildContext context,
+    AppShellDashboardSalesSummary summary,
+  ) {
+    final trendPositive = summary.last7DaysTotal >= summary.previous7DaysTotal;
+    final trendColor = trendPositive ? Colors.green : Colors.red;
+    final trendIcon = trendPositive ? Icons.trending_up : Icons.trending_down;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Vendido no mes',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 10),
+            Text(
+              _formatCurrency(summary.monthTotal),
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: Colors.green.shade700,
+              ),
+            ),
+            const SizedBox(height: 12),
+            _PortalSalesInfoRow(
+              label: 'Pedidos enviados',
+              value: summary.monthOrders.toString(),
+            ),
+            const SizedBox(height: 8),
+            _PortalSalesInfoRow(
+              label: 'Ticket medio',
+              value: _formatCurrency(summary.monthAverageTicket),
+            ),
+            const SizedBox(height: 8),
+            _PortalSalesInfoRow(
+              label: 'Ultimos 7 dias',
+              value: _formatCurrency(summary.last7DaysTotal),
+            ),
+            const SizedBox(height: 8),
+            _PortalSalesInfoRow(
+              label: '7 dias anteriores',
+              value: _formatCurrency(summary.previous7DaysTotal),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Icon(trendIcon, color: trendColor, size: 18),
+                const SizedBox(width: 6),
+                Text(
+                  _formatDeltaPercent(
+                    current: summary.last7DaysTotal,
+                    baseline: summary.previous7DaysTotal,
+                  ),
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    color: trendColor,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTopCustomersCard(
+    BuildContext context,
+    AppShellDashboardSalesSummary summary,
+  ) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Top clientes no mes',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 10),
+            if (summary.topCustomers.isEmpty)
+              Text(
+                'Sem clientes com pedidos enviados no mes.',
+                style: Theme.of(context).textTheme.bodySmall,
+              )
+            else
+              ...summary.topCustomers.asMap().entries.map((entry) {
+                final row = entry.value;
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: _PortalSalesInfoRow(
+                    label:
+                        '${entry.key + 1}. ${row.label} (${row.orders} pedido(s))',
+                    value: _formatCurrency(row.total),
+                  ),
+                );
+              }),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCommercialSummary(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    final isWide = width >= 1280;
+
+    return StreamBuilder<List<Pedido>>(
+      stream: _pedidosStream,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData) {
+          return const Card(
+            child: Padding(
+              padding: EdgeInsets.all(24),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+          );
+        }
+
+        if (snapshot.hasError) {
+          return Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                'Nao foi possivel carregar o resumo comercial: ${snapshot.error}',
+                style: Theme.of(context).textTheme.bodyMedium
+                    ?.copyWith(color: Colors.red),
+              ),
+            ),
+          );
+        }
+
+        final summary = _salesService.build(pedidos: snapshot.data ?? const []);
+        final chartCard = _buildSalesChartCard(context, summary);
+        final sideCards = Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _buildSalesKpiCard(context, summary),
+            const SizedBox(height: 12),
+            _buildTopCustomersCard(context, summary),
+          ],
+        );
+
+        if (!isWide) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [chartCard, const SizedBox(height: 12), sideCards],
+          );
+        }
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(flex: 7, child: chartCard),
+            const SizedBox(width: 12),
+            Expanded(flex: 5, child: sideCards),
+          ],
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -58,23 +452,25 @@ class _PortalLandingSection extends StatelessWidget {
           children: [
             _SummaryCard(
               title: 'Workspace em uso',
-              value: activeTenant.tenantName,
+              value: widget.activeTenant.tenantName,
             ),
             _SummaryCard(
               title: 'Seu acesso atual',
               value: _roleLabel(
-                activeTenant.role,
-                activeTenant.workspaceType,
-                activeTenant.tenantName,
+                widget.activeTenant.role,
+                widget.activeTenant.workspaceType,
+                widget.activeTenant.tenantName,
               ),
             ),
             _SummaryCard(
               title: 'Workspace atual',
-              value: _workspaceTypeLabel(activeTenant.workspaceType),
+              value: _workspaceTypeLabel(widget.activeTenant.workspaceType),
             ),
             const _SummaryCard(title: 'Canal de acesso', value: 'Portal web'),
           ],
         ),
+        const SizedBox(height: 24),
+        _buildCommercialSummary(context),
         const SizedBox(height: 24),
         GridView.count(
           crossAxisCount: isWide ? 3 : 1,
@@ -86,6 +482,31 @@ class _PortalLandingSection extends StatelessWidget {
           children: modules
               .map((module) => _PortalModuleCard(module: module))
               .toList(),
+        ),
+      ],
+    );
+  }
+}
+
+class _PortalSalesInfoRow extends StatelessWidget {
+  const _PortalSalesInfoRow({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Text(label, style: Theme.of(context).textTheme.bodySmall),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          value,
+          style: Theme.of(context).textTheme.titleSmall
+              ?.copyWith(fontWeight: FontWeight.w700),
         ),
       ],
     );
@@ -114,6 +535,212 @@ class _BillingSection extends StatelessWidget {
       ],
     );
   }
+}
+
+const int _userLogoMaxWidthPx = 240;
+const int _userLogoMaxHeightPx = 96;
+
+String _readUserLogoDataUrl(Map<String, dynamic> data) {
+  final logoDataUrl = (data['logoDataUrl'] ?? '').toString().trim();
+  if (logoDataUrl.isNotEmpty) {
+    return logoDataUrl;
+  }
+  return (data['logoUrl'] ?? '').toString().trim();
+}
+
+Future<void> _uploadCurrentUserLogoForPdf(BuildContext context) async {
+  final user = FirebaseAuth.instance.currentUser;
+  if (user == null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Sessao expirada. Faca login novamente.')),
+    );
+    return;
+  }
+
+  try {
+    final logoDataUrl = await _pickAndResizeLogoDataUrl(
+      maxWidth: _userLogoMaxWidthPx,
+      maxHeight: _userLogoMaxHeightPx,
+    );
+    if (logoDataUrl == null || logoDataUrl.trim().isEmpty) {
+      return;
+    }
+
+    var storedWidth = 0;
+    var storedHeight = 0;
+    final bytes = _decodeDataUrlImageBytes(logoDataUrl);
+    if (bytes != null) {
+      final decoded = image_lib.decodeImage(bytes);
+      if (decoded != null) {
+        storedWidth = decoded.width;
+        storedHeight = decoded.height;
+      }
+    }
+
+    await FirebaseFirestore.instance.collection('usuarios').doc(user.uid).set({
+      'uid': user.uid,
+      'email': user.email ?? '',
+      'logoDataUrl': logoDataUrl,
+      'logoMeta': {
+        'maxWidthPx': _userLogoMaxWidthPx,
+        'maxHeightPx': _userLogoMaxHeightPx,
+        'storedWidthPx': storedWidth,
+        'storedHeightPx': storedHeight,
+        'updatedAt': DateTime.now().toIso8601String(),
+      },
+      'updatedAt': DateTime.now().toIso8601String(),
+    }, SetOptions(merge: true));
+
+    if (!context.mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Logo salvo com sucesso.')));
+  } catch (error) {
+    if (!context.mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text('Falha ao salvar logo: $error')));
+  }
+}
+
+Future<void> _removeCurrentUserLogoForPdf(BuildContext context) async {
+  final user = FirebaseAuth.instance.currentUser;
+  if (user == null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Sessao expirada. Faca login novamente.')),
+    );
+    return;
+  }
+
+  try {
+    await FirebaseFirestore.instance.collection('usuarios').doc(user.uid).set({
+      'logoDataUrl': FieldValue.delete(),
+      'logoMeta': FieldValue.delete(),
+      'updatedAt': DateTime.now().toIso8601String(),
+    }, SetOptions(merge: true));
+    if (!context.mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Logo removido.')));
+  } catch (error) {
+    if (!context.mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text('Falha ao remover logo: $error')));
+  }
+}
+
+Widget _buildPortalUserLogoCard(BuildContext context) {
+  final uid = (FirebaseAuth.instance.currentUser?.uid ?? '').trim();
+  final textTheme = Theme.of(context).textTheme;
+
+  return Align(
+    alignment: Alignment.centerLeft,
+    child: ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 980),
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Logo da Empresa', style: textTheme.titleMedium),
+              const SizedBox(height: 8),
+              const Text(
+                'Dimensões 240x96 - imagens maiores serão redimensionadas.',
+              ),
+              const SizedBox(height: 14),
+              StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                stream: uid.isEmpty
+                    ? null
+                    : FirebaseFirestore.instance
+                          .collection('usuarios')
+                          .doc(uid)
+                          .snapshots(),
+                builder: (context, snapshot) {
+                  final data =
+                      snapshot.data?.data() ?? const <String, dynamic>{};
+                  final logoValue = _readUserLogoDataUrl(data);
+                  final logoBytes = _decodeDataUrlImageBytes(logoValue);
+                  final hasLogo = logoBytes != null || logoValue.isNotEmpty;
+
+                  final imageWidget = logoBytes != null
+                      ? Image.memory(
+                          logoBytes,
+                          fit: BoxFit.contain,
+                          filterQuality: FilterQuality.medium,
+                        )
+                      : (logoValue.startsWith('http://') ||
+                            logoValue.startsWith('https://'))
+                      ? Image.network(
+                          logoValue,
+                          fit: BoxFit.contain,
+                          filterQuality: FilterQuality.medium,
+                        )
+                      : const Center(
+                          child: Text(
+                            'Sem logo',
+                            style: TextStyle(fontSize: 11),
+                          ),
+                        );
+
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 128,
+                        height: 56,
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          border: Border.all(
+                            color: Theme.of(context).dividerColor,
+                          ),
+                          borderRadius: BorderRadius.circular(6),
+                          color: Colors.white,
+                        ),
+                        child: imageWidget,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Formatos suportados: JPEG, PNG, GIF e WEBP.',
+                        style: textTheme.bodySmall,
+                      ),
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          OutlinedButton.icon(
+                            onPressed: uid.isEmpty
+                                ? null
+                                : () => _uploadCurrentUserLogoForPdf(context),
+                            icon: const Icon(Icons.upload_file_outlined),
+                            label: const Text('Enviar logo'),
+                          ),
+                          if (hasLogo)
+                            TextButton.icon(
+                              onPressed: uid.isEmpty
+                                  ? null
+                                  : () => _removeCurrentUserLogoForPdf(context),
+                              icon: const Icon(Icons.delete_outline),
+                              label: const Text('Remover logo'),
+                            ),
+                        ],
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
 }
 
 class _AccountSection extends StatelessWidget {
@@ -213,6 +840,8 @@ class _AccountSection extends StatelessWidget {
             ),
           ),
         ),
+        const SizedBox(height: 16),
+        _buildPortalUserLogoCard(context),
         const SizedBox(height: 16),
         Align(
           alignment: Alignment.centerLeft,

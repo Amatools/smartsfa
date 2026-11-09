@@ -20,8 +20,12 @@ class _MediaLibrarySectionState extends State<_MediaLibrarySection> {
   String _searchTerm = '';
   bool _uploading = false;
 
-  String get _scopeKey =>
-      _normalizeDefaultScopeKey(widget.selectedRepresentedCompanyId);
+  String get _scopeKey => _normalizeDefaultScopeKey(
+    EnterpriseRepresentedScope.effectiveRepresentedCompanyId(
+      tenantId: widget.activeTenant.tenantId,
+      representedCompanyId: widget.selectedRepresentedCompanyId,
+    ),
+  );
   String get _scopeLabel =>
       (widget.activeRepresentedCompanyName ?? '').trim().isNotEmpty
       ? widget.activeRepresentedCompanyName!.trim()

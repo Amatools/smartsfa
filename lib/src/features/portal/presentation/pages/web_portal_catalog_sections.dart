@@ -1,4 +1,4 @@
-﻿part of 'web_portal_page.dart';
+part of 'web_portal_page.dart';
 
 class _PricingCatalogSection extends StatelessWidget {
   const _PricingCatalogSection({
@@ -72,6 +72,16 @@ class _SimpleSectionPage extends StatelessWidget {
     String? activeRepresentedCompanyName,
   }) {
     return _EnterprisePoliciesSection(
+      activeTenant: activeTenant,
+      activeRepresentedCompanyName: activeRepresentedCompanyName,
+    );
+  }
+
+  static Widget enterpriseConfiguracoes({
+    required TenantEntryOption activeTenant,
+    String? activeRepresentedCompanyName,
+  }) {
+    return _EnterpriseSettingsSection(
       activeTenant: activeTenant,
       activeRepresentedCompanyName: activeRepresentedCompanyName,
     );
@@ -357,6 +367,203 @@ class _EnterprisePoliciesSectionState
           activeTenant: widget.activeTenant,
           selectedRepresentedCompanyId: null,
           activeRepresentedCompanyName: null,
+        );
+    }
+  }
+}
+
+enum _EnterpriseSettingsSubmenu {
+  parametros,
+  categorias,
+  unidades,
+  fotos,
+  periodoInatividade,
+}
+
+class _EnterpriseSettingsSection extends StatefulWidget {
+  const _EnterpriseSettingsSection({
+    required this.activeTenant,
+    this.activeRepresentedCompanyName,
+  });
+
+  final TenantEntryOption activeTenant;
+  final String? activeRepresentedCompanyName;
+
+  @override
+  State<_EnterpriseSettingsSection> createState() =>
+      _EnterpriseSettingsSectionState();
+}
+
+class _EnterpriseSettingsSectionState
+    extends State<_EnterpriseSettingsSection> {
+  static final Map<String, _EnterpriseSettingsSubmenu> _submenuByTenantId =
+      <String, _EnterpriseSettingsSubmenu>{};
+
+  _EnterpriseSettingsSubmenu _activeSubmenu =
+      _EnterpriseSettingsSubmenu.parametros;
+
+  String get _tenantId => widget.activeTenant.tenantId;
+
+  @override
+  void initState() {
+    super.initState();
+    _activeSubmenu =
+        _submenuByTenantId[_tenantId] ?? _EnterpriseSettingsSubmenu.parametros;
+  }
+
+  @override
+  void didUpdateWidget(covariant _EnterpriseSettingsSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.activeTenant.tenantId != widget.activeTenant.tenantId) {
+      _activeSubmenu =
+          _submenuByTenantId[_tenantId] ??
+          _EnterpriseSettingsSubmenu.parametros;
+    }
+  }
+
+  String get _representedCompanyId {
+    return _enterpriseDefaultRepresentedCompanyId(widget.activeTenant);
+  }
+
+  String get _representedCompanyName {
+    final name = (widget.activeRepresentedCompanyName ?? '').trim();
+    if (name.isNotEmpty) {
+      return name;
+    }
+    final tenantName = widget.activeTenant.tenantName.trim();
+    return tenantName.isEmpty ? 'Empresa ativa' : tenantName;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final canEditSettings = _canEditRepresentedModuleSettings(
+      role: widget.activeTenant.role,
+      workspaceType: widget.activeTenant.workspaceType,
+    );
+
+    if (!canEditSettings) {
+      return const _SimpleCardSection(
+        title: 'Configurações',
+        subtitle:
+            'Acesso restrito ao owner da empresa no workspace enterprise.',
+        items: [
+          'Parâmetros',
+          'Categorias',
+          'Unidades',
+          'Fotos',
+          'Período de inatividade',
+        ],
+      );
+    }
+
+    final textTheme = Theme.of(context).textTheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Configurações', style: textTheme.headlineMedium),
+        const SizedBox(height: 8),
+        Text(
+          'Gerencie recursos da empresa ativa. Escopo: $_representedCompanyName.',
+          style: textTheme.bodyLarge,
+        ),
+        const SizedBox(height: 14),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
+          color: Theme.of(context).colorScheme.surfaceContainerHighest
+              .withValues(alpha: 0.45),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                _buildSubmenuChip(
+                  context,
+                  submenu: _EnterpriseSettingsSubmenu.parametros,
+                  label: 'Parâmetros',
+                ),
+                _buildSubmenuChip(
+                  context,
+                  submenu: _EnterpriseSettingsSubmenu.categorias,
+                  label: 'Categorias',
+                ),
+                _buildSubmenuChip(
+                  context,
+                  submenu: _EnterpriseSettingsSubmenu.unidades,
+                  label: 'Unidades',
+                ),
+                _buildSubmenuChip(
+                  context,
+                  submenu: _EnterpriseSettingsSubmenu.fotos,
+                  label: 'Fotos',
+                ),
+                _buildSubmenuChip(
+                  context,
+                  submenu: _EnterpriseSettingsSubmenu.periodoInatividade,
+                  label: 'Período de inatividade',
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        _buildSubmenuContent(),
+      ],
+    );
+  }
+
+  Widget _buildSubmenuChip(
+    BuildContext context, {
+    required _EnterpriseSettingsSubmenu submenu,
+    required String label,
+  }) {
+    return FilterChip(
+      label: Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
+      side: BorderSide.none,
+      shape: const StadiumBorder(),
+      selectedColor: Theme.of(context).colorScheme.primaryContainer
+          .withValues(alpha: 0.8),
+      backgroundColor: Colors.white,
+      selected: _activeSubmenu == submenu,
+      onSelected: (_) {
+        setState(() {
+          _activeSubmenu = submenu;
+          _submenuByTenantId[_tenantId] = submenu;
+        });
+      },
+    );
+  }
+
+  Widget _buildSubmenuContent() {
+    switch (_activeSubmenu) {
+      case _EnterpriseSettingsSubmenu.parametros:
+        return _WorkspaceParametersSection(
+          activeTenant: widget.activeTenant,
+          selectedRepresentedCompanyId: _representedCompanyId,
+        );
+      case _EnterpriseSettingsSubmenu.categorias:
+        return _CategoriesSection(
+          activeTenant: widget.activeTenant,
+          selectedRepresentedCompanyId: _representedCompanyId,
+          activeRepresentedCompanyName: _representedCompanyName,
+        );
+      case _EnterpriseSettingsSubmenu.unidades:
+        return _UnitsSection(
+          activeTenant: widget.activeTenant,
+          activeRepresentedCompanyName: _representedCompanyName,
+        );
+      case _EnterpriseSettingsSubmenu.fotos:
+        return _MediaLibrarySection(
+          activeTenant: widget.activeTenant,
+          selectedRepresentedCompanyId: _representedCompanyId,
+          activeRepresentedCompanyName: _representedCompanyName,
+        );
+      case _EnterpriseSettingsSubmenu.periodoInatividade:
+        return _InactivityPeriodSection(
+          activeTenant: widget.activeTenant,
+          activeRepresentedCompanyName: _representedCompanyName,
         );
     }
   }

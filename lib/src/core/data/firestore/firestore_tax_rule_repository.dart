@@ -83,6 +83,11 @@ class FirestoreTaxRuleRepository implements TaxRuleRepository {
         .toList();
     items.sort((a, b) => b.priority.compareTo(a.priority));
     _tenantCache[normalizedTenantId] = List<TaxRule>.unmodifiable(items);
+    // ignore: avoid_print
+    print(
+      '[TAX-DEBUG] FirestoreTaxRuleRepository.fetchAll tenant=$normalizedTenantId '
+      'docsBrutos=${snapshot.docs.length} regrasFiltradas=${items.length}',
+    );
     return items;
   }
 
