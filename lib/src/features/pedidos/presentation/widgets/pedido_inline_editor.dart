@@ -49,6 +49,7 @@ class PedidoInlineEditor extends StatefulWidget {
     required this.loadingProducts,
     required this.saving,
     required this.maxBodyHeight,
+    required this.readOnly,
     required this.onClose,
     required this.onSave,
   });
@@ -65,6 +66,7 @@ class PedidoInlineEditor extends StatefulWidget {
   final bool loadingProducts;
   final bool saving;
   final double maxBodyHeight;
+  final bool readOnly;
   final VoidCallback onClose;
   final Future<void> Function(
     Pedido pedido,
@@ -133,6 +135,8 @@ class _PedidoInlineEditorState extends State<PedidoInlineEditor> {
             widget.customerPriceTableAssignmentRepository,
         taxEngineService: widget.taxEngineService,
       );
+
+  bool get _interactionLocked => widget.saving || widget.readOnly;
 
   String? _effectiveRepresentedCompanyIdForWidget(PedidoInlineEditor source) {
     final fromOrder = (source.pedido?.representedCompanyId ?? '').trim();
@@ -849,7 +853,7 @@ class _PedidoInlineEditorState extends State<PedidoInlineEditor> {
   }
 
   Future<void> _addPointDiscountField(int index) async {
-    if (index < 0 || index >= _items.length || widget.saving) {
+    if (index < 0 || index >= _items.length || _interactionLocked) {
       return;
     }
 
@@ -890,7 +894,7 @@ class _PedidoInlineEditorState extends State<PedidoInlineEditor> {
     int index, {
     bool showErrors = true,
   }) async {
-    if (index < 0 || index >= _items.length || widget.saving) {
+    if (index < 0 || index >= _items.length || _interactionLocked) {
       return false;
     }
 
@@ -1022,7 +1026,7 @@ class _PedidoInlineEditorState extends State<PedidoInlineEditor> {
     int itemIndex,
     int discountIndex,
   ) async {
-    if (itemIndex < 0 || itemIndex >= _items.length || widget.saving) {
+    if (itemIndex < 0 || itemIndex >= _items.length || _interactionLocked) {
       return;
     }
 
@@ -1442,7 +1446,7 @@ class _PedidoInlineEditorState extends State<PedidoInlineEditor> {
     String? sourceListId,
     String? sourceListLabel,
   }) async {
-    if (widget.pedido == null || widget.saving) {
+    if (widget.pedido == null || _interactionLocked) {
       return;
     }
 
@@ -1555,7 +1559,7 @@ class _PedidoInlineEditorState extends State<PedidoInlineEditor> {
   }
 
   Future<void> _openSearchResultsModal(List<Produto> searchResults) async {
-    if (widget.saving || widget.pedido == null) {
+    if (_interactionLocked || widget.pedido == null) {
       return;
     }
 
@@ -1579,7 +1583,7 @@ class _PedidoInlineEditorState extends State<PedidoInlineEditor> {
       builder: (dialogContext) {
         return PedidoSearchResultsDialog(
           searchResults: searchResults,
-          saving: widget.saving,
+          saving: _interactionLocked,
           resolveCommercialCode: _resolveCommercialCode,
           formatMoneyBr: PedidoFormatUtils.formatMoneyBr,
           onAddProduct: _addProduct,
@@ -1589,7 +1593,7 @@ class _PedidoInlineEditorState extends State<PedidoInlineEditor> {
   }
 
   Future<void> _openMobileAddItemSheet() async {
-    if (widget.saving || widget.pedido == null) {
+    if (_interactionLocked || widget.pedido == null) {
       return;
     }
 
@@ -1615,7 +1619,7 @@ class _PedidoInlineEditorState extends State<PedidoInlineEditor> {
       showDragHandle: true,
       builder: (sheetContext) {
         return PedidoMobileAddItemSheet(
-          saving: widget.saving,
+          saving: _interactionLocked,
           normalizeSearch: _normalizeSearch,
           buildProductResultsForQuery: _buildProductResultsForQuery,
           readIntegerQuantity: _readIntegerQuantity,
@@ -1678,7 +1682,7 @@ class _PedidoInlineEditorState extends State<PedidoInlineEditor> {
       loadingClientes: _loadingClientes,
       customerReadDenied: _customerReadDenied,
       customerInputError: _customerInputError,
-      saving: widget.saving,
+      saving: _interactionLocked,
       selectedSalePurpose: _selectedSalePurpose,
       selectedClienteId: _clienteReferenciaSelecionada?.id ?? '',
       formatClienteLabel: _formatClienteLabel,
@@ -1695,7 +1699,7 @@ class _PedidoInlineEditorState extends State<PedidoInlineEditor> {
 
   Future<void> _save() async {
     final pedido = widget.pedido;
-    if (pedido == null || widget.saving) {
+    if (pedido == null || _interactionLocked) {
       return;
     }
 
@@ -1794,6 +1798,19 @@ class _PedidoInlineEditorState extends State<PedidoInlineEditor> {
                 onClose: widget.onClose,
               ),
               if (hasSelection && !isCompactItems)
+                if (widget.readOnly)
+                  Container(
+                    width: double.infinity,
+                    color: Theme.of(context)
+                        .colorScheme
+                        .surfaceContainerHighest,
+                    padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+                    child: Text(
+                      'Somente leitura: pedido aprovado para envio.',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ),
+              if (hasSelection && !isCompactItems)
                 _buildCustomerSelectorSection(compact: false),
               Expanded(
                 child: Container(
@@ -1818,7 +1835,7 @@ class _PedidoInlineEditorState extends State<PedidoInlineEditor> {
                                 searchController: _searchController,
                                 searchFocusNode: _searchFocusNode,
                                 quantityController: _quantityController,
-                                saving: widget.saving,
+                                saving: _interactionLocked,
                                 hasQuery: hasQuery,
                                 visibleResultsCount: visibleResults.length,
                                 searchResultsCount: searchResults.length,
@@ -1833,7 +1850,7 @@ class _PedidoInlineEditorState extends State<PedidoInlineEditor> {
                                 onOpenSearchModal: () =>
                                     _openSearchResultsModal(searchResults),
                                 onAddFirstVisibleResult:
-                                    visibleResults.isEmpty || widget.saving
+                                  visibleResults.isEmpty || _interactionLocked
                                     ? null
                                     : () => _addProduct(visibleResults.first),
                               ),
@@ -1898,7 +1915,7 @@ class _PedidoInlineEditorState extends State<PedidoInlineEditor> {
                                           searchResultsCount:
                                               searchResults.length,
                                           hasMoreResults: hasMoreResults,
-                                          saving: widget.saving,
+                                          saving: _interactionLocked,
                                           resolveCommercialCode:
                                               _resolveCommercialCode,
                                           formatMoneyBr:
@@ -2026,7 +2043,7 @@ class _PedidoInlineEditorState extends State<PedidoInlineEditor> {
                                                   index: index,
                                                   isCompactItems:
                                                       isCompactItems,
-                                                  saving: widget.saving,
+                                                  saving: _interactionLocked,
                                                   policyFields:
                                                       _orderDiscountPolicy
                                                           .fields,
@@ -2230,7 +2247,7 @@ class _PedidoInlineEditorState extends State<PedidoInlineEditor> {
                                                                 growable: false,
                                                               ),
                                                           onChanged:
-                                                              widget.saving
+                                                              _interactionLocked
                                                               ? null
                                                               : (value) {
                                                                   setState(() {
@@ -2261,7 +2278,7 @@ class _PedidoInlineEditorState extends State<PedidoInlineEditor> {
                                         heroTag: 'pedido_add_item_mobile_fab',
                                         tooltip: 'Adicionar item',
                                         onPressed:
-                                            widget.saving ||
+                                          _interactionLocked ||
                                                 widget.loadingProducts
                                             ? null
                                             : _openMobileAddItemSheet,
@@ -2302,7 +2319,7 @@ class _PedidoInlineEditorState extends State<PedidoInlineEditor> {
                       ),
                       const Spacer(),
                       FilledButton(
-                        onPressed: hasSelection && !widget.saving
+                        onPressed: hasSelection && !_interactionLocked
                             ? _save
                             : null,
                         style: isCompactItems
@@ -2317,7 +2334,11 @@ class _PedidoInlineEditorState extends State<PedidoInlineEditor> {
                               )
                             : null,
                         child: Text(
-                          widget.saving ? 'Salvando...' : 'Salvar rascunho',
+                          widget.readOnly
+                              ? 'Somente leitura'
+                              : (widget.saving
+                                    ? 'Salvando...'
+                                    : 'Salvar rascunho'),
                         ),
                       ),
                     ],

@@ -112,7 +112,7 @@ class PedidoCard extends StatelessWidget {
                     const SizedBox(height: 4),
                     Center(
                       child: IconButton(
-                        tooltip: 'Abrir PDF',
+                        tooltip: 'Opcoes do PDF',
                         icon: const Icon(Icons.picture_as_pdf_outlined),
                         onPressed: onPreviewPdf,
                         visualDensity: VisualDensity.compact,

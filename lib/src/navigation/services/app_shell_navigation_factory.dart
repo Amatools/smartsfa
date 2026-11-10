@@ -39,6 +39,8 @@ class AppShellNavigationFactory {
     required VoidCallback? onRefreshSyncStatus,
     required VoidCallback? onRegisterQueryReview,
     required VoidCallback? onAccessUpdated,
+    required ValueChanged<bool>? onProdutosInlineBackActiveChanged,
+    required ValueChanged<bool>? onPedidosInlineBackActiveChanged,
   }) {
     final normalizedRole = role.toLowerCase().replaceAll(' ', '_');
     final items = <AppShellItem>[
@@ -74,6 +76,7 @@ class AppShellNavigationFactory {
           repository: produtoRepository,
           activeRepresentedCompanyName: selectedRepresentedCompanyName,
           selectedRepresentedCompanyId: selectedRepresentedCompanyId,
+          onInlineBackActiveChanged: onProdutosInlineBackActiveChanged,
         ),
       ),
       AppShellItem(
@@ -87,6 +90,7 @@ class AppShellNavigationFactory {
           originCompanyUnitId: selectedOriginCompanyUnitId,
           originCompanyUnitLabel: selectedOriginCompanyUnitLabel,
           originCompanyUf: selectedOriginCompanyUf,
+          onInlineBackActiveChanged: onPedidosInlineBackActiveChanged,
         ),
       ),
       AppShellItem(

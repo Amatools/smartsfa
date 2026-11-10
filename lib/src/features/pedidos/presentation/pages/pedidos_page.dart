@@ -2,8 +2,11 @@ import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../../../core/models/app_identity.dart';
 import '../../../../core/data/firestore/catalog_snapshot_tax_rule_repository.dart';
@@ -37,6 +40,8 @@ String _pedidoDisplayNumber(String id) {
   return PedidoFormatUtils.pedidoDisplayNumber(id);
 }
 
+enum _PedidoPdfMenuAction { view, share, save }
+
 class PedidosPage extends StatefulWidget {
   const PedidosPage({
     super.key,
@@ -47,6 +52,7 @@ class PedidosPage extends StatefulWidget {
     this.originCompanyUnitId,
     this.originCompanyUnitLabel,
     this.originCompanyUf,
+    this.onInlineBackActiveChanged,
   });
 
   final AppIdentity identity;
@@ -56,6 +62,7 @@ class PedidosPage extends StatefulWidget {
   final String? originCompanyUnitId;
   final String? originCompanyUnitLabel;
   final String? originCompanyUf;
+  final ValueChanged<bool>? onInlineBackActiveChanged;
 
   @override
   State<PedidosPage> createState() => _PedidosPageState();
@@ -67,6 +74,7 @@ class _PedidosPageState extends State<PedidosPage> {
   bool _savingDraftEdition = false;
   bool _loadingRepresentedContext = false;
   String? _editingOrderId;
+  bool _editingOrderReadOnly = false;
   String? _selectedRepresentedCompanyId;
   String? _selectedOriginCompanyUnitId;
   String? _selectedOriginCompanyUnitLabel;
@@ -81,6 +89,20 @@ class _PedidosPageState extends State<PedidosPage> {
   late final ProductTaxEngineService _taxEngineService;
   final PedidoPdfService _pedidoPdfService = const PedidoPdfService();
   final CatalogSnapshotStore _catalogSnapshotStore = CatalogSnapshotStore();
+
+  void _notifyInlineBackActiveChanged() {
+    final callback = widget.onInlineBackActiveChanged;
+    if (callback == null) {
+      return;
+    }
+    final isActive = (_editingOrderId ?? '').trim().isNotEmpty;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      callback(isActive);
+    });
+  }
 
   @override
   void initState() {
@@ -104,6 +126,7 @@ class _PedidosPageState extends State<PedidosPage> {
       ),
     );
     _loadRepresentedContextIfNeeded();
+    _notifyInlineBackActiveChanged();
   }
 
   @override
@@ -117,6 +140,16 @@ class _PedidosPageState extends State<PedidosPage> {
       _selectedOriginCompanyUf = null;
       _loadRepresentedContextIfNeeded();
     }
+    if (oldWidget.onInlineBackActiveChanged !=
+        widget.onInlineBackActiveChanged) {
+      _notifyInlineBackActiveChanged();
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.onInlineBackActiveChanged?.call(false);
+    super.dispose();
   }
 
   double _roundCurrency(double value) {
@@ -638,8 +671,9 @@ class _PedidosPageState extends State<PedidosPage> {
     return productScope == selectedRepresentedCompanyId;
   }
 
-  bool _canEditOrder(Pedido pedido) {
-    return pedido.statusFila != OrderStatus.sent;
+  bool _isReadOnlyOrder(Pedido pedido) {
+    return pedido.statusFila == OrderStatus.pendingSend ||
+        pedido.statusFila == OrderStatus.sent;
   }
 
   bool _canDeleteOrder(Pedido pedido) {
@@ -656,27 +690,19 @@ class _PedidosPageState extends State<PedidosPage> {
   }
 
   Future<void> _selectOrderForEditing(Pedido pedido) async {
-    if (!_canEditOrder(pedido)) {
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Pedido enviado nao pode mais ser editado.'),
-        ),
-      );
-      return;
-    }
-
     final tenantId = widget.identity.tenantId.trim();
     if (tenantId.isEmpty) {
       return;
     }
 
+    final readOnly = _isReadOnlyOrder(pedido);
+
     setState(() {
       _editingOrderId = pedido.id;
+      _editingOrderReadOnly = readOnly;
       _loadingProductsForEditor = true;
     });
+    _notifyInlineBackActiveChanged();
 
     try {
       final activeProducts = await _resolveProductsForEditor(tenantId);
@@ -764,7 +790,9 @@ class _PedidosPageState extends State<PedidosPage> {
   void _closeInlineEditor() {
     setState(() {
       _editingOrderId = null;
+      _editingOrderReadOnly = false;
     });
+    _notifyInlineBackActiveChanged();
   }
 
   _PedidoListEntry? _findEditingEntry(List<_PedidoListEntry> pedidos) {
@@ -872,53 +900,247 @@ class _PedidosPageState extends State<PedidosPage> {
       return;
     }
 
-    final hasErpIntegration = await _hasErpIntegrationConfigured(
-      pedido.tenantId,
-    );
-    if (hasErpIntegration) {
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Envio ERP ainda sera conectado nesta acao. Enquanto isso, use o fluxo sem integracao para gerar o PDF.',
-          ),
-        ),
-      );
+    final hasErpIntegration = await _hasErpIntegrationConfigured(pedido.tenantId);
+
+    if (!mounted) {
       return;
     }
 
+    var preparingShown = false;
     try {
-      final headerContext = await _buildPdfHeaderContext(pedido);
+      preparingShown = true;
+      unawaited(
+        showDialog<void>(
+          context: context,
+          barrierDismissible: false,
+          builder: (dialogContext) {
+            return const AlertDialog(
+              content: Row(
+                children: [
+                  SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2.4),
+                  ),
+                  SizedBox(width: 12),
+                  Expanded(child: Text('Preparando opcoes de envio...')),
+                ],
+              ),
+            );
+          },
+        ),
+      );
 
-      await _pedidoPdfService.openOrderPdfWithDefaultApp(
+      await Future<void>.delayed(const Duration(milliseconds: 16));
+      final headerContext = await _buildPdfHeaderContext(pedido);
+      final generatedPdfFile = await _pedidoPdfService.saveOrderPdfToTempFile(
         pedido: pedido,
         headerContext: headerContext,
       );
 
-      final shouldMarkAsSent = await _confirmMarkAsSent(pedido);
-      if (!shouldMarkAsSent) {
+      if (preparingShown && mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+        preparingShown = false;
+      }
+
+      if (!mounted) {
         return;
       }
 
-      final now = DateTime.now().toUtc();
-      final sentOrder = pedido.copyWith(
-        statusFila: OrderStatus.sent,
-        updatedAt: now,
-      );
-      await _saveOrderLocalFirst(
-        order: sentOrder,
-        syncedMessage:
-            'Pedido ${_pedidoDisplayNumber(pedido.id)} marcado como enviado.',
-        pendingActionLabel: 'enviado',
+      final messenger = ScaffoldMessenger.of(context);
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: true,
+        builder: (dialogContext) {
+          var runningAction = false;
+
+          return StatefulBuilder(
+            builder: (context, setStateDialog) {
+              Future<void> runPdfAction(_PedidoPdfMenuAction action) async {
+                if (runningAction) {
+                  return;
+                }
+
+                setStateDialog(() {
+                  runningAction = true;
+                });
+
+                try {
+                  switch (action) {
+                    case _PedidoPdfMenuAction.view:
+                      await _pedidoPdfService.openPdfFile(generatedPdfFile);
+                      break;
+                    case _PedidoPdfMenuAction.share:
+                      try {
+                        await Share.shareXFiles(<XFile>[
+                          XFile(generatedPdfFile.path),
+                        ], subject: 'Pedido ${_pedidoDisplayNumber(pedido.id)}');
+                      } on MissingPluginException {
+                        messenger.showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Compartilhar indisponivel nesta execucao. Feche e abra o app novamente.',
+                            ),
+                          ),
+                        );
+                      }
+                      break;
+                    case _PedidoPdfMenuAction.save:
+                      String? targetDirectory;
+                      var pickerMissingPlugin = false;
+                      try {
+                        targetDirectory =
+                            await FilePicker.platform.getDirectoryPath(
+                              dialogTitle: 'Selecione a pasta para salvar o PDF',
+                            );
+                      } on MissingPluginException {
+                        pickerMissingPlugin = true;
+                        targetDirectory = null;
+                      }
+
+                      if (pickerMissingPlugin) {
+                        messenger.showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Selecionar pasta indisponivel nesta execucao. Feche e abra o app novamente.',
+                            ),
+                          ),
+                        );
+                        break;
+                      }
+
+                      if ((targetDirectory ?? '').trim().isEmpty) {
+                        messenger.showSnackBar(
+                          const SnackBar(
+                            content: Text('Salvamento cancelado.'),
+                          ),
+                        );
+                        break;
+                      }
+
+                      final savedFile = await _pedidoPdfService
+                          .savePdfFileToDirectory(
+                            sourceFile: generatedPdfFile,
+                            pedido: pedido,
+                            targetDirectoryPath: targetDirectory!,
+                          );
+                      messenger.showSnackBar(
+                        SnackBar(content: Text('PDF salvo em ${savedFile.path}')),
+                      );
+                      break;
+                  }
+                } catch (error) {
+                  messenger.showSnackBar(
+                    SnackBar(content: Text('Falha na acao de PDF: $error')),
+                  );
+                } finally {
+                  if (dialogContext.mounted) {
+                    setStateDialog(() {
+                      runningAction = false;
+                    });
+                  }
+                }
+              }
+
+              Future<void> runIntegrationSend() async {
+                if (runningAction) {
+                  return;
+                }
+
+                setStateDialog(() {
+                  runningAction = true;
+                });
+
+                try {
+                  messenger.showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'Envio para ERP ainda sera conectado nesta acao.',
+                      ),
+                    ),
+                  );
+                } finally {
+                  if (dialogContext.mounted) {
+                    setStateDialog(() {
+                      runningAction = false;
+                    });
+                  }
+                }
+              }
+
+              Widget pdfActionTile({
+                required _PedidoPdfMenuAction action,
+                required IconData icon,
+                required String title,
+              }) {
+                return ListTile(
+                  leading: Icon(icon),
+                  title: Text(title),
+                  enabled: !runningAction,
+                  onTap: runningAction ? null : () => runPdfAction(action),
+                );
+              }
+
+              return AlertDialog(
+                title: Text('Envio ${_pedidoDisplayNumber(pedido.id)}'),
+                content: SizedBox(
+                  width: 420,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      pdfActionTile(
+                        action: _PedidoPdfMenuAction.view,
+                        icon: Icons.visibility_outlined,
+                        title: 'Visualizar PDF interno',
+                      ),
+                      pdfActionTile(
+                        action: _PedidoPdfMenuAction.share,
+                        icon: Icons.share_outlined,
+                        title: 'Compartilhar PDF interno',
+                      ),
+                      pdfActionTile(
+                        action: _PedidoPdfMenuAction.save,
+                        icon: Icons.save_alt_outlined,
+                        title: 'Salvar PDF interno',
+                      ),
+                      if (hasErpIntegration) ...[
+                        const Divider(height: 20),
+                        ListTile(
+                          leading: const Icon(Icons.send_outlined),
+                          title: const Text('Enviar para ERP'),
+                          enabled: !runningAction,
+                          onTap: runningAction ? null : runIntegrationSend,
+                        ),
+                      ],
+                      if (runningAction) ...[
+                        const SizedBox(height: 8),
+                        const LinearProgressIndicator(),
+                      ],
+                    ],
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: runningAction
+                        ? null
+                        : () => Navigator.of(dialogContext).pop(),
+                    child: const Text('Fechar'),
+                  ),
+                ],
+              );
+            },
+          );
+        },
       );
     } catch (error) {
+      if (preparingShown && mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+      }
       if (!mounted) {
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Falha ao abrir PDF do pedido: $error')),
+        SnackBar(content: Text('Falha ao preparar envio do pedido: $error')),
       );
     }
   }
@@ -928,13 +1150,202 @@ class _PedidosPageState extends State<PedidosPage> {
       return;
     }
 
+    var preparingShown = false;
     try {
+      final preparingContext = context;
+      preparingShown = true;
+      unawaited(
+        showDialog<void>(
+          context: preparingContext,
+          barrierDismissible: false,
+          builder: (dialogContext) {
+            return const AlertDialog(
+              content: Row(
+                children: [
+                  SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2.4),
+                  ),
+                  SizedBox(width: 12),
+                  Expanded(child: Text('Gerando PDF do pedido...')),
+                ],
+              ),
+            );
+          },
+        ),
+      );
+
+      await Future<void>.delayed(const Duration(milliseconds: 16));
       final headerContext = await _buildPdfHeaderContext(pedido);
-      await _pedidoPdfService.openOrderPdfWithDefaultApp(
+      final generatedPdfFile = await _pedidoPdfService.saveOrderPdfToTempFile(
         pedido: pedido,
         headerContext: headerContext,
       );
+
+      if (preparingShown && mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+        preparingShown = false;
+      }
+
+      if (!mounted) {
+        return;
+      }
+
+      final messenger = ScaffoldMessenger.of(context);
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: true,
+        builder: (dialogContext) {
+          var runningAction = false;
+
+          return StatefulBuilder(
+            builder: (context, setStateDialog) {
+              Future<void> runAction(_PedidoPdfMenuAction action) async {
+                if (runningAction) {
+                  return;
+                }
+
+                setStateDialog(() {
+                  runningAction = true;
+                });
+
+                try {
+                  switch (action) {
+                    case _PedidoPdfMenuAction.view:
+                      await _pedidoPdfService.openPdfFile(generatedPdfFile);
+                      break;
+                    case _PedidoPdfMenuAction.share:
+                      try {
+                        await Share.shareXFiles(<XFile>[
+                          XFile(generatedPdfFile.path),
+                        ], subject: 'Pedido ${_pedidoDisplayNumber(pedido.id)}');
+                      } on MissingPluginException {
+                        messenger.showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Compartilhar indisponivel nesta execucao. Feche e abra o app novamente.',
+                            ),
+                          ),
+                        );
+                      }
+                      break;
+                    case _PedidoPdfMenuAction.save:
+                      String? targetDirectory;
+                      var pickerMissingPlugin = false;
+                      try {
+                        targetDirectory =
+                            await FilePicker.platform.getDirectoryPath(
+                              dialogTitle: 'Selecione a pasta para salvar o PDF',
+                            );
+                      } on MissingPluginException {
+                        pickerMissingPlugin = true;
+                        targetDirectory = null;
+                      }
+
+                      if (pickerMissingPlugin) {
+                        messenger.showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Selecionar pasta indisponivel nesta execucao. Feche e abra o app novamente.',
+                            ),
+                          ),
+                        );
+                        break;
+                      }
+
+                      if ((targetDirectory ?? '').trim().isEmpty) {
+                        messenger.showSnackBar(
+                          const SnackBar(
+                            content: Text('Salvamento cancelado.'),
+                          ),
+                        );
+                        break;
+                      }
+
+                      final savedFile = await _pedidoPdfService
+                          .savePdfFileToDirectory(
+                            sourceFile: generatedPdfFile,
+                            pedido: pedido,
+                            targetDirectoryPath: targetDirectory!,
+                          );
+                      messenger.showSnackBar(
+                        SnackBar(content: Text('PDF salvo em ${savedFile.path}')),
+                      );
+                      break;
+                  }
+                } catch (error) {
+                  messenger.showSnackBar(
+                    SnackBar(content: Text('Falha na acao de PDF: $error')),
+                  );
+                } finally {
+                  if (dialogContext.mounted) {
+                    setStateDialog(() {
+                      runningAction = false;
+                    });
+                  }
+                }
+              }
+
+              Widget actionTile({
+                required _PedidoPdfMenuAction action,
+                required IconData icon,
+                required String title,
+              }) {
+                return ListTile(
+                  leading: Icon(icon),
+                  title: Text(title),
+                  enabled: !runningAction,
+                  onTap: runningAction ? null : () => runAction(action),
+                );
+              }
+
+              return AlertDialog(
+                title: Text('PDF ${_pedidoDisplayNumber(pedido.id)}'),
+                content: SizedBox(
+                  width: 420,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      actionTile(
+                        action: _PedidoPdfMenuAction.view,
+                        icon: Icons.visibility_outlined,
+                        title: 'Visualizar',
+                      ),
+                      actionTile(
+                        action: _PedidoPdfMenuAction.share,
+                        icon: Icons.share_outlined,
+                        title: 'Compartilhar',
+                      ),
+                      actionTile(
+                        action: _PedidoPdfMenuAction.save,
+                        icon: Icons.save_alt_outlined,
+                        title: 'Salvar',
+                      ),
+                      if (runningAction) ...[
+                        const SizedBox(height: 8),
+                        const LinearProgressIndicator(),
+                      ],
+                    ],
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: runningAction
+                        ? null
+                        : () => Navigator.of(dialogContext).pop(),
+                    child: const Text('Fechar'),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      );
     } catch (error) {
+      if (preparingShown && mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+      }
       if (!mounted) {
         return;
       }
@@ -1119,83 +1530,6 @@ class _PedidosPageState extends State<PedidosPage> {
       }
     }
     return fallback;
-  }
-
-  Future<void> _showOrderReadOnlyDialog(Pedido pedido) async {
-    if (!mounted) {
-      return;
-    }
-
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: Text('Pedido ${_pedidoDisplayNumber(pedido.id)}'),
-          content: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text('Status: ${pedido.statusFila.label}'),
-                const SizedBox(height: 6),
-                Text(
-                  'Cliente: ${pedido.clienteReferencia?.nomeSnapshot ?? '-'}',
-                ),
-                Text('Itens: ${pedido.itens.length}'),
-                Text(
-                  'Quantidade total: ${pedido.totalItens.toStringAsFixed(2)}',
-                ),
-                Text(
-                  'Total bruto: R\$ ${PedidoFormatUtils.formatMoneyBr(pedido.totalBruto)}',
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  'Forma de pagamento: ${((pedido.formaPagamento ?? '').trim().isEmpty ? '-' : pedido.formaPagamento)}',
-                ),
-                Text('Finalidade: ${pedido.salePurpose.label}'),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('Fechar'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Future<bool> _confirmMarkAsSent(Pedido pedido) async {
-    if (!mounted) {
-      return false;
-    }
-
-    final confirmed =
-        await showDialog<bool>(
-          context: context,
-          builder: (dialogContext) {
-            return AlertDialog(
-              title: const Text('Marcar como enviado'),
-              content: Text(
-                'Voce concluiu o compartilhamento do PDF do pedido ${_pedidoDisplayNumber(pedido.id)}?',
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(false),
-                  child: const Text('Ainda nao'),
-                ),
-                FilledButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(true),
-                  child: const Text('Sim, enviado'),
-                ),
-              ],
-            );
-          },
-        ) ??
-        false;
-    return confirmed;
   }
 
   Future<bool> _hasErpIntegrationConfigured(String tenantId) async {
@@ -1416,160 +1750,168 @@ class _PedidosPageState extends State<PedidosPage> {
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<List<Pedido>>(
-      stream: widget.repository.watchAll(tenantId: widget.identity.tenantId),
-      initialData: const [],
-      builder: (context, snapshot) {
-        final remotePedidos = snapshot.data ?? const [];
+    return PopScope(
+      canPop: (_editingOrderId ?? '').trim().isEmpty,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) {
+          return;
+        }
+        final isEditing = (_editingOrderId ?? '').trim().isNotEmpty;
+        if (isEditing) {
+          _closeInlineEditor();
+        }
+      },
+      child: StreamBuilder<List<Pedido>>(
+        stream: widget.repository.watchAll(tenantId: widget.identity.tenantId),
+        initialData: const [],
+        builder: (context, snapshot) {
+          final remotePedidos = snapshot.data ?? const [];
 
-        return FutureBuilder<_PedidoLocalState>(
-          future: _readLocalPedidos(),
-          initialData: _PedidoLocalState.empty,
-          builder: (context, localSnapshot) {
-            final localState = localSnapshot.data ?? _PedidoLocalState.empty;
-            final localPedidos = localState.records;
-            final filteredRemote = remotePedidos
-                .where((pedido) => !localState.deletedIds.contains(pedido.id))
-                .toList();
-            final pedidos = _mergePedidos(
-              remote: filteredRemote,
-              local: localPedidos,
-            );
-            final editingEntry = _findEditingEntry(pedidos);
+          return FutureBuilder<_PedidoLocalState>(
+            future: _readLocalPedidos(),
+            initialData: _PedidoLocalState.empty,
+            builder: (context, localSnapshot) {
+              final localState = localSnapshot.data ?? _PedidoLocalState.empty;
+              final localPedidos = localState.records;
+              final filteredRemote = remotePedidos
+                  .where((pedido) => !localState.deletedIds.contains(pedido.id))
+                  .toList();
+              final pedidos = _mergePedidos(
+                remote: filteredRemote,
+                local: localPedidos,
+              );
+              final editingEntry = _findEditingEntry(pedidos);
 
-            return LayoutBuilder(
-              builder: (context, constraints) {
-                final editorBodyMaxHeight = (constraints.maxHeight - 220).clamp(
-                  260.0,
-                  1000.0,
-                );
-                final isEditing = (_editingOrderId ?? '').trim().isNotEmpty;
+              return LayoutBuilder(
+                builder: (context, constraints) {
+                  final editorBodyMaxHeight = (constraints.maxHeight - 220)
+                      .clamp(260.0, 1000.0);
+                  final isEditing = (_editingOrderId ?? '').trim().isNotEmpty;
 
-                if (isEditing) {
-                  return Padding(
-                    padding: const EdgeInsets.fromLTRB(0, 6, 0, 0),
-                    child: PedidoInlineEditor(
-                      pedido: editingEntry?.pedido,
-                      products: _editorProducts,
-                      tenantId: widget.identity.tenantId,
-                      representedCompanyId: _effectiveRepresentedCompanyId,
-                      originCompanyUf: _effectiveOriginCompanyUf,
-                      clienteRepository: _clienteRepository,
-                      customerPriceTableAssignmentRepository:
-                          _customerPriceTableAssignmentRepository,
-                      taxEngineService: _taxEngineService,
-                      loadingProducts: _loadingProductsForEditor,
-                      saving: _savingDraftEdition,
-                      maxBodyHeight: editorBodyMaxHeight,
-                      onClose: _closeInlineEditor,
-                      onSave: _saveEditedItems,
-                    ),
-                  );
-                }
-
-                return Stack(
-                  children: [
-                    SingleChildScrollView(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(10, 16, 10, 88),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Pedidos',
-                              style: Theme.of(context).textTheme.headlineSmall,
-                            ),
-                            const SizedBox(height: 8),
-                            const Text('Lista de pedidos.'),
-                            if (!_usesExternalRepresentedContext) ...[
-                              const SizedBox(height: 12),
-                              _buildRepresentedSelectorCard(),
-                            ],
-                            const SizedBox(height: 16),
-                            if (pedidos.isEmpty)
-                              const PedidoEmptyState(
-                                title: 'Nenhum pedido carregado',
-                                subtitle: 'Os pedidos locais aparecerão aqui assim que a fila for preenchida.',
-                              )
-                            else
-                              ...pedidos.map((entry) {
-                                final canSend = _canSendOrder(entry.pedido);
-                                final canApprove = _canApproveOrder(
-                                  entry.pedido,
-                                );
-                                final isSentOrder =
-                                    entry.pedido.statusFila == OrderStatus.sent;
-                                final primaryTooltip = canSend
-                                    ? 'Enviar pedido'
-                                    : (canApprove
-                                          ? 'Aprovar pedido'
-                                          : (isSentOrder
-                                                ? 'Pedido enviado'
-                                                : 'Ação indisponível'));
-                                final primaryIcon = canSend
-                                    ? Icons.send_outlined
-                                    : (canApprove
-                                          ? Icons.check_circle_outline
-                                          : (isSentOrder
-                                                ? Icons.task_alt_outlined
-                                                : Icons.block_outlined));
-                                final primaryAction = canSend
-                                    ? () => _sendOrder(entry.pedido)
-                                    : (canApprove
-                                          ? () => _approveOrder(entry.pedido)
-                                          : null);
-
-                                return PedidoCard(
-                                  entry.pedido,
-                                  syncedRemotely: entry.syncedRemotely,
-                                  selected: false,
-                                  onTap: () {
-                                    if (_canEditOrder(entry.pedido)) {
-                                      _selectOrderForEditing(entry.pedido);
-                                      return;
-                                    }
-                                    _showOrderReadOnlyDialog(entry.pedido);
-                                  },
-                                  onPrimaryAction: primaryAction,
-                                  primaryActionTooltip: primaryTooltip,
-                                  primaryActionIcon: primaryIcon,
-                                  onEdit: _canEditOrder(entry.pedido)
-                                      ? () =>
-                                            _selectOrderForEditing(entry.pedido)
-                                      : null,
-                                  onPreviewPdf: () =>
-                                      _openOrderPdfPreview(entry.pedido),
-                                  onDelete: _canDeleteOrder(entry.pedido)
-                                      ? () =>
-                                            _deleteOrderLocalFirst(entry.pedido)
-                                      : null,
-                                );
-                              }),
-                          ],
-                        ),
+                  if (isEditing) {
+                    return Padding(
+                      padding: const EdgeInsets.fromLTRB(0, 6, 0, 0),
+                      child: PedidoInlineEditor(
+                        pedido: editingEntry?.pedido,
+                        products: _editorProducts,
+                        tenantId: widget.identity.tenantId,
+                        representedCompanyId: _effectiveRepresentedCompanyId,
+                        originCompanyUf: _effectiveOriginCompanyUf,
+                        clienteRepository: _clienteRepository,
+                        customerPriceTableAssignmentRepository:
+                            _customerPriceTableAssignmentRepository,
+                        taxEngineService: _taxEngineService,
+                        loadingProducts: _loadingProductsForEditor,
+                        saving: _savingDraftEdition,
+                        readOnly: _editingOrderReadOnly,
+                        maxBodyHeight: editorBodyMaxHeight,
+                        onClose: _closeInlineEditor,
+                        onSave: _saveEditedItems,
                       ),
-                    ),
-                    Positioned(
-                      right: 16,
-                      bottom: 16,
-                      child: SafeArea(
-                        child: FloatingActionButton.extended(
-                          heroTag: 'pedidos-novo-fab',
-                          onPressed: _creatingDraft ? null : _createDraftOrder,
-                          icon: const Icon(Icons.add_shopping_cart_outlined),
-                          label: Text(
-                            _creatingDraft ? 'Criando...' : 'Novo pedido',
+                    );
+                  }
+
+                  return Stack(
+                    children: [
+                      SingleChildScrollView(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(10, 16, 10, 88),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Pedidos',
+                                style: Theme.of(context).textTheme.headlineSmall,
+                              ),
+                              const SizedBox(height: 8),
+                              const Text('Lista de pedidos.'),
+                              if (!_usesExternalRepresentedContext) ...[
+                                const SizedBox(height: 12),
+                                _buildRepresentedSelectorCard(),
+                              ],
+                              const SizedBox(height: 16),
+                              if (pedidos.isEmpty)
+                                const PedidoEmptyState(
+                                  title: 'Nenhum pedido carregado',
+                                  subtitle: 'Os pedidos locais aparecerão aqui assim que a fila for preenchida.',
+                                )
+                              else
+                                ...pedidos.map((entry) {
+                                  final canSend = _canSendOrder(entry.pedido);
+                                  final canApprove = _canApproveOrder(
+                                    entry.pedido,
+                                  );
+                                  final isSentOrder =
+                                      entry.pedido.statusFila == OrderStatus.sent;
+                                  final primaryTooltip = canSend
+                                      ? 'Opcoes de envio'
+                                      : (canApprove
+                                            ? 'Aprovar pedido'
+                                            : (isSentOrder
+                                                  ? 'Pedido enviado'
+                                                  : 'Ação indisponível'));
+                                  final primaryIcon = canSend
+                                      ? Icons.send_outlined
+                                      : (canApprove
+                                            ? Icons.check_circle_outline
+                                            : (isSentOrder
+                                                  ? Icons.task_alt_outlined
+                                                  : Icons.block_outlined));
+                                  final primaryAction = canSend
+                                      ? () => _sendOrder(entry.pedido)
+                                      : (canApprove
+                                            ? () => _approveOrder(entry.pedido)
+                                            : null);
+
+                                  return PedidoCard(
+                                    entry.pedido,
+                                    syncedRemotely: entry.syncedRemotely,
+                                    selected: false,
+                                    onTap: () {
+                                      _selectOrderForEditing(entry.pedido);
+                                    },
+                                    onPrimaryAction: primaryAction,
+                                    primaryActionTooltip: primaryTooltip,
+                                    primaryActionIcon: primaryIcon,
+                                      onEdit: () =>
+                                          _selectOrderForEditing(entry.pedido),
+                                    onPreviewPdf: () =>
+                                        _openOrderPdfPreview(entry.pedido),
+                                    onDelete: _canDeleteOrder(entry.pedido)
+                                        ? () => _deleteOrderLocalFirst(
+                                            entry.pedido,
+                                          )
+                                        : null,
+                                  );
+                                }),
+                            ],
                           ),
                         ),
                       ),
-                    ),
-                  ],
-                );
-              },
-            );
-          },
-        );
-      },
+                      Positioned(
+                        right: 16,
+                        bottom: 16,
+                        child: SafeArea(
+                          child: FloatingActionButton.extended(
+                            heroTag: 'pedidos-novo-fab',
+                            onPressed: _creatingDraft
+                                ? null
+                                : _createDraftOrder,
+                            icon: const Icon(Icons.add_shopping_cart_outlined),
+                            label: Text(
+                              _creatingDraft ? 'Criando...' : 'Novo pedido',
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              );
+            },
+          );
+        },
+      ),
     );
   }
 }

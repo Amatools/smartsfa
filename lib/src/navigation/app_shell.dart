@@ -106,6 +106,9 @@ class _AppShellPageState extends State<AppShellPage> {
   SyncCostMetricsSnapshot _costMetrics = const SyncCostMetricsSnapshot.empty();
   SyncCostAlert? _costAlert;
   bool _queryReviewOverdue = true;
+  final List<int> _navigationHistory = <int>[];
+  bool _produtosInlineBackActive = false;
+  bool _pedidosInlineBackActive = false;
 
   void _updateViewState(
     AppShellViewState Function(AppShellViewState state) update,
@@ -133,6 +136,9 @@ class _AppShellPageState extends State<AppShellPage> {
   void didUpdateWidget(covariant AppShellPage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.identity.tenantId.trim() != widget.identity.tenantId.trim()) {
+      _navigationHistory.clear();
+      _produtosInlineBackActive = false;
+      _pedidosInlineBackActive = false;
       _representedScopeOptions = const <_RepresentedScopeOption>[];
       _selectedRepresentedScope = null;
       _isEnterpriseWorkspaceScope = false;
@@ -1100,21 +1106,91 @@ class _AppShellPageState extends State<AppShellPage> {
           : _refreshSyncStatusFromHome,
       onRegisterQueryReview: _registerQueryPaginationReview,
       onAccessUpdated: widget.onAccessUpdated,
+      onProdutosInlineBackActiveChanged: _setProdutosInlineBackActive,
+      onPedidosInlineBackActiveChanged: _setPedidosInlineBackActive,
     );
   }
 
-  void _setSelectedIndex(int index) {
+  void _setProdutosInlineBackActive(bool active) {
+    if (_produtosInlineBackActive == active || !mounted) {
+      return;
+    }
+    setState(() {
+      _produtosInlineBackActive = active;
+    });
+  }
+
+  void _setPedidosInlineBackActive(bool active) {
+    if (_pedidosInlineBackActive == active || !mounted) {
+      return;
+    }
+    setState(() {
+      _pedidosInlineBackActive = active;
+    });
+  }
+
+  bool _isHomeNavigationLabel(String label) {
+    final normalized = label.trim().toLowerCase();
+    return normalized == 'inicio' || normalized == 'dashboard';
+  }
+
+  bool _isPedidosNavigationLabel(String label) {
+    return label.trim().toLowerCase() == 'pedidos';
+  }
+
+  bool _isProdutosNavigationLabel(String label) {
+    return label.trim().toLowerCase() == 'produtos';
+  }
+
+  int _resolveHomeIndex(List<AppShellItem> items) {
+    for (var index = 0; index < items.length; index++) {
+      if (_isHomeNavigationLabel(items[index].label)) {
+        return index;
+      }
+    }
+    return 0;
+  }
+
+  void _setSelectedIndex(int index, {bool recordHistory = true}) {
     final items = _buildItems();
+    if (items.isEmpty) {
+      return;
+    }
+
+    final safeIndex = index.clamp(0, items.length - 1);
+    final currentSafeIndex = _viewState.selectedIndex.clamp(0, items.length - 1);
+    if (safeIndex == currentSafeIndex) {
+      return;
+    }
+
+    final homeIndex = _resolveHomeIndex(items);
+    final nextLabel = items[safeIndex].label;
+    final nextIsPedidos = _isPedidosNavigationLabel(nextLabel);
+    final nextIsProdutos = _isProdutosNavigationLabel(nextLabel);
+    if (!nextIsProdutos && _produtosInlineBackActive) {
+      _produtosInlineBackActive = false;
+    }
+    if (!nextIsPedidos && _pedidosInlineBackActive) {
+      _pedidosInlineBackActive = false;
+    }
+
+    if (recordHistory) {
+      if (safeIndex == homeIndex) {
+        _navigationHistory.clear();
+      } else {
+        _navigationHistory.add(currentSafeIndex);
+      }
+    }
+
     final isHomeIndex =
-        index >= 0 &&
-        index < items.length &&
-        (items[index].label.trim().toLowerCase() == 'inicio' ||
-            items[index].label.trim().toLowerCase() == 'dashboard');
+        safeIndex >= 0 &&
+        safeIndex < items.length &&
+        _isHomeNavigationLabel(items[safeIndex].label);
 
     _updateViewState(
       (state) => _viewStateCoordinator.applySelectedIndex(
         state: state,
-        selectedIndex: index,
+        selectedIndex: safeIndex,
       ),
     );
 
@@ -1128,8 +1204,60 @@ class _AppShellPageState extends State<AppShellPage> {
       if (!mounted) {
         return;
       }
-      _setSelectedIndex(normalizedIndex);
+      _setSelectedIndex(normalizedIndex, recordHistory: false);
     });
+  }
+
+  bool _canPopFromShell({
+    required List<AppShellItem> items,
+    required int selectedIndex,
+  }) {
+    if (items.isEmpty) {
+      return true;
+    }
+    final safeIndex = selectedIndex.clamp(0, items.length - 1);
+    if (_produtosInlineBackActive &&
+        _isProdutosNavigationLabel(items[safeIndex].label)) {
+      return false;
+    }
+    if (_pedidosInlineBackActive &&
+        _isPedidosNavigationLabel(items[safeIndex].label)) {
+      return false;
+    }
+    final homeIndex = _resolveHomeIndex(items);
+    return safeIndex == homeIndex && _navigationHistory.isEmpty;
+  }
+
+  void _handleSystemBack({
+    required List<AppShellItem> items,
+    required int selectedIndex,
+  }) {
+    if (items.isEmpty) {
+      return;
+    }
+
+    final safeIndex = selectedIndex.clamp(0, items.length - 1);
+    if (_produtosInlineBackActive &&
+        _isProdutosNavigationLabel(items[safeIndex].label)) {
+      return;
+    }
+    if (_pedidosInlineBackActive &&
+        _isPedidosNavigationLabel(items[safeIndex].label)) {
+      return;
+    }
+    while (_navigationHistory.isNotEmpty) {
+      final previousIndex = _navigationHistory.removeLast();
+      if (previousIndex == safeIndex) {
+        continue;
+      }
+      _setSelectedIndex(previousIndex, recordHistory: false);
+      return;
+    }
+
+    final homeIndex = _resolveHomeIndex(items);
+    if (safeIndex != homeIndex) {
+      _setSelectedIndex(homeIndex, recordHistory: false);
+    }
   }
 
   AppShellScaffoldPayload _buildScaffoldPayload({
@@ -1204,8 +1332,23 @@ class _AppShellPageState extends State<AppShellPage> {
       _normalizeSelectedIndexAfterBuild(selection.safeIndex);
     }
 
-    return AppShellScaffold(
-      payload: _buildScaffoldPayload(items: items, selection: selection),
+    final scaffoldPayload = _buildScaffoldPayload(
+      items: items,
+      selection: selection,
+    );
+
+    return PopScope(
+      canPop: _canPopFromShell(
+        items: items,
+        selectedIndex: selection.safeIndex,
+      ),
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) {
+          return;
+        }
+        _handleSystemBack(items: items, selectedIndex: selection.safeIndex);
+      },
+      child: AppShellScaffold(payload: scaffoldPayload),
     );
   }
 }

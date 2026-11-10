@@ -33,12 +33,14 @@ class ProdutosPage extends StatefulWidget {
     required this.repository,
     this.activeRepresentedCompanyName,
     this.selectedRepresentedCompanyId,
+    this.onInlineBackActiveChanged,
   });
 
   final AppIdentity identity;
   final ProdutoRepository repository;
   final String? activeRepresentedCompanyName;
   final String? selectedRepresentedCompanyId;
+  final ValueChanged<bool>? onInlineBackActiveChanged;
 
   @override
   State<ProdutosPage> createState() => _ProdutosPageState();
@@ -68,6 +70,20 @@ class _ProdutosPageState extends State<ProdutosPage>
   ProductCatalogSourceFilter get _sourceFilter => _catalogState.sourceFilter;
   Produto? get _editingProduto => _catalogState.editingProduto;
   bool get _editorOpen => _catalogState.editorOpen;
+
+  void _notifyInlineBackActiveChanged() {
+    final callback = widget.onInlineBackActiveChanged;
+    if (callback == null) {
+      return;
+    }
+    final isActive = _editorOpen;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      callback(isActive);
+    });
+  }
 
   void _updateCatalogState(
     ProductCatalogPageViewState Function(ProductCatalogPageViewState state)
@@ -162,6 +178,22 @@ class _ProdutosPageState extends State<ProdutosPage>
     final firestore = FirebaseFirestore.instance;
     _priceTableRepository = FirestoreTabelaPrecoRepository(firestore);
     _basePriceRepository = FirestoreProductBasePriceRepository(firestore);
+    _notifyInlineBackActiveChanged();
+  }
+
+  @override
+  void didUpdateWidget(covariant ProdutosPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.onInlineBackActiveChanged !=
+        widget.onInlineBackActiveChanged) {
+      _notifyInlineBackActiveChanged();
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.onInlineBackActiveChanged?.call(false);
+    super.dispose();
   }
 
   void _openProductEditor({Produto? produto}) {
@@ -171,6 +203,7 @@ class _ProdutosPageState extends State<ProdutosPage>
         currentBrandFilter: _brandFilter,
       ),
     );
+    _notifyInlineBackActiveChanged();
   }
 
   void _openExistingProductEditor(Produto produto) {
@@ -181,6 +214,7 @@ class _ProdutosPageState extends State<ProdutosPage>
     _setCatalogEditorState(
       _editorActionCoordinator.closeEditor(currentBrandFilter: _brandFilter),
     );
+    _notifyInlineBackActiveChanged();
   }
 
   void _applyEditorActionOutcome(ProductCatalogEditorActionOutcome outcome) {
@@ -284,6 +318,17 @@ class _ProdutosPageState extends State<ProdutosPage>
 
   @override
   Widget build(BuildContext context) {
-    return ProductCatalogWorkspaceSection(payload: _buildWorkspacePayload());
+    return PopScope(
+      canPop: !_editorOpen,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) {
+          return;
+        }
+        if (_editorOpen) {
+          _closeProductEditor();
+        }
+      },
+      child: ProductCatalogWorkspaceSection(payload: _buildWorkspacePayload()),
+    );
   }
 }

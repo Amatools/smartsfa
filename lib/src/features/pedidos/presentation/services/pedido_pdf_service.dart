@@ -77,6 +77,10 @@ class PedidoPdfService {
       pedido: pedido,
       headerContext: headerContext,
     );
+    await openPdfFile(file);
+  }
+
+  Future<void> openPdfFile(File file) async {
     final openResult = await OpenFilex.open(file.path, type: 'application/pdf');
 
     if (openResult.type != ResultType.done) {
@@ -101,6 +105,43 @@ class PedidoPdfService {
     final file = File('${tempDirectory.path}/${_buildFileName(pedido)}');
     await file.writeAsBytes(bytes, flush: true);
     return file;
+  }
+
+  Future<File> savePdfFileToDevice({
+    required File sourceFile,
+    required Pedido pedido,
+  }) async {
+    final directory =
+        await getExternalStorageDirectory() ??
+        await getApplicationDocumentsDirectory();
+    final outputDirectory = Directory('${directory.path}/pedidos_pdf');
+    if (!await outputDirectory.exists()) {
+      await outputDirectory.create(recursive: true);
+    }
+
+    final outputFile = File('${outputDirectory.path}/${_buildFileName(pedido)}');
+    await outputFile.writeAsBytes(await sourceFile.readAsBytes(), flush: true);
+    return outputFile;
+  }
+
+  Future<File> savePdfFileToDirectory({
+    required File sourceFile,
+    required Pedido pedido,
+    required String targetDirectoryPath,
+  }) async {
+    final normalizedTargetDirectoryPath = targetDirectoryPath.trim();
+    if (normalizedTargetDirectoryPath.isEmpty) {
+      throw StateError('Pasta de destino invalida para salvar o PDF.');
+    }
+
+    final outputDirectory = Directory(normalizedTargetDirectoryPath);
+    if (!await outputDirectory.exists()) {
+      await outputDirectory.create(recursive: true);
+    }
+
+    final outputFile = File('${outputDirectory.path}/${_buildFileName(pedido)}');
+    await outputFile.writeAsBytes(await sourceFile.readAsBytes(), flush: true);
+    return outputFile;
   }
 
   Future<Uint8List> buildPdfBytes({
