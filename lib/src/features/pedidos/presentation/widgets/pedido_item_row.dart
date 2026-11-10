@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../../core/models/domain_types.dart';
 import '../../../../core/models/pedido.dart';
 import '../../../../core/models/produto.dart';
 import '../../../auth/services/workspace_profile_service.dart';
@@ -68,6 +69,39 @@ class PedidoItemRow extends StatelessWidget {
   final Future<void> Function(int index) onAddDiscountField;
   final VoidCallback onRemoveItem;
 
+  Color _resolveSourceBorderColor(BuildContext context) {
+    switch (item.sourceType) {
+      case OrderItemSourceType.promotion:
+        return Colors.green.shade500;
+      case OrderItemSourceType.highlight:
+        return Colors.blue.shade500;
+      case OrderItemSourceType.none:
+        return Theme.of(context).dividerColor;
+    }
+  }
+
+  Color _resolveSourceBadgeColor() {
+    switch (item.sourceType) {
+      case OrderItemSourceType.promotion:
+        return Colors.green.shade700;
+      case OrderItemSourceType.highlight:
+        return Colors.blue.shade700;
+      case OrderItemSourceType.none:
+        return Colors.grey.shade600;
+    }
+  }
+
+  String? _resolveSourceBadgeLabel() {
+    switch (item.sourceType) {
+      case OrderItemSourceType.promotion:
+        return 'Promocao';
+      case OrderItemSourceType.highlight:
+        return 'Destaque';
+      case OrderItemSourceType.none:
+        return null;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final snapshot = item.taxSnapshot;
@@ -87,6 +121,9 @@ class PedidoItemRow extends StatelessWidget {
     final activeDiscountSlots = item.appliedDiscountPercents.length;
     final canAddDiscountSlot =
         maxDiscountSlots > 0 && activeDiscountSlots < maxDiscountSlots;
+    final sourceBadgeLabel = _resolveSourceBadgeLabel();
+    final sourceBorderColor = _resolveSourceBorderColor(context);
+    final sourceBadgeColor = _resolveSourceBadgeColor();
     final inlineDiscountControllers = activeDiscountSlots > 0
         ? ensureDiscountControllersForItem(item, activeDiscountSlots)
         : const <TextEditingController>[];
@@ -99,7 +136,7 @@ class PedidoItemRow extends StatelessWidget {
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: Theme.of(context).dividerColor),
+            border: Border.all(color: sourceBorderColor, width: 1.2),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -118,6 +155,30 @@ class PedidoItemRow extends StatelessWidget {
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
+                        if (sourceBadgeLabel != null) ...[
+                          const SizedBox(height: 4),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: sourceBadgeColor.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(999),
+                              border: Border.all(
+                                color: sourceBadgeColor.withValues(alpha: 0.55),
+                              ),
+                            ),
+                            child: Text(
+                              sourceBadgeLabel,
+                              style: Theme.of(context).textTheme.labelSmall
+                                  ?.copyWith(
+                                    color: sourceBadgeColor,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                            ),
+                          ),
+                        ],
                         const SizedBox(height: 4),
                         InkWell(
                           onTap: () => showItemTaxDetailsDialog(item),
@@ -355,309 +416,352 @@ class PedidoItemRow extends StatelessWidget {
         horizontal: rowHorizontalPadding,
         vertical: 6,
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          buildItemThumbnail(product, item.productName),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Table(
-              columnWidths: columnWidths,
-              defaultVerticalAlignment: TableCellVerticalAlignment.middle,
-              children: [
-                TableRow(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: Text(
-                        '$displayCode · ${item.productName}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            tooltip: 'Diminuir quantidade',
-                            onPressed: saving
-                                ? null
-                                : () => onDecrementQuantity(index),
-                            icon: const Icon(
-                              Icons.remove_circle_outline,
-                              size: 18,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.fromLTRB(10, 8, 8, 8),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: sourceBorderColor, width: 1.1),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            buildItemThumbnail(product, item.productName),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Table(
+                columnWidths: columnWidths,
+                defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+                children: [
+                  TableRow(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '$displayCode · ${item.productName}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                            visualDensity: VisualDensity.compact,
-                            constraints: const BoxConstraints(
-                              minWidth: 26,
-                              minHeight: 26,
-                            ),
-                            padding: EdgeInsets.zero,
-                          ),
-                          const SizedBox(width: 4),
-                          SizedBox(
-                            width: 52,
-                            child: TextFormField(
-                              key: ValueKey(
-                                'qtd_${item.id}_${formatQuantity(item.quantity)}',
-                              ),
-                              initialValue: formatQuantity(item.quantity),
-                              enabled: !saving,
-                              keyboardType: TextInputType.number,
-                              inputFormatters: [
-                                FilteringTextInputFormatter.digitsOnly,
-                                LengthLimitingTextInputFormatter(5),
-                              ],
-                              textAlign: TextAlign.center,
-                              decoration: const InputDecoration(
-                                isDense: true,
-                                contentPadding: EdgeInsets.symmetric(
-                                  horizontal: 6,
-                                  vertical: 6,
+                            if (sourceBadgeLabel != null) ...[
+                              const SizedBox(height: 2),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 7,
+                                  vertical: 1,
                                 ),
-                                border: OutlineInputBorder(),
+                                decoration: BoxDecoration(
+                                  color: sourceBadgeColor.withValues(
+                                    alpha: 0.12,
+                                  ),
+                                  borderRadius: BorderRadius.circular(999),
+                                  border: Border.all(
+                                    color: sourceBadgeColor.withValues(
+                                      alpha: 0.5,
+                                    ),
+                                  ),
+                                ),
+                                child: Text(
+                                  sourceBadgeLabel,
+                                  style: Theme.of(context).textTheme.labelSmall
+                                      ?.copyWith(
+                                        color: sourceBadgeColor,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                ),
                               ),
-                              onFieldSubmitted: (value) {
-                                final parsed = readIntegerQuantity(value);
-                                onSetQuantity(index, parsed);
-                              },
-                            ),
-                          ),
-                          const SizedBox(width: 4),
-                          IconButton(
-                            tooltip: 'Aumentar quantidade',
-                            onPressed: saving
-                                ? null
-                                : () => onIncrementQuantity(index),
-                            icon: const Icon(
-                              Icons.add_circle_outline,
-                              size: 18,
-                            ),
-                            visualDensity: VisualDensity.compact,
-                            constraints: const BoxConstraints(
-                              minWidth: 26,
-                              minHeight: 26,
-                            ),
-                            padding: EdgeInsets.zero,
-                          ),
-                        ],
+                            ],
+                          ],
+                        ),
                       ),
-                    ),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: Text(formatMoney(item.unitPrice)),
-                    ),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: Text(formatMoney(item.totalPrice)),
-                    ),
-                  ],
-                ),
-                TableRow(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.only(top: 3),
-                      child: InkWell(
-                        onTap: () => showItemTaxDetailsDialog(item),
+                      Align(
+                        alignment: Alignment.centerRight,
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Flexible(
-                              child: Text(
-                                fiscalMetaText.isEmpty
-                                    ? '$ipiText · ICMS-ST por regra fiscal'
-                                    : '$ipiText · $fiscalMetaText · ICMS-ST por regra fiscal',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.bodySmall,
+                            IconButton(
+                              tooltip: 'Diminuir quantidade',
+                              onPressed: saving
+                                  ? null
+                                  : () => onDecrementQuantity(index),
+                              icon: const Icon(
+                                Icons.remove_circle_outline,
+                                size: 18,
+                              ),
+                              visualDensity: VisualDensity.compact,
+                              constraints: const BoxConstraints(
+                                minWidth: 26,
+                                minHeight: 26,
+                              ),
+                              padding: EdgeInsets.zero,
+                            ),
+                            const SizedBox(width: 4),
+                            SizedBox(
+                              width: 52,
+                              child: TextFormField(
+                                key: ValueKey(
+                                  'qtd_${item.id}_${formatQuantity(item.quantity)}',
+                                ),
+                                initialValue: formatQuantity(item.quantity),
+                                enabled: !saving,
+                                keyboardType: TextInputType.number,
+                                inputFormatters: [
+                                  FilteringTextInputFormatter.digitsOnly,
+                                  LengthLimitingTextInputFormatter(5),
+                                ],
+                                textAlign: TextAlign.center,
+                                decoration: const InputDecoration(
+                                  isDense: true,
+                                  contentPadding: EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 6,
+                                  ),
+                                  border: OutlineInputBorder(),
+                                ),
+                                onFieldSubmitted: (value) {
+                                  final parsed = readIntegerQuantity(value);
+                                  onSetQuantity(index, parsed);
+                                },
                               ),
                             ),
                             const SizedBox(width: 4),
-                            Icon(
-                              Icons.info_outline,
-                              size: 14,
-                              color: Theme.of(context).colorScheme.outline,
+                            IconButton(
+                              tooltip: 'Aumentar quantidade',
+                              onPressed: saving
+                                  ? null
+                                  : () => onIncrementQuantity(index),
+                              icon: const Icon(
+                                Icons.add_circle_outline,
+                                size: 18,
+                              ),
+                              visualDensity: VisualDensity.compact,
+                              constraints: const BoxConstraints(
+                                minWidth: 26,
+                                minHeight: 26,
+                              ),
+                              padding: EdgeInsets.zero,
                             ),
                           ],
                         ),
                       ),
-                    ),
-                    const SizedBox.shrink(),
-                    const SizedBox.shrink(),
-                    const SizedBox.shrink(),
-                  ],
-                ),
-                TableRow(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.only(top: 2),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            discountSummary,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                          const SizedBox(height: 4),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 6,
-                            crossAxisAlignment: WrapCrossAlignment.center,
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: Text(formatMoney(item.unitPrice)),
+                      ),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: Text(formatMoney(item.totalPrice)),
+                      ),
+                    ],
+                  ),
+                  TableRow(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(top: 3),
+                        child: InkWell(
+                          onTap: () => showItemTaxDetailsDialog(item),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              if (activeDiscountSlots == 0)
-                                TextButton.icon(
-                                  onPressed: saving
-                                      ? null
-                                      : () => onAddDiscountField(index),
-                                  icon: const Icon(
-                                    Icons.percent_outlined,
-                                    size: 16,
-                                  ),
-                                  label: const Text('Adicionar desconto'),
-                                  style: TextButton.styleFrom(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 4,
-                                      vertical: 0,
-                                    ),
-                                    minimumSize: const Size(0, 30),
-                                    tapTargetSize:
-                                        MaterialTapTargetSize.shrinkWrap,
-                                  ),
+                              Flexible(
+                                child: Text(
+                                  fiscalMetaText.isEmpty
+                                      ? '$ipiText · ICMS-ST por regra fiscal'
+                                      : '$ipiText · $fiscalMetaText · ICMS-ST por regra fiscal',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context).textTheme.bodySmall,
                                 ),
+                              ),
+                              const SizedBox(width: 4),
+                              Icon(
+                                Icons.info_outline,
+                                size: 14,
+                                color: Theme.of(context).colorScheme.outline,
+                              ),
                             ],
                           ),
-                          if (activeDiscountSlots > 0) ...[
-                            const SizedBox(height: 6),
+                        ),
+                      ),
+                      const SizedBox.shrink(),
+                      const SizedBox.shrink(),
+                      const SizedBox.shrink(),
+                    ],
+                  ),
+                  TableRow(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              discountSummary,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                            const SizedBox(height: 4),
                             Wrap(
                               spacing: 8,
-                              runSpacing: 8,
+                              runSpacing: 6,
                               crossAxisAlignment: WrapCrossAlignment.center,
                               children: [
-                                for (var i = 0; i < activeDiscountSlots; i++)
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 6,
-                                      vertical: 4,
+                                if (activeDiscountSlots == 0)
+                                  TextButton.icon(
+                                    onPressed: saving
+                                        ? null
+                                        : () => onAddDiscountField(index),
+                                    icon: const Icon(
+                                      Icons.percent_outlined,
+                                      size: 16,
                                     ),
-                                    decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(10),
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .surfaceContainerHighest
-                                          .withValues(alpha: 0.35),
-                                      border: Border.all(
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .outlineVariant
-                                            .withValues(alpha: 0.55),
+                                    label: const Text('Adicionar desconto'),
+                                    style: TextButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 4,
+                                        vertical: 0,
                                       ),
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        SizedBox(
-                                          width: 96,
-                                          child: TextField(
-                                            controller:
-                                                inlineDiscountControllers[i],
-                                            enabled: !saving,
-                                            keyboardType:
-                                                const TextInputType.numberWithOptions(
-                                                  decimal: true,
-                                                ),
-                                            decoration: InputDecoration(
-                                              labelText: i < policyFields.length
-                                                  ? policyFields[i].label
-                                                  : 'Desconto ${i + 1}',
-                                              suffixText: '%',
-                                              isDense: true,
-                                              contentPadding:
-                                                  const EdgeInsets.symmetric(
-                                                    horizontal: 8,
-                                                    vertical: 8,
-                                                  ),
-                                              border:
-                                                  const OutlineInputBorder(),
-                                            ),
-                                            onSubmitted: (_) =>
-                                                onApplyInlineDiscounts(
-                                                  index,
-                                                  showErrors: true,
-                                                ),
-                                            onChanged: (_) =>
-                                                onApplyInlineDiscounts(
-                                                  index,
-                                                  showErrors: false,
-                                                ),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 4),
-                                        IconButton(
-                                          tooltip: 'Remover este desconto',
-                                          onPressed: saving
-                                              ? null
-                                              : () => onRemoveDiscountField(
-                                                  index,
-                                                  i,
-                                                ),
-                                          icon: const Icon(
-                                            Icons.close,
-                                            size: 16,
-                                          ),
-                                          visualDensity: VisualDensity.compact,
-                                          constraints: const BoxConstraints(
-                                            minWidth: 24,
-                                            minHeight: 24,
-                                          ),
-                                          padding: EdgeInsets.zero,
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                if (canAddDiscountSlot)
-                                  Padding(
-                                    padding: const EdgeInsets.only(top: 2),
-                                    child: FloatingActionButton.small(
-                                      heroTag:
-                                          'item_discount_fab_${item.id}_$activeDiscountSlots',
-                                      tooltip: 'Adicionar próximo campo',
-                                      onPressed: saving
-                                          ? null
-                                          : () => onAddDiscountField(index),
-                                      child: const Icon(Icons.add, size: 18),
+                                      minimumSize: const Size(0, 30),
+                                      tapTargetSize:
+                                          MaterialTapTargetSize.shrinkWrap,
                                     ),
                                   ),
                               ],
                             ),
+                            if (activeDiscountSlots > 0) ...[
+                              const SizedBox(height: 6),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                children: [
+                                  for (var i = 0; i < activeDiscountSlots; i++)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                        vertical: 4,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(10),
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .surfaceContainerHighest
+                                            .withValues(alpha: 0.35),
+                                        border: Border.all(
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .outlineVariant
+                                              .withValues(alpha: 0.55),
+                                        ),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          SizedBox(
+                                            width: 96,
+                                            child: TextField(
+                                              controller:
+                                                  inlineDiscountControllers[i],
+                                              enabled: !saving,
+                                              keyboardType:
+                                                  const TextInputType.numberWithOptions(
+                                                    decimal: true,
+                                                  ),
+                                              decoration: InputDecoration(
+                                                labelText:
+                                                    i < policyFields.length
+                                                    ? policyFields[i].label
+                                                    : 'Desconto ${i + 1}',
+                                                suffixText: '%',
+                                                isDense: true,
+                                                contentPadding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 8,
+                                                      vertical: 8,
+                                                    ),
+                                                border:
+                                                    const OutlineInputBorder(),
+                                              ),
+                                              onSubmitted: (_) =>
+                                                  onApplyInlineDiscounts(
+                                                    index,
+                                                    showErrors: true,
+                                                  ),
+                                              onChanged: (_) =>
+                                                  onApplyInlineDiscounts(
+                                                    index,
+                                                    showErrors: false,
+                                                  ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 4),
+                                          IconButton(
+                                            tooltip: 'Remover este desconto',
+                                            onPressed: saving
+                                                ? null
+                                                : () => onRemoveDiscountField(
+                                                    index,
+                                                    i,
+                                                  ),
+                                            icon: const Icon(
+                                              Icons.close,
+                                              size: 16,
+                                            ),
+                                            visualDensity:
+                                                VisualDensity.compact,
+                                            constraints: const BoxConstraints(
+                                              minWidth: 24,
+                                              minHeight: 24,
+                                            ),
+                                            padding: EdgeInsets.zero,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  if (canAddDiscountSlot)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 2),
+                                      child: FloatingActionButton.small(
+                                        heroTag:
+                                            'item_discount_fab_${item.id}_$activeDiscountSlots',
+                                        tooltip: 'Adicionar próximo campo',
+                                        onPressed: saving
+                                            ? null
+                                            : () => onAddDiscountField(index),
+                                        child: const Icon(Icons.add, size: 18),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ],
                           ],
-                        ],
+                        ),
                       ),
-                    ),
-                    const SizedBox.shrink(),
-                    const SizedBox.shrink(),
-                    const SizedBox.shrink(),
-                  ],
-                ),
-              ],
+                      const SizedBox.shrink(),
+                      const SizedBox.shrink(),
+                      const SizedBox.shrink(),
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
-          SizedBox(
-            width: actionSlotWidth,
-            child: Column(
-              children: [
-                IconButton(
-                  tooltip: 'Remover item',
-                  onPressed: saving ? null : onRemoveItem,
-                  icon: const Icon(Icons.delete_outline),
-                ),
-              ],
+            SizedBox(
+              width: actionSlotWidth,
+              child: Column(
+                children: [
+                  IconButton(
+                    tooltip: 'Remover item',
+                    onPressed: saving ? null : onRemoveItem,
+                    icon: const Icon(Icons.delete_outline),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

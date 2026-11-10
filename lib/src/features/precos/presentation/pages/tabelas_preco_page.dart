@@ -50,20 +50,24 @@ class _TabelasPrecoPageState extends State<TabelasPrecoPage> {
     required String? representedCompanyName,
   }) {
     final normalizedWorkspaceType = workspaceType.trim().toLowerCase();
-    final representedId = (DefaultPriceTableGuard.effectiveRepresentedCompanyId(
-              tenantId: widget.identity.tenantId,
-              representedCompanyId: representedCompanyId,
-            ) ??
-            '')
-        .trim();
+    final representedId =
+        (DefaultPriceTableGuard.effectiveRepresentedCompanyId(
+                  tenantId: widget.identity.tenantId,
+                  representedCompanyId: representedCompanyId,
+                ) ??
+                '')
+            .trim();
     final representedName = (representedCompanyName ?? '').trim();
     final representedContext =
-        normalizedWorkspaceType == 'rep_workspace' || representedName.isNotEmpty;
+        normalizedWorkspaceType == 'rep_workspace' ||
+        representedName.isNotEmpty;
     final shouldUseRepresentedScope =
         representedContext && representedId.isNotEmpty;
 
     if (shouldUseRepresentedScope) {
-      return DefaultPriceTableGuard.normalizeDefaultPricingScopeKey(representedId);
+      return DefaultPriceTableGuard.normalizeDefaultPricingScopeKey(
+        representedId,
+      );
     }
     return 'tenant_default';
   }
@@ -148,21 +152,23 @@ class _TabelasPrecoPageState extends State<TabelasPrecoPage> {
           );
         }
 
-        final workspaceType = widget.activeTenant.workspaceType.trim().toLowerCase();
+        final workspaceType = widget.activeTenant.workspaceType
+            .trim()
+            .toLowerCase();
         final hasRepresentedContext = representedName.isNotEmpty;
-        final selectedRepresented = (DefaultPriceTableGuard.effectiveRepresentedCompanyId(
-                  tenantId: widget.identity.tenantId,
-                  representedCompanyId: widget.selectedRepresentedCompanyId,
-                ) ??
-                '')
-            .trim();
+        final selectedRepresented =
+            (DefaultPriceTableGuard.effectiveRepresentedCompanyId(
+                      tenantId: widget.identity.tenantId,
+                      representedCompanyId: widget.selectedRepresentedCompanyId,
+                    ) ??
+                    '')
+                .trim();
         final hasRepresentedScope =
             (workspaceType == 'rep_workspace' || hasRepresentedContext) &&
             selectedRepresented.isNotEmpty;
         final scopedTables = hasRepresentedScope
             ? tabelas
-                .where(
-                  (tabela) {
+                  .where((tabela) {
                     final isSystemDefault =
                         tabela.origem.trim().toLowerCase() == 'system' &&
                         tabela.nome.trim().toLowerCase() ==
@@ -179,9 +185,8 @@ class _TabelasPrecoPageState extends State<TabelasPrecoPage> {
                       return true;
                     }
                     return linked == selectedRepresented;
-                  },
-                )
-                .toList(growable: false)
+                  })
+                  .toList(growable: false)
             : tabelas;
         final visibleTabelas = DefaultPriceTableGuard.dedupeSystemDefaultTables(
           scopedTables,
@@ -200,7 +205,8 @@ class _TabelasPrecoPageState extends State<TabelasPrecoPage> {
                 final allProducts = productsSnapshot.data ?? const <Produto>[];
                 final activeProductIds = <String>{
                   for (final product in allProducts)
-                    if (product.status == ProductStatus.active) product.id.trim(),
+                    if (product.status == ProductStatus.active)
+                      product.id.trim(),
                 };
 
                 final uniqueItemCountByTableId = _buildUniqueItemCountByTableId(
@@ -211,7 +217,10 @@ class _TabelasPrecoPageState extends State<TabelasPrecoPage> {
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Tabelas de preco', style: Theme.of(context).textTheme.headlineMedium),
+                    Text(
+                      'Tabelas de preco',
+                      style: Theme.of(context).textTheme.headlineMedium,
+                    ),
                     const SizedBox(height: 8),
                     Text(
                       'Cadastro de tabelas por tenant para $representedLabel.',
@@ -235,10 +244,11 @@ class _TabelasPrecoPageState extends State<TabelasPrecoPage> {
                                 OutlinedButton.icon(
                                   onPressed: policy.canManage
                                       ? () => _downloadPriceTableTemplate(
-                                            context,
-                                            identity: widget.identity,
-                                            productRepository: widget.productRepository,
-                                          )
+                                          context,
+                                          identity: widget.identity,
+                                          productRepository:
+                                              widget.productRepository,
+                                        )
                                       : null,
                                   icon: const Icon(Icons.download_outlined),
                                   label: const Text('Baixar modelo XLSX'),
@@ -246,12 +256,14 @@ class _TabelasPrecoPageState extends State<TabelasPrecoPage> {
                                 FilledButton.icon(
                                   onPressed: policy.canManage
                                       ? () => _openImportSheet(
-                                            context,
-                                            identity: widget.identity,
-                                            repository: widget.repository,
-                                            productRepository: widget.productRepository,
-                                            basePriceRepository: widget.basePriceRepository,
-                                          )
+                                          context,
+                                          identity: widget.identity,
+                                          repository: widget.repository,
+                                          productRepository:
+                                              widget.productRepository,
+                                          basePriceRepository:
+                                              widget.basePriceRepository,
+                                        )
                                       : null,
                                   icon: const Icon(Icons.upload_file_outlined),
                                   label: const Text('Importar planilha'),
@@ -259,10 +271,10 @@ class _TabelasPrecoPageState extends State<TabelasPrecoPage> {
                                 OutlinedButton.icon(
                                   onPressed: policy.canManage
                                       ? () => _openCreateTableDialog(
-                                            context,
-                                            identity: widget.identity,
-                                            repository: widget.repository,
-                                          )
+                                          context,
+                                          identity: widget.identity,
+                                          repository: widget.repository,
+                                        )
                                       : null,
                                   icon: const Icon(Icons.add),
                                   label: const Text('Nova tabela'),
@@ -275,7 +287,9 @@ class _TabelasPrecoPageState extends State<TabelasPrecoPage> {
                                 dense: true,
                                 contentPadding: EdgeInsets.zero,
                                 leading: Icon(Icons.info_outline),
-                                title: Text('Somente owner/gerente podem alterar tabelas no workspace enterprise.'),
+                                title: Text(
+                                  'Somente owner/gerente podem alterar tabelas no workspace enterprise.',
+                                ),
                               ),
                             ],
                           ],
@@ -287,7 +301,9 @@ class _TabelasPrecoPageState extends State<TabelasPrecoPage> {
                       const Card(
                         child: ListTile(
                           title: Text('Nenhuma tabela cadastrada'),
-                          subtitle: Text('Use importacao de planilha ou cadastro manual para iniciar.'),
+                          subtitle: Text(
+                            'Use importacao de planilha ou cadastro manual para iniciar.',
+                          ),
                         ),
                       )
                     else
@@ -319,9 +335,9 @@ class _TabelasPrecoPageState extends State<TabelasPrecoPage> {
 }
 
 Map<String, int> _buildUniqueItemCountByTableId(
-  List<ProductBasePrice> prices,
-  {Set<String>? activeProductIds,}
-) {
+  List<ProductBasePrice> prices, {
+  Set<String>? activeProductIds,
+}) {
   final byTable = <String, Set<String>>{};
   final activeIds = activeProductIds;
   for (final item in prices) {
@@ -333,7 +349,9 @@ Map<String, int> _buildUniqueItemCountByTableId(
     if (tableId.isEmpty || productId.isEmpty) {
       continue;
     }
-    if (activeIds != null && activeIds.isNotEmpty && !activeIds.contains(productId)) {
+    if (activeIds != null &&
+        activeIds.isNotEmpty &&
+        !activeIds.contains(productId)) {
       continue;
     }
     (byTable[tableId] ??= <String>{}).add(productId);
@@ -350,7 +368,17 @@ int? _resolveDisplayItemCount({
   required TabelaPreco tabela,
   required Map<String, int> uniqueItemCountByTableId,
 }) {
+  final isPromotionCampaign =
+      tabela.origem.trim().toLowerCase() == 'campaign_promotion' ||
+      tabela.scopeType.trim().toLowerCase() == 'promotion_campaign';
+
   final fromBasePrices = uniqueItemCountByTableId[tabela.id];
+  if (isPromotionCampaign) {
+    // Promotion tables are derived from active campaign items.
+    // Showing rowCount fallback here can display stale counts briefly.
+    return fromBasePrices ?? 0;
+  }
+
   if (fromBasePrices != null) {
     return fromBasePrices;
   }
@@ -415,9 +443,15 @@ class _PriceTableCard extends StatelessWidget {
         tabela.nome.trim().toLowerCase() == reservedSystemDefaultPriceTableName;
   }
 
+  bool get _isPromotionCampaign {
+    return tabela.origem.trim().toLowerCase() == 'campaign_promotion' ||
+        tabela.scopeType.trim().toLowerCase() == 'promotion_campaign';
+  }
+
   @override
   Widget build(BuildContext context) {
-    final deleteEnabled = canManage && !_isSystemDefault;
+    final deleteEnabled =
+        canManage && !_isSystemDefault && !_isPromotionCampaign;
     final itemCount = displayItemCount;
 
     return Padding(
@@ -591,10 +625,7 @@ Future<void> _openCreateTableDialog(
                 onPressed: () => Navigator.of(dialogContext).pop(),
                 child: const Text('Cancelar'),
               ),
-              FilledButton(
-                onPressed: save,
-                child: const Text('Salvar'),
-              ),
+              FilledButton(onPressed: save, child: const Text('Salvar')),
             ],
           );
         },
@@ -631,7 +662,9 @@ Future<void> _openImportSheet(
               withData: true,
             );
 
-            final file = result?.files.isNotEmpty == true ? result!.files.first : null;
+            final file = result?.files.isNotEmpty == true
+                ? result!.files.first
+                : null;
             if (file == null) {
               return;
             }
@@ -647,7 +680,9 @@ Future<void> _openImportSheet(
             final file = selectedFile;
             if (file == null) {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Selecione uma planilha primeiro.')),
+                const SnackBar(
+                  content: Text('Selecione uma planilha primeiro.'),
+                ),
               );
               return;
             }
@@ -662,7 +697,9 @@ Future<void> _openImportSheet(
             final file = selectedFile;
             if (file == null) {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Selecione uma planilha para importar.')),
+                const SnackBar(
+                  content: Text('Selecione uma planilha para importar.'),
+                ),
               );
               return;
             }
@@ -672,9 +709,8 @@ Future<void> _openImportSheet(
               setSheetState(() {
                 validation = report;
               });
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(report.message)),
-              );
+              ScaffoldMessenger.of(context)
+                  .showSnackBar(SnackBar(content: Text(report.message)));
               return;
             }
 
@@ -688,7 +724,8 @@ Future<void> _openImportSheet(
               return;
             }
 
-            if (importedName.toLowerCase() == reservedSystemDefaultPriceTableName) {
+            if (importedName.toLowerCase() ==
+                reservedSystemDefaultPriceTableName) {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
                   content: Text(
@@ -720,15 +757,12 @@ Future<void> _openImportSheet(
               final rowsToImport = <_ImportedPriceRow>[];
               final unknownCodes = <String>{};
               for (final row in report.rows) {
-                final code = _readPriceCell(
-                  row,
-                  const [
-                    'codigointerno',
-                    'codigo_interno',
-                    'codigo',
-                    'sku',
-                  ],
-                );
+                final code = _readPriceCell(row, const [
+                  'codigointerno',
+                  'codigo_interno',
+                  'codigo',
+                  'sku',
+                ]);
                 if (code.isEmpty) {
                   continue;
                 }
@@ -739,10 +773,12 @@ Future<void> _openImportSheet(
                   continue;
                 }
 
-                final rawPrice = _readPriceCell(
-                  row,
-                  const ['preco', 'valor', 'valor_bruto', 'baseprice'],
-                );
+                final rawPrice = _readPriceCell(row, const [
+                  'preco',
+                  'valor',
+                  'valor_bruto',
+                  'baseprice',
+                ]);
                 final basePrice = TabularSpreadsheetService.parseDecimal(
                   rawPrice,
                 );
@@ -750,14 +786,12 @@ Future<void> _openImportSheet(
                   continue;
                 }
 
-                final regionId = _readPriceCell(
-                  row,
-                  const ['regiao', 'region', 'regionid'],
-                );
-                final statusRaw = _readPriceCell(
-                  row,
-                  const ['status'],
-                );
+                final regionId = _readPriceCell(row, const [
+                  'regiao',
+                  'region',
+                  'regionid',
+                ]);
+                final statusRaw = _readPriceCell(row, const ['status']);
                 final validFrom = TabularSpreadsheetService.parseDate(
                   _readPriceCell(row, const ['validfrom', 'vigenciainicial']),
                 );
@@ -898,16 +932,24 @@ Future<void> _openImportSheet(
                       contentPadding: EdgeInsets.zero,
                       leading: const Icon(Icons.description_outlined),
                       title: Text(selectedFile!.name),
-                      subtitle: Text('${(selectedFile!.size / 1024).toStringAsFixed(1)} KB'),
+                      subtitle: Text(
+                        '${(selectedFile!.size / 1024).toStringAsFixed(1)} KB',
+                      ),
                     ),
                   if (validation != null)
                     ListTile(
                       contentPadding: EdgeInsets.zero,
                       leading: Icon(
-                        validation!.ok ? Icons.verified_outlined : Icons.error_outline,
+                        validation!.ok
+                            ? Icons.verified_outlined
+                            : Icons.error_outline,
                         color: validation!.ok ? Colors.green : Colors.red,
                       ),
-                      title: Text(validation!.ok ? 'Validacao concluida' : 'Validacao com erro'),
+                      title: Text(
+                        validation!.ok
+                            ? 'Validacao concluida'
+                            : 'Validacao com erro',
+                      ),
                       subtitle: Text(validation!.message),
                     ),
                   const SizedBox(height: 12),
@@ -927,11 +969,17 @@ Future<void> _openImportSheet(
                       ),
                       FilledButton.icon(
                         onPressed: importing ? null : importFile,
-                        icon: const Icon(Icons.playlist_add_check_circle_outlined),
-                        label: Text(importing ? 'Importando...' : 'Importar agora'),
+                        icon: const Icon(
+                          Icons.playlist_add_check_circle_outlined,
+                        ),
+                        label: Text(
+                          importing ? 'Importando...' : 'Importar agora',
+                        ),
                       ),
                       TextButton(
-                        onPressed: importing ? null : () => Navigator.of(sheetContext).pop(),
+                        onPressed: importing
+                            ? null
+                            : () => Navigator.of(sheetContext).pop(),
                         child: const Text('Fechar'),
                       ),
                     ],
@@ -970,18 +1018,21 @@ _PriceImportValidation _validatePriceSheet(PlatformFile file) {
 
   final header = parsed.headers;
 
-  final hasCodigo = header.contains('codigointerno') ||
+  final hasCodigo =
+      header.contains('codigointerno') ||
       header.contains('codigo_interno') ||
       header.contains('codigo') ||
       header.contains('sku');
-  final hasPreco = header.contains('preco') ||
+  final hasPreco =
+      header.contains('preco') ||
       header.contains('valor') ||
       header.contains('valor_bruto');
 
   if (!hasCodigo || !hasPreco) {
     return const _PriceImportValidation(
       ok: false,
-      message: 'Cabecalho invalido. Campos obrigatorios: codigoInterno e preco.',
+      message:
+          'Cabecalho invalido. Campos obrigatorios: codigoInterno e preco.',
       rows: <Map<String, String>>[],
     );
   }
@@ -990,14 +1041,18 @@ _PriceImportValidation _validatePriceSheet(PlatformFile file) {
   final invalidPriceLines = <int>[];
   for (var index = 0; index < parsed.rows.length; index++) {
     final row = parsed.rows[index];
-    final code = _readPriceCell(
-      row,
-      const <String>['codigointerno', 'codigo_interno', 'codigo', 'sku'],
-    );
-    final rawPrice = _readPriceCell(
-      row,
-      const <String>['preco', 'valor', 'valor_bruto', 'baseprice'],
-    );
+    final code = _readPriceCell(row, const <String>[
+      'codigointerno',
+      'codigo_interno',
+      'codigo',
+      'sku',
+    ]);
+    final rawPrice = _readPriceCell(row, const <String>[
+      'preco',
+      'valor',
+      'valor_bruto',
+      'baseprice',
+    ]);
     final parsedPrice = TabularSpreadsheetService.parseDecimal(rawPrice);
 
     if (code.isEmpty) {
@@ -1043,7 +1098,9 @@ Future<void> _downloadPriceTableTemplate(
   required ProdutoRepository productRepository,
 }) async {
   try {
-    final products = await productRepository.fetchAll(tenantId: identity.tenantId);
+    final products = await productRepository.fetchAll(
+      tenantId: identity.tenantId,
+    );
     if (products.isEmpty) {
       if (!context.mounted) {
         return;
@@ -1095,7 +1152,8 @@ Future<void> _downloadPriceTableTemplate(
     await downloadFileBytes(
       bytes: bytes,
       fileName: 'modelo_tabela_preco_$stamp.xlsx',
-      mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      mimeType:
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     );
   } catch (error) {
     if (!context.mounted) {
@@ -1134,7 +1192,8 @@ String _formatDate(DateTime? value) {
 
 String _readPriceCell(Map<String, String> row, List<String> aliases) {
   for (final alias in aliases) {
-    final value = row[TabularSpreadsheetService.normalizeHeader(alias)]?.trim() ?? '';
+    final value =
+        row[TabularSpreadsheetService.normalizeHeader(alias)]?.trim() ?? '';
     if (value.isNotEmpty) {
       return value;
     }

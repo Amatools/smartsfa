@@ -8,6 +8,8 @@ import '../../../../core/models/produto.dart';
 typedef ProductThumbnailBuilder = Widget Function(Produto produto);
 typedef ProductPriceFormatter = String Function(Produto produto);
 
+enum ProductsTableSortField { code, name, price }
+
 class ProductsTable extends StatelessWidget {
   const ProductsTable({
     super.key,
@@ -18,6 +20,9 @@ class ProductsTable extends StatelessWidget {
     this.onPreviewImage,
     required this.thumbnailBuilder,
     required this.priceFormatter,
+    required this.sortField,
+    required this.sortAscending,
+    required this.onSortRequested,
   });
 
   final List<Produto> produtos;
@@ -27,6 +32,21 @@ class ProductsTable extends StatelessWidget {
   final void Function(Produto produto)? onPreviewImage;
   final ProductThumbnailBuilder thumbnailBuilder;
   final ProductPriceFormatter priceFormatter;
+  final ProductsTableSortField sortField;
+  final bool sortAscending;
+  final ValueChanged<ProductsTableSortField> onSortRequested;
+
+  static String resolveDisplayCode(Produto produto) {
+    final codigoErp = (produto.erpProductId ?? '').trim();
+    final codigoSaas = produto.codigoInterno.trim();
+    if (codigoErp.isNotEmpty) {
+      return codigoErp;
+    }
+    if (codigoSaas.isNotEmpty) {
+      return codigoSaas;
+    }
+    return (produto.codigoFabricante ?? '').trim();
+  }
 
   // Kept for hot-reload compatibility after refactoring away from Table.
   // ignore: unused_field
@@ -125,19 +145,74 @@ class ProductsTable extends StatelessWidget {
           const SizedBox(width: _ProductTableLayout.columnGap),
           SizedBox(
             width: _ProductTableLayout.codeColumnWidth,
-            child: Text('Código', style: style),
+            child: _buildSortableHeaderCell(
+              label: 'Código',
+              field: ProductsTableSortField.code,
+              style: style,
+            ),
           ),
           const SizedBox(width: _ProductTableLayout.columnGap),
-          Expanded(child: Text('Nome', style: style)),
+          Expanded(
+            child: _buildSortableHeaderCell(
+              label: 'Nome',
+              field: ProductsTableSortField.name,
+              style: style,
+            ),
+          ),
           const SizedBox(width: _ProductTableLayout.columnGap),
           SizedBox(
             width: _ProductTableLayout.priceColumnWidth,
             child: Align(
               alignment: Alignment.centerRight,
-              child: Text('Preço', style: style, textAlign: TextAlign.right),
+              child: _buildSortableHeaderCell(
+                label: 'Preço',
+                field: ProductsTableSortField.price,
+                style: style,
+                alignRight: true,
+              ),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildSortableHeaderCell({
+    required String label,
+    required ProductsTableSortField field,
+    required TextStyle style,
+    bool alignRight = false,
+  }) {
+    final isSortedField = sortField == field;
+    final icon = isSortedField
+        ? (sortAscending ? Icons.arrow_upward : Icons.arrow_downward)
+        : Icons.unfold_more;
+
+    return InkWell(
+      onTap: () => onSortRequested(field),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 2),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: alignRight
+              ? MainAxisAlignment.end
+              : MainAxisAlignment.start,
+          children: [
+            Flexible(
+              child: Text(
+                label,
+                style: style,
+                textAlign: alignRight ? TextAlign.right : TextAlign.left,
+              ),
+            ),
+            const SizedBox(width: 4),
+            Icon(
+              icon,
+              size: 14,
+              color: isSortedField ? Colors.black87 : Colors.black26,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -153,13 +228,7 @@ class ProductsTable extends StatelessWidget {
   }) {
     final theme = Theme.of(context);
     final isActive = produto.status == ProductStatus.active;
-    final codigoErp = (produto.erpProductId ?? '').trim();
-    final codigoSaas = produto.codigoInterno.trim();
-    final codigo = codigoErp.isNotEmpty
-        ? codigoErp
-        : (codigoSaas.isNotEmpty
-              ? codigoSaas
-              : (produto.codigoFabricante ?? '').trim());
+    final codigo = resolveDisplayCode(produto);
 
     Widget tappableCell(Widget child, {bool alignRight = false}) {
       return InkWell(

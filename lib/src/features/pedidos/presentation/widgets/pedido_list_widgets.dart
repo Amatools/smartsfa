@@ -3,47 +3,6 @@ import 'package:flutter/material.dart';
 import '../../../../core/models/pedido.dart';
 import '../services/pedido_format_utils.dart';
 
-/// Header action card used at the top of the pedidos (orders) list page.
-/// Extracted from `pedidos_page.dart` (SRP).
-class PedidoHeaderCard extends StatelessWidget {
-  const PedidoHeaderCard({
-    super.key,
-    required this.title,
-    required this.subtitle,
-    required this.actionLabel,
-    required this.onAction,
-    this.actionEnabled = true,
-  });
-
-  final String title;
-  final String subtitle;
-  final String actionLabel;
-  final VoidCallback onAction;
-  final bool actionEnabled;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: Theme.of(context).textTheme.headlineSmall),
-            const SizedBox(height: 8),
-            Text(subtitle),
-            const SizedBox(height: 10),
-            FilledButton(
-              onPressed: actionEnabled ? onAction : null,
-              child: Text(actionLabel),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 /// List item card for a single pedido in the pedidos list page. Extracted
 /// from `pedidos_page.dart` (SRP).
 class PedidoCard extends StatelessWidget {

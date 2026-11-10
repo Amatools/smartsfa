@@ -1,32 +1,22 @@
 import 'package:flutter/material.dart';
 
-import 'header_card.dart';
-
 class ProductCatalogTopSection extends StatelessWidget {
   const ProductCatalogTopSection({
     super.key,
     required this.creatingNewProduct,
     required this.canCreateOrImportProducts,
     required this.representedCompanyName,
-    required this.showEnterpriseSyncSwitchCard,
-    required this.erpSyncEnabled,
-    required this.erpSyncChangeEnabled,
     required this.onImportExcel,
     required this.onDownloadExcelModel,
     required this.onCreateProduct,
-    required this.onErpSyncChanged,
   });
 
   final bool creatingNewProduct;
   final bool canCreateOrImportProducts;
   final String? representedCompanyName;
-  final bool showEnterpriseSyncSwitchCard;
-  final bool erpSyncEnabled;
-  final bool erpSyncChangeEnabled;
   final VoidCallback onImportExcel;
   final VoidCallback onDownloadExcelModel;
   final VoidCallback onCreateProduct;
-  final ValueChanged<bool> onErpSyncChanged;
 
   Widget _buildHeaderActions() {
     return LayoutBuilder(
@@ -88,51 +78,24 @@ class ProductCatalogTopSection extends StatelessWidget {
         ? 'Cadastro de Produtos da Empresa'
         : 'Cadastro de Produtos da $representedName';
 
+    if (creatingNewProduct) {
+      return const SizedBox.shrink();
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (!creatingNewProduct)
-          HeaderCard(
-            title: 'Produtos',
-            subtitle: subtitle,
-            actions: [
-              if (canCreateOrImportProducts) ...[_buildHeaderActions()],
-            ],
+        Text('Produtos', style: Theme.of(context).textTheme.headlineSmall),
+        const SizedBox(height: 6),
+        Text(subtitle),
+        const SizedBox(height: 12),
+        if (canCreateOrImportProducts)
+          _buildHeaderActions()
+        else
+          Text(
+            'Catálogo gerenciado por integração ERP. Edição manual indisponível.',
+            style: Theme.of(context).textTheme.bodySmall,
           ),
-        if (showEnterpriseSyncSwitchCard) ...[
-          const SizedBox(height: 12),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  const Icon(Icons.sync_lock_outlined),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
-                        Text(
-                          'Sincronizar Produtos do ERP',
-                          style: TextStyle(fontWeight: FontWeight.w600),
-                        ),
-                        SizedBox(height: 4),
-                        Text(
-                          'Quando ativado desativa o cadastro manual e sincroniza produtos do ERP.',
-                        ),
-                      ],
-                    ),
-                  ),
-                  Switch(
-                    value: erpSyncEnabled,
-                    onChanged: erpSyncChangeEnabled ? onErpSyncChanged : null,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
       ],
     );
   }

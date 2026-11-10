@@ -1,11 +1,13 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../models/produto.dart';
+import '../../repositories/produto_paging_repository.dart';
 import '../../repositories/produto_repository.dart';
 import 'firestore_map_normalizer.dart';
 import 'firestore_sync_metadata.dart';
 
-class FirestoreProdutoRepository implements ProdutoRepository {
+class FirestoreProdutoRepository
+  implements ProdutoRepository, ProdutoPagingRepository {
   FirestoreProdutoRepository(this._firestore);
 
   final FirebaseFirestore _firestore;
@@ -74,6 +76,58 @@ class FirestoreProdutoRepository implements ProdutoRepository {
     items.sort((a, b) => a.descricao.compareTo(b.descricao));
     _tenantCache[normalizedTenantId] = List<Produto>.unmodifiable(items);
     return items;
+  }
+
+  @override
+  Future<ProdutoPageChunk> fetchPageChunk({
+    required String tenantId,
+    required int limit,
+    String? startAfterDocumentId,
+  }) async {
+    final normalizedTenantId = tenantId.trim();
+    if (normalizedTenantId.isEmpty) {
+      return const ProdutoPageChunk(
+        items: <Produto>[],
+        lastDocumentId: null,
+        hasMore: false,
+      );
+    }
+
+    final safeLimit = limit <= 0 ? 50 : limit;
+    final normalizedCursor = (startAfterDocumentId ?? '').trim();
+
+    Query<Map<String, dynamic>> query = _collection
+        .where('tenantId', isEqualTo: normalizedTenantId)
+        .orderBy(FieldPath.documentId)
+        .limit(safeLimit);
+
+    if (normalizedCursor.isNotEmpty) {
+      query = query.startAfter(<Object>[normalizedCursor]);
+    }
+
+    final snapshot = await query.get();
+    if (snapshot.docs.isEmpty) {
+      return const ProdutoPageChunk(
+        items: <Produto>[],
+        lastDocumentId: null,
+        hasMore: false,
+      );
+    }
+
+    final items = snapshot.docs
+        .map((doc) {
+          final data = normalizeFirestoreMap(doc.data());
+          data.putIfAbsent('id', () => doc.id);
+          return Produto.fromMap(data);
+        })
+        .where((produto) => produto.deletedAt == null)
+        .toList(growable: false);
+
+    return ProdutoPageChunk(
+      items: items,
+      lastDocumentId: snapshot.docs.last.id,
+      hasMore: snapshot.docs.length >= safeLimit,
+    );
   }
 
   @override

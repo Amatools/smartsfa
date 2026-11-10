@@ -202,6 +202,9 @@ class PedidoItem {
     this.appliedDiscountPercents = const <double>[],
     this.unit,
     this.ncm,
+    this.sourceType = OrderItemSourceType.none,
+    this.sourceListId,
+    this.sourceListLabel,
     this.taxSnapshot,
   });
 
@@ -217,6 +220,11 @@ class PedidoItem {
       appliedDiscountPercents: _readDoubleList(map['appliedDiscountPercents']),
       unit: map['unit'] as String?,
       ncm: map['ncm'] as String?,
+      sourceType: OrderItemSourceType.fromValue(
+        map['sourceType'] as String? ?? OrderItemSourceType.none.value,
+      ),
+      sourceListId: map['sourceListId'] as String?,
+      sourceListLabel: map['sourceListLabel'] as String?,
       taxSnapshot: map['taxSnapshot'] is Map
           ? PedidoItemTaxSnapshot.fromMap(
               Map<String, Object?>.from(map['taxSnapshot'] as Map),
@@ -235,6 +243,9 @@ class PedidoItem {
   final List<double> appliedDiscountPercents;
   final String? unit;
   final String? ncm;
+  final OrderItemSourceType sourceType;
+  final String? sourceListId;
+  final String? sourceListLabel;
   final PedidoItemTaxSnapshot? taxSnapshot;
 
   PedidoItem copyWith({
@@ -248,6 +259,9 @@ class PedidoItem {
     List<double>? appliedDiscountPercents,
     String? unit,
     String? ncm,
+    OrderItemSourceType? sourceType,
+    String? sourceListId,
+    String? sourceListLabel,
     PedidoItemTaxSnapshot? taxSnapshot,
   }) {
     return PedidoItem(
@@ -262,6 +276,9 @@ class PedidoItem {
           appliedDiscountPercents ?? this.appliedDiscountPercents,
       unit: unit ?? this.unit,
       ncm: ncm ?? this.ncm,
+      sourceType: sourceType ?? this.sourceType,
+      sourceListId: sourceListId ?? this.sourceListId,
+      sourceListLabel: sourceListLabel ?? this.sourceListLabel,
       taxSnapshot: taxSnapshot ?? this.taxSnapshot,
     );
   }
@@ -278,6 +295,9 @@ class PedidoItem {
       'appliedDiscountPercents': appliedDiscountPercents,
       'unit': unit,
       'ncm': ncm,
+      'sourceType': sourceType.value,
+      'sourceListId': sourceListId,
+      'sourceListLabel': sourceListLabel,
       'taxSnapshot': taxSnapshot?.toMap(),
     };
   }

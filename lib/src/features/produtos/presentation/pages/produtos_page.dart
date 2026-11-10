@@ -17,14 +17,12 @@ import '../services/product_catalog_async_flow_coordinator.dart';
 import '../services/product_catalog_defaults.dart';
 import '../services/product_catalog_editor_action_coordinator.dart';
 import '../services/product_catalog_editor_state_coordinator.dart';
-import '../services/product_catalog_erp_disable_flow_coordinator.dart';
-import '../services/product_catalog_erp_products_deactivation_coordinator.dart';
 import '../services/product_catalog_feedback.dart';
 import '../services/product_catalog_page_state_coordinator.dart';
 import '../services/product_catalog_page_view_state.dart';
+import '../services/product_catalog_source_filter.dart';
 import '../services/product_catalog_workspace_payload.dart';
 import '../services/product_list_price_formatter.dart';
-import '../widgets/disable_erp_sync_dialog.dart';
 import '../widgets/product_catalog_workspace_section.dart';
 import '../widgets/product_import_sheet.dart';
 
@@ -55,9 +53,6 @@ class _ProdutosPageState extends State<ProdutosPage>
       const ProductCatalogEditorActionCoordinator();
   final ProductCatalogAsyncFlowCoordinator _catalogAsyncFlowCoordinator =
       const ProductCatalogAsyncFlowCoordinator();
-  final ProductCatalogErpProductsDeactivationCoordinator
-  _erpProductsDeactivationCoordinator =
-      const ProductCatalogErpProductsDeactivationCoordinator();
   final ProductCatalogPageStateCoordinator _pageStateCoordinator =
       const ProductCatalogPageStateCoordinator();
   late final TabelaPrecoRepository? _priceTableRepository;
@@ -67,10 +62,10 @@ class _ProdutosPageState extends State<ProdutosPage>
       ProductCatalogPageViewState.initial();
   final Set<String> _ensuredDefaultScopes = <String>{};
 
-  bool get _updatingErpSync => _catalogState.updatingErpSync;
   Set<String> get _updatingStatusProductIds =>
       _catalogState.updatingStatusProductIds;
   String get _brandFilter => _catalogState.brandFilter;
+  ProductCatalogSourceFilter get _sourceFilter => _catalogState.sourceFilter;
   Produto? get _editingProduto => _catalogState.editingProduto;
   bool get _editorOpen => _catalogState.editorOpen;
 
@@ -110,6 +105,15 @@ class _ProdutosPageState extends State<ProdutosPage>
     );
   }
 
+  void _setCatalogSourceFilter(ProductCatalogSourceFilter value) {
+    _updateCatalogState(
+      (state) => _pageStateCoordinator.applySourceFilter(
+        currentState: state,
+        sourceFilter: value,
+      ),
+    );
+  }
+
   void _openImportSheet() {
     openProductImportSheet(
       context,
@@ -125,15 +129,6 @@ class _ProdutosPageState extends State<ProdutosPage>
       identity: widget.identity,
       repository: widget.repository,
       representedCompanyId: widget.selectedRepresentedCompanyId,
-    );
-  }
-
-  void _setErpSyncUpdating(bool isLoading) {
-    _updateCatalogStateIfMounted(
-      (state) => _pageStateCoordinator.applyErpSyncLoading(
-        currentState: state,
-        isLoading: isLoading,
-      ),
     );
   }
 
@@ -167,48 +162,6 @@ class _ProdutosPageState extends State<ProdutosPage>
     final firestore = FirebaseFirestore.instance;
     _priceTableRepository = FirestoreTabelaPrecoRepository(firestore);
     _basePriceRepository = FirestoreProductBasePriceRepository(firestore);
-  }
-
-  Future<ProductCatalogErpDisableSelection?>
-  _requestDisableErpSyncSelection() async {
-    final selected = await showDisableErpSyncDialog(context);
-    if (selected == null) {
-      return null;
-    }
-
-    if (selected == DisableErpSyncAction.deactivateErpProducts) {
-      return ProductCatalogErpDisableSelection.deactivateErpProducts;
-    }
-
-    return ProductCatalogErpDisableSelection.keepCurrent;
-  }
-
-  Future<void> _setErpSyncEnabled(bool enabled) async {
-    final feedbackMessages = await _catalogAsyncFlowCoordinator.updateErpSync(
-      enabled: enabled,
-      tenantId: widget.identity.tenantId,
-      requestDisableSelection: _requestDisableErpSyncSelection,
-      deactivateErpProducts: () {
-        return _erpProductsDeactivationCoordinator.execute(
-          repository: widget.repository,
-          tenantId: widget.identity.tenantId,
-        );
-      },
-      persistSyncEnabled: ({required tenantId, required enabled}) {
-        return _workspaceService.setProductSyncFromErpEnabled(
-          tenantId: tenantId,
-          enabled: enabled,
-        );
-      },
-      onLoadingChanged: _setErpSyncUpdating,
-      resolveError: _resolveCatalogError,
-    );
-
-    runIfMounted(() {
-      for (final message in feedbackMessages) {
-        _showCatalogFeedback(message);
-      }
-    });
   }
 
   void _openProductEditor({Produto? produto}) {
@@ -305,6 +258,7 @@ class _ProdutosPageState extends State<ProdutosPage>
       repository: widget.repository,
       workspaceService: _workspaceService,
       selectedBrandFilter: _brandFilter,
+      selectedSourceFilter: _sourceFilter,
       editorOpen: _editorOpen,
       editingProduct: _editingProduto,
       priceTableRepository: _priceTableRepository,
@@ -317,14 +271,13 @@ class _ProdutosPageState extends State<ProdutosPage>
       onDownloadExcelModel: _downloadImportModel,
       onCreateProduct: _openProductEditor,
       onBrandFilterChanged: _setCatalogBrandFilter,
-      onErpSyncChanged: _setErpSyncEnabled,
+      onSourceFilterChanged: _setCatalogSourceFilter,
       onToggleStatus: _toggleProductStatus,
       onOpenProduct: _openExistingProductEditor,
       priceFormatter: _formatCatalogPrice,
       onCloseEditor: _closeProductEditor,
       onSavedHandlerBuilder: _buildOnProductSavedHandler,
       onDeleted: _handleProductDeleted,
-      erpSyncChangeEnabled: !_updatingErpSync,
       isMounted: () => mounted,
     );
   }

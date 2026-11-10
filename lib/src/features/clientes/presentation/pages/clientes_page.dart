@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/data/in_memory/in_memory_cliente_pre_cadastro_repository.dart';
 import '../../../../core/diagnostics/app_diagnostics.dart';
-import '../../../../core/diagnostics/error_dialog.dart';
 import '../../../../core/models/app_identity.dart';
 import '../../../../core/models/cliente.dart';
 import '../../../../core/models/cliente_pre_cadastro.dart';
@@ -45,7 +44,6 @@ class _ClientesPageState extends State<ClientesPage> {
   String _scopeVendedorId = '';
   bool _scopeResolved = false;
   int _pendingSyncCount = 0;
-  bool _syncingAll = false;
 
   @override
   void initState() {
@@ -249,143 +247,6 @@ class _ClientesPageState extends State<ClientesPage> {
     });
   }
 
-  /// General "Sincronizar" action for this screen: pushes every unsynced
-  /// local-first record related to clientes — pending pre-cadastros and
-  /// already-approved clientes alike — to Firestore in one go. Failures per
-  /// item are swallowed so one bad record never blocks the rest; anything
-  /// that fails just stays pending for the next sync attempt.
-  Future<void> _syncAllNow(BuildContext context) async {
-    if (_syncingAll) {
-      return;
-    }
-
-    setState(() => _syncingAll = true);
-
-    final pending = await OfflineSyncQueue.readAll();
-    var syncedCount = 0;
-    var failedCount = 0;
-    Object? lastError;
-    StackTrace? lastStackTrace;
-
-    for (final entry in pending) {
-      if (entry.synced || !_belongsToCurrentScope(entry.tenantId)) {
-        continue;
-      }
-
-      if (entry.type == 'cliente_pre_cadastro' &&
-          widget.preCadastroRepository != null) {
-        try {
-          final entity = ClientePreCadastro.fromMap(entry.payloadMap);
-          await widget.preCadastroRepository!.save(entity);
-          await OfflineSyncQueue.markSynced(entry.id);
-          syncedCount++;
-        } catch (error, stackTrace) {
-          // keep unsynced; user can retry later once connectivity is back.
-          failedCount++;
-          lastError = error;
-          lastStackTrace = stackTrace;
-          AppDiagnostics.log(
-            tag: 'sync.pre_cadastro',
-            message: 'Falha ao sincronizar pré-cadastro.',
-            error: error,
-            stackTrace: stackTrace,
-          );
-        }
-      } else if (entry.type == 'cliente') {
-        try {
-          final entity = Cliente.fromMap(entry.payloadMap);
-          await widget.repository.save(entity);
-          await OfflineSyncQueue.markSynced(entry.id);
-          syncedCount++;
-        } catch (error, stackTrace) {
-          // keep unsynced; user can retry later once connectivity is back.
-          failedCount++;
-          lastError = error;
-          lastStackTrace = stackTrace;
-          AppDiagnostics.log(
-            tag: 'sync.cliente',
-            message: 'Falha ao sincronizar cliente.',
-            error: error,
-            stackTrace: stackTrace,
-          );
-        }
-      }
-    }
-
-    // Also retry confirming any pending local deletes (cancel pré-cadastro /
-    // excluir cliente) whose remote delete hadn't succeeded yet — e.g. it
-    // was attempted while offline. Each tombstone is cleared only once the
-    // remote delete truly succeeds; otherwise it stays around so the record
-    // keeps being filtered out of remote reads instead of resurfacing.
-    final pendingDeletes = await OfflineSyncQueue.readPendingDeletes();
-    for (final tombstone in pendingDeletes) {
-      final type = tombstone['type']?.toString() ?? '';
-      final id = tombstone['id']?.toString() ?? '';
-      final tenantId = tombstone['tenantId']?.toString() ?? '';
-      if (id.isEmpty || !_belongsToCurrentScope(tenantId)) {
-        continue;
-      }
-
-      try {
-        if (type == 'cliente_pre_cadastro' &&
-            widget.preCadastroRepository != null) {
-          await widget.preCadastroRepository!.delete(
-            tenantId: tenantId,
-            id: id,
-          );
-          await OfflineSyncQueue.clearTombstone(id);
-        } else if (type == 'cliente') {
-          await widget.repository.delete(tenantId: tenantId, id: id);
-          await OfflineSyncQueue.clearTombstone(id);
-        }
-      } catch (error, stackTrace) {
-        AppDiagnostics.log(
-          tag: 'sync.delete_retry',
-          message: 'Falha ao confirmar exclusão remota de $type/$id.',
-          error: error,
-          stackTrace: stackTrace,
-        );
-      }
-    }
-
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {
-      _syncingAll = false;
-      _localClientesFuture = _loadLocalClientes();
-      _preCadastroRefreshTick++;
-    });
-    await _refreshPendingSyncCount();
-
-    if (!context.mounted) {
-      return;
-    }
-
-    if (syncedCount == 0 && failedCount > 0 && lastError != null) {
-      await showAppErrorDialog(
-        context,
-        title: 'Não foi possível sincronizar',
-        error: lastError,
-        stackTrace: lastStackTrace,
-        tag: 'sync.geral',
-      );
-      return;
-    }
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          syncedCount > 0
-              ? '$syncedCount registro(s) sincronizado(s) com o Firebase.'
-                    '${failedCount > 0 ? ' $failedCount continuam pendentes.' : ''}'
-              : 'Tudo já está sincronizado.',
-        ),
-      ),
-    );
-  }
-
   List<_ClienteEntry> _mergeClientes(
     List<Cliente> remote,
     List<LocalClienteRecord> local,
@@ -438,62 +299,84 @@ class _ClientesPageState extends State<ClientesPage> {
                 .where((entry) => _canViewClienteByHierarchy(entry.item))
                 .toList(growable: false);
 
-            return SingleChildScrollView(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(10, 16, 10, 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _HeaderCard(
-                      title: 'Clientes',
-                      subtitle: _buildHierarchySubtitle(),
-                      actionLabel: 'Novo pré-cadastro',
-                      onAction: () {
-                        _openPreCadastro(context);
-                      },
-                      pendingSyncCount: _pendingSyncCount,
-                      syncing: _syncingAll,
-                      onSync: () => _syncAllNow(context),
-                      showSyncAction: false,
-                    ),
-                    const SizedBox(height: 16),
-                    _PreCadastroSection(
-                      key: ValueKey(
-                        'pre-cadastro-${widget.identity.tenantId}-$_preCadastroRefreshTick',
-                      ),
-                      identity: widget.identity,
-                      repository: widget.preCadastroRepository,
-                      clienteRepository: widget.repository,
-                      onClienteCreated: () {
-                        setState(() {
-                          _localClientesFuture = _loadLocalClientes();
-                        });
-                        _refreshPendingSyncCount();
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    if (clientes.isEmpty)
-                      const _EmptyState(
-                        title: 'Nenhum cliente carregado',
-                        subtitle: 'Os primeiros clientes aparecem aqui quando a base for sincronizada.',
-                      )
-                    else
-                      ...clientes.map(
-                        (entry) => _ClienteCard(
-                          entry: entry,
-                          repository: widget.repository,
+            return Stack(
+              children: [
+                SingleChildScrollView(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(10, 16, 10, 88),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Clientes',
+                          style: Theme.of(context).textTheme.headlineSmall,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(_buildHierarchySubtitle()),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Use a sincronização geral na tela Início para enviar e baixar dados.',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                        if (_pendingSyncCount > 0) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            'Pendências locais de clientes: $_pendingSyncCount',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
+                        const SizedBox(height: 16),
+                        _PreCadastroSection(
+                          key: ValueKey(
+                            'pre-cadastro-${widget.identity.tenantId}-$_preCadastroRefreshTick',
+                          ),
                           identity: widget.identity,
-                          onChanged: () {
+                          repository: widget.preCadastroRepository,
+                          clienteRepository: widget.repository,
+                          onClienteCreated: () {
                             setState(() {
                               _localClientesFuture = _loadLocalClientes();
                             });
                             _refreshPendingSyncCount();
                           },
                         ),
-                      ),
-                  ],
+                        const SizedBox(height: 16),
+                        if (clientes.isEmpty)
+                          const _EmptyState(
+                            title: 'Nenhum cliente carregado',
+                            subtitle: 'Os primeiros clientes aparecem aqui quando a base for sincronizada.',
+                          )
+                        else
+                          ...clientes.map(
+                            (entry) => _ClienteCard(
+                              entry: entry,
+                              repository: widget.repository,
+                              identity: widget.identity,
+                              onChanged: () {
+                                setState(() {
+                                  _localClientesFuture = _loadLocalClientes();
+                                });
+                                _refreshPendingSyncCount();
+                              },
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
+                Positioned(
+                  right: 16,
+                  bottom: 16,
+                  child: SafeArea(
+                    child: FloatingActionButton.extended(
+                      heroTag: 'clientes-novo-pre-cadastro-fab',
+                      onPressed: () => _openPreCadastro(context),
+                      icon: const Icon(Icons.person_add_alt_1_outlined),
+                      label: const Text('Novo pré-cadastro'),
+                    ),
+                  ),
+                ),
+              ],
             );
           },
         );
@@ -534,76 +417,6 @@ class _ClientesPageState extends State<ClientesPage> {
       _preCadastroRefreshTick++;
     });
     _refreshPendingSyncCount();
-  }
-}
-
-class _HeaderCard extends StatelessWidget {
-  const _HeaderCard({
-    required this.title,
-    required this.subtitle,
-    required this.actionLabel,
-    required this.onAction,
-    this.pendingSyncCount = 0,
-    this.syncing = false,
-    this.onSync,
-    this.showSyncAction = true,
-  });
-
-  final String title;
-  final String subtitle;
-  final String actionLabel;
-  final VoidCallback onAction;
-  final int pendingSyncCount;
-  final bool syncing;
-  final VoidCallback? onSync;
-  final bool showSyncAction;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: Theme.of(context).textTheme.headlineSmall),
-            if (subtitle.trim().isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Text(subtitle),
-            ],
-            const SizedBox(height: 10),
-            FilledButton(onPressed: onAction, child: Text(actionLabel)),
-            if (onSync != null && showSyncAction) ...[
-              const SizedBox(height: 12),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: OutlinedButton.icon(
-                  onPressed: syncing ? null : onSync,
-                  icon: syncing
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.sync),
-                  label: Text(
-                    pendingSyncCount > 0
-                        ? 'Sincronizar agora ($pendingSyncCount)'
-                        : 'Sincronizar agora',
-                  ),
-                ),
-              ),
-            ] else ...[
-              const SizedBox(height: 12),
-              Text(
-                'Use a sincronizacao geral na tela Inicio para enviar e baixar dados.',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
   }
 }
 

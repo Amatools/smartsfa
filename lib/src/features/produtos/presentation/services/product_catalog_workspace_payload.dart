@@ -8,6 +8,7 @@ import '../../../../core/repositories/product_base_price_repository.dart';
 import '../../../../core/repositories/produto_repository.dart';
 import '../../../../core/repositories/tabela_preco_repository.dart';
 import '../../../auth/services/workspace_profile_service.dart';
+import 'product_catalog_source_filter.dart';
 
 class ProductCatalogWorkspacePayload {
   const ProductCatalogWorkspacePayload({
@@ -15,6 +16,7 @@ class ProductCatalogWorkspacePayload {
     required this.repository,
     required this.workspaceService,
     required this.selectedBrandFilter,
+    required this.selectedSourceFilter,
     required this.editorOpen,
     required this.editingProduct,
     required this.priceTableRepository,
@@ -27,14 +29,13 @@ class ProductCatalogWorkspacePayload {
     required this.onDownloadExcelModel,
     required this.onCreateProduct,
     required this.onBrandFilterChanged,
-    required this.onErpSyncChanged,
+    required this.onSourceFilterChanged,
     required this.onToggleStatus,
     required this.onOpenProduct,
     required this.priceFormatter,
     required this.onCloseEditor,
     required this.onSavedHandlerBuilder,
     required this.onDeleted,
-    required this.erpSyncChangeEnabled,
     required this.isMounted,
   });
 
@@ -42,6 +43,7 @@ class ProductCatalogWorkspacePayload {
   final ProdutoRepository repository;
   final WorkspaceProfileService workspaceService;
   final String selectedBrandFilter;
+  final ProductCatalogSourceFilter selectedSourceFilter;
   final bool editorOpen;
   final Produto? editingProduct;
   final TabelaPrecoRepository? priceTableRepository;
@@ -54,7 +56,7 @@ class ProductCatalogWorkspacePayload {
   final VoidCallback onDownloadExcelModel;
   final VoidCallback onCreateProduct;
   final ValueChanged<String> onBrandFilterChanged;
-  final ValueChanged<bool> onErpSyncChanged;
+  final ValueChanged<ProductCatalogSourceFilter> onSourceFilterChanged;
   final ValueChanged<Produto> onToggleStatus;
   final ValueChanged<Produto> onOpenProduct;
   final String Function(Produto produto) priceFormatter;
@@ -62,6 +64,5 @@ class ProductCatalogWorkspacePayload {
   final ValueChanged<Produto> Function({required bool isNew})
   onSavedHandlerBuilder;
   final VoidCallback onDeleted;
-  final bool erpSyncChangeEnabled;
   final bool Function() isMounted;
 }

@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../../core/models/domain_types.dart';
 import '../../../../core/models/produto.dart';
+
+enum _PedidoMobileSourceFilter { catalogo, promocoes, destaques }
 
 /// Mobile "add item" bottom sheet: search box + quantity + results list.
 /// Owns its own local search/quantity state; all business logic (product
@@ -18,6 +21,8 @@ class PedidoMobileAddItemSheet extends StatefulWidget {
     required this.formatMoneyBr,
     required this.inputDecoration,
     required this.onAddProduct,
+    this.promotionProducts = const <Produto>[],
+    this.highlightProducts = const <Produto>[],
   });
 
   final bool saving;
@@ -27,8 +32,16 @@ class PedidoMobileAddItemSheet extends StatefulWidget {
   final String Function(Produto product) resolveCommercialCode;
   final String Function(double value) formatMoneyBr;
   final InputDecoration Function({required String label}) inputDecoration;
-  final Future<void> Function(Produto product, {required int quantityOverride})
+  final Future<void> Function(
+    Produto product, {
+    required int quantityOverride,
+    OrderItemSourceType sourceType,
+    String? sourceListId,
+    String? sourceListLabel,
+  })
   onAddProduct;
+  final List<Produto> promotionProducts;
+  final List<Produto> highlightProducts;
 
   @override
   State<PedidoMobileAddItemSheet> createState() =>
@@ -41,6 +54,7 @@ class _PedidoMobileAddItemSheetState extends State<PedidoMobileAddItemSheet> {
     text: '1',
   );
   String _localQuery = '';
+  _PedidoMobileSourceFilter _activeFilter = _PedidoMobileSourceFilter.catalogo;
 
   @override
   void dispose() {
@@ -62,8 +76,30 @@ class _PedidoMobileAddItemSheetState extends State<PedidoMobileAddItemSheet> {
       return;
     }
 
+    final sourceType = switch (_activeFilter) {
+      _PedidoMobileSourceFilter.catalogo => OrderItemSourceType.none,
+      _PedidoMobileSourceFilter.promocoes => OrderItemSourceType.promotion,
+      _PedidoMobileSourceFilter.destaques => OrderItemSourceType.highlight,
+    };
+    final sourceListId = switch (_activeFilter) {
+      _PedidoMobileSourceFilter.catalogo => null,
+      _PedidoMobileSourceFilter.promocoes => 'mobile_campaign_promocoes',
+      _PedidoMobileSourceFilter.destaques => 'mobile_campaign_destaques',
+    };
+    final sourceListLabel = switch (_activeFilter) {
+      _PedidoMobileSourceFilter.catalogo => null,
+      _PedidoMobileSourceFilter.promocoes => 'Promocao',
+      _PedidoMobileSourceFilter.destaques => 'Destaque',
+    };
+
     final sheetNavigator = Navigator.of(context);
-    await widget.onAddProduct(product, quantityOverride: quantity);
+    await widget.onAddProduct(
+      product,
+      quantityOverride: quantity,
+      sourceType: sourceType,
+      sourceListId: sourceListId,
+      sourceListLabel: sourceListLabel,
+    );
     if (!mounted) {
       return;
     }
@@ -72,15 +108,56 @@ class _PedidoMobileAddItemSheetState extends State<PedidoMobileAddItemSheet> {
     }
   }
 
+  bool _matchesSearch(Produto product, String normalizedTerm) {
+    if (normalizedTerm.isEmpty) {
+      return true;
+    }
+
+    final haystack = <String>[
+      product.codigoInterno,
+      product.descricao,
+      product.marca ?? '',
+      product.ncm ?? '',
+      product.categoria ?? '',
+    ].join(' ').toLowerCase();
+    return haystack.contains(normalizedTerm);
+  }
+
+  List<Produto> _resolveSourceProducts(String normalizedQuery) {
+    switch (_activeFilter) {
+      case _PedidoMobileSourceFilter.catalogo:
+        if (normalizedQuery.isEmpty) {
+          return const <Produto>[];
+        }
+        return widget
+            .buildProductResultsForQuery(_localQuery)
+            .take(120)
+            .toList();
+      case _PedidoMobileSourceFilter.promocoes:
+        return widget.promotionProducts
+            .where((product) => _matchesSearch(product, normalizedQuery))
+            .take(120)
+            .toList(growable: false);
+      case _PedidoMobileSourceFilter.destaques:
+        return widget.highlightProducts
+            .where((product) => _matchesSearch(product, normalizedQuery))
+            .take(120)
+            .toList(growable: false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final normalized = widget.normalizeSearch(_localQuery);
-    final results = normalized.isEmpty
-        ? const <Produto>[]
-        : widget.buildProductResultsForQuery(_localQuery).take(120).toList();
+    final results = _resolveSourceProducts(normalized);
+    final hasCampaignSources =
+        widget.promotionProducts.isNotEmpty ||
+        widget.highlightProducts.isNotEmpty;
 
     return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
       child: SizedBox(
         height: MediaQuery.of(context).size.height * 0.84,
         child: Column(
@@ -141,12 +218,74 @@ class _PedidoMobileAddItemSheetState extends State<PedidoMobileAddItemSheet> {
                 ],
               ),
             ),
+            if (hasCampaignSources) ...[
+              const SizedBox(height: 10),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    ChoiceChip(
+                      label: const Text('Catalogo'),
+                      selected:
+                          _activeFilter == _PedidoMobileSourceFilter.catalogo,
+                      onSelected: (_) {
+                        setState(() {
+                          _activeFilter = _PedidoMobileSourceFilter.catalogo;
+                        });
+                      },
+                    ),
+                    ChoiceChip(
+                      label: Text(
+                        'Promocoes (${widget.promotionProducts.length})',
+                      ),
+                      selected:
+                          _activeFilter == _PedidoMobileSourceFilter.promocoes,
+                      onSelected: widget.promotionProducts.isEmpty
+                          ? null
+                          : (_) {
+                              setState(() {
+                                _activeFilter =
+                                    _PedidoMobileSourceFilter.promocoes;
+                              });
+                            },
+                    ),
+                    ChoiceChip(
+                      label: Text(
+                        'Destaques (${widget.highlightProducts.length})',
+                      ),
+                      selected:
+                          _activeFilter == _PedidoMobileSourceFilter.destaques,
+                      onSelected: widget.highlightProducts.isEmpty
+                          ? null
+                          : (_) {
+                              setState(() {
+                                _activeFilter =
+                                    _PedidoMobileSourceFilter.destaques;
+                              });
+                            },
+                    ),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 8),
-            if (normalized.isEmpty)
+            if (_activeFilter == _PedidoMobileSourceFilter.catalogo &&
+                normalized.isEmpty)
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                 child: Text(
                   'Digite para buscar produtos.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              )
+            else if (_activeFilter != _PedidoMobileSourceFilter.catalogo &&
+                results.isEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: Text(
+                  'Nenhum produto nesta lista com o filtro atual.',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               )

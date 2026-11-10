@@ -11,20 +11,6 @@ class ProductCatalogFeedback {
     );
   }
 
-  static String erpProductsDeactivatedMessage(int updated) {
-    return '$updated produto(s) ERP inativado(s).';
-  }
-
-  static String erpSyncUpdatedMessage({required bool enabled}) {
-    return enabled
-        ? 'Sincronizacao de produtos via ERP ativada.'
-        : 'Sincronizacao de produtos via ERP desativada.';
-  }
-
-  static String erpSyncUpdateFailureMessage(Object error) {
-    return 'Falha ao atualizar integracao de produtos: $error';
-  }
-
   static String productSavedMessage({required bool isNew}) {
     return isNew
         ? 'Produto cadastrado com sucesso.'

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/product_catalog_content_payload.dart';
+import '../services/product_catalog_source_filter.dart';
 import 'product_catalog_table_section.dart';
 import 'product_catalog_top_section.dart';
 import 'product_editor_sheet.dart';
@@ -25,6 +26,8 @@ class ProductCatalogContentView extends StatelessWidget {
                 const SizedBox(height: 14),
                 _buildBrandFilterSection(),
                 const SizedBox(height: 12),
+                _buildSourceFilterSection(context),
+                const SizedBox(height: 12),
                 _buildMainSection(),
               ],
             ),
@@ -39,19 +42,22 @@ class ProductCatalogContentView extends StatelessWidget {
       creatingNewProduct: payload.projection.creatingNewProduct,
       canCreateOrImportProducts: payload.policy.canCreateOrImportProducts,
       representedCompanyName: payload.representedCompanyName,
-      showEnterpriseSyncSwitchCard: payload.policy.showEnterpriseSyncSwitchCard,
-      erpSyncEnabled: payload.policy.erpSyncEnabled,
-      erpSyncChangeEnabled: payload.erpSyncChangeEnabled,
       onImportExcel: payload.onImportExcel,
       onDownloadExcelModel: payload.onDownloadExcelModel,
       onCreateProduct: payload.onCreateProduct,
-      onErpSyncChanged: payload.onErpSyncChanged,
     );
   }
 
   Widget _buildBrandFilterSection() {
-    final availableBrands = payload.projection.availableBrands;
-    if (availableBrands.isEmpty) {
+    final selectedBrand = payload.projection.effectiveBrandFilter;
+    final availableBrands = List<String>.from(payload.projection.availableBrands);
+    if (selectedBrand != 'todas' &&
+        selectedBrand.trim().isNotEmpty &&
+        !availableBrands.contains(selectedBrand)) {
+      availableBrands.insert(0, selectedBrand);
+    }
+
+    if (availableBrands.isEmpty && selectedBrand == 'todas') {
       return const SizedBox.shrink();
     }
 
@@ -66,7 +72,7 @@ class ProductCatalogContentView extends StatelessWidget {
             const SizedBox(width: 12),
             Expanded(
               child: DropdownButtonFormField<String>(
-                initialValue: payload.projection.effectiveBrandFilter,
+                initialValue: selectedBrand,
                 decoration: const InputDecoration(
                   isDense: true,
                   border: OutlineInputBorder(),
@@ -89,6 +95,106 @@ class ProductCatalogContentView extends StatelessWidget {
                 },
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSourceFilterSection(BuildContext context) {
+    final projection = payload.projection;
+    final sourceOptions = <ProductCatalogSourceFilter, String>{
+      ProductCatalogSourceFilter.catalogo: 'Catalogo',
+      ProductCatalogSourceFilter.promocoes:
+          'Promocoes (${projection.promotionVisibleCount})',
+      ProductCatalogSourceFilter.destaques:
+          'Destaques (${projection.highlightVisibleCount})',
+    };
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final useCompactSelector = screenWidth < 720;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.local_offer_outlined),
+                const SizedBox(width: 12),
+                const Text('Origem comercial'),
+              ],
+            ),
+            const SizedBox(height: 10),
+            if (useCompactSelector)
+              DropdownButtonFormField<ProductCatalogSourceFilter>(
+                initialValue: payload.selectedSourceFilter,
+                decoration: const InputDecoration(
+                  isDense: true,
+                  border: OutlineInputBorder(),
+                ),
+                items: sourceOptions.entries
+                    .map(
+                      (entry) => DropdownMenuItem<ProductCatalogSourceFilter>(
+                        value: entry.key,
+                        child: Text(entry.value),
+                      ),
+                    )
+                    .toList(growable: false),
+                onChanged: (value) {
+                  if (value == null) {
+                    return;
+                  }
+                  payload.onSourceFilterChanged(value);
+                },
+              )
+            else
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  ChoiceChip(
+                    label: Text(
+                      sourceOptions[ProductCatalogSourceFilter.catalogo]!,
+                    ),
+                    selected:
+                        payload.selectedSourceFilter ==
+                        ProductCatalogSourceFilter.catalogo,
+                    onSelected: (_) {
+                      payload.onSourceFilterChanged(
+                        ProductCatalogSourceFilter.catalogo,
+                      );
+                    },
+                  ),
+                  ChoiceChip(
+                    label: Text(
+                      sourceOptions[ProductCatalogSourceFilter.promocoes]!,
+                    ),
+                    selected:
+                        payload.selectedSourceFilter ==
+                        ProductCatalogSourceFilter.promocoes,
+                    onSelected: (_) {
+                      payload.onSourceFilterChanged(
+                        ProductCatalogSourceFilter.promocoes,
+                      );
+                    },
+                  ),
+                  ChoiceChip(
+                    label: Text(
+                      sourceOptions[ProductCatalogSourceFilter.destaques]!,
+                    ),
+                    selected:
+                        payload.selectedSourceFilter ==
+                        ProductCatalogSourceFilter.destaques,
+                    onSelected: (_) {
+                      payload.onSourceFilterChanged(
+                        ProductCatalogSourceFilter.destaques,
+                      );
+                    },
+                  ),
+                ],
+              ),
           ],
         ),
       ),
@@ -122,6 +228,13 @@ class ProductCatalogContentView extends StatelessWidget {
       updatingStatusProductIds: payload.updatingStatusProductIds,
       onToggleStatus: payload.onToggleStatus,
       onOpen: payload.onOpenProduct,
+      currentPage: payload.currentProductsPage,
+      hasPreviousPage: payload.hasPreviousProductsPage,
+      hasNextPage: payload.hasNextProductsPage,
+      loadingPage: payload.loadingProductsPage,
+      pageSize: payload.productsPageSize,
+      onPreviousPage: payload.onPreviousProductsPage,
+      onNextPage: payload.onNextProductsPage,
       priceFormatter: payload.priceFormatter,
     );
   }

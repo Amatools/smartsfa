@@ -12,7 +12,6 @@ import '../../domain/tenant_membership_filter.dart';
 import '../../domain/tenant_admin_permissions.dart';
 import '../controllers/tenant_admin_action_controller.dart';
 import 'tenant_invitations_page.dart';
-import 'tenant_membership_audit_page.dart';
 
 class TenantAdminPage extends StatefulWidget {
   const TenantAdminPage({
@@ -456,6 +455,10 @@ class _TenantAdminPageState extends State<TenantAdminPage> {
                     const Text(
                       'Convites de acesso ficam em uma tela dedicada dentro de Tenant.',
                     ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Auditoria de memberships agora fica centralizada no menu Auditoria do portal.',
+                    ),
                     const SizedBox(height: 10),
                     if (_canOpenInvitationsPage)
                       FilledButton.tonalIcon(
@@ -476,20 +479,6 @@ class _TenantAdminPageState extends State<TenantAdminPage> {
                         'Envio de convites bloqueado para seu perfil. O owner pode liberar isso na política do tenant.',
                         style: Theme.of(context).textTheme.bodyMedium,
                       ),
-                    const SizedBox(height: 8),
-                    OutlinedButton.icon(
-                      onPressed: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute<void>(
-                            builder: (_) => TenantMembershipAuditPage(
-                              identity: widget.identity,
-                            ),
-                          ),
-                        );
-                      },
-                      icon: const Icon(Icons.history),
-                      label: const Text('Ver auditoria de memberships'),
-                    ),
                   ],
                 ),
               ),

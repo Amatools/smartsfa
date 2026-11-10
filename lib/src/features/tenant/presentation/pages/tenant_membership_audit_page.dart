@@ -9,9 +9,16 @@ import '../../../auth/services/tenant_membership_service.dart';
 import '../../domain/tenant_membership_audit_filter.dart';
 
 class TenantMembershipAuditPage extends StatefulWidget {
-  const TenantMembershipAuditPage({super.key, required this.identity});
+  const TenantMembershipAuditPage({
+    super.key,
+    required this.identity,
+    this.embedded = false,
+    this.showIntroHeader = true,
+  });
 
   final AppIdentity identity;
+  final bool embedded;
+  final bool showIntroHeader;
 
   @override
   State<TenantMembershipAuditPage> createState() =>
@@ -65,178 +72,189 @@ class _TenantMembershipAuditPageState extends State<TenantMembershipAuditPage> {
 
   @override
   Widget build(BuildContext context) {
+    final body = _buildContent(context);
+    if (widget.embedded) {
+      return body;
+    }
+
     return Scaffold(
       appBar: AppBar(title: const Text('Auditoria de memberships')),
       body: SafeArea(
         child: SingleChildScrollView(
           child: Padding(
             padding: const EdgeInsets.all(16),
+            child: body,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildContent(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (widget.showIntroHeader) ...[
+          Text(
+            'Histórico de alterações críticas no tenant ${widget.identity.tenantName}.',
+            style: Theme.of(context).textTheme.bodyLarge,
+          ),
+          const SizedBox(height: 12),
+        ],
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Histórico de alterações críticas no tenant ${widget.identity.tenantName}.',
-                  style: Theme.of(context).textTheme.bodyLarge,
+                TextField(
+                  controller: _searchController,
+                  onChanged: (_) {
+                    setState(() {
+                      _currentPage = 0;
+                    });
+                  },
+                  decoration: _fieldDecoration(
+                    context: context,
+                    label: 'Buscar por ação, ator ou membershipId',
+                    icon: Icons.search,
+                  ),
                 ),
                 const SizedBox(height: 12),
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      children: [
-                        TextField(
-                          controller: _searchController,
-                          onChanged: (_) {
-                            setState(() {
-                              _currentPage = 0;
-                            });
-                          },
-                          decoration: _fieldDecoration(
-                            context: context,
-                            label: 'Buscar por ação, ator ou membershipId',
-                            icon: Icons.search,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        DropdownButtonFormField<String>(
-                          initialValue: _selectedAction,
-                          isExpanded: true,
-                          decoration: _fieldDecoration(
-                            context: context,
-                            label: 'Ação',
-                          ),
-                          items: [
-                            const DropdownMenuItem(
-                              value: 'todos',
-                              child: Text('Todos'),
-                            ),
-                            ...const [
-                              'membership_revoked',
-                              'membership_reactivated',
-                              'membership_deactivated',
-                              'membership_role_changed',
-                              'tenant_policy_updated',
-                            ].map(
-                              (action) => DropdownMenuItem(
-                                value: action,
-                                child: Text(
-                                  TenantMembershipAuditFilter.actionLabel(
-                                    action,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                          onChanged: (value) {
-                            if (value != null) {
-                              setState(() {
-                                _selectedAction = value;
-                                _currentPage = 0;
-                              });
-                            }
-                          },
-                        ),
-                      ],
+                DropdownButtonFormField<String>(
+                  initialValue: _selectedAction,
+                  isExpanded: true,
+                  decoration: _fieldDecoration(
+                    context: context,
+                    label: 'Ação',
+                  ),
+                  items: [
+                    const DropdownMenuItem(
+                      value: 'todos',
+                      child: Text('Todos'),
                     ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                StreamBuilder<List<Map<String, dynamic>>>(
-                  stream: _membershipService.watchAuditForTenant(
-                    widget.identity.tenantId,
-                  ),
-                  builder: (context, snapshot) {
-                    if (snapshot.hasError) {
-                      return AppInfoCard(
-                        title: 'Falha ao carregar auditoria',
-                        subtitle: '${snapshot.error}',
-                      );
-                    }
-
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const AppInfoCard(
-                        title: 'Carregando auditoria',
-                        subtitle: 'Buscando eventos de governança...',
-                      );
-                    }
-
-                    final entries = snapshot.data ?? const [];
-                    if (entries.isEmpty) {
-                      return const AppInfoCard(
-                        title: 'Sem eventos de auditoria',
-                        subtitle: 'Eventos aparecem quando houver inativação, revogação, reativação ou alteração de papel.',
-                      );
-                    }
-
-                    final filteredEntries = TenantMembershipAuditFilter.apply(
-                      entries: entries,
-                      query: _searchController.text,
-                      selectedAction: _selectedAction,
-                    );
-                    if (filteredEntries.isEmpty) {
-                      return const AppInfoCard(
-                        title: 'Sem resultados',
-                        subtitle: 'Ajuste os filtros para localizar eventos.',
-                      );
-                    }
-
-                    final page = buildPaginationSlice(
-                      source: filteredEntries,
-                      requestedPage: _currentPage,
-                      pageSize: _pageSize,
-                    );
-
-                    if (page.currentPage != _currentPage) {
-                      WidgetsBinding.instance.addPostFrameCallback((_) {
-                        if (mounted) {
-                          setState(() {
-                            _currentPage = page.currentPage;
-                          });
-                        }
+                    ...const [
+                      'membership_revoked',
+                      'membership_reactivated',
+                      'membership_deactivated',
+                      'membership_role_changed',
+                      'tenant_policy_updated',
+                    ].map(
+                      (action) => DropdownMenuItem(
+                        value: action,
+                        child: Text(
+                          TenantMembershipAuditFilter.actionLabel(
+                            action,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) {
+                      setState(() {
+                        _selectedAction = value;
+                        _currentPage = 0;
                       });
                     }
-
-                    return Column(
-                      children: [
-                        AppPaginationBar(
-                          currentPage: page.currentPage,
-                          totalPages: page.totalPages,
-                          pageSize: _pageSize,
-                          startDisplay: page.startDisplay,
-                          endDisplay: page.endDisplay,
-                          totalItems: page.totalItems,
-                          onPageSizeChanged: (value) {
-                            setState(() {
-                              _pageSize = value;
-                              _currentPage = 0;
-                            });
-                          },
-                          onPrevious: !page.hasPrevious
-                              ? null
-                              : () {
-                                  setState(() {
-                                    _currentPage = page.currentPage - 1;
-                                  });
-                                },
-                          onNext: !page.hasNext
-                              ? null
-                              : () {
-                                  setState(() {
-                                    _currentPage = page.currentPage + 1;
-                                  });
-                                },
-                        ),
-                        const SizedBox(height: 10),
-                        ...page.items.map((entry) => _AuditCard(entry: entry)),
-                      ],
-                    );
                   },
                 ),
               ],
             ),
           ),
         ),
-      ),
+        const SizedBox(height: 12),
+        StreamBuilder<List<Map<String, dynamic>>>(
+          stream: _membershipService.watchAuditForTenant(
+            widget.identity.tenantId,
+          ),
+          builder: (context, snapshot) {
+            if (snapshot.hasError) {
+              return AppInfoCard(
+                title: 'Falha ao carregar auditoria',
+                subtitle: '${snapshot.error}',
+              );
+            }
+
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const AppInfoCard(
+                title: 'Carregando auditoria',
+                subtitle: 'Buscando eventos de governança...',
+              );
+            }
+
+            final entries = snapshot.data ?? const [];
+            if (entries.isEmpty) {
+              return const AppInfoCard(
+                title: 'Sem eventos de auditoria',
+                subtitle: 'Eventos aparecem quando houver inativação, revogação, reativação ou alteração de papel.',
+              );
+            }
+
+            final filteredEntries = TenantMembershipAuditFilter.apply(
+              entries: entries,
+              query: _searchController.text,
+              selectedAction: _selectedAction,
+            );
+            if (filteredEntries.isEmpty) {
+              return const AppInfoCard(
+                title: 'Sem resultados',
+                subtitle: 'Ajuste os filtros para localizar eventos.',
+              );
+            }
+
+            final page = buildPaginationSlice(
+              source: filteredEntries,
+              requestedPage: _currentPage,
+              pageSize: _pageSize,
+            );
+
+            if (page.currentPage != _currentPage) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) {
+                  setState(() {
+                    _currentPage = page.currentPage;
+                  });
+                }
+              });
+            }
+
+            return Column(
+              children: [
+                AppPaginationBar(
+                  currentPage: page.currentPage,
+                  totalPages: page.totalPages,
+                  pageSize: _pageSize,
+                  startDisplay: page.startDisplay,
+                  endDisplay: page.endDisplay,
+                  totalItems: page.totalItems,
+                  onPageSizeChanged: (value) {
+                    setState(() {
+                      _pageSize = value;
+                      _currentPage = 0;
+                    });
+                  },
+                  onPrevious: !page.hasPrevious
+                      ? null
+                      : () {
+                          setState(() {
+                            _currentPage = page.currentPage - 1;
+                          });
+                        },
+                  onNext: !page.hasNext
+                      ? null
+                      : () {
+                          setState(() {
+                            _currentPage = page.currentPage + 1;
+                          });
+                        },
+                ),
+                const SizedBox(height: 10),
+                ...page.items.map((entry) => _AuditCard(entry: entry)),
+              ],
+            );
+          },
+        ),
+      ],
     );
   }
 }

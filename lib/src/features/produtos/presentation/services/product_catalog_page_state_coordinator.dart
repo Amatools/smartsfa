@@ -1,5 +1,6 @@
 import 'product_catalog_editor_state_coordinator.dart';
 import 'product_catalog_page_view_state.dart';
+import 'product_catalog_source_filter.dart';
 
 class ProductCatalogPageStateCoordinator {
   const ProductCatalogPageStateCoordinator();
@@ -22,11 +23,11 @@ class ProductCatalogPageStateCoordinator {
     return currentState.withBrandFilter(brandFilter);
   }
 
-  ProductCatalogPageViewState applyErpSyncLoading({
+  ProductCatalogPageViewState applySourceFilter({
     required ProductCatalogPageViewState currentState,
-    required bool isLoading,
+    required ProductCatalogSourceFilter sourceFilter,
   }) {
-    return currentState.withUpdatingErpSync(isLoading);
+    return currentState.withSourceFilter(sourceFilter);
   }
 
   ProductCatalogPageViewState addUpdatingStatusProductId({

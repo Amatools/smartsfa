@@ -1,10 +1,12 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../../../core/models/domain_types.dart';
 import '../../../core/services/enterprise_represented_scope.dart';
 
 part 'workspace_profile_service_payment_conditions.dart';
 part 'workspace_profile_service_commercial_adjustments.dart';
 part 'workspace_profile_service_order_discounts.dart';
+part 'workspace_profile_service_campaign_lists.dart';
 part 'workspace_profile_service_product_taxonomy.dart';
 part 'workspace_profile_service_erp_settings.dart';
 part 'workspace_profile_service_represented_companies.dart';
@@ -157,6 +159,119 @@ class ProductCategoryTaxonomyItem {
 
   Map<String, Object> toMap() {
     return <String, Object>{'name': name, 'subcategories': subcategories};
+  }
+}
+
+class CampaignProductList {
+  const CampaignProductList({
+    required this.id,
+    required this.name,
+    required this.sourceType,
+    this.items = const <CampaignProductListItem>[],
+    this.active = true,
+    this.validFromIso,
+    this.validUntilIso,
+    this.priceTableId,
+    this.createdAtIso,
+    this.updatedAtIso,
+  });
+
+  final String id;
+  final String name;
+  final OrderItemSourceType sourceType;
+  final List<CampaignProductListItem> items;
+  final bool active;
+  final String? validFromIso;
+  final String? validUntilIso;
+  final String? priceTableId;
+  final String? createdAtIso;
+  final String? updatedAtIso;
+
+  List<String> get productIds => items
+      .map((item) => item.productId)
+      .where((value) => value.trim().isNotEmpty)
+      .toList(growable: false);
+
+  CampaignProductListItem? itemForProductId(String productId) {
+    final normalized = productId.trim();
+    if (normalized.isEmpty) {
+      return null;
+    }
+    for (final item in items) {
+      if (item.productId == normalized) {
+        return item;
+      }
+    }
+    return null;
+  }
+
+  CampaignProductList copyWith({
+    String? id,
+    String? name,
+    OrderItemSourceType? sourceType,
+    List<CampaignProductListItem>? items,
+    bool? active,
+    String? validFromIso,
+    String? validUntilIso,
+    String? priceTableId,
+    String? createdAtIso,
+    String? updatedAtIso,
+  }) {
+    return CampaignProductList(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      sourceType: sourceType ?? this.sourceType,
+      items: items ?? this.items,
+      active: active ?? this.active,
+      validFromIso: validFromIso ?? this.validFromIso,
+      validUntilIso: validUntilIso ?? this.validUntilIso,
+      priceTableId: priceTableId ?? this.priceTableId,
+      createdAtIso: createdAtIso ?? this.createdAtIso,
+      updatedAtIso: updatedAtIso ?? this.updatedAtIso,
+    );
+  }
+
+  Map<String, Object?> toMap() {
+    return <String, Object?>{
+      'id': id,
+      'name': name,
+      'sourceType': sourceType.value,
+      'items': items.map((item) => item.toMap()).toList(growable: false),
+      'productIds': productIds,
+      'active': active,
+      'validFrom': validFromIso,
+      'validUntil': validUntilIso,
+      'priceTableId': priceTableId,
+      'createdAt': createdAtIso,
+      'updatedAt': updatedAtIso,
+    };
+  }
+}
+
+class CampaignProductListItem {
+  const CampaignProductListItem({
+    required this.productId,
+    this.promotionPrice,
+  });
+
+  final String productId;
+  final double? promotionPrice;
+
+  CampaignProductListItem copyWith({
+    String? productId,
+    double? promotionPrice,
+  }) {
+    return CampaignProductListItem(
+      productId: productId ?? this.productId,
+      promotionPrice: promotionPrice ?? this.promotionPrice,
+    );
+  }
+
+  Map<String, Object?> toMap() {
+    return <String, Object?>{
+      'productId': productId,
+      'promotionPrice': promotionPrice,
+    };
   }
 }
 
@@ -477,6 +592,7 @@ class WorkspaceProfileService
         _WorkspaceProfilePaymentConditionsMixin,
         _WorkspaceProfileCommercialAdjustmentsMixin,
         _WorkspaceProfileOrderDiscountsMixin,
+        _WorkspaceProfileCampaignListsMixin,
         _WorkspaceProfileProductTaxonomyMixin,
         _WorkspaceProfileErpSettingsMixin,
         _WorkspaceProfileRepresentedCompaniesMixin {

@@ -1444,11 +1444,6 @@ class _PedidosPageState extends State<PedidosPage> {
                   1000.0,
                 );
                 final isEditing = (_editingOrderId ?? '').trim().isNotEmpty;
-                final representedNameForNewOrder =
-                    (_effectiveOriginCompanyUnitLabel ?? '').trim();
-                final newOrderActionLabel = representedNameForNewOrder.isEmpty
-                    ? 'Novo pedido'
-                    : 'Novo pedido para $representedNameForNewOrder';
 
                 if (isEditing) {
                   return Padding(
@@ -1472,84 +1467,103 @@ class _PedidosPageState extends State<PedidosPage> {
                   );
                 }
 
-                return SingleChildScrollView(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(10, 16, 10, 16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        PedidoHeaderCard(
-                          title: 'Pedidos',
-                          subtitle: 'Lista de Pedidos.',
-                          actionLabel: _creatingDraft
-                              ? 'Criando...'
-                              : newOrderActionLabel,
-                          onAction: _createDraftOrder,
-                          actionEnabled: !_creatingDraft,
-                        ),
-                        if (!_usesExternalRepresentedContext) ...[
-                          const SizedBox(height: 12),
-                          _buildRepresentedSelectorCard(),
-                        ],
-                        const SizedBox(height: 16),
-                        if (pedidos.isEmpty)
-                          const PedidoEmptyState(
-                            title: 'Nenhum pedido carregado',
-                            subtitle: 'Os pedidos locais aparecerão aqui assim que a fila for preenchida.',
-                          )
-                        else
-                          ...pedidos.map((entry) {
-                            final canSend = _canSendOrder(entry.pedido);
-                            final canApprove = _canApproveOrder(entry.pedido);
-                            final isSentOrder =
-                                entry.pedido.statusFila == OrderStatus.sent;
-                            final primaryTooltip = canSend
-                                ? 'Enviar pedido'
-                                : (canApprove
-                                      ? 'Aprovar pedido'
-                                      : (isSentOrder
-                                            ? 'Pedido enviado'
-                                            : 'Ação indisponível'));
-                            final primaryIcon = canSend
-                                ? Icons.send_outlined
-                                : (canApprove
-                                      ? Icons.check_circle_outline
-                                      : (isSentOrder
-                                            ? Icons.task_alt_outlined
-                                            : Icons.block_outlined));
-                            final primaryAction = canSend
-                                ? () => _sendOrder(entry.pedido)
-                                : (canApprove
-                                      ? () => _approveOrder(entry.pedido)
-                                      : null);
+                return Stack(
+                  children: [
+                    SingleChildScrollView(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(10, 16, 10, 88),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Pedidos',
+                              style: Theme.of(context).textTheme.headlineSmall,
+                            ),
+                            const SizedBox(height: 8),
+                            const Text('Lista de pedidos.'),
+                            if (!_usesExternalRepresentedContext) ...[
+                              const SizedBox(height: 12),
+                              _buildRepresentedSelectorCard(),
+                            ],
+                            const SizedBox(height: 16),
+                            if (pedidos.isEmpty)
+                              const PedidoEmptyState(
+                                title: 'Nenhum pedido carregado',
+                                subtitle: 'Os pedidos locais aparecerão aqui assim que a fila for preenchida.',
+                              )
+                            else
+                              ...pedidos.map((entry) {
+                                final canSend = _canSendOrder(entry.pedido);
+                                final canApprove = _canApproveOrder(
+                                  entry.pedido,
+                                );
+                                final isSentOrder =
+                                    entry.pedido.statusFila == OrderStatus.sent;
+                                final primaryTooltip = canSend
+                                    ? 'Enviar pedido'
+                                    : (canApprove
+                                          ? 'Aprovar pedido'
+                                          : (isSentOrder
+                                                ? 'Pedido enviado'
+                                                : 'Ação indisponível'));
+                                final primaryIcon = canSend
+                                    ? Icons.send_outlined
+                                    : (canApprove
+                                          ? Icons.check_circle_outline
+                                          : (isSentOrder
+                                                ? Icons.task_alt_outlined
+                                                : Icons.block_outlined));
+                                final primaryAction = canSend
+                                    ? () => _sendOrder(entry.pedido)
+                                    : (canApprove
+                                          ? () => _approveOrder(entry.pedido)
+                                          : null);
 
-                            return PedidoCard(
-                              entry.pedido,
-                              syncedRemotely: entry.syncedRemotely,
-                              selected: false,
-                              onTap: () {
-                                if (_canEditOrder(entry.pedido)) {
-                                  _selectOrderForEditing(entry.pedido);
-                                  return;
-                                }
-                                _showOrderReadOnlyDialog(entry.pedido);
-                              },
-                              onPrimaryAction: primaryAction,
-                              primaryActionTooltip: primaryTooltip,
-                              primaryActionIcon: primaryIcon,
-                              onEdit: _canEditOrder(entry.pedido)
-                                  ? () => _selectOrderForEditing(entry.pedido)
-                                  : null,
-                              onPreviewPdf: () =>
-                                  _openOrderPdfPreview(entry.pedido),
-                              onDelete: _canDeleteOrder(entry.pedido)
-                                  ? () => _deleteOrderLocalFirst(entry.pedido)
-                                  : null,
-                            );
-                          }),
-                      ],
+                                return PedidoCard(
+                                  entry.pedido,
+                                  syncedRemotely: entry.syncedRemotely,
+                                  selected: false,
+                                  onTap: () {
+                                    if (_canEditOrder(entry.pedido)) {
+                                      _selectOrderForEditing(entry.pedido);
+                                      return;
+                                    }
+                                    _showOrderReadOnlyDialog(entry.pedido);
+                                  },
+                                  onPrimaryAction: primaryAction,
+                                  primaryActionTooltip: primaryTooltip,
+                                  primaryActionIcon: primaryIcon,
+                                  onEdit: _canEditOrder(entry.pedido)
+                                      ? () =>
+                                            _selectOrderForEditing(entry.pedido)
+                                      : null,
+                                  onPreviewPdf: () =>
+                                      _openOrderPdfPreview(entry.pedido),
+                                  onDelete: _canDeleteOrder(entry.pedido)
+                                      ? () =>
+                                            _deleteOrderLocalFirst(entry.pedido)
+                                      : null,
+                                );
+                              }),
+                          ],
+                        ),
+                      ),
                     ),
-                  ),
+                    Positioned(
+                      right: 16,
+                      bottom: 16,
+                      child: SafeArea(
+                        child: FloatingActionButton.extended(
+                          heroTag: 'pedidos-novo-fab',
+                          onPressed: _creatingDraft ? null : _createDraftOrder,
+                          icon: const Icon(Icons.add_shopping_cart_outlined),
+                          label: Text(
+                            _creatingDraft ? 'Criando...' : 'Novo pedido',
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 );
               },
             );

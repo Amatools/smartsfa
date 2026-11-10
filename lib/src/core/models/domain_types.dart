@@ -283,6 +283,24 @@ enum OrderStatus {
   }
 }
 
+enum OrderItemSourceType {
+  none('none', 'Sem origem comercial'),
+  promotion('promotion', 'Promocao'),
+  highlight('highlight', 'Destaque');
+
+  const OrderItemSourceType(this.value, this.label);
+
+  final String value;
+  final String label;
+
+  static OrderItemSourceType fromValue(String value) {
+    return OrderItemSourceType.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => OrderItemSourceType.none,
+    );
+  }
+}
+
 enum CustomerReferenceType {
   official('oficial', 'Oficial'),
   preRegistration('pre_cadastro', 'Pre cadastro');

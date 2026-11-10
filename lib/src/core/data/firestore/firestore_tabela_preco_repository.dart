@@ -148,6 +148,15 @@ class FirestoreTabelaPrecoRepository implements TabelaPrecoRepository {
       );
     }
 
+    final isPromotionCampaignTable =
+        existing.origem.trim().toLowerCase() == 'campaign_promotion' ||
+        existing.scopeType.trim().toLowerCase() == 'promotion_campaign';
+    if (isPromotionCampaignTable) {
+      throw StateError(
+        'A tabela de promocoes e gerenciada automaticamente e nao pode ser excluida manualmente.',
+      );
+    }
+
     final basePrices = await _firestore
         .collection('product_base_prices')
         .where('tenantId', isEqualTo: tenantId.trim())

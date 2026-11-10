@@ -21,9 +21,22 @@ class ProductCatalogPolicy {
     final workspaceType = isPersonalWorkspace
         ? 'seller_solo_workspace'
         : (tenantData?['workspaceType'] ?? '').toString().trim();
+    final rootProvider = (tenantData?['erpProvider'] ?? '').toString().trim();
+    final integrationRaw = tenantData?['erpIntegration'];
+    String nestedProvider = '';
+    if (integrationRaw is Map) {
+      nestedProvider = (integrationRaw['provider'] ?? '').toString().trim();
+    }
+
+    final effectiveProvider = nestedProvider.isNotEmpty
+      ? nestedProvider
+      : rootProvider;
+    final hasErpIntegration =
+      effectiveProvider.toLowerCase() == 'sankhya' ||
+      effectiveProvider.toLowerCase() == 'custom';
+
     final erpSyncEnabled =
-        workspaceType == 'brand_owner_workspace' &&
-        tenantData?['productSyncFromErpEnabled'] == true;
+      workspaceType == 'brand_owner_workspace' && hasErpIntegration;
 
     return ProductCatalogPolicy(
       workspaceType: workspaceType,
@@ -34,14 +47,6 @@ class ProductCatalogPolicy {
   }
 
   bool get isEnterprise => workspaceType == 'brand_owner_workspace';
-
-  bool get isOwnerOrPlatformAdmin =>
-      role == 'owner' || role == 'platform_admin';
-
-  bool get showEnterpriseSyncSwitchCard =>
-      isEnterprise && isOwnerOrPlatformAdmin;
-
-  bool get showErpManagedInfoCard => isEnterprise && erpSyncEnabled;
 
   bool get canCreateOrImportProducts {
     if (!allowCatalogWrite) {

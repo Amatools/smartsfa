@@ -84,7 +84,12 @@ class _TenantWorkspaceModuleAreaState
       content = const _SimpleCardSection(
         title: 'Selecione a representada',
         subtitle: 'Para editar os módulos comerciais, selecione uma representada ativa no topo do portal.',
-        items: ['Contexto da empresa', 'Produtos', 'Políticas comerciais'],
+        items: [
+          'Contexto da empresa',
+          'Produtos',
+          'Políticas comerciais',
+          'Configurações',
+        ],
       );
     } else if (activeSubmenu == null) {
       content = const SizedBox.shrink();
@@ -156,6 +161,20 @@ class _TenantWorkspaceModuleAreaState
         activeTenant: widget.activeTenant,
         selectedRepresentedCompanyId: widget.selectedRepresentedCompanyId,
         activeRepresentedCompanyName: widget.activeRepresentedCompanyName,
+      );
+    } else if (activeSubmenu.key == 'listas_promocionais') {
+      content = _CampaignProductsSection(
+        activeTenant: widget.activeTenant,
+        selectedRepresentedCompanyId: widget.selectedRepresentedCompanyId,
+        activeRepresentedCompanyName: widget.activeRepresentedCompanyName,
+        sourceType: OrderItemSourceType.promotion,
+      );
+    } else if (activeSubmenu.key == 'listas_destaque') {
+      content = _CampaignProductsSection(
+        activeTenant: widget.activeTenant,
+        selectedRepresentedCompanyId: widget.selectedRepresentedCompanyId,
+        activeRepresentedCompanyName: widget.activeRepresentedCompanyName,
+        sourceType: OrderItemSourceType.highlight,
       );
     } else if (activeSubmenu.linkedItemLabel == null) {
       content = _SimpleCardSection(

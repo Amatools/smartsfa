@@ -139,11 +139,13 @@ class _WebPortalShellState extends State<_WebPortalShell> {
               activeTenant,
             );
             final representedSelected =
-              (_effectiveRepresentedCompanyId(activeTenant) ?? '').trim().isNotEmpty;
+                (_effectiveRepresentedCompanyId(activeTenant) ?? '')
+                    .trim()
+                    .isNotEmpty;
             final effectiveRepresentedCompanyId =
-              _effectiveRepresentedCompanyId(activeTenant);
+                _effectiveRepresentedCompanyId(activeTenant);
             final effectiveRepresentedCompanyName =
-              _effectiveRepresentedCompanyName(activeTenant);
+                _effectiveRepresentedCompanyName(activeTenant);
             final tenantSectionLocked =
                 representedRequired && !representedSelected;
 
@@ -169,18 +171,18 @@ class _WebPortalShellState extends State<_WebPortalShell> {
                     child: _TenantWorkspaceModuleArea(
                       activeTenant: activeTenant,
                       activeRepresentedCompanyName:
-                        effectiveRepresentedCompanyName,
+                          effectiveRepresentedCompanyName,
                       selectedRepresentedCompanyId:
-                        effectiveRepresentedCompanyId,
+                          effectiveRepresentedCompanyId,
                       tenantItems: tenantModuleItems,
                       selectedItemLabel: tenantModuleItems.isEmpty
                           ? selectedItem.label
                           : tenantModuleItems.first.label,
                       tenantSectionLocked: tenantSectionLocked,
                       selectedSubmenuKey: (() {
-                        final selectedSubmenu = _selectedTenantSubmenuByTenant[
-                          activeTenant.tenantId
-                        ];
+                        final selectedSubmenu =
+                            _selectedTenantSubmenuByTenant[activeTenant
+                                .tenantId];
                         if (selectedSubmenu != null &&
                             selectedSubmenu.trim().isNotEmpty) {
                           return selectedSubmenu;
@@ -221,7 +223,7 @@ class _WebPortalShellState extends State<_WebPortalShell> {
                             onMenuSelected: _setSelectedIndex,
                             tenantSectionLocked: tenantSectionLocked,
                             selectedRepresentedCompanyName:
-                              effectiveRepresentedCompanyName,
+                                effectiveRepresentedCompanyName,
                           ),
                           const VerticalDivider(width: 1),
                           Expanded(
@@ -231,17 +233,17 @@ class _WebPortalShellState extends State<_WebPortalShell> {
                                   identity: widget.identity,
                                   activeTenant: activeTenant,
                                   accountContractLock: accountContractLock,
-                                    selectedRepresentedCompanyId:
+                                  selectedRepresentedCompanyId:
                                       effectiveRepresentedCompanyId,
-                                    selectedRepresentedCompanyName:
+                                  selectedRepresentedCompanyName:
                                       effectiveRepresentedCompanyName,
-                                    enterpriseDefaultRepresentedCompanyId:
+                                  enterpriseDefaultRepresentedCompanyId:
                                       _isEnterpriseWorkspace(activeTenant)
                                       ? _enterpriseDefaultRepresentedId(
-                                        activeTenant,
-                                      )
+                                          activeTenant,
+                                        )
                                       : null,
-                                    enterpriseDefaultRepresentedCompanyName:
+                                  enterpriseDefaultRepresentedCompanyName:
                                       _isEnterpriseWorkspace(activeTenant)
                                       ? effectiveRepresentedCompanyName
                                       : null,
@@ -274,17 +276,17 @@ class _WebPortalShellState extends State<_WebPortalShell> {
                             activeTenant: activeTenant,
                             accountContractLock: accountContractLock,
                             selectedRepresentedCompanyId:
-                              effectiveRepresentedCompanyId,
+                                effectiveRepresentedCompanyId,
                             selectedRepresentedCompanyName:
-                              effectiveRepresentedCompanyName,
+                                effectiveRepresentedCompanyName,
                             enterpriseDefaultRepresentedCompanyId:
-                              _isEnterpriseWorkspace(activeTenant)
-                              ? _enterpriseDefaultRepresentedId(activeTenant)
-                              : null,
+                                _isEnterpriseWorkspace(activeTenant)
+                                ? _enterpriseDefaultRepresentedId(activeTenant)
+                                : null,
                             enterpriseDefaultRepresentedCompanyName:
-                              _isEnterpriseWorkspace(activeTenant)
-                              ? effectiveRepresentedCompanyName
-                              : null,
+                                _isEnterpriseWorkspace(activeTenant)
+                                ? effectiveRepresentedCompanyName
+                                : null,
                             onRepresentedCompanySelected:
                                 (companyId, companyName) {
                                   _setActiveRepresentedCompany(
@@ -392,8 +394,8 @@ class _WebPortalShellState extends State<_WebPortalShell> {
   }) {
     final normalizedCompanyId = (companyId ?? '').trim();
     final normalizedCompanyName = (companyName ?? '').trim();
-    final currentCompanyId =
-        (_activeRepresentedCompanyByTenant[tenantId] ?? '').trim();
+    final currentCompanyId = (_activeRepresentedCompanyByTenant[tenantId] ?? '')
+        .trim();
     final currentCompanyName =
         (_activeRepresentedCompanyNameByTenant[tenantId] ?? '').trim();
 
@@ -403,8 +405,9 @@ class _WebPortalShellState extends State<_WebPortalShell> {
     }
 
     setState(() {
-      _activeRepresentedCompanyByTenant[tenantId] =
-          normalizedCompanyId.isEmpty ? null : normalizedCompanyId;
+      _activeRepresentedCompanyByTenant[tenantId] = normalizedCompanyId.isEmpty
+          ? null
+          : normalizedCompanyId;
       _activeRepresentedCompanyNameByTenant[tenantId] =
           normalizedCompanyName.isEmpty ? null : normalizedCompanyName;
     });
@@ -673,6 +676,23 @@ class _WebPortalShellState extends State<_WebPortalShell> {
             required activeRepresentedCompanyName,
           }) => TenantAdminPage(identity: _tenantAdminIdentity(activeTenant)),
         ),
+      if (canAccessInvites)
+        _PortalNavItem(
+          label: 'Auditoria',
+          icon: Icons.fact_check_outlined,
+          section: _PortalSection.global,
+          builder:
+              ({
+                required activeTenant,
+                required activeRepresentedCompanyName,
+              }) => _SimpleSectionPage.auditoria(
+                activeTenant: activeTenant,
+                activeRepresentedCompanyName: activeRepresentedCompanyName,
+                selectedRepresentedCompanyId: _effectiveRepresentedCompanyId(
+                  activeTenant,
+                ),
+              ),
+        ),
       if (supportsRepresentedCompanies)
         const _PortalNavItem(
           label: 'Representadas',
@@ -778,11 +798,75 @@ class _WebPortalShellState extends State<_WebPortalShell> {
             tenantModule: true,
             hideFromNavigation: false,
           ),
+        ]);
+      } else {
+        items.addAll(const [
           _PortalNavItem(
-            label: 'Auditoria',
-            icon: Icons.fact_check_outlined,
+            label: 'Produtos',
+            icon: Icons.inventory_2_outlined,
             section: _PortalSection.tenant,
-            builder: _SimpleSectionPage.auditoria,
+            builder: _ProductsCatalogSection.new,
+            tenantModule: true,
+            hideFromNavigation: true,
+          ),
+          _PortalNavItem(
+            label: 'Tabelas de preço',
+            icon: Icons.price_change_outlined,
+            section: _PortalSection.tenant,
+            builder: _PricingCatalogSection.new,
+            tenantModule: true,
+            hideFromNavigation: true,
+          ),
+          _PortalNavItem(
+            label: 'Condições de pagamento',
+            icon: Icons.receipt_long_outlined,
+            section: _PortalSection.tenant,
+            builder: _PaymentConditionsSection.new,
+            tenantModule: true,
+            hideFromNavigation: true,
+          ),
+          _PortalNavItem(
+            label: 'Políticas',
+            icon: Icons.policy_outlined,
+            section: _PortalSection.tenant,
+            builder: _SimpleSectionPage.politicas,
+            tenantModule: true,
+            hideFromNavigation: true,
+          ),
+        ]);
+      }
+    } else {
+      if (isEnterpriseWorkspace) {
+        items.addAll(const [
+          _PortalNavItem(
+            label: 'Produtos',
+            icon: Icons.inventory_2_outlined,
+            section: _PortalSection.tenant,
+            builder: _ProductsCatalogSection.new,
+            tenantModule: true,
+            hideFromNavigation: true,
+          ),
+          _PortalNavItem(
+            label: 'Tabelas de preço',
+            icon: Icons.price_change_outlined,
+            section: _PortalSection.tenant,
+            builder: _PricingCatalogSection.new,
+            tenantModule: true,
+            hideFromNavigation: true,
+          ),
+          _PortalNavItem(
+            label: 'Políticas',
+            icon: Icons.policy_outlined,
+            section: _PortalSection.tenant,
+            builder: _SimpleSectionPage.enterprisePoliticas,
+            tenantModule: true,
+            hideFromNavigation: true,
+          ),
+          _PortalNavItem(
+            label: 'Configurações',
+            icon: Icons.settings_outlined,
+            section: _PortalSection.tenant,
+            builder: _SimpleSectionPage.enterpriseConfiguracoes,
             tenantModule: true,
             hideFromNavigation: true,
           ),
@@ -821,51 +905,8 @@ class _WebPortalShellState extends State<_WebPortalShell> {
             tenantModule: true,
             hideFromNavigation: true,
           ),
-          _PortalNavItem(
-            label: 'Auditoria',
-            icon: Icons.fact_check_outlined,
-            section: _PortalSection.tenant,
-            builder: _SimpleSectionPage.auditoria,
-            tenantModule: true,
-            hideFromNavigation: true,
-          ),
         ]);
       }
-    } else {
-      items.addAll(const [
-        _PortalNavItem(
-          label: 'Produtos',
-          icon: Icons.inventory_2_outlined,
-          section: _PortalSection.tenant,
-          builder: _ProductsCatalogSection.new,
-          tenantModule: true,
-          hideFromNavigation: true,
-        ),
-        _PortalNavItem(
-          label: 'Tabelas de preço',
-          icon: Icons.price_change_outlined,
-          section: _PortalSection.tenant,
-          builder: _PricingCatalogSection.new,
-          tenantModule: true,
-          hideFromNavigation: true,
-        ),
-        _PortalNavItem(
-          label: 'Condições de pagamento',
-          icon: Icons.receipt_long_outlined,
-          section: _PortalSection.tenant,
-          builder: _PaymentConditionsSection.new,
-          tenantModule: true,
-          hideFromNavigation: true,
-        ),
-        _PortalNavItem(
-          label: 'Políticas',
-          icon: Icons.policy_outlined,
-          section: _PortalSection.tenant,
-          builder: _SimpleSectionPage.politicas,
-          tenantModule: true,
-          hideFromNavigation: true,
-        ),
-      ]);
     }
 
     if (canAccessInvites) {

@@ -420,6 +420,11 @@ class _PortalLandingSectionState extends State<_PortalLandingSection> {
         icon: Icons.policy_outlined,
       ),
       _PortalModule(
+        title: 'Configurações',
+        subtitle: 'Parâmetros, categorias, unidades, mídia e períodos.',
+        icon: Icons.settings_outlined,
+      ),
+      _PortalModule(
         title: 'ERP e integrações',
         subtitle: 'Parâmetros de conector, mapeamento e status.',
         icon: Icons.integration_instructions_outlined,

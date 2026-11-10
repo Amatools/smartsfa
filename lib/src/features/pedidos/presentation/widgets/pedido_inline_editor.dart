@@ -116,6 +116,8 @@ class _PedidoInlineEditorState extends State<PedidoInlineEditor> {
   String? _customerInputError;
   String? _boundOrderId;
   String _searchQuery = '';
+  List<Produto> _mobilePromotionProducts = const <Produto>[];
+  List<Produto> _mobileHighlightProducts = const <Produto>[];
   final WorkspaceProfileService _workspaceProfileService =
       WorkspaceProfileService(FirebaseFirestore.instance);
   final CatalogSnapshotStore _catalogSnapshotStore = CatalogSnapshotStore();
@@ -173,6 +175,7 @@ class _PedidoInlineEditorState extends State<PedidoInlineEditor> {
     _loadCommercialRules();
     _loadOrderDiscountPolicy();
     _loadPaymentConditionRules();
+    _loadMobileCampaignProducts();
   }
 
   @override
@@ -188,14 +191,113 @@ class _PedidoInlineEditorState extends State<PedidoInlineEditor> {
       _loadCommercialRules();
       _loadOrderDiscountPolicy();
       _loadPaymentConditionRules();
+      _loadMobileCampaignProducts();
     }
     if (oldScope != newScope) {
       _resetScopedPoliciesState();
       _loadCommercialRules();
       _loadOrderDiscountPolicy();
       _loadPaymentConditionRules();
+      _loadMobileCampaignProducts();
+    }
+    if (!listEquals(oldWidget.products, widget.products)) {
+      _loadMobileCampaignProducts();
     }
     _syncFromPedidoIfNeeded();
+  }
+
+  Future<void> _loadMobileCampaignProducts() async {
+    if (kIsWeb) {
+      return;
+    }
+
+    final tenantId = widget.tenantId.trim();
+    if (tenantId.isEmpty) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _mobilePromotionProducts = const <Produto>[];
+        _mobileHighlightProducts = const <Produto>[];
+      });
+      return;
+    }
+
+    try {
+      final promotionListsFuture = _workspaceProfileService
+          .fetchCampaignProductLists(
+            tenantId: tenantId,
+            representedCompanyId: _effectiveRepresentedCompanyId,
+            sourceType: OrderItemSourceType.promotion,
+          );
+      final highlightListsFuture = _workspaceProfileService
+          .fetchCampaignProductLists(
+            tenantId: tenantId,
+            representedCompanyId: _effectiveRepresentedCompanyId,
+            sourceType: OrderItemSourceType.highlight,
+          );
+
+      final values = await Future.wait<List<CampaignProductList>>([
+        promotionListsFuture,
+        highlightListsFuture,
+      ]);
+
+      if (!mounted) {
+        return;
+      }
+
+      final promotionIds = <String>{};
+      final highlightIds = <String>{};
+      for (final list in values[0]) {
+        if (!list.active) {
+          continue;
+        }
+        promotionIds.addAll(list.productIds);
+      }
+      for (final list in values[1]) {
+        if (!list.active) {
+          continue;
+        }
+        highlightIds.addAll(list.productIds);
+      }
+
+      final promotionProducts =
+          widget.products
+              .where((product) => promotionIds.contains(product.id))
+              .where((product) => product.status == ProductStatus.active)
+              .toList(growable: false)
+            ..sort(
+              (a, b) => a.descricao.toLowerCase().compareTo(
+                b.descricao.toLowerCase(),
+              ),
+            );
+
+      final highlightProducts =
+          widget.products
+              .where((product) => highlightIds.contains(product.id))
+              .where((product) => product.status == ProductStatus.active)
+              .toList(growable: false)
+            ..sort(
+              (a, b) => a.descricao.toLowerCase().compareTo(
+                b.descricao.toLowerCase(),
+              ),
+            );
+
+      setState(() {
+        _mobilePromotionProducts = promotionProducts;
+        _mobileHighlightProducts = highlightProducts;
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _mobilePromotionProducts = const <Produto>[];
+        _mobileHighlightProducts = const <Produto>[];
+      });
+    } finally {
+      // no-op
+    }
   }
 
   /// Leitura unica (nao continua) das regras de acrescimos/descontos
@@ -1333,7 +1435,13 @@ class _PedidoInlineEditorState extends State<PedidoInlineEditor> {
     await _setItemQuantity(index, current - 1);
   }
 
-  Future<void> _addProduct(Produto product, {int? quantityOverride}) async {
+  Future<void> _addProduct(
+    Produto product, {
+    int? quantityOverride,
+    OrderItemSourceType sourceType = OrderItemSourceType.none,
+    String? sourceListId,
+    String? sourceListLabel,
+  }) async {
     if (widget.pedido == null || widget.saving) {
       return;
     }
@@ -1386,12 +1494,24 @@ class _PedidoInlineEditorState extends State<PedidoInlineEditor> {
       setState(() {
         if (existingIndex >= 0) {
           final existingItem = _items[existingIndex];
+          final shouldPromoteSource =
+              existingItem.sourceType == OrderItemSourceType.none &&
+              sourceType != OrderItemSourceType.none;
           _items[existingIndex] = existingItem.copyWith(
             quantity: nextQty.toDouble(),
             unitPrice: computed.unitPrice,
             totalPrice: computed.totalPrice,
             taxSnapshot: computed.taxSnapshot,
             appliedDiscountPercents: existingItem.appliedDiscountPercents,
+            sourceType: shouldPromoteSource
+                ? sourceType
+                : existingItem.sourceType,
+            sourceListId: shouldPromoteSource
+                ? sourceListId
+                : existingItem.sourceListId,
+            sourceListLabel: shouldPromoteSource
+                ? sourceListLabel
+                : existingItem.sourceListLabel,
           );
         } else {
           _items.add(
@@ -1406,6 +1526,9 @@ class _PedidoInlineEditorState extends State<PedidoInlineEditor> {
               appliedDiscountPercents: const <double>[],
               unit: product.unidade,
               ncm: product.ncm,
+              sourceType: sourceType,
+              sourceListId: sourceListId,
+              sourceListLabel: sourceListLabel,
               taxSnapshot: computed.taxSnapshot,
             ),
           );
@@ -1499,8 +1622,22 @@ class _PedidoInlineEditorState extends State<PedidoInlineEditor> {
           resolveCommercialCode: _resolveCommercialCode,
           formatMoneyBr: PedidoFormatUtils.formatMoneyBr,
           inputDecoration: _inputDecoration,
-          onAddProduct: (product, {required quantityOverride}) =>
-              _addProduct(product, quantityOverride: quantityOverride),
+          promotionProducts: _mobilePromotionProducts,
+          highlightProducts: _mobileHighlightProducts,
+          onAddProduct:
+              (
+                product, {
+                required quantityOverride,
+                sourceType = OrderItemSourceType.none,
+                sourceListId,
+                sourceListLabel,
+              }) => _addProduct(
+                product,
+                quantityOverride: quantityOverride,
+                sourceType: sourceType,
+                sourceListId: sourceListId,
+                sourceListLabel: sourceListLabel,
+              ),
         );
       },
     );
@@ -1877,7 +2014,7 @@ class _PedidoInlineEditorState extends State<PedidoInlineEditor> {
                                                   const NeverScrollableScrollPhysics(),
                                               itemCount: _items.length,
                                               separatorBuilder: (_, index) =>
-                                                  const Divider(height: 1),
+                                                  const SizedBox(height: 2),
                                               itemBuilder: (context, index) {
                                                 final item = _items[index];
                                                 final product =
