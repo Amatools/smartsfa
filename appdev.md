@@ -3,6 +3,25 @@
 Este arquivo e o board oficial de acompanhamento do projeto.
 Regra de uso: cada item entregue deve ser marcado com [x] e manter evidencias curtas na secao "Log de Execucao".
 
+## Estado atual consolidado (2026-11-11)
+
+- [x] Core de negocio do SFA praticamente concluido para operacao inicial (faltam fechamentos pontuais)
+- [x] Fluxo multi-tenant com memberships, convites, auditoria e governanca ativa em Firestore
+- [x] Modulos comerciais principais em base real (clientes, produtos, pedidos), com suporte offline local
+- [x] Portal web administrativo em funcionamento, com evolucoes SRP e reducao de duplicacao
+- [x] Correcao aplicada para classificacao de workspace (seller_solo/rep/enterprise) no resolver de entrada e membership
+- [x] Validacoes tecnicas recorrentes estabilizadas (analyze limpo e ciclo de hot restart)
+- [ ] Fechar trilha de operacao do mantenedor (inspecao, diagnostico e acoes administrativas seguras)
+- [ ] Fechar login/registro/billing ponta a ponta para escala de contas
+
+## Decisao tecnica - Painel de mantenedor (Flutter vs HTML)
+
+- [x] Stack principal aprovada: Flutter Web para o painel de mantenedor
+- [x] Racional da decisao documentado: reaproveita autenticacao, autorizacao, componentes, regras de tenant e padrao de deploy do produto
+- [x] Racional da decisao documentado: reduz divergencia funcional/visual e custo de manter dois backoffices
+- [ ] Uso recomendado de HTML puro apenas para paginas institucionais/estaticas (status publico, termos, privacidade, docs)
+- [ ] Registrar politicas de acesso do painel de mantenedor (observer/operator/admin) no backend e na UI
+
 ## Direcao do produto
 
 - [x] Direcao aprovada: plataforma SaaS multi-tenant
@@ -59,15 +78,111 @@ Regra de uso: cada item entregue deve ser marcado com [x] e manter evidencias cu
 
 ## Proxima etapa recomendada (execucao)
 
-- [ ] Migrar Clientes de in-memory para provider real tenant-aware (Firestore inicial)
-- [ ] Manter fallback de mock apenas para modo dev explicito
-- [ ] Replicar estrategia em Produtos
-- [ ] Replicar estrategia em Pedidos
-- [ ] Fechar ciclo com testes de repositorio e smoke de UI
+- [x] Migrar Clientes de in-memory para provider real tenant-aware (Firestore inicial)
+- [x] Manter fallback de mock apenas para modo dev explicito
+- [x] Replicar estrategia em Produtos
+- [x] Replicar estrategia em Pedidos
+- [ ] Fechar ciclo com testes de repositorio e smoke de UI para os fluxos novos
 - [x] Criar login web responsivo e dedicado para o portal administrativo
 - [x] Iniciar portal web administrativo para configuracao de tenant, regras e tabelas de preco (MVP funcional)
 - [ ] Definir e implementar motor de precificacao compartilhado com o portal web
 - [ ] Separar claramente no backlog o que e app operacional e o que e configuracao web
+- [ ] Entregar painel de mantenedor (MVP) no portal web
+- [ ] Instrumentar estatisticas de contas e observabilidade operacional
+- [ ] Finalizar login, registro e billing para producao assistida
+
+## Painel de mantenedor (MVP -> v1)
+
+### 1) Saude do sistema
+
+- [ ] Dashboard de saude (Auth, Firestore, Functions, jobs)
+- [ ] Taxa de erro por modulo e por tenant
+- [ ] Tempo medio de resposta das rotas criticas (portal, sync, consulta comercial)
+- [ ] Alertas basicos de degradacao (warning/critical) com trilha de incidente
+
+### 2) Inspecao e diagnostico por conta/tenant
+
+- [ ] Busca por tenantId, userId, email e CNPJ
+- [ ] Timeline de eventos por conta (login, convite, troca de workspace, mudancas criticas)
+- [ ] Visualizacao consolidada de membership, role, workspaceType e status de contrato
+- [ ] Diagnostico assistido para erros comuns (acesso negado, convite invalido, lock de conta)
+
+### 3) Acoes administrativas seguras
+
+- [ ] Bloquear/desbloquear conta com motivo obrigatorio
+- [ ] Forcar refresh de sessao / revogar sessao ativa
+- [ ] Reprocessar tarefas de sincronizacao por tenant (acao idempotente)
+- [ ] Ajustes assistidos de configuracao com dry-run quando aplicavel
+
+### 4) Auditoria obrigatoria
+
+- [ ] Registrar ator, alvo, motivo, antes/depois e timestamp em toda acao critica
+- [ ] Diferenciar operacao normal de break-glass (admin)
+- [ ] Criar consulta de auditoria com filtros (tenant, ator, acao, periodo)
+- [ ] Definir politica de retencao e exportacao de trilha
+
+## Estatisticas de contas e uso (escala)
+
+### 1) Aquisicao e ativacao
+
+- [ ] Novos cadastros por dia/semana/mes
+- [ ] Taxa de ativacao (registro -> primeiro uso valido)
+- [ ] Tempo medio ate primeiro valor (ex.: primeira configuracao comercial util)
+
+### 2) Retencao e engajamento
+
+- [ ] DAU/WAU/MAU por tipo de workspace
+- [ ] Retencao D1/D7/D30
+- [ ] Queda de uso por tenant (alerta de churn tecnico)
+
+### 3) Saude comercial e billing
+
+- [ ] Distribuicao de tenants por plano
+- [ ] Uso de recursos por plano e por tenant
+- [ ] Conversao de upgrade e motivos de cancelamento
+- [ ] Contas proximas de limite operacional/comercial
+
+### 4) Operacao e suporte
+
+- [ ] Erros por modulo com tendencia temporal
+- [ ] Chamados por categoria e severidade
+- [ ] Tempo medio de resolucao (MTTR)
+
+## Fechamento de Login, Registro e Billing (plano tecnico)
+
+### Fase A - Login e seguranca
+
+- [ ] Confirmacao de email no onboarding
+- [ ] Recuperacao de senha com UX completa
+- [ ] Tratamento robusto de sessao expirada e conta bloqueada
+- [ ] Avaliar MFA para perfis owner/admin (roadmap curto)
+
+### Fase B - Registro e onboarding
+
+- [ ] Wizard unico de criacao de workspace/tenant
+- [ ] Fluxo de convite com aceite, expiracao e reenvio
+- [ ] Regras claras por jornada (solo, representacao, enterprise)
+- [ ] Checklist guiado de primeira configuracao apos entrada
+
+### Fase C - Billing e governanca de plano
+
+- [ ] Checkout/assinatura e alteracao de plano (upgrade/downgrade)
+- [ ] Webhooks idempotentes para eventos de pagamento
+- [ ] Grace period e lock progressivo por inadimplencia
+- [ ] Tela de status de cobranca (faturas, vencimento, situacao)
+
+### Fase D - Integracao operacional
+
+- [ ] Sincronizar plano/limites com regras de acesso do produto
+- [ ] Expor eventos de billing no painel de mantenedor
+- [ ] Cobrir regressao critica com testes automatizados (auth + onboarding + billing)
+
+## Roadmap de fechamento (proximas 4 sprints)
+
+- [ ] Sprint F1: Painel mantenedor leitura + auditoria base
+- [ ] Sprint F2: Acoes administrativas seguras + trilha completa
+- [ ] Sprint F3: Login/registro completo com onboarding consolidado
+- [ ] Sprint F4: Billing ponta a ponta + regras de plano/lock
 
 ## 0.1) Precificacao e cadastro de produto (decisao recente)
 
@@ -157,6 +272,8 @@ Objetivo: reduzir regressao de permissao antes de publicar regras em producao.
 - [ ] Definir fluxo canonico de pre-cadastro de clientes e merge com ERP
 - [ ] Definir regra de aprovacao padrao para pre-cadastro em tenants sem ERP
 - [ ] Definir fluxo de primeira entrada: convite, solicitacao de acesso ou workspace pessoal
+- [ ] Definir escopo da primeira release do painel de mantenedor (MVP fechado)
+- [ ] Definir stack de pagamento e contrato de webhook de billing
 
 ## 1) Requisitos mandatarios de UI responsiva
 
@@ -334,6 +451,12 @@ Objetivo: validar onboarding, entrada por convite/membership e permissao por pap
 - Mudancas de role refletem no menu/abas e no escopo de dados.
 
 ## Log de Execucao
+
+- 2026-11-11: appdev.md atualizado com estado atual consolidado e replanejamento para fechamento (painel de mantenedor, estatisticas de contas, login/registro/billing).
+- 2026-11-11: Decisao registrada: painel de mantenedor no portal Flutter Web; HTML reservado para paginas estaticas/institucionais.
+- 2026-11-11: Portal web recebeu rodada de refactor SRP em secoes de conta/representadas e catalogo (reducao de duplicacao e melhor manutencao).
+- 2026-11-11: Correcao aplicada para classificacao de workspace no fluxo de entrada/membership (evitando menu enterprise indevido para seller_solo).
+- 2026-11-11: Ajustes de estabilidade visual no portal (dedupe de callback de selecao) e tasks para validacao wasm/profile/release.
 
 - 2026-09-10: Projeto Firebase migrado para smart-sfa (novas configuracoes Android/iOS/Web via FlutterFire).
 - 2026-09-10: Firestore rules e indexes publicados no projeto smart-sfa.

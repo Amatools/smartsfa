@@ -42,6 +42,8 @@ import '../../../produtos/presentation/pages/produtos_page.dart';
 import '../../../tenant/presentation/pages/tenant_admin_page.dart';
 import '../../../tenant/presentation/pages/tenant_membership_audit_page.dart';
 import '../../../enterprise/erp_integration/presentation/pages/enterprise_erp_integration_section.dart';
+import '../../../maintainer/presentation/pages/maintainer_console_page.dart';
+import '../../../maintainer/services/maintainer_access_service.dart';
 import '../../../produtos/presentation/services/product_editor_defaults.dart';
 import '../../../produtos/presentation/services/product_unit_catalog_service.dart';
 import '../services/tax_rule_formatting_utils.dart';

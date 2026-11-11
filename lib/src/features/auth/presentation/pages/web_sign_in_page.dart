@@ -92,160 +92,146 @@ class _WebSignInPageState extends State<WebSignInPage> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final textTheme = theme.textTheme;
-    final isWide = MediaQuery.sizeOf(context).width >= 980;
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
 
     return Scaffold(
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 1320),
+            constraints: const BoxConstraints(maxWidth: 460),
             child: Padding(
               padding: const EdgeInsets.all(24),
-              child: isWide
-                  ? Row(
-                      children: [
-                        Expanded(
-                          flex: 5,
-                          child: _HeroPanel(
-                            textTheme: textTheme,
-                            colorScheme: theme.colorScheme,
+              child: Card(
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  side: BorderSide(
+                    color: colorScheme.outlineVariant.withValues(alpha: 0.35),
+                  ),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.storefront_outlined,
+                        size: 40,
+                        color: colorScheme.primary,
+                      ),
+                      const SizedBox(height: 10),
+                      Text('SmartSFA', style: textTheme.headlineSmall),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Entrar com conta Google',
+                        style: textTheme.bodyMedium,
+                      ),
+                      const SizedBox(height: 20),
+                      if (_error != null) ...[
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: colorScheme.errorContainer,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Codigo: ${_error!.code}',
+                                style: TextStyle(
+                                  color: colorScheme.onErrorContainer,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                _error!.message,
+                                style: TextStyle(
+                                  color: colorScheme.onErrorContainer,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                        const SizedBox(width: 24),
-                        Expanded(
-                          flex: 4,
-                          child: _LoginPanel(
-                            loading: _loading,
-                            error: _error,
-                            emailController: _emailController,
-                            passwordController: _passwordController,
-                            onGoogle: _signInWithGoogle,
-                            onEmailPassword: _signInWithEmailPassword,
-                            textTheme: textTheme,
-                            colorScheme: theme.colorScheme,
-                          ),
-                        ),
+                        const SizedBox(height: 14),
                       ],
-                    )
-                  : SingleChildScrollView(
-                      child: Column(
-                        children: [
-                          _HeroPanel(
-                            textTheme: textTheme,
-                            colorScheme: theme.colorScheme,
+                      FilledButton.icon(
+                        onPressed: _loading ? null : _signInWithGoogle,
+                        icon: const Icon(Icons.login),
+                        label: Text(
+                          _loading ? 'Entrando...' : 'Continuar com Google',
+                        ),
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size.fromHeight(44),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
                           ),
-                          const SizedBox(height: 16),
-                          _LoginPanel(
-                            loading: _loading,
-                            error: _error,
-                            emailController: _emailController,
-                            passwordController: _passwordController,
-                            onGoogle: _signInWithGoogle,
-                            onEmailPassword: _signInWithEmailPassword,
-                            textTheme: textTheme,
-                            colorScheme: theme.colorScheme,
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      ExpansionTile(
+                        tilePadding: EdgeInsets.zero,
+                        shape: const Border(),
+                        collapsedShape: const Border(),
+                        title: const Text('Entrar com e-mail/senha (suporte)'),
+                        childrenPadding: EdgeInsets.zero,
+                        children: [
+                          const SizedBox(height: 10),
+                          TextField(
+                            controller: _emailController,
+                            keyboardType: TextInputType.emailAddress,
+                            decoration: _inputDecoration(
+                              colorScheme,
+                              label: 'E-mail',
+                              icon: Icons.alternate_email,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          TextField(
+                            controller: _passwordController,
+                            obscureText: true,
+                            decoration: _inputDecoration(
+                              colorScheme,
+                              label: 'Senha',
+                              icon: Icons.lock_outline,
+                            ),
+                            onSubmitted: (_) => _signInWithEmailPassword(),
+                          ),
+                          const SizedBox(height: 10),
+                          OutlinedButton.icon(
+                            onPressed: _loading
+                                ? null
+                                : _signInWithEmailPassword,
+                            icon: const Icon(Icons.alternate_email),
+                            label: const Text('Entrar com e-mail/senha'),
+                            style: OutlinedButton.styleFrom(
+                              minimumSize: const Size.fromHeight(42),
+                            ),
                           ),
                         ],
                       ),
-                    ),
+                    ],
+                  ),
+                ),
+              ),
             ),
           ),
         ),
       ),
     );
   }
-}
 
-class _HeroPanel extends StatelessWidget {
-  const _HeroPanel({required this.textTheme, required this.colorScheme});
-
-  final TextTheme textTheme;
-  final ColorScheme colorScheme;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      elevation: 0,
-      color: colorScheme.primaryContainer.withValues(alpha: 0.45),
-      child: Padding(
-        padding: const EdgeInsets.all(28),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(
-              Icons.storefront_outlined,
-              size: 42,
-              color: colorScheme.primary,
-            ),
-            const SizedBox(height: 20),
-            Text('Smart SFA', style: textTheme.headlineMedium),
-            const SizedBox(height: 8),
-            Text(
-              'Portal web administrativo e login oficial no mesmo dominio do produto.',
-              style: textTheme.titleMedium,
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              'Use o web para configuracoes densas, politicas de preco, ERP e governanca. O app mobile fica para operacao e campo.',
-            ),
-            const SizedBox(height: 24),
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: const [
-                _FeatureChip(label: 'Portal web'),
-                _FeatureChip(label: 'Pricing engine'),
-                _FeatureChip(label: 'ERP parametrizavel'),
-                _FeatureChip(label: 'Governanca multi-tenant'),
-              ],
-            ),
-            const SizedBox(height: 28),
-            const _FeatureCard(
-              title: 'Acesso responsivo',
-              subtitle: 'Login adaptado para navegador, com foco em leitura, configuracao e navegação de portal.',
-            ),
-            const SizedBox(height: 12),
-            const _FeatureCard(
-              title: 'Mesmo login Firebase',
-              subtitle: 'Um unico domínio e autenticacao compartilhada para mobile e web.',
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _LoginPanel extends StatelessWidget {
-  const _LoginPanel({
-    required this.loading,
-    required this.error,
-    required this.emailController,
-    required this.passwordController,
-    required this.onGoogle,
-    required this.onEmailPassword,
-    required this.textTheme,
-    required this.colorScheme,
-  });
-
-  final bool loading;
-  final AuthErrorInfo? error;
-  final TextEditingController emailController;
-  final TextEditingController passwordController;
-  final VoidCallback onGoogle;
-  final VoidCallback onEmailPassword;
-  final TextTheme textTheme;
-  final ColorScheme colorScheme;
-
-  InputDecoration _inputDecoration({
+  InputDecoration _inputDecoration(
+    ColorScheme colorScheme, {
     required String label,
     required IconData icon,
   }) {
     OutlineInputBorder border(Color color, {double width = 1}) {
       return OutlineInputBorder(
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(10),
         borderSide: BorderSide(color: color, width: width),
       );
     }
@@ -253,151 +239,16 @@ class _LoginPanel extends StatelessWidget {
     return InputDecoration(
       labelText: label,
       filled: true,
-      fillColor: colorScheme.surfaceContainerHighest.withValues(alpha: 0.28),
+      fillColor: colorScheme.surfaceContainerHighest.withValues(alpha: 0.2),
       prefixIcon: Icon(icon, size: 18),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       enabledBorder: border(colorScheme.outlineVariant.withValues(alpha: 0.32)),
       focusedBorder: border(
-        colorScheme.primary.withValues(alpha: 0.48),
+        colorScheme.primary.withValues(alpha: 0.5),
         width: 1.25,
       ),
       errorBorder: border(colorScheme.error.withValues(alpha: 0.72)),
       focusedErrorBorder: border(colorScheme.error, width: 1.25),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      elevation: 0,
-      color: colorScheme.surface,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-        side: BorderSide(
-          color: colorScheme.outlineVariant.withValues(alpha: 0.35),
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Entrar', style: textTheme.headlineSmall),
-            const SizedBox(height: 8),
-            Text(
-              'Acesso corporativo com liberacao interna.',
-              style: textTheme.bodyMedium,
-            ),
-            const SizedBox(height: 20),
-            if (error != null) ...[
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: colorScheme.errorContainer,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Codigo: ${error!.code}',
-                      style: TextStyle(
-                        color: colorScheme.onErrorContainer,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      error!.message,
-                      style: TextStyle(color: colorScheme.onErrorContainer),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-            ],
-            FilledButton.icon(
-              onPressed: loading ? null : onGoogle,
-              icon: const Icon(Icons.login),
-              label: Text(loading ? 'Entrando...' : 'Continuar com Google'),
-              style: FilledButton.styleFrom(
-                minimumSize: const Size.fromHeight(44),
-                shape: const StadiumBorder(),
-                padding: const EdgeInsets.symmetric(horizontal: 18),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Se a empresa ainda nao liberou o acesso, use o fluxo de onboarding após autenticar.',
-              style: textTheme.bodySmall,
-            ),
-            const SizedBox(height: 20),
-            const Divider(),
-            const SizedBox(height: 20),
-            TextField(
-              controller: emailController,
-              keyboardType: TextInputType.emailAddress,
-              decoration: _inputDecoration(
-                label: 'E-mail',
-                icon: Icons.alternate_email,
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: passwordController,
-              obscureText: true,
-              decoration: _inputDecoration(
-                label: 'Senha',
-                icon: Icons.lock_outline,
-              ),
-              onSubmitted: (_) => onEmailPassword(),
-            ),
-            const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: loading ? null : onEmailPassword,
-              icon: const Icon(Icons.alternate_email),
-              label: const Text('Entrar com e-mail/senha'),
-              style: OutlinedButton.styleFrom(
-                minimumSize: const Size.fromHeight(42),
-                shape: const StadiumBorder(),
-                side: BorderSide(
-                  color: colorScheme.primary.withValues(alpha: 0.35),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _FeatureChip extends StatelessWidget {
-  const _FeatureChip({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Chip(label: Text(label));
-  }
-}
-
-class _FeatureCard extends StatelessWidget {
-  const _FeatureCard({required this.title, required this.subtitle});
-
-  final String title;
-  final String subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: ListTile(
-        leading: const Icon(Icons.check_circle_outline),
-        title: Text(title),
-        subtitle: Text(subtitle),
-      ),
     );
   }
 }

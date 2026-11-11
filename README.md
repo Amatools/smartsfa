@@ -56,7 +56,15 @@ Exemplos de execucao:
 3. Prod web:
    `flutter run -d chrome --dart-define APP_ENV=prod`
 4. Android com override de polling:
-   `flutter run -d 25282525700315 --dart-define APP_ENV=homolog --dart-define CLOUD_DELTA_REFRESH_INTERVAL_SECONDS=60`flutter run -d 25282525700315 --dart-define APP_ENV=dev
+   `flutter run -d 25282525700315 --dart-define APP_ENV=homolog --dart-define CLOUD_DELTA_REFRESH_INTERVAL_SECONDS=60`
+5. flutter run -d 25282525700315 --dart-define APP_ENV=dev
+
+Acesso ao painel admin
+
+flutter run -d chrome --web-port=5400
+
+http://localhost:5400/?mode=web&entry=maintainer
+
 
 O login e exclusivamente via Firebase Auth (Google ou e-mail/senha cadastrados no projeto). Nao ha mais modos mock/local de desenvolvimento: a conta precisa existir no Firebase para liberar o app. Apos o primeiro login bem-sucedido, a sessao fica persistida localmente e o app continua funcionando offline (Firestore com persistencia habilitada) ate que seja necessario reautenticar.
 

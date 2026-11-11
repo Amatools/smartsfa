@@ -1,5 +1,16 @@
 ﻿part of 'web_portal_page.dart';
 
+String _requestedPortalEntryPoint() {
+  final rawEntry =
+      (Uri.base.queryParameters['entry'] ??
+              Uri.base.queryParameters['panel'] ??
+              Uri.base.queryParameters['console'] ??
+              '')
+          .trim()
+          .toLowerCase();
+  return rawEntry.replaceAll(' ', '_');
+}
+
 class _WebPortalShellState extends State<_WebPortalShell> {
   int _selectedIndex = 0;
   String? _activeTenantId;
@@ -8,6 +19,8 @@ class _WebPortalShellState extends State<_WebPortalShell> {
   bool _settingFavoriteRepresented = false;
   String? _accountContractLockUid;
   Future<AccountContractLock>? _accountContractLockFuture;
+  final String _requestedEntryPoint = _requestedPortalEntryPoint();
+  bool _requestedEntryPointApplied = false;
   final Map<String, String?> _selectedTenantSubmenuByTenant = {};
   final Map<String, String?> _activeRepresentedCompanyByTenant = {};
   final Map<String, String?> _activeRepresentedCompanyNameByTenant = {};
@@ -132,6 +145,7 @@ class _WebPortalShellState extends State<_WebPortalShell> {
             final visibleItems = allItems
                 .where((item) => !item.hideFromNavigation)
                 .toList(growable: false);
+            _applyRequestedEntryPointIfNeeded(visibleItems);
             final tenantModuleItems = allItems
                 .where((item) => item.tenantModule)
                 .toList(growable: false);
@@ -438,6 +452,33 @@ class _WebPortalShellState extends State<_WebPortalShell> {
     });
   }
 
+  void _applyRequestedEntryPointIfNeeded(List<_PortalNavItem> visibleItems) {
+    if (_requestedEntryPointApplied) {
+      return;
+    }
+    _requestedEntryPointApplied = true;
+
+    if (_requestedEntryPoint != 'maintainer') {
+      return;
+    }
+
+    final targetIndex = visibleItems.indexWhere(
+      (item) => item.label == 'Mantenedor',
+    );
+    if (targetIndex < 0 || targetIndex == _selectedIndex) {
+      return;
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _selectedIndex = targetIndex;
+      });
+    });
+  }
+
   bool _requiresRepresentedSelection(TenantEntryOption tenant) {
     return tenant.workspaceType == 'seller_solo_workspace' ||
         tenant.workspaceType == 'rep_workspace';
@@ -630,6 +671,8 @@ class _WebPortalShellState extends State<_WebPortalShell> {
       ' ',
       '_',
     );
+    final canOpenMaintainerPanel =
+        MaintainerAccessService.isPotentialMaintainerRole(normalizedRole);
     final isTenantManager =
         normalizedRole == 'owner' ||
         normalizedRole == 'gerente' ||
@@ -692,6 +735,16 @@ class _WebPortalShellState extends State<_WebPortalShell> {
                   activeTenant,
                 ),
               ),
+        ),
+      if (canOpenMaintainerPanel)
+        _PortalNavItem(
+          label: 'Mantenedor',
+          icon: Icons.security_outlined,
+          section: _PortalSection.global,
+          builder: ({
+            required activeTenant,
+            required activeRepresentedCompanyName,
+          }) => MaintainerConsolePage(activeTenant: activeTenant),
         ),
       if (supportsRepresentedCompanies)
         const _PortalNavItem(

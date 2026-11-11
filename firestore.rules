@@ -993,6 +993,43 @@ service cloud.firestore {
         );
     }
 
+    function validPlatformAdminAuditAction(action) {
+      return action in [
+        'admin_user_created',
+        'admin_user_updated',
+        'admin_user_deleted',
+        'account_activated',
+        'account_deactivated',
+        'billing_grace_set',
+        'billing_normalized',
+        'billing_suspended',
+        'billing_state_updated',
+        'impersonation_session_started',
+        'impersonation_session_consumed'
+      ];
+    }
+
+    function validPlatformAdminAuditDoc(data) {
+      return data.action is string
+        && validPlatformAdminAuditAction(data.action)
+        && data.actorUid is string
+        && data.actorUid != ''
+        && data.targetUid is string
+        && data.targetUid != ''
+        && data.createdAt is string
+        && (!('actorLabel' in data) || data.actorLabel is string)
+        && (!('actorEmail' in data) || data.actorEmail is string)
+        && (!('targetDisplayName' in data) || data.targetDisplayName is string)
+        && (!('targetEmail' in data) || data.targetEmail is string)
+        && (!('details' in data) || data.details == null || data.details is map);
+    }
+
+    function canCreatePlatformAdminAuditDoc(data) {
+      return isPlatformAdmin()
+        && validPlatformAdminAuditDoc(data)
+        && data.actorUid == uid();
+    }
+
     function isPossibleSelfServiceBootstrapMembership(data) {
       return data.uid == uid()
         && data.defaultTenant == true
@@ -1346,6 +1383,13 @@ service cloud.firestore {
       allow delete: if signedIn() && isPlatformAdmin();
     }
 
+    match /platform_user_admin_profiles/{targetUid} {
+      allow read: if signedIn() && isPlatformAdmin();
+      allow create: if signedIn() && isPlatformAdmin();
+      allow update: if signedIn() && isPlatformAdmin();
+      allow delete: if signedIn() && isPlatformAdmin();
+    }
+
     match /tenant_memberships/{membershipKey} {
       allow read: if signedIn() && canReadMembershipDoc(resource.data);
 
@@ -1396,6 +1440,15 @@ service cloud.firestore {
 
       allow create: if signedIn()
         && canCreateTenantMembershipAuditDoc(request.resource.data);
+
+      allow update, delete: if false;
+    }
+
+    match /platform_admin_audit/{eventId} {
+      allow read: if signedIn() && isPlatformAdmin();
+
+      allow create: if signedIn()
+        && canCreatePlatformAdminAuditDoc(request.resource.data);
 
       allow update, delete: if false;
     }

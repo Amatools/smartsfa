@@ -3,7 +3,9 @@
     "test:firestore-rules": "firebase emulators:exec --only firestore \"node ./scripts/firestore_rules_smoke_test.mjs\"",
     "test:firestore-rules:represented": "firebase emulators:exec --only firestore \"node ./scripts/firestore_rules_represented_smoke_test.mjs\"",
     "test:firestore-rules:memberships": "firebase emulators:exec --only firestore \"node ./scripts/firestore_rules_memberships_smoke_test.mjs\"",
-    "test:firestore-rules:tenants": "firebase emulators:exec --only firestore \"node ./scripts/firestore_rules_tenants_smoke_test.mjs\""
+    "test:firestore-rules:tenants": "firebase emulators:exec --only firestore \"node ./scripts/firestore_rules_tenants_smoke_test.mjs\"",
+    "platform:grant-admin": "node ./scripts/bootstrap_owner/grant_platform_admin_access.mjs",
+    "platform:grant-admin:sdk": "node ./scripts/bootstrap_owner/grant_platform_admin_access_admin_sdk.mjs"
   },
   "dependencies": {
     "@google-cloud/firestore": "^9.1.0"

@@ -319,6 +319,118 @@
 			],
 			"isBackground": false,
 			"group": "build"
+		},
+		{
+			"label": "firebase deploy impersonation functions",
+			"type": "shell",
+			"command": "C:/Users/Aureo.Filho/AppData/Roaming/npm/firebase.cmd",
+			"args": [
+				"deploy",
+				"--project=smart-sfa",
+				"--only",
+				"functions:createImpersonationSession,functions:consumeImpersonationSession"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "firebase deploy firestore full",
+			"type": "shell",
+			"command": "C:/Users/Aureo.Filho/AppData/Roaming/npm/firebase.cmd",
+			"args": [
+				"deploy",
+				"--project=smart-sfa",
+				"--only",
+				"firestore"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "logs impersonation consume",
+			"type": "shell",
+			"command": "C:/Users/Aureo.Filho/AppData/Roaming/npm/firebase.cmd",
+			"args": [
+				"functions:log",
+				"--only",
+				"consumeImpersonationSession",
+				"-n",
+				"40",
+				"--project=smart-sfa"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "firebase deploy consume impersonation function",
+			"type": "shell",
+			"command": "C:/Users/Aureo.Filho/AppData/Roaming/npm/firebase.cmd",
+			"args": [
+				"deploy",
+				"--project=smart-sfa",
+				"--only",
+				"functions:consumeImpersonationSession"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "logs impersonation consume latest",
+			"type": "shell",
+			"command": "C:/Users/Aureo.Filho/AppData/Roaming/npm/firebase.cmd",
+			"args": [
+				"functions:log",
+				"--only",
+				"consumeImpersonationSession",
+				"-n",
+				"10",
+				"--project=smart-sfa"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "logs impersonation consume latest detailed",
+			"type": "shell",
+			"command": "C:/Users/Aureo.Filho/AppData/Roaming/npm/firebase.cmd",
+			"args": [
+				"functions:log",
+				"--only",
+				"consumeImpersonationSession",
+				"-n",
+				"30",
+				"--project=smart-sfa"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "logs impersonation consume latest 100",
+			"type": "shell",
+			"command": "C:/Users/Aureo.Filho/AppData/Roaming/npm/firebase.cmd",
+			"args": [
+				"functions:log",
+				"--only",
+				"consumeImpersonationSession",
+				"-n",
+				"100",
+				"--project=smart-sfa"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "firebase deploy create impersonation function",
+			"type": "shell",
+			"command": "C:/Users/Aureo.Filho/AppData/Roaming/npm/firebase.cmd",
+			"args": [
+				"deploy",
+				"--project=smart-sfa",
+				"--only",
+				"functions:createImpersonationSession"
+			],
+			"isBackground": false,
+			"group": "build"
 		}
 	]
 }

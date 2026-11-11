@@ -17,6 +17,9 @@ const TEMPORARY_IMPORT_LIMIT = 5;
 const SANKHYA_IMAGE_CHUNK_BYTES = 1800;
 const DEFAULT_PRODUCT_MEDIA_SCOPE_KEY = 'tenant_default';
 const DEFAULT_STORAGE_BUCKET = 'smart-sfa.firebasestorage.app';
+const IMPERSONATION_DEFAULT_DURATION_MINUTES = 15;
+const IMPERSONATION_MIN_DURATION_MINUTES = 5;
+const IMPERSONATION_MAX_DURATION_MINUTES = 30;
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -241,6 +244,417 @@ exports.syncSankhyaCatalogModule = onRequest(
         message: error instanceof Error ? error.message : String(error),
       });
     }
+  },
+);
+
+exports.createImpersonationSession = onRequest(
+  {
+    cors: true,
+    region: 'us-central1',
+    timeoutSeconds: 60,
+    serviceAccount: 'smart-sfa@appspot.gserviceaccount.com',
+  },
+  async (request, response) => {
+    if (request.method !== 'POST') {
+      response.status(405).json({ error: 'method_not_allowed' });
+      return;
+    }
+
+    const targetUid = String(request.body?.targetUid ?? '').trim();
+    const targetTenantId = String(request.body?.targetTenantId ?? '').trim();
+    const targetMembershipId = String(request.body?.targetMembershipId ?? '').trim();
+    const reason = String(request.body?.reason ?? '').trim();
+    const launchOrigin = String(request.body?.launchOrigin ?? '').trim();
+
+    const durationInput = Number(
+      request.body?.durationMinutes ?? IMPERSONATION_DEFAULT_DURATION_MINUTES,
+    );
+    const durationMinutes = Number.isFinite(durationInput)
+      ? Math.max(
+          IMPERSONATION_MIN_DURATION_MINUTES,
+          Math.min(IMPERSONATION_MAX_DURATION_MINUTES, Math.floor(durationInput)),
+        )
+      : IMPERSONATION_DEFAULT_DURATION_MINUTES;
+
+    if (!targetUid || !targetTenantId || !targetMembershipId) {
+      response.status(400).json({
+        error: 'missing_target',
+        message: 'targetUid, targetTenantId e targetMembershipId sao obrigatorios.',
+      });
+      return;
+    }
+
+    if (reason.length < 8) {
+      response.status(400).json({
+        error: 'missing_reason',
+        message: 'Informe motivo com ao menos 8 caracteres.',
+      });
+      return;
+    }
+
+    const firestore = admin.firestore();
+    const authContext = await verifyFirebaseAuthFromRequest(request);
+    if (!authContext.ok) {
+      response.status(authContext.status).json({
+        error: authContext.error,
+        message: authContext.message,
+      });
+      return;
+    }
+
+    const actorUid = authContext.uid;
+    const actorUserDoc = await firestore.collection('usuarios').doc(actorUid).get();
+    const actorUserData = actorUserDoc.data() || {};
+    const actorPlatformRole = String(actorUserData.platformRole ?? '').trim().toLowerCase();
+    const actorActiveGlobal = actorUserData.ativoGlobal !== false;
+    const actorConsoleEnabled = actorUserData.maintainerConsoleEnabled !== false;
+
+    if (actorPlatformRole !== 'platform_admin' || !actorActiveGlobal || !actorConsoleEnabled) {
+      response.status(403).json({
+        error: 'forbidden',
+        message: 'Apenas platform_admin com console habilitado pode iniciar acesso assistido.',
+      });
+      return;
+    }
+
+    if (actorUid === targetUid) {
+      response.status(400).json({
+        error: 'self_impersonation_not_allowed',
+        message: 'Nao e permitido criar acesso assistido para a propria conta.',
+      });
+      return;
+    }
+
+    const targetUserDoc = await firestore.collection('usuarios').doc(targetUid).get();
+    if (!targetUserDoc.exists) {
+      response.status(404).json({
+        error: 'target_not_found',
+        message: 'Usuario alvo nao encontrado.',
+      });
+      return;
+    }
+
+    const targetUserData = targetUserDoc.data() || {};
+    const targetActiveGlobal = targetUserData.ativoGlobal !== false;
+    if (!targetActiveGlobal) {
+      response.status(400).json({
+        error: 'target_inactive',
+        message: 'Nao e permitido acesso assistido para conta alvo inativa.',
+      });
+      return;
+    }
+
+    const targetMembershipDoc = await firestore
+      .collection('tenant_memberships')
+      .doc(targetMembershipId)
+      .get();
+
+    if (!targetMembershipDoc.exists) {
+      response.status(404).json({
+        error: 'membership_not_found',
+        message: 'Membership alvo nao encontrado.',
+      });
+      return;
+    }
+
+    const targetMembershipData = targetMembershipDoc.data() || {};
+    const membershipUid = String(targetMembershipData.uid ?? '').trim();
+    const membershipTenantId = String(targetMembershipData.tenantId ?? '').trim();
+    const membershipActive = targetMembershipData.ativo === true;
+    const membershipState = String(targetMembershipData.state ?? 'active')
+      .trim()
+      .toLowerCase();
+
+    if (
+      membershipUid !== targetUid ||
+      membershipTenantId !== targetTenantId ||
+      !membershipActive ||
+      membershipState !== 'active'
+    ) {
+      response.status(400).json({
+        error: 'invalid_membership_target',
+        message: 'Membership alvo invalido para o usuario/tenant informado.',
+      });
+      return;
+    }
+
+    const sessionRef = firestore.collection('platform_impersonation_sessions').doc();
+    const sessionId = sessionRef.id;
+    const sessionKey = crypto.randomBytes(24).toString('hex');
+    const sessionKeyHash = sha256Hex(sessionKey);
+    const nowDate = new Date();
+    const expiresAtDate = new Date(
+      nowDate.getTime() + durationMinutes * 60 * 1000,
+    );
+
+    const actorEmail = String(
+      actorUserData.email ?? authContext.email ?? '',
+    ).trim();
+    const actorLabel = resolveUserDisplayLabel(actorUserData, actorEmail, actorUid);
+    const targetEmail = String(targetUserData.email ?? '').trim();
+    const targetLabel = resolveUserDisplayLabel(targetUserData, targetEmail, targetUid);
+
+    await sessionRef.set({
+      sessionId,
+      status: 'issued',
+      actorUid,
+      actorEmail,
+      actorLabel,
+      targetUid,
+      targetTenantId,
+      targetMembershipId,
+      targetEmail,
+      targetDisplayName: targetLabel,
+      reason,
+      durationMinutes,
+      sessionKeyHash,
+      createdAt: admin.firestore.Timestamp.fromDate(nowDate),
+      expiresAt: admin.firestore.Timestamp.fromDate(expiresAtDate),
+      consumedAt: null,
+      consumedByIp: '',
+      consumedUserAgent: '',
+      revokedAt: null,
+      revokedByUid: '',
+      revokedReason: '',
+    });
+
+    await firestore.collection('platform_admin_audit').add({
+      action: 'impersonation_session_started',
+      actorUid,
+      actorEmail,
+      actorLabel,
+      targetUid,
+      targetEmail,
+      targetDisplayName: targetLabel,
+      details: {
+        targetTenantId,
+        targetMembershipId,
+        reason,
+        durationMinutes,
+        sessionId,
+      },
+      createdAt: admin.firestore.Timestamp.fromDate(nowDate),
+    });
+
+    const normalizedOrigin = normalizeLaunchOrigin(launchOrigin, request);
+    const launchQuery =
+      `impersonationSession=${encodeURIComponent(sessionId)}` +
+      `&impersonationKey=${encodeURIComponent(sessionKey)}` +
+      `&impersonationTenantId=${encodeURIComponent(targetTenantId)}` +
+      `&impersonationMembershipId=${encodeURIComponent(targetMembershipId)}` +
+      `&mode=web`;
+    const launchUrl = normalizedOrigin
+      ? `${normalizedOrigin}/?${launchQuery}`
+      : `/?${launchQuery}`;
+
+    let adminRestoreCustomToken = '';
+    try {
+      adminRestoreCustomToken = await admin.auth().createCustomToken(actorUid, {
+        maintainerRestore: true,
+        impersonationSessionId: sessionId,
+      });
+    } catch (error) {
+      console.error(
+        'createImpersonationSession admin restore token failed',
+        error,
+      );
+    }
+
+    response.status(200).json({
+      success: true,
+      sessionId,
+      sessionKey,
+      adminRestoreCustomToken,
+      launchUrl,
+      targetUid,
+      targetTenantId,
+      targetMembershipId,
+      expiresAt: expiresAtDate.toISOString(),
+    });
+  },
+);
+
+exports.consumeImpersonationSession = onRequest(
+  {
+    cors: true,
+    region: 'us-central1',
+    timeoutSeconds: 60,
+    serviceAccount: 'smart-sfa@appspot.gserviceaccount.com',
+  },
+  async (request, response) => {
+    if (request.method !== 'POST') {
+      response.status(405).json({ error: 'method_not_allowed' });
+      return;
+    }
+
+    const sessionId = String(request.body?.sessionId ?? '').trim();
+    const sessionKey = String(request.body?.sessionKey ?? '').trim();
+    if (!sessionId || !sessionKey) {
+      response.status(400).json({
+        error: 'missing_session_data',
+        message: 'sessionId e sessionKey sao obrigatorios.',
+      });
+      return;
+    }
+
+    const firestore = admin.firestore();
+    const sessionRef = firestore.collection('platform_impersonation_sessions').doc(sessionId);
+    const requestIp = resolveRequestIp(request);
+    const userAgent = String(request.headers['user-agent'] ?? '').trim().slice(0, 300);
+    const sessionKeyHash = sha256Hex(sessionKey);
+    const nowDate = new Date();
+
+    let sessionData = null;
+    try {
+      await firestore.runTransaction(async (tx) => {
+        const sessionDoc = await tx.get(sessionRef);
+        if (!sessionDoc.exists) {
+          throw new Error('session_not_found');
+        }
+
+        const data = sessionDoc.data() || {};
+        assertImpersonationSessionConsumable({
+          data,
+          sessionKeyHash,
+          nowDate,
+        });
+        sessionData = data;
+      });
+    } catch (error) {
+      const code = error instanceof Error ? error.message : String(error);
+      const responseMap = mapImpersonationConsumeError(code);
+      response.status(responseMap.status).json({
+        error: responseMap.error,
+        message: responseMap.message,
+      });
+      return;
+    }
+
+    const actorUid = String(sessionData?.actorUid ?? '').trim();
+    const actorEmail = String(sessionData?.actorEmail ?? '').trim();
+    const actorLabel = String(sessionData?.actorLabel ?? '').trim();
+    const targetUid = String(sessionData?.targetUid ?? '').trim();
+    const targetTenantId = String(sessionData?.targetTenantId ?? '').trim();
+    const targetMembershipId = String(sessionData?.targetMembershipId ?? '').trim();
+    const targetEmail = String(sessionData?.targetEmail ?? '').trim();
+    const targetDisplayName = String(sessionData?.targetDisplayName ?? '').trim();
+    const reason = String(sessionData?.reason ?? '').trim();
+    const expiresAtTimestamp = sessionData?.expiresAt;
+    const expiresAtDate =
+      expiresAtTimestamp && typeof expiresAtTimestamp.toDate === 'function'
+        ? expiresAtTimestamp.toDate()
+        : null;
+
+    if (!targetUid) {
+      response.status(400).json({
+        error: 'invalid_target_uid',
+        message: 'Sessao de impersonation sem usuario alvo valido.',
+      });
+      return;
+    }
+
+    const targetUserDoc = await firestore.collection('usuarios').doc(targetUid).get();
+    if (!targetUserDoc.exists) {
+      response.status(404).json({
+        error: 'target_not_found',
+        message: 'Usuario alvo nao encontrado para consumo da sessao.',
+      });
+      return;
+    }
+
+    const targetUserData = targetUserDoc.data() || {};
+    if (targetUserData.ativoGlobal === false) {
+      response.status(400).json({
+        error: 'target_inactive',
+        message: 'Conta alvo inativa para acesso assistido.',
+      });
+      return;
+    }
+
+    let customToken = '';
+    try {
+      customToken = await admin.auth().createCustomToken(targetUid, {
+        impersonation: true,
+        impersonatedByUid: actorUid,
+        impersonationSessionId: sessionId,
+        impersonationTenantId: targetTenantId,
+        impersonationMembershipId: targetMembershipId,
+      });
+    } catch (error) {
+      console.error(
+        'consumeImpersonationSession createCustomToken failed',
+        error,
+      );
+      response.status(500).json({
+        error: 'custom_token_generation_failed',
+        message:
+          'Falha interna ao preparar autenticacao da sessao assistida. Tente novamente.',
+      });
+      return;
+    }
+
+    const consumedAtDate = new Date();
+    try {
+      await firestore.runTransaction(async (tx) => {
+        const sessionDoc = await tx.get(sessionRef);
+        if (!sessionDoc.exists) {
+          throw new Error('session_not_found');
+        }
+
+        const data = sessionDoc.data() || {};
+        assertImpersonationSessionConsumable({
+          data,
+          sessionKeyHash,
+          nowDate: consumedAtDate,
+        });
+
+        tx.update(sessionRef, {
+          status: 'consumed',
+          consumedAt: admin.firestore.Timestamp.fromDate(consumedAtDate),
+          consumedByIp: requestIp,
+          consumedUserAgent: userAgent,
+        });
+      });
+    } catch (error) {
+      const code = error instanceof Error ? error.message : String(error);
+      const responseMap = mapImpersonationConsumeError(code);
+      response.status(responseMap.status).json({
+        error: responseMap.error,
+        message: responseMap.message,
+      });
+      return;
+    }
+
+    try {
+      await firestore.collection('platform_admin_audit').add({
+        action: 'impersonation_session_consumed',
+        actorUid,
+        actorEmail,
+        actorLabel,
+        targetUid,
+        targetEmail,
+        targetDisplayName,
+        details: {
+          targetTenantId,
+          targetMembershipId,
+          reason,
+          sessionId,
+          consumedByIp: requestIp,
+        },
+        createdAt: admin.firestore.Timestamp.fromDate(consumedAtDate),
+      });
+    } catch (error) {
+      console.error('consumeImpersonationSession audit write failed', error);
+    }
+
+    response.status(200).json({
+      success: true,
+      customToken,
+      targetUid,
+      targetTenantId,
+      targetMembershipId,
+      expiresAt: expiresAtDate ? expiresAtDate.toISOString() : '',
+    });
   },
 );
 
@@ -3373,4 +3787,196 @@ function detectImageFormat(buffer) {
 function buildFirebaseDownloadUrl({ bucketName, storagePath, token }) {
   const encodedPath = encodeURIComponent(storagePath);
   return `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodedPath}?alt=media&token=${token}`;
+}
+
+async function verifyFirebaseAuthFromRequest(request) {
+  const authHeader = String(request.headers?.authorization ?? '').trim();
+  if (!authHeader.toLowerCase().startsWith('bearer ')) {
+    return {
+      ok: false,
+      status: 401,
+      error: 'missing_firebase_auth',
+      message: 'Envie Authorization: Bearer <Firebase ID token>.',
+      uid: '',
+      email: '',
+    };
+  }
+
+  const idToken = authHeader.substring(7).trim();
+  if (!idToken) {
+    return {
+      ok: false,
+      status: 401,
+      error: 'invalid_firebase_auth',
+      message: 'Token Firebase invalido ou ausente.',
+      uid: '',
+      email: '',
+    };
+  }
+
+  try {
+    const decodedToken = await admin.auth().verifyIdToken(idToken);
+    const uid = String(decodedToken?.uid ?? '').trim();
+    if (!uid) {
+      return {
+        ok: false,
+        status: 401,
+        error: 'missing_uid',
+        message: 'Usuario autenticado sem UID valido.',
+        uid: '',
+        email: '',
+      };
+    }
+
+    return {
+      ok: true,
+      status: 200,
+      error: '',
+      message: '',
+      uid,
+      email: String(decodedToken?.email ?? '').trim(),
+    };
+  } catch (_) {
+    return {
+      ok: false,
+      status: 401,
+      error: 'firebase_auth_failed',
+      message: 'Falha ao validar autenticacao Firebase.',
+      uid: '',
+      email: '',
+    };
+  }
+}
+
+function normalizeLaunchOrigin(rawOrigin, request) {
+  const directOrigin = String(rawOrigin ?? '').trim();
+  if (isValidHttpOrigin(directOrigin)) {
+    return stripTrailingSlash(directOrigin);
+  }
+
+  const headerOrigin = String(request.headers?.origin ?? '').trim();
+  if (isValidHttpOrigin(headerOrigin)) {
+    return stripTrailingSlash(headerOrigin);
+  }
+
+  const host = String(request.headers?.host ?? '').trim();
+  if (!host) {
+    return '';
+  }
+
+  const protocol =
+    String(request.headers?.['x-forwarded-proto'] ?? 'https').trim() ||
+    'https';
+  return stripTrailingSlash(`${protocol}://${host}`);
+}
+
+function isValidHttpOrigin(value) {
+  if (!value) {
+    return false;
+  }
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch (_) {
+    return false;
+  }
+}
+
+function stripTrailingSlash(value) {
+  return value.endsWith('/') ? value.slice(0, -1) : value;
+}
+
+function resolveRequestIp(request) {
+  const forwarded = String(request.headers?.['x-forwarded-for'] ?? '').trim();
+  if (forwarded) {
+    return forwarded.split(',')[0].trim();
+  }
+
+  return String(request.ip ?? request.connection?.remoteAddress ?? '').trim();
+}
+
+function sha256Hex(value) {
+  return crypto.createHash('sha256').update(String(value ?? '')).digest('hex');
+}
+
+function resolveUserDisplayLabel(userData, fallbackEmail, fallbackUid) {
+  const preferred = String(
+    userData.displayName ?? userData.name ?? userData.nome ?? '',
+  ).trim();
+  if (preferred) {
+    return preferred;
+  }
+
+  const email = String(fallbackEmail ?? '').trim();
+  if (email) {
+    return email;
+  }
+
+  return String(fallbackUid ?? '').trim();
+}
+
+function assertImpersonationSessionConsumable({ data, sessionKeyHash, nowDate }) {
+  const status = String(data.status ?? '').trim().toLowerCase();
+  const consumedAt = data.consumedAt ?? null;
+  const revokedAt = data.revokedAt ?? null;
+  const expiresAt = data.expiresAt;
+  const expiresAtDate =
+    expiresAt && typeof expiresAt.toDate === 'function'
+      ? expiresAt.toDate()
+      : null;
+  const storedHash = String(data.sessionKeyHash ?? '').trim();
+
+  if (revokedAt != null) {
+    throw new Error('session_revoked');
+  }
+  if (status !== 'issued' || consumedAt != null) {
+    throw new Error('session_already_consumed');
+  }
+  if (!storedHash || storedHash !== sessionKeyHash) {
+    throw new Error('invalid_session_key');
+  }
+  if (!expiresAtDate || expiresAtDate.getTime() <= nowDate.getTime()) {
+    throw new Error('session_expired');
+  }
+}
+
+function mapImpersonationConsumeError(code) {
+  switch (String(code ?? '').trim()) {
+    case 'session_not_found':
+      return {
+        status: 404,
+        error: 'session_not_found',
+        message: 'Sessao de acesso assistido nao encontrada.',
+      };
+    case 'session_revoked':
+      return {
+        status: 403,
+        error: 'session_revoked',
+        message: 'Sessao de acesso assistido revogada.',
+      };
+    case 'session_already_consumed':
+      return {
+        status: 409,
+        error: 'session_already_consumed',
+        message: 'Sessao de acesso assistido ja consumida.',
+      };
+    case 'invalid_session_key':
+      return {
+        status: 403,
+        error: 'invalid_session_key',
+        message: 'Chave da sessao de acesso assistido invalida.',
+      };
+    case 'session_expired':
+      return {
+        status: 410,
+        error: 'session_expired',
+        message: 'Sessao de acesso assistido expirada.',
+      };
+    default:
+      return {
+        status: 500,
+        error: 'session_consume_failed',
+        message: 'Falha ao consumir sessao de acesso assistido.',
+      };
+  }
 }
