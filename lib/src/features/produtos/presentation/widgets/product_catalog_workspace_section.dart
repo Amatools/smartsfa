@@ -59,7 +59,8 @@ class _ProductCatalogWorkspaceSectionState
     super.didUpdateWidget(oldWidget);
     final oldTenantId = oldWidget.payload.identity.tenantId.trim();
     final newTenantId = payload.identity.tenantId.trim();
-    final oldRepresented = (oldWidget.payload.representedCompanyId ?? '').trim();
+    final oldRepresented = (oldWidget.payload.representedCompanyId ?? '')
+        .trim();
     final newRepresented = (payload.representedCompanyId ?? '').trim();
     if (oldTenantId != newTenantId || oldRepresented != newRepresented) {
       _loadPage(0, reset: true);
@@ -187,7 +188,7 @@ class _ProductCatalogWorkspaceSectionState
 
   @override
   Widget build(BuildContext context) {
-        final pageProducts = _pageCache[_currentPage] ?? const <Produto>[];
+    final pageProducts = _pageCache[_currentPage] ?? const <Produto>[];
 
     return StreamBuilder<Map<String, dynamic>?>(
       stream: _tenantStream(),
@@ -222,12 +223,15 @@ class _ProductCatalogWorkspaceSectionState
               ),
               initialData: const <CampaignProductList>[],
               builder: (context, highlightListsSnapshot) {
+                final nowUtc = DateTime.now().toUtc();
                 final scopedProdutos = _filterByRepresentedScope(pageProducts);
                 final promotionProductIds = _resolveActiveCampaignProductIds(
                   promotionListsSnapshot.data ?? const <CampaignProductList>[],
+                  nowUtc: nowUtc,
                 );
                 final highlightProductIds = _resolveActiveCampaignProductIds(
                   highlightListsSnapshot.data ?? const <CampaignProductList>[],
+                  nowUtc: nowUtc,
                 );
 
                 final projection = widget.projectionCoordinator.resolve(
@@ -315,9 +319,13 @@ class _ProductCatalogWorkspaceSectionState
     );
   }
 
-  Set<String> _resolveActiveCampaignProductIds(List<CampaignProductList> lists) {
+  Set<String> _resolveActiveCampaignProductIds(
+    List<CampaignProductList> lists, {
+    required DateTime nowUtc,
+  }) {
     return CampaignProductResolutionService.resolveActiveProductIds(
       lists: lists,
+      momentUtc: nowUtc,
     );
   }
 

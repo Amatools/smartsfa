@@ -122,7 +122,7 @@ class _PedidoInlineEditorState extends State<PedidoInlineEditor> {
   String _searchQuery = '';
   List<Produto> _mobilePromotionProducts = const <Produto>[];
   List<Produto> _mobileHighlightProducts = const <Produto>[];
-    Map<String, CampaignPromotionProductMeta> _activePromotionMetaByProductId =
+  Map<String, CampaignPromotionProductMeta> _activePromotionMetaByProductId =
       const <String, CampaignPromotionProductMeta>{};
   final WorkspaceProfileService _workspaceProfileService =
       WorkspaceProfileService(FirebaseFirestore.instance);
@@ -262,8 +262,11 @@ class _PedidoInlineEditorState extends State<PedidoInlineEditor> {
             promotionLists: values[0],
             momentUtc: nowUtc,
           );
-      final highlightIds = CampaignProductResolutionService
-          .resolveActiveProductIds(lists: values[1], momentUtc: nowUtc);
+      final highlightIds =
+          CampaignProductResolutionService.resolveActiveProductIds(
+            lists: values[1],
+            momentUtc: nowUtc,
+          );
 
       final promotionProducts =
           widget.products
@@ -1323,9 +1326,9 @@ class _PedidoInlineEditorState extends State<PedidoInlineEditor> {
         widget.pedido?.clienteReferencia?.id;
 
     final preferredPromotionTableId =
-      sourceType == OrderItemSourceType.promotion
-      ? _promotionPriceTableIdForScope()
-      : null;
+        sourceType == OrderItemSourceType.promotion
+        ? _promotionPriceTableIdForScope()
+        : null;
 
     final computed = await _itemPricingService.resolveItemValues(
       tenantId: widget.tenantId.trim(),
@@ -1576,13 +1579,14 @@ class _PedidoInlineEditorState extends State<PedidoInlineEditor> {
       );
       final resolvedSourceListId = sourceType == OrderItemSourceType.promotion
           ? (normalizedRequestedSourceListId.isNotEmpty
-            ? normalizedRequestedSourceListId
-            : promotionMeta?.sourceListId)
+                ? normalizedRequestedSourceListId
+                : promotionMeta?.sourceListId)
           : sourceListId;
-      final resolvedSourceListLabel = sourceType == OrderItemSourceType.promotion
+      final resolvedSourceListLabel =
+          sourceType == OrderItemSourceType.promotion
           ? ((sourceListLabel ?? '').trim().isNotEmpty
-            ? sourceListLabel!.trim()
-            : promotionMeta?.sourceListLabel)
+                ? sourceListLabel!.trim()
+                : promotionMeta?.sourceListLabel)
           : sourceListLabel;
       final nextQty = (existing?.quantity.round() ?? 0) + quantity;
       final computed = await _resolveItemValues(
@@ -1616,10 +1620,10 @@ class _PedidoInlineEditorState extends State<PedidoInlineEditor> {
                 ? sourceType
                 : existingItem.sourceType,
             sourceListId: shouldPromoteSource
-              ? resolvedSourceListId
+                ? resolvedSourceListId
                 : existingItem.sourceListId,
             sourceListLabel: shouldPromoteSource
-              ? resolvedSourceListLabel
+                ? resolvedSourceListLabel
                 : existingItem.sourceListLabel,
           );
         } else {
@@ -1956,7 +1960,7 @@ class _PedidoInlineEditorState extends State<PedidoInlineEditor> {
                                 onOpenSearchModal: () =>
                                     _openSearchResultsModal(searchResults),
                                 onAddFirstVisibleResult:
-                                  visibleResults.isEmpty || _interactionLocked
+                                    visibleResults.isEmpty || _interactionLocked
                                     ? null
                                     : () => _addProduct(visibleResults.first),
                               ),
@@ -2384,7 +2388,7 @@ class _PedidoInlineEditorState extends State<PedidoInlineEditor> {
                                         heroTag: 'pedido_add_item_mobile_fab',
                                         tooltip: 'Adicionar item',
                                         onPressed:
-                                          _interactionLocked ||
+                                            _interactionLocked ||
                                                 widget.loadingProducts
                                             ? null
                                             : _openMobileAddItemSheet,

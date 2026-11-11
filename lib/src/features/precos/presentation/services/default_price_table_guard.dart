@@ -124,8 +124,12 @@ class DefaultPriceTableGuard {
       tenantId: identity.tenantId,
       representedCompanyId: selectedRepresentedCompanyId,
     );
-    final scopeKey = normalizeDefaultPricingScopeKey(normalizedRepresentedCompanyId);
-    final legacyScopeKey = legacyDefaultPricingScopeKey(normalizedRepresentedCompanyId);
+    final scopeKey = normalizeDefaultPricingScopeKey(
+      normalizedRepresentedCompanyId,
+    );
+    final legacyScopeKey = legacyDefaultPricingScopeKey(
+      normalizedRepresentedCompanyId,
+    );
     if (ensuredScopes?.contains(scopeKey) == true) {
       return;
     }
@@ -143,34 +147,38 @@ class DefaultPriceTableGuard {
           id: defaultPriceTableId,
           tenantId: identity.tenantId,
           nome: 'Tabela padrao',
-          scopeType: scopeKey == 'tenant_default' ? 'general' : 'represented_company',
+          scopeType: scopeKey == 'tenant_default'
+              ? 'general'
+              : 'represented_company',
           scopeLabel: scopeKey == 'tenant_default'
               ? 'Tabela principal da conta'
               : 'Tabela padrao da representada',
           scopeIndex: <String>['default', scopeKey],
           origem: 'system',
           status: 'ativo',
-          linkedEntityId: scopeKey == 'tenant_default' ? null : representedCompanyId,
+          linkedEntityId: scopeKey == 'tenant_default'
+              ? null
+              : representedCompanyId,
           rowCount: 0,
           createdAt: now,
           updatedAt: now,
         ),
       );
 
-      await FirebaseFirestore.instance.collection('tenants').doc(identity.tenantId).set(
-        {
-          'defaultPriceTableIds': {scopeKey: defaultPriceTableId},
-          'defaultPriceRegionIds': {scopeKey: defaultPriceRegionId},
-          'defaultProductCatalogIds': {
-            scopeKey: defaultProductCatalogIdForScope(
-              tenantId: identity.tenantId,
-              representedCompanyId: normalizedRepresentedCompanyId,
-            ),
-          },
-          'updatedAt': FieldValue.serverTimestamp(),
-        },
-        SetOptions(merge: true),
-      );
+      await FirebaseFirestore.instance
+          .collection('tenants')
+          .doc(identity.tenantId)
+          .set({
+            'defaultPriceTableIds': {scopeKey: defaultPriceTableId},
+            'defaultPriceRegionIds': {scopeKey: defaultPriceRegionId},
+            'defaultProductCatalogIds': {
+              scopeKey: defaultProductCatalogIdForScope(
+                tenantId: identity.tenantId,
+                representedCompanyId: normalizedRepresentedCompanyId,
+              ),
+            },
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
 
       if (legacyScopeKey != scopeKey) {
         final legacyDefaultPriceTableId = legacyDefaultPriceTableIdForScope(
@@ -184,7 +192,8 @@ class DefaultPriceTableGuard {
           );
           if (legacy != null &&
               legacy.origem == 'system' &&
-              legacy.nome.trim().toLowerCase() == reservedSystemDefaultPriceTableName) {
+              legacy.nome.trim().toLowerCase() ==
+                  reservedSystemDefaultPriceTableName) {
             await repository.delete(
               tenantId: identity.tenantId,
               id: legacyDefaultPriceTableId,
@@ -192,15 +201,15 @@ class DefaultPriceTableGuard {
           }
         }
 
-        await FirebaseFirestore.instance.collection('tenants').doc(identity.tenantId).set(
-          {
-            'defaultPriceTableIds': {legacyScopeKey: FieldValue.delete()},
-            'defaultPriceRegionIds': {legacyScopeKey: FieldValue.delete()},
-            'defaultProductCatalogIds': {legacyScopeKey: FieldValue.delete()},
-            'updatedAt': FieldValue.serverTimestamp(),
-          },
-          SetOptions(merge: true),
-        );
+        await FirebaseFirestore.instance
+            .collection('tenants')
+            .doc(identity.tenantId)
+            .set({
+              'defaultPriceTableIds': {legacyScopeKey: FieldValue.delete()},
+              'defaultPriceRegionIds': {legacyScopeKey: FieldValue.delete()},
+              'defaultProductCatalogIds': {legacyScopeKey: FieldValue.delete()},
+              'updatedAt': FieldValue.serverTimestamp(),
+            }, SetOptions(merge: true));
       }
 
       ensuredScopes?.add(scopeKey);
@@ -221,15 +230,18 @@ class DefaultPriceTableGuard {
     required String? activeRepresentedCompanyName,
   }) {
     final workspaceType = activeTenant.workspaceType.trim().toLowerCase();
-    final representedId = (effectiveRepresentedCompanyId(
-              tenantId: identity.tenantId,
-              representedCompanyId: selectedRepresentedCompanyId,
-            ) ??
-            '')
-        .trim();
+    final representedId =
+        (effectiveRepresentedCompanyId(
+                  tenantId: identity.tenantId,
+                  representedCompanyId: selectedRepresentedCompanyId,
+                ) ??
+                '')
+            .trim();
     final representedName = (activeRepresentedCompanyName ?? '').trim();
-    final representedContext = workspaceType == 'rep_workspace' || representedName.isNotEmpty;
-    final shouldUseRepresentedScope = representedContext && representedId.isNotEmpty;
+    final representedContext =
+        workspaceType == 'rep_workspace' || representedName.isNotEmpty;
+    final shouldUseRepresentedScope =
+        representedContext && representedId.isNotEmpty;
 
     final scopeKey = shouldUseRepresentedScope
         ? normalizeDefaultPricingScopeKey(representedId)
@@ -242,7 +254,8 @@ class DefaultPriceTableGuard {
     final exists = allTables.any((table) {
       final isSystemDefault =
           table.origem.trim().toLowerCase() == 'system' &&
-          table.nome.trim().toLowerCase() == reservedSystemDefaultPriceTableName;
+          table.nome.trim().toLowerCase() ==
+              reservedSystemDefaultPriceTableName;
       if (!isSystemDefault) {
         return false;
       }
@@ -265,7 +278,9 @@ class DefaultPriceTableGuard {
         final now = DateTime.now().toUtc();
         final defaultTableId = defaultPriceTableIdForScope(
           tenantId: identity.tenantId,
-          representedCompanyId: shouldUseRepresentedScope ? representedId : null,
+          representedCompanyId: shouldUseRepresentedScope
+              ? representedId
+              : null,
         );
 
         await repository.save(
@@ -273,11 +288,13 @@ class DefaultPriceTableGuard {
             id: defaultTableId,
             tenantId: identity.tenantId,
             nome: 'Tabela padrao',
-            scopeType: shouldUseRepresentedScope ? 'represented_company' : 'general',
+            scopeType: shouldUseRepresentedScope
+                ? 'represented_company'
+                : 'general',
             scopeLabel: shouldUseRepresentedScope
                 ? (representedName.isEmpty
-                    ? 'Tabela padrao da representada'
-                    : 'Tabela padrao - $representedName')
+                      ? 'Tabela padrao da representada'
+                      : 'Tabela padrao - $representedName')
                 : 'Tabela principal da conta',
             scopeIndex: <String>['default', scopeKey],
             origem: 'system',
@@ -289,20 +306,22 @@ class DefaultPriceTableGuard {
           ),
         );
 
-        await FirebaseFirestore.instance.collection('tenants').doc(identity.tenantId).set(
-          {
-            'defaultPriceTableIds': {scopeKey: defaultTableId},
-            'defaultPriceRegionIds': {scopeKey: defaultPriceRegionId},
-            'defaultProductCatalogIds': {
-              scopeKey: defaultProductCatalogIdForScope(
-                tenantId: identity.tenantId,
-                representedCompanyId: shouldUseRepresentedScope ? representedId : null,
-              ),
-            },
-            'updatedAt': FieldValue.serverTimestamp(),
-          },
-          SetOptions(merge: true),
-        );
+        await FirebaseFirestore.instance
+            .collection('tenants')
+            .doc(identity.tenantId)
+            .set({
+              'defaultPriceTableIds': {scopeKey: defaultTableId},
+              'defaultPriceRegionIds': {scopeKey: defaultPriceRegionId},
+              'defaultProductCatalogIds': {
+                scopeKey: defaultProductCatalogIdForScope(
+                  tenantId: identity.tenantId,
+                  representedCompanyId: shouldUseRepresentedScope
+                      ? representedId
+                      : null,
+                ),
+              },
+              'updatedAt': FieldValue.serverTimestamp(),
+            }, SetOptions(merge: true));
 
         _autoEnsuredDefaultPriceScopes.add(scopeKey);
       } catch (_) {
@@ -322,15 +341,18 @@ class DefaultPriceTableGuard {
     required String? activeRepresentedCompanyName,
   }) {
     final workspaceType = activeTenant.workspaceType.trim().toLowerCase();
-    final representedId = (effectiveRepresentedCompanyId(
-              tenantId: identity.tenantId,
-              representedCompanyId: selectedRepresentedCompanyId,
-            ) ??
-            '')
-        .trim();
+    final representedId =
+        (effectiveRepresentedCompanyId(
+                  tenantId: identity.tenantId,
+                  representedCompanyId: selectedRepresentedCompanyId,
+                ) ??
+                '')
+            .trim();
     final representedName = (activeRepresentedCompanyName ?? '').trim();
-    final representedContext = workspaceType == 'rep_workspace' || representedName.isNotEmpty;
-    final shouldUseRepresentedScope = representedContext && representedId.isNotEmpty;
+    final representedContext =
+        workspaceType == 'rep_workspace' || representedName.isNotEmpty;
+    final shouldUseRepresentedScope =
+        representedContext && representedId.isNotEmpty;
 
     final scopeKey = shouldUseRepresentedScope
         ? normalizeDefaultPricingScopeKey(representedId)
@@ -343,7 +365,8 @@ class DefaultPriceTableGuard {
     for (final table in allTables) {
       final isSystemDefault =
           table.origem.trim().toLowerCase() == 'system' &&
-          table.nome.trim().toLowerCase() == reservedSystemDefaultPriceTableName;
+          table.nome.trim().toLowerCase() ==
+              reservedSystemDefaultPriceTableName;
       if (!isSystemDefault) {
         continue;
       }
@@ -432,7 +455,8 @@ class DefaultPriceTableGuard {
     for (final table in tables) {
       final isSystemDefault =
           table.origem.trim().toLowerCase() == 'system' &&
-          table.nome.trim().toLowerCase() == reservedSystemDefaultPriceTableName;
+          table.nome.trim().toLowerCase() ==
+              reservedSystemDefaultPriceTableName;
       if (!isSystemDefault) {
         deduped.add(table);
         continue;
@@ -441,7 +465,9 @@ class DefaultPriceTableGuard {
       final linked = (table.linkedEntityId ?? '').trim();
       final scopeKey = linked.isEmpty
           ? 'tenant_default'
-          : (collapseRepresentedDefaults ? 'represented_active' : 'represented:$linked');
+          : (collapseRepresentedDefaults
+                ? 'represented_active'
+                : 'represented:$linked');
       if (seenDefaultScopes.contains(scopeKey)) {
         continue;
       }

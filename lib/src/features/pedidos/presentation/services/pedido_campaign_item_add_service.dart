@@ -5,8 +5,7 @@ import '../../../../core/repositories/pedido_repository.dart';
 import 'pedido_format_utils.dart';
 
 class PedidoCampaignItemAddService {
-  PedidoCampaignItemAddService({required PedidoRepository pedidoRepository})
-    : _pedidoRepository = pedidoRepository;
+  PedidoCampaignItemAddService({required this._pedidoRepository});
 
   final PedidoRepository _pedidoRepository;
 

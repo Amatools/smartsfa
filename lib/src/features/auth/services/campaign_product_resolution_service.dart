@@ -71,7 +71,8 @@ class CampaignProductResolutionService {
         );
 
         final current = bestByProductId[productId];
-        if (current == null || _shouldReplacePromotionCandidate(current, candidate)) {
+        if (current == null ||
+            _shouldReplacePromotionCandidate(current, candidate)) {
           bestByProductId[productId] = candidate;
         }
       }

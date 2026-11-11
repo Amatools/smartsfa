@@ -321,8 +321,8 @@ class _PedidoMobileAddItemSheetState extends State<PedidoMobileAddItemSheet> {
                         final promotionPrice = widget.resolvePromotionPrice(
                           product,
                         );
-                        final priceLabel = PedidoCampaignPriceLabelFormatter
-                            .formatMobileSearchPriceLabel(
+                        final priceLabel =
+                            PedidoCampaignPriceLabelFormatter.formatMobileSearchPriceLabel(
                               basePrice: basePrice,
                               promotionPrice: promotionPrice,
                               formatMoneyBr: widget.formatMoneyBr,
