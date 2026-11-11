@@ -13,19 +13,7 @@ class _PricingCatalogSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final userLabel = FirebaseAuth.instance.currentUser?.displayName?.trim();
-    final identity = AppIdentity(
-      tenantId: activeTenant.tenantId,
-      userLabel: (userLabel == null || userLabel.isEmpty)
-          ? 'Portal'
-          : userLabel,
-      role: activeTenant.role,
-      tenantName: activeTenant.tenantName,
-      isMock: false,
-      membershipId: activeTenant.membershipId,
-      isPersonalWorkspace:
-          activeTenant.workspaceType == 'seller_solo_workspace',
-    );
+    final identity = _portalIdentityForTenant(activeTenant);
 
     return TabelasPrecoPage(
       identity: identity,
@@ -186,19 +174,7 @@ class _AuditSectionState extends State<_AuditSection>
 
   @override
   Widget build(BuildContext context) {
-    final userLabel = FirebaseAuth.instance.currentUser?.displayName?.trim();
-    final identity = AppIdentity(
-      tenantId: widget.activeTenant.tenantId,
-      userLabel: (userLabel == null || userLabel.isEmpty)
-          ? 'Portal'
-          : userLabel,
-      role: widget.activeTenant.role,
-      tenantName: widget.activeTenant.tenantName,
-      isMock: false,
-      membershipId: widget.activeTenant.membershipId,
-      isPersonalWorkspace:
-          widget.activeTenant.workspaceType == 'seller_solo_workspace',
-    );
+    final identity = _portalIdentityForTenant(widget.activeTenant);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -457,19 +433,7 @@ class _ProductsCatalogSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final userLabel = FirebaseAuth.instance.currentUser?.displayName?.trim();
-    final identity = AppIdentity(
-      tenantId: activeTenant.tenantId,
-      userLabel: (userLabel == null || userLabel.isEmpty)
-          ? 'Portal'
-          : userLabel,
-      role: activeTenant.role,
-      tenantName: activeTenant.tenantName,
-      isMock: false,
-      membershipId: activeTenant.membershipId,
-      isPersonalWorkspace:
-          activeTenant.workspaceType == 'seller_solo_workspace',
-    );
+    final identity = _portalIdentityForTenant(activeTenant);
 
     return ProdutosPage(
       identity: identity,
@@ -566,96 +530,6 @@ class _CampaignProductsSectionState extends State<_CampaignProductsSection> {
       return tenantName;
     }
     return 'empresa ativa';
-  }
-
-  bool _matchesSearch(Produto product, String normalizedTerm) {
-    if (normalizedTerm.isEmpty) {
-      return true;
-    }
-
-    final haystack = <String>[
-      product.codigoInterno,
-      product.descricao,
-      product.marca ?? '',
-      product.ncm ?? '',
-      product.categoria ?? '',
-    ].join(' ').toLowerCase();
-    return haystack.contains(normalizedTerm);
-  }
-
-  bool _matchesScope(Produto product) {
-    final selectedRepresentedId = (widget.selectedRepresentedCompanyId ?? '')
-        .trim();
-    if (selectedRepresentedId.isEmpty) {
-      return true;
-    }
-
-    final productRepresentedId = (product.representedCompanyId ?? '').trim();
-    if (productRepresentedId.isEmpty) {
-      return true;
-    }
-    return productRepresentedId == selectedRepresentedId;
-  }
-
-  bool _matchesBrandAndCategory(Produto product) {
-    final productBrand = (product.marca ?? '').trim().toLowerCase();
-    final productCategory = (product.categoria ?? '').trim().toLowerCase();
-
-    final matchesBrand =
-        _selectedBrand == _allBrandsFilterValue ||
-        productBrand == _selectedBrand;
-    final matchesCategory =
-        _selectedCategory == _allCategoriesFilterValue ||
-        productCategory == _selectedCategory;
-
-    return matchesBrand && matchesCategory;
-  }
-
-  List<String> _availableBrands(List<Produto> products) {
-    final byKey = <String, String>{};
-    for (final item in products) {
-      final brand = (item.marca ?? '').trim();
-      if (brand.isEmpty) {
-        continue;
-      }
-      byKey.putIfAbsent(brand.toLowerCase(), () => brand);
-    }
-    final values = byKey.values.toList(growable: false)
-      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
-    return values;
-  }
-
-  List<String> _availableCategories(List<Produto> products) {
-    final byKey = <String, String>{};
-    for (final item in products) {
-      final category = (item.categoria ?? '').trim();
-      if (category.isEmpty) {
-        continue;
-      }
-      byKey.putIfAbsent(category.toLowerCase(), () => category);
-    }
-    final values = byKey.values.toList(growable: false)
-      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
-    return values;
-  }
-
-  String _normalizeFilterValue(String raw) {
-    return raw.trim().toLowerCase();
-  }
-
-  String _formatDateShort(String? isoValue) {
-    final normalized = (isoValue ?? '').trim();
-    if (normalized.isEmpty) {
-      return '--/--/----';
-    }
-    final parsed = DateTime.tryParse(normalized)?.toLocal();
-    if (parsed == null) {
-      return '--/--/----';
-    }
-    final day = parsed.day.toString().padLeft(2, '0');
-    final month = parsed.month.toString().padLeft(2, '0');
-    final year = parsed.year.toString();
-    return '$day/$month/$year';
   }
 
   CampaignProductList? _resolveSelectedList(List<CampaignProductList> lists) {
@@ -1333,10 +1207,16 @@ class _CampaignProductsSectionState extends State<_CampaignProductsSection> {
     required List<String> brands,
     required List<String> categories,
   }) {
-    final availableBrandKeys = brands.map(_normalizeFilterValue).toSet()
-      ..add(_allBrandsFilterValue);
-    final availableCategoryKeys = categories.map(_normalizeFilterValue).toSet()
-      ..add(_allCategoriesFilterValue);
+    final availableBrandKeys =
+        brands
+            .map(WebPortalCampaignCatalogUiService.normalizeFilterValue)
+            .toSet()
+          ..add(_allBrandsFilterValue);
+    final availableCategoryKeys =
+        categories
+            .map(WebPortalCampaignCatalogUiService.normalizeFilterValue)
+            .toSet()
+          ..add(_allCategoriesFilterValue);
 
     if (!availableBrandKeys.contains(_selectedBrand)) {
       _selectedBrand = _allBrandsFilterValue;
@@ -1509,12 +1389,14 @@ class _CampaignProductsSectionState extends State<_CampaignProductsSection> {
                                   const Divider(height: 1),
                               itemBuilder: (context, index) {
                                 final list = lists[index];
-                                final validityStart = _formatDateShort(
-                                  list.validFromIso,
-                                );
-                                final validityEnd = _formatDateShort(
-                                  list.validUntilIso,
-                                );
+                                final validityStart =
+                                    WebPortalCampaignCatalogUiService.formatDateShort(
+                                      list.validFromIso,
+                                    );
+                                final validityEnd =
+                                    WebPortalCampaignCatalogUiService.formatDateShort(
+                                      list.validUntilIso,
+                                    );
                                 final statusLabel = list.active
                                     ? 'Ativa'
                                     : 'Inativa';
@@ -1561,7 +1443,7 @@ class _CampaignProductsSectionState extends State<_CampaignProductsSection> {
                                   ),
                             icon: const Icon(Icons.play_arrow_outlined),
                             label: Text(
-                              'Inicio: ${_formatDateShort(selectedList.validFromIso)}',
+                              'Inicio: ${WebPortalCampaignCatalogUiService.formatDateShort(selectedList.validFromIso)}',
                             ),
                           ),
                           IconButton(
@@ -1583,7 +1465,7 @@ class _CampaignProductsSectionState extends State<_CampaignProductsSection> {
                                   ),
                             icon: const Icon(Icons.stop_circle_outlined),
                             label: Text(
-                              'Fim: ${_formatDateShort(selectedList.validUntilIso)}',
+                              'Fim: ${WebPortalCampaignCatalogUiService.formatDateShort(selectedList.validUntilIso)}',
                             ),
                           ),
                           IconButton(
@@ -1630,7 +1512,14 @@ class _CampaignProductsSectionState extends State<_CampaignProductsSection> {
                                       (item) =>
                                           item.status == ProductStatus.active,
                                     )
-                                    .where(_matchesScope)
+                                    .where(
+                                      (item) =>
+                                          WebPortalCampaignCatalogUiService.matchesScope(
+                                            item,
+                                            selectedRepresentedCompanyId: widget
+                                                .selectedRepresentedCompanyId,
+                                          ),
+                                    )
                                     .toList(growable: false)
                                   ..sort(
                                     (a, b) => a.descricao
@@ -1638,10 +1527,14 @@ class _CampaignProductsSectionState extends State<_CampaignProductsSection> {
                                         .compareTo(b.descricao.toLowerCase()),
                                   );
 
-                            final brands = _availableBrands(scopedProducts);
-                            final categories = _availableCategories(
-                              scopedProducts,
-                            );
+                            final brands =
+                                WebPortalCampaignCatalogUiService.availableBrands(
+                                  scopedProducts,
+                                );
+                            final categories =
+                                WebPortalCampaignCatalogUiService.availableCategories(
+                                  scopedProducts,
+                                );
                             _ensureFiltersValid(
                               brands: brands,
                               categories: categories,
@@ -1654,20 +1547,48 @@ class _CampaignProductsSectionState extends State<_CampaignProductsSection> {
                             final listedProducts = selectedList.items
                                 .map((entry) => productById[entry.productId])
                                 .whereType<Produto>()
-                                .where(_matchesBrandAndCategory)
                                 .where(
                                   (item) =>
-                                      _matchesSearch(item, normalizedSearch),
+                                      WebPortalCampaignCatalogUiService.matchesBrandAndCategory(
+                                        item,
+                                        selectedBrand: _selectedBrand,
+                                        selectedCategory: _selectedCategory,
+                                        allBrandsFilterValue:
+                                            _allBrandsFilterValue,
+                                        allCategoriesFilterValue:
+                                            _allCategoriesFilterValue,
+                                      ),
+                                )
+                                .where(
+                                  (item) =>
+                                      WebPortalCampaignCatalogUiService.matchesSearch(
+                                        item,
+                                        normalizedSearch,
+                                      ),
                                 )
                                 .toList(growable: false);
 
                             final listedIdSet = selectedList.productIds.toSet();
                             final availableProducts = scopedProducts
                                 .where((item) => !listedIdSet.contains(item.id))
-                                .where(_matchesBrandAndCategory)
                                 .where(
                                   (item) =>
-                                      _matchesSearch(item, normalizedSearch),
+                                      WebPortalCampaignCatalogUiService.matchesBrandAndCategory(
+                                        item,
+                                        selectedBrand: _selectedBrand,
+                                        selectedCategory: _selectedCategory,
+                                        allBrandsFilterValue:
+                                            _allBrandsFilterValue,
+                                        allCategoriesFilterValue:
+                                            _allCategoriesFilterValue,
+                                      ),
+                                )
+                                .where(
+                                  (item) =>
+                                      WebPortalCampaignCatalogUiService.matchesSearch(
+                                        item,
+                                        normalizedSearch,
+                                      ),
                                 )
                                 .toList(growable: false);
 
@@ -1719,9 +1640,10 @@ class _CampaignProductsSectionState extends State<_CampaignProductsSection> {
                                           ),
                                           ...brands.map(
                                             (brand) => DropdownMenuItem<String>(
-                                              value: _normalizeFilterValue(
-                                                brand,
-                                              ),
+                                              value:
+                                                  WebPortalCampaignCatalogUiService.normalizeFilterValue(
+                                                    brand,
+                                                  ),
                                               child: Text(brand),
                                             ),
                                           ),
@@ -1752,13 +1674,15 @@ class _CampaignProductsSectionState extends State<_CampaignProductsSection> {
                                             child: Text('Todas as categorias'),
                                           ),
                                           ...categories.map(
-                                            (category) =>
-                                                DropdownMenuItem<String>(
-                                                  value: _normalizeFilterValue(
+                                            (
+                                              category,
+                                            ) => DropdownMenuItem<String>(
+                                              value:
+                                                  WebPortalCampaignCatalogUiService.normalizeFilterValue(
                                                     category,
                                                   ),
-                                                  child: Text(category),
-                                                ),
+                                              child: Text(category),
+                                            ),
                                           ),
                                         ],
                                         onChanged: (value) {
@@ -1859,26 +1783,22 @@ class _CampaignProductsSectionState extends State<_CampaignProductsSection> {
                                                   _syncingProductIds.contains(
                                                     product.id,
                                                   );
-                                              final price =
-                                                  PedidoFormatUtils.formatMoneyBr(
-                                                    product.valorBruto ?? 0,
-                                                  );
                                               final promotionPrice =
                                                   itemEntry?.promotionPrice;
-                                              final promotionPriceLabel =
-                                                  promotionPrice == null
-                                                  ? '-'
-                                                  : PedidoFormatUtils.formatMoneyBr(
-                                                      promotionPrice,
-                                                    );
 
                                               return ListTile(
                                                 dense: true,
                                                 title: Text(product.descricao),
                                                 subtitle: Text(
-                                                  _isPromotion
-                                                      ? '${product.codigoInterno.trim().isEmpty ? '-' : product.codigoInterno.trim()} · ${product.marca?.trim().isEmpty ?? true ? '-' : product.marca?.trim()} · R\$ base $price · R\$ promocao $promotionPriceLabel'
-                                                      : '${product.codigoInterno.trim().isEmpty ? '-' : product.codigoInterno.trim()} · ${product.marca?.trim().isEmpty ?? true ? '-' : product.marca?.trim()} · NCM ${product.ncm?.trim().isEmpty ?? true ? '-' : product.ncm?.trim()} · R\$ $price',
+                                                  WebPortalCampaignCatalogUiService.buildListedProductSubtitle(
+                                                    product: product,
+                                                    isPromotion: _isPromotion,
+                                                    formatMoneyBr:
+                                                        PedidoFormatUtils
+                                                            .formatMoneyBr,
+                                                    promotionPrice:
+                                                        promotionPrice,
+                                                  ),
                                                 ),
                                                 trailing: Wrap(
                                                   spacing: 8,
@@ -1955,10 +1875,6 @@ class _CampaignProductsSectionState extends State<_CampaignProductsSection> {
                                                   _syncingProductIds.contains(
                                                     product.id,
                                                   );
-                                              final price =
-                                                  PedidoFormatUtils.formatMoneyBr(
-                                                    product.valorBruto ?? 0,
-                                                  );
                                               final selectedForBulk =
                                                   _bulkSelectedProductIds
                                                       .contains(product.id);
@@ -1982,7 +1898,12 @@ class _CampaignProductsSectionState extends State<_CampaignProductsSection> {
                                                 ),
                                                 title: Text(product.descricao),
                                                 subtitle: Text(
-                                                  '${product.codigoInterno.trim().isEmpty ? '-' : product.codigoInterno.trim()} · ${product.marca?.trim().isEmpty ?? true ? '-' : product.marca?.trim()} · NCM ${product.ncm?.trim().isEmpty ?? true ? '-' : product.ncm?.trim()} · R\$ $price',
+                                                  WebPortalCampaignCatalogUiService.buildAvailableProductSubtitle(
+                                                    product: product,
+                                                    formatMoneyBr:
+                                                        PedidoFormatUtils
+                                                            .formatMoneyBr,
+                                                  ),
                                                 ),
                                                 trailing: FilledButton.icon(
                                                   onPressed: isSyncing
@@ -2027,6 +1948,100 @@ enum _EnterprisePolicySubmenu {
   destaques,
 }
 
+class _EnterpriseSubmenuOption<T> {
+  const _EnterpriseSubmenuOption({required this.label, required this.value});
+
+  final String label;
+  final T value;
+}
+
+const List<_EnterpriseSubmenuOption<_EnterprisePolicySubmenu>>
+_enterprisePolicySubmenuOptions =
+    <_EnterpriseSubmenuOption<_EnterprisePolicySubmenu>>[
+      _EnterpriseSubmenuOption<_EnterprisePolicySubmenu>(
+        label: 'Tributações',
+        value: _EnterprisePolicySubmenu.tributacoes,
+      ),
+      _EnterpriseSubmenuOption<_EnterprisePolicySubmenu>(
+        label: 'Condições de pagamento',
+        value: _EnterprisePolicySubmenu.condicoesPagamento,
+      ),
+      _EnterpriseSubmenuOption<_EnterprisePolicySubmenu>(
+        label: 'Descontos pontuais',
+        value: _EnterprisePolicySubmenu.descontosPontuais,
+      ),
+      _EnterpriseSubmenuOption<_EnterprisePolicySubmenu>(
+        label: 'Acréscimos ou descontos',
+        value: _EnterprisePolicySubmenu.acrescimosDescontos,
+      ),
+      _EnterpriseSubmenuOption<_EnterprisePolicySubmenu>(
+        label: 'Promoções',
+        value: _EnterprisePolicySubmenu.promocoes,
+      ),
+      _EnterpriseSubmenuOption<_EnterprisePolicySubmenu>(
+        label: 'Destaques',
+        value: _EnterprisePolicySubmenu.destaques,
+      ),
+    ];
+
+String _enterpriseRepresentedCompanyScopeId(TenantEntryOption activeTenant) {
+  return _enterpriseDefaultRepresentedCompanyId(activeTenant);
+}
+
+String _enterpriseRepresentedCompanyScopeLabel(
+  TenantEntryOption activeTenant,
+  String? activeRepresentedCompanyName,
+) {
+  final name = (activeRepresentedCompanyName ?? '').trim();
+  if (name.isNotEmpty) {
+    return name;
+  }
+  final tenantName = activeTenant.tenantName.trim();
+  return tenantName.isEmpty ? 'Empresa ativa' : tenantName;
+}
+
+Widget _buildEnterpriseSubmenuFilterChip<T>({
+  required BuildContext context,
+  required String label,
+  required T value,
+  required T selectedValue,
+  required VoidCallback onSelected,
+}) {
+  return FilterChip(
+    label: Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
+    side: BorderSide.none,
+    shape: const StadiumBorder(),
+    selectedColor: Theme.of(context).colorScheme.primaryContainer
+        .withValues(alpha: 0.8),
+    backgroundColor: Colors.white,
+    selected: selectedValue == value,
+    onSelected: (_) => onSelected(),
+  );
+}
+
+Widget _buildEnterpriseSubmenuChips<T>({
+  required BuildContext context,
+  required T selectedValue,
+  required List<_EnterpriseSubmenuOption<T>> options,
+  required void Function(T value) onSelected,
+}) {
+  return Wrap(
+    spacing: 6,
+    runSpacing: 6,
+    children: options
+        .map(
+          (option) => _buildEnterpriseSubmenuFilterChip<T>(
+            context: context,
+            label: option.label,
+            value: option.value,
+            selectedValue: selectedValue,
+            onSelected: () => onSelected(option.value),
+          ),
+        )
+        .toList(),
+  );
+}
+
 class _EnterprisePoliciesSection extends StatefulWidget {
   const _EnterprisePoliciesSection({
     required this.activeTenant,
@@ -2068,16 +2083,21 @@ class _EnterprisePoliciesSectionState
   }
 
   String get _representedCompanyId {
-    return _enterpriseDefaultRepresentedCompanyId(widget.activeTenant);
+    return _enterpriseRepresentedCompanyScopeId(widget.activeTenant);
   }
 
   String get _representedCompanyName {
-    final name = (widget.activeRepresentedCompanyName ?? '').trim();
-    if (name.isNotEmpty) {
-      return name;
-    }
-    final tenantName = widget.activeTenant.tenantName.trim();
-    return tenantName.isEmpty ? 'Empresa ativa' : tenantName;
+    return _enterpriseRepresentedCompanyScopeLabel(
+      widget.activeTenant,
+      widget.activeRepresentedCompanyName,
+    );
+  }
+
+  void _selectSubmenu(_EnterprisePolicySubmenu submenu) {
+    setState(() {
+      _activeSubmenu = submenu;
+      _submenuByTenantId[_tenantId] = submenu;
+    });
   }
 
   @override
@@ -2122,69 +2142,17 @@ class _EnterprisePoliciesSectionState
               .withValues(alpha: 0.45),
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
-            child: Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: [
-                _buildSubmenuChip(
-                  context,
-                  submenu: _EnterprisePolicySubmenu.tributacoes,
-                  label: 'Tributações',
-                ),
-                _buildSubmenuChip(
-                  context,
-                  submenu: _EnterprisePolicySubmenu.condicoesPagamento,
-                  label: 'Condições de pagamento',
-                ),
-                _buildSubmenuChip(
-                  context,
-                  submenu: _EnterprisePolicySubmenu.descontosPontuais,
-                  label: 'Descontos pontuais',
-                ),
-                _buildSubmenuChip(
-                  context,
-                  submenu: _EnterprisePolicySubmenu.acrescimosDescontos,
-                  label: 'Acréscimos ou descontos',
-                ),
-                _buildSubmenuChip(
-                  context,
-                  submenu: _EnterprisePolicySubmenu.promocoes,
-                  label: 'Promoções',
-                ),
-                _buildSubmenuChip(
-                  context,
-                  submenu: _EnterprisePolicySubmenu.destaques,
-                  label: 'Destaques',
-                ),
-              ],
+            child: _buildEnterpriseSubmenuChips<_EnterprisePolicySubmenu>(
+              context: context,
+              selectedValue: _activeSubmenu,
+              options: _enterprisePolicySubmenuOptions,
+              onSelected: _selectSubmenu,
             ),
           ),
         ),
         const SizedBox(height: 12),
         _buildSubmenuContent(),
       ],
-    );
-  }
-
-  Widget _buildSubmenuChip(
-    BuildContext context, {
-    required _EnterprisePolicySubmenu submenu,
-    required String label,
-  }) {
-    return FilterChip(
-      label: Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
-      side: BorderSide.none,
-      shape: const StadiumBorder(),
-      selectedColor: Theme.of(context).colorScheme.primaryContainer
-          .withValues(alpha: 0.8),
-      backgroundColor: Colors.white,
-      selected: _activeSubmenu == submenu,
-      onSelected: (_) {
-        setState(() {
-          _activeSubmenu = submenu;
-          _submenuByTenantId[_tenantId] = submenu;
-        });
-      },
     );
   }
 
@@ -2240,6 +2208,31 @@ enum _EnterpriseSettingsSubmenu {
   periodoInatividade,
 }
 
+const List<_EnterpriseSubmenuOption<_EnterpriseSettingsSubmenu>>
+_enterpriseSettingsSubmenuOptions =
+    <_EnterpriseSubmenuOption<_EnterpriseSettingsSubmenu>>[
+      _EnterpriseSubmenuOption<_EnterpriseSettingsSubmenu>(
+        label: 'Parâmetros',
+        value: _EnterpriseSettingsSubmenu.parametros,
+      ),
+      _EnterpriseSubmenuOption<_EnterpriseSettingsSubmenu>(
+        label: 'Categorias',
+        value: _EnterpriseSettingsSubmenu.categorias,
+      ),
+      _EnterpriseSubmenuOption<_EnterpriseSettingsSubmenu>(
+        label: 'Unidades',
+        value: _EnterpriseSettingsSubmenu.unidades,
+      ),
+      _EnterpriseSubmenuOption<_EnterpriseSettingsSubmenu>(
+        label: 'Fotos',
+        value: _EnterpriseSettingsSubmenu.fotos,
+      ),
+      _EnterpriseSubmenuOption<_EnterpriseSettingsSubmenu>(
+        label: 'Período de inatividade',
+        value: _EnterpriseSettingsSubmenu.periodoInatividade,
+      ),
+    ];
+
 class _EnterpriseSettingsSection extends StatefulWidget {
   const _EnterpriseSettingsSection({
     required this.activeTenant,
@@ -2282,16 +2275,21 @@ class _EnterpriseSettingsSectionState
   }
 
   String get _representedCompanyId {
-    return _enterpriseDefaultRepresentedCompanyId(widget.activeTenant);
+    return _enterpriseRepresentedCompanyScopeId(widget.activeTenant);
   }
 
   String get _representedCompanyName {
-    final name = (widget.activeRepresentedCompanyName ?? '').trim();
-    if (name.isNotEmpty) {
-      return name;
-    }
-    final tenantName = widget.activeTenant.tenantName.trim();
-    return tenantName.isEmpty ? 'Empresa ativa' : tenantName;
+    return _enterpriseRepresentedCompanyScopeLabel(
+      widget.activeTenant,
+      widget.activeRepresentedCompanyName,
+    );
+  }
+
+  void _selectSubmenu(_EnterpriseSettingsSubmenu submenu) {
+    setState(() {
+      _activeSubmenu = submenu;
+      _submenuByTenantId[_tenantId] = submenu;
+    });
   }
 
   @override
@@ -2335,64 +2333,17 @@ class _EnterpriseSettingsSectionState
               .withValues(alpha: 0.45),
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
-            child: Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: [
-                _buildSubmenuChip(
-                  context,
-                  submenu: _EnterpriseSettingsSubmenu.parametros,
-                  label: 'Parâmetros',
-                ),
-                _buildSubmenuChip(
-                  context,
-                  submenu: _EnterpriseSettingsSubmenu.categorias,
-                  label: 'Categorias',
-                ),
-                _buildSubmenuChip(
-                  context,
-                  submenu: _EnterpriseSettingsSubmenu.unidades,
-                  label: 'Unidades',
-                ),
-                _buildSubmenuChip(
-                  context,
-                  submenu: _EnterpriseSettingsSubmenu.fotos,
-                  label: 'Fotos',
-                ),
-                _buildSubmenuChip(
-                  context,
-                  submenu: _EnterpriseSettingsSubmenu.periodoInatividade,
-                  label: 'Período de inatividade',
-                ),
-              ],
+            child: _buildEnterpriseSubmenuChips<_EnterpriseSettingsSubmenu>(
+              context: context,
+              selectedValue: _activeSubmenu,
+              options: _enterpriseSettingsSubmenuOptions,
+              onSelected: _selectSubmenu,
             ),
           ),
         ),
         const SizedBox(height: 12),
         _buildSubmenuContent(),
       ],
-    );
-  }
-
-  Widget _buildSubmenuChip(
-    BuildContext context, {
-    required _EnterpriseSettingsSubmenu submenu,
-    required String label,
-  }) {
-    return FilterChip(
-      label: Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
-      side: BorderSide.none,
-      shape: const StadiumBorder(),
-      selectedColor: Theme.of(context).colorScheme.primaryContainer
-          .withValues(alpha: 0.8),
-      backgroundColor: Colors.white,
-      selected: _activeSubmenu == submenu,
-      onSelected: (_) {
-        setState(() {
-          _activeSubmenu = submenu;
-          _submenuByTenantId[_tenantId] = submenu;
-        });
-      },
     );
   }
 
@@ -2559,19 +2510,7 @@ class _OrdersSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final userLabel = FirebaseAuth.instance.currentUser?.displayName?.trim();
-    final identity = AppIdentity(
-      tenantId: activeTenant.tenantId,
-      userLabel: (userLabel == null || userLabel.isEmpty)
-          ? 'Portal'
-          : userLabel,
-      role: activeTenant.role,
-      tenantName: activeTenant.tenantName,
-      isMock: false,
-      membershipId: activeTenant.membershipId,
-      isPersonalWorkspace:
-          activeTenant.workspaceType == 'seller_solo_workspace',
-    );
+    final identity = _portalIdentityForTenant(activeTenant);
 
     final representedName = (activeRepresentedCompanyName ?? '').trim();
     if (representedName.isEmpty) {

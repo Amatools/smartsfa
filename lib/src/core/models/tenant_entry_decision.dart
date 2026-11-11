@@ -45,6 +45,7 @@ class TenantEntryDecision {
     required String tenantName,
     required String role,
     required String defaultTenantId,
+    String workspaceType = 'brand_owner_workspace',
   }) {
     return TenantEntryDecision(
       uid: uid,
@@ -55,7 +56,7 @@ class TenantEntryDecision {
           tenantId: tenantId,
           tenantName: tenantName,
           role: role,
-          workspaceType: 'brand_owner_workspace',
+          workspaceType: workspaceType,
           defaultTenant: true,
         ),
       ],
@@ -100,9 +101,7 @@ class TenantEntryDecision {
     );
   }
 
-  factory TenantEntryDecision.personalWorkspace({
-    required String uid,
-  }) {
+  factory TenantEntryDecision.personalWorkspace({required String uid}) {
     return TenantEntryDecision(
       uid: uid,
       path: TenantEntryPath.personalWorkspace,

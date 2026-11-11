@@ -70,34 +70,37 @@ class _PedidoOpenOrderPickerDialogState
             ),
             const Divider(height: 1),
             Expanded(
-              child: ListView.separated(
-                itemCount: widget.orders.length,
-                separatorBuilder: (_, __) => const Divider(height: 1),
-                itemBuilder: (context, index) {
-                  final order = widget.orders[index];
-                  final orderNumber = PedidoFormatUtils.pedidoDisplayNumber(
-                    order.id,
-                  );
-                  final customerName =
-                      (order.clienteReferencia?.nomeSnapshot ?? '').trim();
-                  final customerDisplay = customerName.isEmpty
-                      ? '-'
-                      : customerName;
-
-                  return RadioListTile<String>(
-                    value: order.id,
-                    groupValue: _selectedOrderId,
-                    onChanged: (value) {
-                      setState(() {
-                        _selectedOrderId = value;
-                      });
-                    },
-                    title: Text('Pedido $orderNumber'),
-                    subtitle: Text(
-                      'Status: ${order.statusFila.label} · Cliente: $customerDisplay\nItens: ${order.itens.length} · Total: R\$ ${PedidoFormatUtils.formatMoneyBr(order.totalBruto)}',
-                    ),
-                  );
+              child: RadioGroup<String>(
+                groupValue: _selectedOrderId,
+                onChanged: (value) {
+                  setState(() {
+                    _selectedOrderId = value;
+                  });
                 },
+                child: ListView.separated(
+                  itemCount: widget.orders.length,
+                  separatorBuilder: (context, index) =>
+                      const Divider(height: 1),
+                  itemBuilder: (context, index) {
+                    final order = widget.orders[index];
+                    final orderNumber = PedidoFormatUtils.pedidoDisplayNumber(
+                      order.id,
+                    );
+                    final customerName =
+                        (order.clienteReferencia?.nomeSnapshot ?? '').trim();
+                    final customerDisplay = customerName.isEmpty
+                        ? '-'
+                        : customerName;
+
+                    return RadioListTile<String>(
+                      value: order.id,
+                      title: Text('Pedido $orderNumber'),
+                      subtitle: Text(
+                        'Status: ${order.statusFila.label} · Cliente: $customerDisplay\nItens: ${order.itens.length} · Total: R\$ ${PedidoFormatUtils.formatMoneyBr(order.totalBruto)}',
+                      ),
+                    );
+                  },
+                ),
               ),
             ),
             const SizedBox(height: 10),

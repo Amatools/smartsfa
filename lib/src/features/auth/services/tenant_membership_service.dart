@@ -7,12 +7,67 @@ class TenantMembershipService {
   TenantMembershipService(this._firestore);
 
   final FirebaseFirestore _firestore;
+  static const String _sellerSoloWorkspace = 'seller_solo_workspace';
+  static const String _repWorkspace = 'rep_workspace';
+  static const String _brandOwnerWorkspace = 'brand_owner_workspace';
   static const Set<String> _allowedRoles = {
     'owner',
     'gerente',
     'representante',
     'vendedor',
   };
+  static const Set<String> _knownWorkspaceTypes = {
+    _sellerSoloWorkspace,
+    _repWorkspace,
+    _brandOwnerWorkspace,
+  };
+
+  String _resolveWorkspaceType(
+    Map<String, dynamic> tenantData, {
+    String? membershipWorkspaceType,
+  }) {
+    String normalize(Object? value) {
+      return (value ?? '').toString().trim().toLowerCase();
+    }
+
+    final explicit = normalize(tenantData['workspaceType']);
+    if (_knownWorkspaceTypes.contains(explicit)) {
+      return explicit;
+    }
+
+    final fromMembership = normalize(membershipWorkspaceType);
+    if (_knownWorkspaceTypes.contains(fromMembership)) {
+      return fromMembership;
+    }
+
+    final planKey = normalize(tenantData['billingPlanKey']);
+    if (planKey == 'solo') {
+      return _sellerSoloWorkspace;
+    }
+    if (planKey == 'team') {
+      return _repWorkspace;
+    }
+    if (planKey == 'enterprise') {
+      return _brandOwnerWorkspace;
+    }
+
+    final hierarchyModel = normalize(tenantData['hierarchyModel']);
+    if (hierarchyModel == 'seller_only') {
+      return _sellerSoloWorkspace;
+    }
+
+    if (tenantData['allowInvitations'] == false) {
+      return _sellerSoloWorkspace;
+    }
+
+    // Ambiguous legacy records without workspaceType are treated as
+    // Representações to avoid exposing enterprise-only menus by default.
+    if (hierarchyModel == 'full_chain') {
+      return _repWorkspace;
+    }
+
+    return _repWorkspace;
+  }
 
   Stream<List<TenantMembership>> watchMembershipsForTenant(String tenantId) {
     final normalizedTenantId = tenantId.trim();
@@ -100,9 +155,10 @@ class TenantMembershipService {
                 tenantId: tenantId,
                 tenantName: (tenantData['nomeFantasia'] ?? tenantId).toString(),
                 role: (data['role'] ?? 'member').toString(),
-                workspaceType:
-                    (tenantData['workspaceType'] ?? 'brand_owner_workspace')
-                        .toString(),
+                workspaceType: _resolveWorkspaceType(
+                  tenantData,
+                  membershipWorkspaceType: data['workspaceType']?.toString(),
+                ),
                 defaultTenant: data['defaultTenant'] == true,
               ),
             );
@@ -1141,11 +1197,10 @@ class TenantMembershipService {
         .collection('tenants')
         .doc(tenantId)
         .get();
-    final workspaceType =
-        (tenantDoc.data()?['workspaceType'] ?? 'brand_owner_workspace')
-            .toString()
-            .trim()
-            .toLowerCase();
+    final workspaceType = _resolveWorkspaceType(
+      tenantDoc.data() ?? <String, dynamic>{},
+      membershipWorkspaceType: actorData['workspaceType']?.toString(),
+    );
     final policy = await loadGovernancePolicy(tenantId);
 
     if (workspaceType == 'rep_workspace') {

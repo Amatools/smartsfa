@@ -194,14 +194,6 @@ class ProductTaxEngineService {
           return scope == normalizedRepresentedCompanyId;
         })
         .toList(growable: false);
-    // TEMP DEBUG: investigacao "imposto nao calculado" (remover apos diagnostico).
-    print(
-      '[TAX-DEBUG] produtoId=$normalizedProdutoId ncm=${produto.ncm} '
-      'grupoTributarioId=${produto.grupoTributarioId} cest=${produto.cest} '
-      'regrasTotal=${regras.length} scopedRules=${scopedRules.length} '
-      'ufOrigem=$normalizedUfOrigem ufDestino=$normalizedUfDestino '
-      'representedCompanyId=$normalizedRepresentedCompanyId',
-    );
     final ruleMatch = _resolveTaxRule(
       regras: scopedRules,
       produtoId: produto.id,
@@ -213,11 +205,6 @@ class ProductTaxEngineService {
       customerTaxRegime: customerTaxRegime,
     );
     final regra = ruleMatch?.regra;
-    // TEMP DEBUG: investigacao "imposto nao calculado" (remover apos diagnostico).
-    print(
-      '[TAX-DEBUG] matchedTier=${ruleMatch?.tier} regraId=${regra?.id} '
-      'aliquotaDestino=${regra?.aliquotaDestino} aliquotaCredito=${regra?.aliquotaCredito}',
-    );
 
     final precoBaseOriginal = precoUnitarioComDescontoPreTax * quantidade;
     final precoUnitario = precoUnitarioComDescontoPreTax;
@@ -398,11 +385,13 @@ class ProductTaxEngineService {
     required String ufDestino,
   }) async {
     final all = await _loadBasePrices(tenantId);
+    final now = DateTime.now().toUtc();
     final filtered = all
         .where((item) {
           return item.isActive &&
               item.productId == produtoId &&
-              item.priceTableId == tabelaId;
+              item.priceTableId == tabelaId &&
+              _isInDateWindow(item.validFrom, item.validUntil, now);
         })
         .toList(growable: false);
 
@@ -633,14 +622,10 @@ class ProductTaxEngineService {
   Future<List<TaxRule>> _loadTaxRules(String tenantId) async {
     final cached = _taxRulesCache[tenantId];
     if (cached != null) {
-      // TEMP DEBUG: investigacao "imposto nao calculado" (remover apos diagnostico).
-      print('[TAX-DEBUG] _loadTaxRules cache HIT tenant=$tenantId count=${cached.length}');
       return cached;
     }
 
     final loaded = await taxRuleRepository.fetchAll(tenantId: tenantId);
-    // TEMP DEBUG: investigacao "imposto nao calculado" (remover apos diagnostico).
-    print('[TAX-DEBUG] _loadTaxRules fetchAll tenant=$tenantId count=${loaded.length}');
     _taxRulesCache[tenantId] = List<TaxRule>.unmodifiable(loaded);
     return loaded;
   }

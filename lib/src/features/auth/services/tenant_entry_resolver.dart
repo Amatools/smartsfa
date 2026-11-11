@@ -8,6 +8,56 @@ class TenantEntryResolver {
   TenantEntryResolver(this._firestore);
 
   final FirebaseFirestore _firestore;
+  static const Set<String> _knownWorkspaceTypes = {
+    'seller_solo_workspace',
+    'rep_workspace',
+    'brand_owner_workspace',
+  };
+
+  String _resolveWorkspaceType(
+    Map<String, dynamic> tenantData, {
+    String? membershipWorkspaceType,
+  }) {
+    String normalize(Object? value) {
+      return (value ?? '').toString().trim().toLowerCase();
+    }
+
+    final explicit = normalize(tenantData['workspaceType']);
+    if (_knownWorkspaceTypes.contains(explicit)) {
+      return explicit;
+    }
+
+    final fromMembership = normalize(membershipWorkspaceType);
+    if (_knownWorkspaceTypes.contains(fromMembership)) {
+      return fromMembership;
+    }
+
+    final planKey = normalize(tenantData['billingPlanKey']);
+    if (planKey == 'solo') {
+      return 'seller_solo_workspace';
+    }
+    if (planKey == 'team') {
+      return 'rep_workspace';
+    }
+    if (planKey == 'enterprise') {
+      return 'brand_owner_workspace';
+    }
+
+    final hierarchyModel = normalize(tenantData['hierarchyModel']);
+    if (hierarchyModel == 'seller_only') {
+      return 'seller_solo_workspace';
+    }
+
+    if (tenantData['allowInvitations'] == false) {
+      return 'seller_solo_workspace';
+    }
+
+    if (hierarchyModel == 'full_chain') {
+      return 'rep_workspace';
+    }
+
+    return 'rep_workspace';
+  }
 
   Future<TenantEntryDecision?> resolve(User user) async {
     return _resolveWithRetry(user, shouldRefreshToken: true);
@@ -86,6 +136,7 @@ class TenantEntryResolver {
         defaultTenantId: selected.defaultTenant
             ? selected.tenantId
             : selected.tenantId,
+        workspaceType: selected.workspaceType,
       );
     }
 
@@ -143,8 +194,10 @@ class TenantEntryResolver {
         tenantId: tenantId,
         tenantName: (tenantData['nomeFantasia'] ?? tenantId).toString(),
         role: role,
-        workspaceType: (tenantData['workspaceType'] ?? 'brand_owner_workspace')
-            .toString(),
+        workspaceType: _resolveWorkspaceType(
+          tenantData,
+          membershipWorkspaceType: data['workspaceType']?.toString(),
+        ),
         defaultTenant: data['defaultTenant'] == true,
       );
     } on FirebaseException catch (error) {
@@ -159,8 +212,10 @@ class TenantEntryResolver {
         tenantId: tenantId,
         tenantName: tenantId,
         role: role,
-        workspaceType: (data['workspaceType'] ?? 'brand_owner_workspace')
-            .toString(),
+        workspaceType: _resolveWorkspaceType(
+          const <String, dynamic>{},
+          membershipWorkspaceType: data['workspaceType']?.toString(),
+        ),
         defaultTenant: data['defaultTenant'] == true,
       );
     }

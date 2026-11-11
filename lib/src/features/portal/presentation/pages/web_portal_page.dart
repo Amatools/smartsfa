@@ -46,6 +46,8 @@ import '../../../produtos/presentation/services/product_editor_defaults.dart';
 import '../../../produtos/presentation/services/product_unit_catalog_service.dart';
 import '../services/tax_rule_formatting_utils.dart';
 import '../services/tax_rule_import_export_service.dart';
+import '../services/web_portal_campaign_catalog_ui_service.dart';
+import '../services/web_portal_dashboard_format_service.dart';
 import '../services/web_logo_webp_converter.dart';
 import '../widgets/tax_rule_form_dialog.dart';
 
@@ -94,6 +96,19 @@ String _normalizeTaxRegimeValue(Object? value) {
     return normalized;
   }
   return '';
+}
+
+AppIdentity _portalIdentityForTenant(TenantEntryOption tenant) {
+  final userLabel = FirebaseAuth.instance.currentUser?.displayName?.trim();
+  return AppIdentity(
+    tenantId: tenant.tenantId,
+    userLabel: (userLabel == null || userLabel.isEmpty) ? 'Portal' : userLabel,
+    role: tenant.role,
+    tenantName: tenant.tenantName,
+    isMock: false,
+    membershipId: tenant.membershipId,
+    isPersonalWorkspace: tenant.workspaceType == 'seller_solo_workspace',
+  );
 }
 
 String _taxRegimeLabel(Object? value) {

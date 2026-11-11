@@ -48,6 +48,39 @@
 			"group": "build"
 		},
 		{
+			"label": "flutter run chrome wasm profile",
+			"type": "process",
+			"command": "flutter",
+			"args": [
+				"run",
+				"-d",
+				"chrome",
+				"--profile",
+				"--wasm"
+			],
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"isBackground": true,
+			"group": "build"
+		},
+		{
+			"label": "flutter build web release wasm",
+			"type": "process",
+			"command": "flutter",
+			"args": [
+				"build",
+				"web",
+				"--release",
+				"--wasm"
+			],
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"isBackground": false,
+			"group": "build"
+		},
+		{
 			"label": "flutterfire configure",
 			"type": "process",
 			"command": "C:/Users/Aureo.Filho/AppData/Local/Pub/Cache/bin/flutterfire.bat",

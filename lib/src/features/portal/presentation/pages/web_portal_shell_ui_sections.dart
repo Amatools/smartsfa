@@ -352,7 +352,7 @@ class _WebPortalBrandCard extends StatelessWidget {
   }
 }
 
-class _WebPortalTopBar extends StatelessWidget {
+class _WebPortalTopBar extends StatefulWidget {
   const _WebPortalTopBar({
     required this.identity,
     required this.activeTenant,
@@ -386,6 +386,13 @@ class _WebPortalTopBar extends StatelessWidget {
   final bool settingFavoriteRepresented;
   final VoidCallback onBackToWorkspaceSelection;
   final VoidCallback onSignOut;
+
+  @override
+  State<_WebPortalTopBar> createState() => _WebPortalTopBarState();
+}
+
+class _WebPortalTopBarState extends State<_WebPortalTopBar> {
+  String? _lastAutoSelectionSignature;
 
   @override
   Widget build(BuildContext context) {
@@ -450,7 +457,7 @@ class _WebPortalTopBar extends StatelessWidget {
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               Text(
-                '${identity.tenantName} • ${_roleLabel(activeTenant.role, activeTenant.workspaceType, activeTenant.tenantName)} • ${_workspaceTypeLabel(activeTenant.workspaceType)} • ${_accountContractLockLabel(accountContractLock)}',
+                '${widget.identity.tenantName} • ${_roleLabel(widget.activeTenant.role, widget.activeTenant.workspaceType, widget.activeTenant.tenantName)} • ${_workspaceTypeLabel(widget.activeTenant.workspaceType)} • ${_accountContractLockLabel(widget.accountContractLock)}',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
             ],
@@ -462,11 +469,11 @@ class _WebPortalTopBar extends StatelessWidget {
 
   Widget _buildRepresentedSelector(BuildContext context) {
     final isEnterpriseWorkspace =
-        activeTenant.workspaceType == 'brand_owner_workspace';
+        widget.activeTenant.workspaceType == 'brand_owner_workspace';
     final normalizedEnterpriseDefaultId =
-        (enterpriseDefaultRepresentedCompanyId ?? '').trim();
+        (widget.enterpriseDefaultRepresentedCompanyId ?? '').trim();
     final normalizedEnterpriseDefaultName =
-        (enterpriseDefaultRepresentedCompanyName ?? '').trim();
+        (widget.enterpriseDefaultRepresentedCompanyName ?? '').trim();
 
     if (isEnterpriseWorkspace && normalizedEnterpriseDefaultId.isNotEmpty) {
       final label = normalizedEnterpriseDefaultName.isEmpty
@@ -487,12 +494,7 @@ class _WebPortalTopBar extends StatelessWidget {
               child: const Icon(Icons.apartment, size: 16),
             ),
             const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                label,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
+            Expanded(child: Text(label, overflow: TextOverflow.ellipsis)),
           ],
         ),
       );
@@ -500,15 +502,17 @@ class _WebPortalTopBar extends StatelessWidget {
 
     return StreamBuilder<Map<String, dynamic>?>(
       stream: WorkspaceProfileService(FirebaseFirestore.instance)
-          .watchWorkspace(activeTenant.tenantId),
+          .watchWorkspace(widget.activeTenant.tenantId),
       builder: (context, snapshot) {
         final workspaceData = snapshot.data ?? const <String, dynamic>{};
         final supportsRepresentedCompanies =
-            activeTenant.workspaceType == 'seller_solo_workspace' ||
-            activeTenant.workspaceType == 'rep_workspace';
+            widget.activeTenant.workspaceType == 'seller_solo_workspace' ||
+            widget.activeTenant.workspaceType == 'rep_workspace';
         final hasEnterpriseDefaultRepresented =
-          activeTenant.workspaceType == 'brand_owner_workspace' &&
-          (enterpriseDefaultRepresentedCompanyId ?? '').trim().isNotEmpty;
+            widget.activeTenant.workspaceType == 'brand_owner_workspace' &&
+            (widget.enterpriseDefaultRepresentedCompanyId ?? '')
+                .trim()
+                .isNotEmpty;
         final favoriteRepresentedCompanyId =
             (workspaceData['favoriteRepresentedCompanyId'] ?? '')
                 .toString()
@@ -516,16 +520,17 @@ class _WebPortalTopBar extends StatelessWidget {
 
         return StreamBuilder<List<Map<String, Object?>>>(
           stream: WorkspaceProfileService(FirebaseFirestore.instance)
-              .watchRepresentedCompanies(activeTenant.tenantId),
+              .watchRepresentedCompanies(widget.activeTenant.tenantId),
           builder: (context, representedSnapshot) {
             final representedCompanies = _representedCompaniesFromStorage(
               representedSnapshot.data ?? const <Map<String, Object?>>[],
             );
             final selectedId =
                 representedCompanies.any(
-                  (company) => company.id == selectedRepresentedCompanyId,
+                  (company) =>
+                      company.id == widget.selectedRepresentedCompanyId,
                 )
-                ? selectedRepresentedCompanyId
+                ? widget.selectedRepresentedCompanyId
                 : null;
             final favoriteId =
                 representedCompanies.any(
@@ -544,8 +549,8 @@ class _WebPortalTopBar extends StatelessWidget {
               effectiveSelectedId = representedCompanies.first.id;
             }
             if (effectiveSelectedId != null &&
-              effectiveSelectedId.trim() !=
-                (selectedRepresentedCompanyId ?? '').trim()) {
+                effectiveSelectedId.trim() !=
+                    (widget.selectedRepresentedCompanyId ?? '').trim()) {
               _RepresentedCompany? selectedCompany;
               for (final company in representedCompanies) {
                 if (company.id == effectiveSelectedId) {
@@ -556,14 +561,25 @@ class _WebPortalTopBar extends StatelessWidget {
               final isEnterpriseDefaultSelection =
                   hasEnterpriseDefaultRepresented &&
                   effectiveSelectedId == normalizedEnterpriseDefaultId;
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                onRepresentedCompanySelected(
-                  effectiveSelectedId,
-                  isEnterpriseDefaultSelection
-                      ? normalizedEnterpriseDefaultName
-                      : selectedCompany?.nomeFantasia,
-                );
-              });
+              final autoCompanyName = isEnterpriseDefaultSelection
+                  ? normalizedEnterpriseDefaultName
+                  : selectedCompany?.nomeFantasia;
+              final signature =
+                  '${widget.activeTenant.tenantId}|$effectiveSelectedId|${(autoCompanyName ?? '').trim()}';
+              if (_lastAutoSelectionSignature != signature) {
+                _lastAutoSelectionSignature = signature;
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (!mounted) {
+                    return;
+                  }
+                  widget.onRepresentedCompanySelected(
+                    effectiveSelectedId,
+                    autoCompanyName,
+                  );
+                });
+              }
+            } else {
+              _lastAutoSelectionSignature = null;
             }
             final dropdownSelectedValue =
                 hasEnterpriseDefaultRepresented &&
@@ -598,13 +614,10 @@ class _WebPortalTopBar extends StatelessWidget {
                             children: [
                               CircleAvatar(
                                 radius: 20,
-                                backgroundColor: Theme.of(
-                                  context,
-                                ).colorScheme.primaryContainer,
-                                child: const Icon(
-                                  Icons.apartment,
-                                  size: 18,
-                                ),
+                                backgroundColor: Theme.of(context)
+                                    .colorScheme
+                                    .primaryContainer,
+                                child: const Icon(Icons.apartment, size: 18),
                               ),
                               const SizedBox(width: 8),
                               Expanded(
@@ -644,7 +657,7 @@ class _WebPortalTopBar extends StatelessWidget {
                         : (value) {
                             if (hasEnterpriseDefaultRepresented &&
                                 value == normalizedEnterpriseDefaultId) {
-                              onRepresentedCompanySelected(
+                              widget.onRepresentedCompanySelected(
                                 normalizedEnterpriseDefaultId,
                                 normalizedEnterpriseDefaultName,
                               );
@@ -657,7 +670,7 @@ class _WebPortalTopBar extends StatelessWidget {
                                 break;
                               }
                             }
-                            onRepresentedCompanySelected(
+                            widget.onRepresentedCompanySelected(
                               value,
                               selectedCompany?.nomeFantasia,
                             );
@@ -674,11 +687,11 @@ class _WebPortalTopBar extends StatelessWidget {
                   child: IconButton.outlined(
                     onPressed:
                         effectiveSelectedId == null ||
-                            settingFavoriteRepresented ||
+                            widget.settingFavoriteRepresented ||
                             !supportsRepresentedCompanies
                         ? null
-                        : () => onToggleFavoriteRepresented(
-                            activeTenant: activeTenant,
+                        : () => widget.onToggleFavoriteRepresented(
+                            activeTenant: widget.activeTenant,
                             selectedRepresentedCompanyId: effectiveSelectedId,
                             favoriteRepresentedCompanyId:
                                 favoriteRepresentedCompanyId,
@@ -700,7 +713,7 @@ class _WebPortalTopBar extends StatelessWidget {
     return Tooltip(
       message: 'Trocar workspace',
       child: IconButton.outlined(
-        onPressed: onBackToWorkspaceSelection,
+        onPressed: widget.onBackToWorkspaceSelection,
         icon: const Icon(Icons.u_turn_left),
       ),
     );
@@ -710,7 +723,7 @@ class _WebPortalTopBar extends StatelessWidget {
     return Tooltip(
       message: 'Sair da conta',
       child: IconButton.outlined(
-        onPressed: onSignOut,
+        onPressed: widget.onSignOut,
         icon: const Icon(Icons.logout),
       ),
     );

@@ -39,62 +39,6 @@ class _PortalLandingSectionState extends State<_PortalLandingSection> {
     return _pedidoRepository.watchAll(tenantId: widget.activeTenant.tenantId);
   }
 
-  String _formatCurrency(double value) {
-    final negative = value < 0;
-    final normalized = value.abs();
-    final cents = (normalized * 100).round();
-    final integerPart = cents ~/ 100;
-    final decimalPart = cents % 100;
-    final digits = integerPart.toString();
-
-    final grouped = StringBuffer();
-    for (var index = 0; index < digits.length; index++) {
-      final reverseIndex = digits.length - index;
-      grouped.write(digits[index]);
-      if (reverseIndex > 1 && reverseIndex % 3 == 1) {
-        grouped.write('.');
-      }
-    }
-
-    final base =
-        '${grouped.toString()},${decimalPart.toString().padLeft(2, '0')}';
-    if (negative) {
-      return '-R\$ $base';
-    }
-    return 'R\$ $base';
-  }
-
-  String _formatCompactCurrency(double value) {
-    final absolute = value.abs();
-    if (absolute >= 1000000) {
-      return 'R\$ ${(value / 1000000).toStringAsFixed(1)}M';
-    }
-    if (absolute >= 1000) {
-      return 'R\$ ${(value / 1000).toStringAsFixed(1)}k';
-    }
-    return _formatCurrency(value);
-  }
-
-  String _formatDay(DateTime day) {
-    String twoDigits(int value) => value.toString().padLeft(2, '0');
-    return '${twoDigits(day.day)}/${twoDigits(day.month)}';
-  }
-
-  String _formatDeltaPercent({
-    required double current,
-    required double baseline,
-  }) {
-    if (baseline == 0 && current == 0) {
-      return '0.0%';
-    }
-    if (baseline == 0 && current > 0) {
-      return '+100.0%';
-    }
-    final delta = ((current - baseline) / baseline) * 100;
-    final prefix = delta >= 0 ? '+' : '';
-    return '$prefix${delta.toStringAsFixed(1)}%';
-  }
-
   Widget _buildSalesChartCard(
     BuildContext context,
     AppShellDashboardSalesSummary summary,
@@ -170,7 +114,9 @@ class _PortalLandingSectionState extends State<_PortalLandingSection> {
                           return Padding(
                             padding: const EdgeInsets.only(right: 8),
                             child: Text(
-                              _formatCompactCurrency(value),
+                              WebPortalDashboardFormatService.formatCompactCurrencyBr(
+                                value,
+                              ),
                               style: Theme.of(context).textTheme.bodySmall,
                               textAlign: TextAlign.right,
                             ),
@@ -198,7 +144,9 @@ class _PortalLandingSectionState extends State<_PortalLandingSection> {
                           return Padding(
                             padding: const EdgeInsets.only(top: 6),
                             child: Text(
-                              _formatDay(data[index].day),
+                              WebPortalDashboardFormatService.formatDayDdMm(
+                                data[index].day,
+                              ),
                               style: Theme.of(context).textTheme.bodySmall,
                             ),
                           );
@@ -256,7 +204,9 @@ class _PortalLandingSectionState extends State<_PortalLandingSection> {
             ),
             const SizedBox(height: 10),
             Text(
-              _formatCurrency(summary.monthTotal),
+              WebPortalDashboardFormatService.formatCurrencyBr(
+                summary.monthTotal,
+              ),
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                 fontWeight: FontWeight.w700,
                 color: Colors.green.shade700,
@@ -270,17 +220,23 @@ class _PortalLandingSectionState extends State<_PortalLandingSection> {
             const SizedBox(height: 8),
             _PortalSalesInfoRow(
               label: 'Ticket medio',
-              value: _formatCurrency(summary.monthAverageTicket),
+              value: WebPortalDashboardFormatService.formatCurrencyBr(
+                summary.monthAverageTicket,
+              ),
             ),
             const SizedBox(height: 8),
             _PortalSalesInfoRow(
               label: 'Ultimos 7 dias',
-              value: _formatCurrency(summary.last7DaysTotal),
+              value: WebPortalDashboardFormatService.formatCurrencyBr(
+                summary.last7DaysTotal,
+              ),
             ),
             const SizedBox(height: 8),
             _PortalSalesInfoRow(
               label: '7 dias anteriores',
-              value: _formatCurrency(summary.previous7DaysTotal),
+              value: WebPortalDashboardFormatService.formatCurrencyBr(
+                summary.previous7DaysTotal,
+              ),
             ),
             const SizedBox(height: 12),
             Row(
@@ -288,7 +244,7 @@ class _PortalLandingSectionState extends State<_PortalLandingSection> {
                 Icon(trendIcon, color: trendColor, size: 18),
                 const SizedBox(width: 6),
                 Text(
-                  _formatDeltaPercent(
+                  WebPortalDashboardFormatService.formatDeltaPercent(
                     current: summary.last7DaysTotal,
                     baseline: summary.previous7DaysTotal,
                   ),
@@ -333,7 +289,9 @@ class _PortalLandingSectionState extends State<_PortalLandingSection> {
                   child: _PortalSalesInfoRow(
                     label:
                         '${entry.key + 1}. ${row.label} (${row.orders} pedido(s))',
-                    value: _formatCurrency(row.total),
+                    value: WebPortalDashboardFormatService.formatCurrencyBr(
+                      row.total,
+                    ),
                   ),
                 );
               }),
@@ -544,6 +502,106 @@ class _BillingSection extends StatelessWidget {
 
 const int _userLogoMaxWidthPx = 240;
 const int _userLogoMaxHeightPx = 96;
+
+WorkspaceProfileService _workspaceProfileService() {
+  return WorkspaceProfileService(FirebaseFirestore.instance);
+}
+
+Future<void> _runWorkspaceProfileMutation(
+  BuildContext context, {
+  required Future<void> Function(WorkspaceProfileService service) action,
+  required String successMessage,
+  required String failurePrefix,
+}) async {
+  try {
+    await action(_workspaceProfileService());
+    if (!context.mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(successMessage)));
+  } catch (error) {
+    if (!context.mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text('$failurePrefix: $error')));
+  }
+}
+
+Future<void> _upsertRepresentedCompanyFromEditor(
+  BuildContext context, {
+  required String tenantId,
+  required List<_RepresentedCompany> allCompanies,
+  _RepresentedCompany? initialCompany,
+  required String successMessage,
+  required String failurePrefix,
+}) async {
+  final payload = await _openRepresentedCompanyEditor(
+    context,
+    initial: initialCompany,
+    allCompanies: allCompanies,
+  );
+  if (payload == null || !context.mounted) {
+    return;
+  }
+
+  await _runWorkspaceProfileMutation(
+    context,
+    action: (service) {
+      return service.upsertRepresentedCompany(
+        tenantId: tenantId,
+        companyId: initialCompany?.id,
+        values: payload,
+      );
+    },
+    successMessage: successMessage,
+    failurePrefix: failurePrefix,
+  );
+}
+
+Future<void> _editRepresentedCompanyForTenant(
+  BuildContext context, {
+  required String tenantId,
+  required _RepresentedCompany company,
+  required List<_RepresentedCompany> allCompanies,
+}) async {
+  await _upsertRepresentedCompanyFromEditor(
+    context,
+    tenantId: tenantId,
+    allCompanies: allCompanies,
+    initialCompany: company,
+    successMessage: 'Representada atualizada com sucesso.',
+    failurePrefix: 'Falha ao atualizar representada',
+  );
+}
+
+Future<bool> _confirmDeleteRepresentedCompany(
+  BuildContext context,
+  _RepresentedCompany company,
+) async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: const Text('Excluir representada'),
+      content: Text(
+        'Deseja excluir ${_representedCompanyDisplayName(company)}?',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(false),
+          child: const Text('Cancelar'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(dialogContext).pop(true),
+          child: const Text('Excluir'),
+        ),
+      ],
+    ),
+  );
+
+  return confirmed == true && context.mounted;
+}
 
 String _readUserLogoDataUrl(Map<String, dynamic> data) {
   final logoDataUrl = (data['logoDataUrl'] ?? '').toString().trim();
@@ -761,6 +819,19 @@ class _AccountSection extends StatelessWidget {
   final bool upgradingWorkspace;
   final VoidCallback onUpgradeToRep;
 
+  static const List<String> _enterpriseOnlyWorkspaceRules = [
+    'Esta Conta BrandOp controla apenas a propria empresa contratante.',
+    'Não é permitido criar outras empresas ou operações paralelas neste login.',
+    'Mudanças de plano/tipo devem ocorrer por migração controlada, sem criar novo workspace.',
+  ];
+
+  static const List<String> _flexibleWorkspaceRules = [
+    'Esta conta está vinculada ao tipo de workspace atual para fins de billing e governança.',
+    'O contexto Individual não adiciona usuários e não abre cadeia de representações.',
+    'Para mudar de Individual para Representações (ou outro plano), o caminho e upgrade de plano.',
+    'Não criamos workspace paralelo por esta tela para evitar divergência de billing.',
+  ];
+
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
@@ -784,8 +855,9 @@ class _AccountSection extends StatelessWidget {
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 980),
             child: StreamBuilder<Map<String, dynamic>?>(
-              stream: WorkspaceProfileService(FirebaseFirestore.instance)
-                  .watchWorkspace(activeTenant.tenantId),
+              stream: _workspaceProfileService().watchWorkspace(
+                activeTenant.tenantId,
+              ),
               builder: (context, snapshot) {
                 final workspaceData =
                     snapshot.data ?? const <String, dynamic>{};
@@ -860,49 +932,7 @@ class _AccountSection extends StatelessWidget {
                   children: [
                     Text('Gestão de workspaces', style: textTheme.titleMedium),
                     const SizedBox(height: 12),
-                    if (accountContractLock ==
-                        AccountContractLock.enterpriseOnly) ...[
-                      const Text(
-                        '• Esta Conta BrandOp controla apenas a propria empresa contratante.',
-                      ),
-                      const SizedBox(height: 6),
-                      const Text(
-                        '• Não é permitido criar outras empresas ou operações paralelas neste login.',
-                      ),
-                      const SizedBox(height: 6),
-                      const Text(
-                        '• Mudanças de plano/tipo devem ocorrer por migração controlada, sem criar novo workspace.',
-                      ),
-                    ] else ...[
-                      const Text(
-                        '• Esta conta está vinculada ao tipo de workspace atual para fins de billing e governança.',
-                      ),
-                      const SizedBox(height: 6),
-                      const Text(
-                        '• O contexto Individual não adiciona usuários e não abre cadeia de representações.',
-                      ),
-                      const SizedBox(height: 6),
-                      const Text(
-                        '• Para mudar de Individual para Representações (ou outro plano), o caminho e upgrade de plano.',
-                      ),
-                      const SizedBox(height: 6),
-                      const Text(
-                        '• Não criamos workspace paralelo por esta tela para evitar divergência de billing.',
-                      ),
-                      if (activeTenant.workspaceType ==
-                          'seller_solo_workspace') ...[
-                        const SizedBox(height: 16),
-                        FilledButton.icon(
-                          onPressed: upgradingWorkspace ? null : onUpgradeToRep,
-                          icon: const Icon(Icons.upgrade_outlined),
-                          label: Text(
-                            upgradingWorkspace
-                                ? 'Aplicando upgrade...'
-                                : 'Upgrade para Representações',
-                          ),
-                        ),
-                      ],
-                    ],
+                    ..._buildWorkspaceManagementRules(),
                   ],
                 ),
               ),
@@ -912,6 +942,44 @@ class _AccountSection extends StatelessWidget {
       ],
     );
   }
+
+  List<Widget> _buildWorkspaceManagementRules() {
+    final enterpriseOnly =
+        accountContractLock == AccountContractLock.enterpriseOnly;
+    final rules = enterpriseOnly
+        ? _enterpriseOnlyWorkspaceRules
+        : _flexibleWorkspaceRules;
+
+    final widgets = <Widget>[];
+    for (var index = 0; index < rules.length; index++) {
+      widgets.add(_workspaceManagementBullet(rules[index]));
+      if (index < rules.length - 1) {
+        widgets.add(const SizedBox(height: 6));
+      }
+    }
+
+    if (!enterpriseOnly &&
+        activeTenant.workspaceType == 'seller_solo_workspace') {
+      widgets.add(const SizedBox(height: 16));
+      widgets.add(
+        FilledButton.icon(
+          onPressed: upgradingWorkspace ? null : onUpgradeToRep,
+          icon: const Icon(Icons.upgrade_outlined),
+          label: Text(
+            upgradingWorkspace
+                ? 'Aplicando upgrade...'
+                : 'Upgrade para Representações',
+          ),
+        ),
+      );
+    }
+
+    return widgets;
+  }
+
+  Widget _workspaceManagementBullet(String message) {
+    return Text('• $message');
+  }
 }
 
 class _RepresentedCompaniesSection extends StatelessWidget {
@@ -919,6 +987,16 @@ class _RepresentedCompaniesSection extends StatelessWidget {
     required this.activeTenant,
     this.activeRepresentedCompanyName,
   });
+
+  static const List<String> _unsupportedRepresentedCompaniesLines = [
+    'Disponivel apenas para workspaces Individual e Representações.',
+    'No contexto Empresa (BrandOp), esta conta administra apenas a empresa contratante.',
+  ];
+
+  static const List<String> _emptyRepresentedCompaniesLines = [
+    'Nenhuma representada cadastrada ainda.',
+    'Use esta lista para manter as empresas que você representa neste workspace.',
+  ];
 
   final TenantEntryOption activeTenant;
   final String? activeRepresentedCompanyName;
@@ -951,8 +1029,9 @@ class _RepresentedCompaniesSection extends StatelessWidget {
             child: Card(
               clipBehavior: Clip.antiAlias,
               child: StreamBuilder<Map<String, dynamic>?>(
-                stream: WorkspaceProfileService(FirebaseFirestore.instance)
-                    .watchWorkspace(activeTenant.tenantId),
+                stream: _workspaceProfileService().watchWorkspace(
+                  activeTenant.tenantId,
+                ),
                 builder: (context, workspaceSnapshot) {
                   const headerColor = Color(0xFFF5F6F8);
                   const bodyColor = Colors.white;
@@ -966,7 +1045,7 @@ class _RepresentedCompaniesSection extends StatelessWidget {
                           .trim();
 
                   return StreamBuilder<List<Map<String, Object?>>>(
-                    stream: WorkspaceProfileService(FirebaseFirestore.instance)
+                    stream: _workspaceProfileService()
                         .watchRepresentedCompanies(activeTenant.tenantId),
                     builder: (context, snapshot) {
                       final representedCompanies =
@@ -1008,162 +1087,17 @@ class _RepresentedCompaniesSection extends StatelessWidget {
                             width: double.infinity,
                             color: bodyColor,
                             padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                if (!supportsRepresentedCompanies) ...[
-                                  const Text(
-                                    'Disponivel apenas para workspaces Individual e Representações.',
-                                  ),
-                                  const SizedBox(height: 6),
-                                  const Text(
-                                    'No contexto Empresa (BrandOp), esta conta administra apenas a empresa contratante.',
-                                  ),
-                                ] else if (representedCompanies.isEmpty) ...[
-                                  const Text(
-                                    'Nenhuma representada cadastrada ainda.',
-                                  ),
-                                  const SizedBox(height: 6),
-                                  const Text(
-                                    'Use esta lista para manter as empresas que você representa neste workspace.',
-                                  ),
-                                ] else ...[
-                                  for (
-                                    var index = 0;
-                                    index < representedCompanies.length;
-                                    index++
-                                  ) ...[
-                                    if (index > 0) ...[
-                                      const SizedBox(height: 12),
-                                      const Divider(
-                                        height: 1,
-                                        thickness: 1,
-                                        color: rowDividerColor,
-                                      ),
-                                      const SizedBox(height: 14),
-                                    ],
-                                    Builder(
-                                      builder: (context) {
-                                        final company =
-                                            representedCompanies[index];
-                                        return Row(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Expanded(
-                                              child: Column(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.start,
-                                                children: [
-                                                  Text(
-                                                    company.nomeFantasia.isEmpty
-                                                        ? 'Sem nome fantasia'
-                                                        : company.nomeFantasia,
-                                                    style: textTheme.titleSmall,
-                                                  ),
-                                                  const SizedBox(height: 2),
-                                                  Text(
-                                                    'CNPJ: ${company.cnpj.isEmpty ? 'Não informado' : company.cnpj}',
-                                                  ),
-                                                  if (company
-                                                          .logradouro
-                                                          .isNotEmpty ||
-                                                      company.numero.isNotEmpty)
-                                                    Text(
-                                                      'Endereço: ${company.logradouro.isEmpty ? 'Não informado' : company.logradouro}${company.numero.isEmpty ? '' : ', ${company.numero}'}',
-                                                    ),
-                                                  Text(
-                                                    'CEP: ${company.cep.isEmpty ? 'Não informado' : company.cep}',
-                                                  ),
-                                                  Text(
-                                                    'Cidade/UF: ${company.cidade.isEmpty ? 'Não informado' : company.cidade}${company.uf.isEmpty ? '' : '/${company.uf}'}',
-                                                  ),
-                                                  Text(
-                                                    _companyRelationshipSummary(
-                                                      company: company,
-                                                      allCompanies:
-                                                          representedCompanies,
-                                                    ),
-                                                  ),
-                                                  if (company
-                                                      .segmento
-                                                      .isNotEmpty)
-                                                    Text(
-                                                      'Segmento: ${company.segmento}',
-                                                    ),
-                                                  Text(
-                                                    'Regime tributário: ${_taxRegimeLabel(company.taxRegime)}',
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                            if (supportsRepresentedCompanies &&
-                                                canManageRepresentedCompanies) ...[
-                                              Tooltip(
-                                                message:
-                                                    company.id ==
-                                                        favoriteRepresentedCompanyId
-                                                    ? 'Representada favorita'
-                                                    : 'Definir como favorita',
-                                                child: IconButton.outlined(
-                                                  onPressed:
-                                                      company.id ==
-                                                          favoriteRepresentedCompanyId
-                                                      ? null
-                                                      : () =>
-                                                            _setFavoriteRepresentedCompany(
-                                                              context,
-                                                              activeTenant,
-                                                              company,
-                                                            ),
-                                                  icon: Icon(
-                                                    company.id ==
-                                                            favoriteRepresentedCompanyId
-                                                        ? Icons.star
-                                                        : Icons.star_outline,
-                                                  ),
-                                                ),
-                                              ),
-                                              const SizedBox(width: 8),
-                                              Tooltip(
-                                                message: 'Editar',
-                                                child: IconButton.outlined(
-                                                  onPressed: () =>
-                                                      _editRepresentedCompany(
-                                                        context,
-                                                        activeTenant,
-                                                        company,
-                                                        allCompanies:
-                                                            representedCompanies,
-                                                      ),
-                                                  icon: const Icon(
-                                                    Icons.edit_outlined,
-                                                  ),
-                                                ),
-                                              ),
-                                              const SizedBox(width: 8),
-                                              Tooltip(
-                                                message: 'Excluir',
-                                                child: IconButton.outlined(
-                                                  onPressed: () =>
-                                                      _deleteRepresentedCompany(
-                                                        context,
-                                                        activeTenant,
-                                                        company,
-                                                      ),
-                                                  icon: const Icon(
-                                                    Icons.delete_outline,
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ],
-                                        );
-                                      },
-                                    ),
-                                  ],
-                                ],
-                              ],
+                            child: _buildRepresentedCompaniesBody(
+                              context,
+                              representedCompanies: representedCompanies,
+                              activeTenant: activeTenant,
+                              favoriteRepresentedCompanyId:
+                                  favoriteRepresentedCompanyId,
+                              supportsRepresentedCompanies:
+                                  supportsRepresentedCompanies,
+                              canManageRepresentedCompanies:
+                                  canManageRepresentedCompanies,
+                              rowDividerColor: rowDividerColor,
                             ),
                           ),
                         ],
@@ -1179,39 +1113,211 @@ class _RepresentedCompaniesSection extends StatelessWidget {
     );
   }
 
+  Widget _buildRepresentedCompaniesBody(
+    BuildContext context, {
+    required List<_RepresentedCompany> representedCompanies,
+    required TenantEntryOption activeTenant,
+    required String favoriteRepresentedCompanyId,
+    required bool supportsRepresentedCompanies,
+    required bool canManageRepresentedCompanies,
+    required Color rowDividerColor,
+  }) {
+    if (!supportsRepresentedCompanies) {
+      return _buildInformativeMessageLines(
+        _unsupportedRepresentedCompaniesLines,
+      );
+    }
+
+    if (representedCompanies.isEmpty) {
+      return _buildInformativeMessageLines(_emptyRepresentedCompaniesLines);
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (var index = 0; index < representedCompanies.length; index++) ...[
+          if (index > 0) ...[
+            const SizedBox(height: 12),
+            Divider(height: 1, thickness: 1, color: rowDividerColor),
+            const SizedBox(height: 14),
+          ],
+          Builder(
+            builder: (context) {
+              final company = representedCompanies[index];
+              return _buildRepresentedCompanyRow(
+                context,
+                company: company,
+                allCompanies: representedCompanies,
+                activeTenant: activeTenant,
+                favoriteRepresentedCompanyId: favoriteRepresentedCompanyId,
+                supportsRepresentedCompanies: supportsRepresentedCompanies,
+                canManageRepresentedCompanies: canManageRepresentedCompanies,
+              );
+            },
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildInformativeMessageLines(List<String> lines) {
+    final children = <Widget>[];
+    for (var index = 0; index < lines.length; index++) {
+      children.add(Text(lines[index]));
+      if (index < lines.length - 1) {
+        children.add(const SizedBox(height: 6));
+      }
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: children,
+    );
+  }
+
+  Widget _buildRepresentedCompanyRow(
+    BuildContext context, {
+    required _RepresentedCompany company,
+    required List<_RepresentedCompany> allCompanies,
+    required TenantEntryOption activeTenant,
+    required String favoriteRepresentedCompanyId,
+    required bool supportsRepresentedCompanies,
+    required bool canManageRepresentedCompanies,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: _buildRepresentedCompanyInfo(
+            context,
+            company: company,
+            allCompanies: allCompanies,
+          ),
+        ),
+        if (supportsRepresentedCompanies && canManageRepresentedCompanies)
+          ..._buildRepresentedCompanyActions(
+            context,
+            company: company,
+            allCompanies: allCompanies,
+            activeTenant: activeTenant,
+            favoriteRepresentedCompanyId: favoriteRepresentedCompanyId,
+          ),
+      ],
+    );
+  }
+
+  Widget _buildRepresentedCompanyInfo(
+    BuildContext context, {
+    required _RepresentedCompany company,
+    required List<_RepresentedCompany> allCompanies,
+  }) {
+    final textTheme = Theme.of(context).textTheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          _representedCompanyDisplayName(
+            company,
+            fallback: 'Sem nome fantasia',
+          ),
+          style: textTheme.titleSmall,
+        ),
+        const SizedBox(height: 2),
+        Text('CNPJ: ${company.cnpj.isEmpty ? 'Não informado' : company.cnpj}'),
+        if (company.logradouro.isNotEmpty || company.numero.isNotEmpty)
+          Text('Endereço: ${_formatAddressLine(company)}'),
+        Text('CEP: ${company.cep.isEmpty ? 'Não informado' : company.cep}'),
+        Text('Cidade/UF: ${_formatCityUfLine(company)}'),
+        Text(
+          _companyRelationshipSummary(
+            company: company,
+            allCompanies: allCompanies,
+          ),
+        ),
+        if (company.segmento.isNotEmpty) Text('Segmento: ${company.segmento}'),
+        Text('Regime tributário: ${_taxRegimeLabel(company.taxRegime)}'),
+      ],
+    );
+  }
+
+  List<Widget> _buildRepresentedCompanyActions(
+    BuildContext context, {
+    required _RepresentedCompany company,
+    required List<_RepresentedCompany> allCompanies,
+    required TenantEntryOption activeTenant,
+    required String favoriteRepresentedCompanyId,
+  }) {
+    final isFavorite = company.id == favoriteRepresentedCompanyId;
+
+    return [
+      _buildRepresentedCompanyActionButton(
+        message: isFavorite ? 'Representada favorita' : 'Definir como favorita',
+        onPressed: isFavorite
+            ? null
+            : () => _setFavoriteRepresentedCompany(
+                context,
+                activeTenant,
+                company,
+              ),
+        icon: isFavorite ? Icons.star : Icons.star_outline,
+      ),
+      const SizedBox(width: 8),
+      _buildRepresentedCompanyActionButton(
+        message: 'Editar',
+        onPressed: () => _editRepresentedCompany(
+          context,
+          activeTenant,
+          company,
+          allCompanies: allCompanies,
+        ),
+        icon: Icons.edit_outlined,
+      ),
+      const SizedBox(width: 8),
+      _buildRepresentedCompanyActionButton(
+        message: 'Excluir',
+        onPressed: () =>
+            _deleteRepresentedCompany(context, activeTenant, company),
+        icon: Icons.delete_outline,
+      ),
+    ];
+  }
+
+  Widget _buildRepresentedCompanyActionButton({
+    required String message,
+    required VoidCallback? onPressed,
+    required IconData icon,
+  }) {
+    return Tooltip(
+      message: message,
+      child: IconButton.outlined(onPressed: onPressed, icon: Icon(icon)),
+    );
+  }
+
+  String _formatAddressLine(_RepresentedCompany company) {
+    final street = company.logradouro.isEmpty
+        ? 'Não informado'
+        : company.logradouro;
+    final number = company.numero.isEmpty ? '' : ', ${company.numero}';
+    return '$street$number';
+  }
+
+  String _formatCityUfLine(_RepresentedCompany company) {
+    return _cityUfLabel(city: company.cidade, uf: company.uf);
+  }
+
   Future<void> _createRepresentedCompany(
     BuildContext context,
     TenantEntryOption activeTenant, {
     required List<_RepresentedCompany> allCompanies,
   }) async {
-    final payload = await _openRepresentedCompanyEditor(
+    await _upsertRepresentedCompanyFromEditor(
       context,
+      tenantId: activeTenant.tenantId,
       allCompanies: allCompanies,
+      successMessage: 'Representada cadastrada com sucesso.',
+      failurePrefix: 'Falha ao cadastrar representada',
     );
-    if (payload == null || !context.mounted) {
-      return;
-    }
-
-    try {
-      await WorkspaceProfileService(FirebaseFirestore.instance)
-          .upsertRepresentedCompany(
-            tenantId: activeTenant.tenantId,
-            values: payload,
-          );
-      if (!context.mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Representada cadastrada com sucesso.')),
-      );
-    } catch (error) {
-      if (!context.mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Falha ao cadastrar representada: $error')),
-      );
-    }
   }
 
   Future<void> _editRepresentedCompany(
@@ -1220,36 +1326,12 @@ class _RepresentedCompaniesSection extends StatelessWidget {
     _RepresentedCompany company, {
     required List<_RepresentedCompany> allCompanies,
   }) async {
-    final payload = await _openRepresentedCompanyEditor(
+    await _editRepresentedCompanyForTenant(
       context,
-      initial: company,
+      tenantId: activeTenant.tenantId,
+      company: company,
       allCompanies: allCompanies,
     );
-    if (payload == null || !context.mounted) {
-      return;
-    }
-
-    try {
-      await WorkspaceProfileService(FirebaseFirestore.instance)
-          .upsertRepresentedCompany(
-            tenantId: activeTenant.tenantId,
-            companyId: company.id,
-            values: payload,
-          );
-      if (!context.mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Representada atualizada com sucesso.')),
-      );
-    } catch (error) {
-      if (!context.mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Falha ao atualizar representada: $error')),
-      );
-    }
   }
 
   Future<void> _deleteRepresentedCompany(
@@ -1257,50 +1339,24 @@ class _RepresentedCompaniesSection extends StatelessWidget {
     TenantEntryOption activeTenant,
     _RepresentedCompany company,
   ) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Excluir representada'),
-        content: Text(
-          'Deseja excluir ${company.nomeFantasia.isEmpty ? 'esta representada' : company.nomeFantasia}?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Excluir'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed != true || !context.mounted) {
+    if (!await _confirmDeleteRepresentedCompany(context, company)) {
+      return;
+    }
+    if (!context.mounted) {
       return;
     }
 
-    try {
-      await WorkspaceProfileService(FirebaseFirestore.instance)
-          .deleteRepresentedCompany(
-            tenantId: activeTenant.tenantId,
-            companyId: company.id,
-          );
-      if (!context.mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Representada excluida com sucesso.')),
-      );
-    } catch (error) {
-      if (!context.mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Falha ao excluir representada: $error')),
-      );
-    }
+    await _runWorkspaceProfileMutation(
+      context,
+      action: (service) {
+        return service.deleteRepresentedCompany(
+          tenantId: activeTenant.tenantId,
+          companyId: company.id,
+        );
+      },
+      successMessage: 'Representada excluida com sucesso.',
+      failurePrefix: 'Falha ao excluir representada',
+    );
   }
 
   Future<void> _setFavoriteRepresentedCompany(
@@ -1308,101 +1364,60 @@ class _RepresentedCompaniesSection extends StatelessWidget {
     TenantEntryOption activeTenant,
     _RepresentedCompany company,
   ) async {
-    try {
-      await WorkspaceProfileService(FirebaseFirestore.instance)
-          .setFavoriteRepresentedCompany(
-            tenantId: activeTenant.tenantId,
-            companyId: company.id,
-          );
-      if (!context.mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Representada favorita: ${company.nomeFantasia.isEmpty ? company.id : company.nomeFantasia}',
-          ),
-        ),
-      );
-    } catch (error) {
-      if (!context.mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Falha ao atualizar favorita: $error')),
-      );
-    }
+    await _runWorkspaceProfileMutation(
+      context,
+      action: (service) {
+        return service.setFavoriteRepresentedCompany(
+          tenantId: activeTenant.tenantId,
+          companyId: company.id,
+        );
+      },
+      successMessage:
+          'Representada favorita: ${_representedCompanyDisplayName(company, fallback: company.id)}',
+      failurePrefix: 'Falha ao atualizar favorita',
+    );
   }
 }
 
-class _PartnersSection extends StatelessWidget {
+abstract class _ClientesTenantSection extends StatelessWidget {
+  const _ClientesTenantSection({
+    required this.activeTenant,
+    this.activeRepresentedCompanyName,
+  });
+
+  final TenantEntryOption activeTenant;
+  final String? activeRepresentedCompanyName;
+
+  @override
+  Widget build(BuildContext context) {
+    return _buildClientesPageForTenant(activeTenant);
+  }
+}
+
+class _PartnersSection extends _ClientesTenantSection {
   const _PartnersSection({
-    required this.activeTenant,
-    this.activeRepresentedCompanyName,
+    required super.activeTenant,
+    super.activeRepresentedCompanyName,
   });
-
-  final TenantEntryOption activeTenant;
-  final String? activeRepresentedCompanyName;
-
-  @override
-  Widget build(BuildContext context) {
-    final userLabel = FirebaseAuth.instance.currentUser?.displayName?.trim();
-    final identity = AppIdentity(
-      tenantId: activeTenant.tenantId,
-      userLabel: (userLabel == null || userLabel.isEmpty)
-          ? 'Portal'
-          : userLabel,
-      role: activeTenant.role,
-      tenantName: activeTenant.tenantName,
-      isMock: false,
-      membershipId: activeTenant.membershipId,
-      isPersonalWorkspace:
-          activeTenant.workspaceType == 'seller_solo_workspace',
-    );
-
-    return ClientesPage(
-      identity: identity,
-      repository: FirestoreClienteRepository(FirebaseFirestore.instance),
-      preCadastroRepository: FirestoreClientePreCadastroRepository(
-        FirebaseFirestore.instance,
-      ),
-    );
-  }
 }
 
-class _CustomersSection extends StatelessWidget {
+class _CustomersSection extends _ClientesTenantSection {
   const _CustomersSection({
-    required this.activeTenant,
-    this.activeRepresentedCompanyName,
+    required super.activeTenant,
+    super.activeRepresentedCompanyName,
   });
+}
 
-  final TenantEntryOption activeTenant;
-  final String? activeRepresentedCompanyName;
+Widget _buildClientesPageForTenant(TenantEntryOption activeTenant) {
+  final identity = _portalIdentityForTenant(activeTenant);
 
-  @override
-  Widget build(BuildContext context) {
-    final userLabel = FirebaseAuth.instance.currentUser?.displayName?.trim();
-    final identity = AppIdentity(
-      tenantId: activeTenant.tenantId,
-      userLabel: (userLabel == null || userLabel.isEmpty)
-          ? 'Portal'
-          : userLabel,
-      role: activeTenant.role,
-      tenantName: activeTenant.tenantName,
-      isMock: false,
-      membershipId: activeTenant.membershipId,
-      isPersonalWorkspace:
-          activeTenant.workspaceType == 'seller_solo_workspace',
-    );
-
-    return ClientesPage(
-      identity: identity,
-      repository: FirestoreClienteRepository(FirebaseFirestore.instance),
-      preCadastroRepository: FirestoreClientePreCadastroRepository(
-        FirebaseFirestore.instance,
-      ),
-    );
-  }
+  return ClientesPage(
+    identity: identity,
+    repository: FirestoreClienteRepository(FirebaseFirestore.instance),
+    preCadastroRepository: FirestoreClientePreCadastroRepository(
+      FirebaseFirestore.instance,
+    ),
+  );
 }
 
 class _TasksSection extends StatelessWidget {
@@ -1461,6 +1476,17 @@ class _RepresentedDetailsSection extends StatelessWidget {
     this.activeRepresentedCompanyName,
   });
 
+  static const String _detailsCardTitle = 'Informações de cadastro';
+  static const List<String> _selectionRequiredItems = [
+    'Razão social e nome fantasia',
+    'CNPJ, contato e endereço',
+    'Segmento e status',
+  ];
+  static const List<String> _notFoundItems = [
+    'Valide a representada ativa no topo',
+    'Atualize a lista de representadas',
+  ];
+
   final TenantEntryOption activeTenant;
   final String? selectedRepresentedCompanyId;
   final String? activeRepresentedCompanyName;
@@ -1473,42 +1499,31 @@ class _RepresentedDetailsSection extends StatelessWidget {
     );
     final selectedId = (selectedRepresentedCompanyId ?? '').trim();
     if (selectedId.isEmpty) {
-      return _SimpleCardSection(
-        title: 'Informações de cadastro',
+      return _buildDetailsInfoCard(
         subtitle: 'Selecione uma representada no topo para editar os detalhes.',
-        items: const [
-          'Razão social e nome fantasia',
-          'CNPJ, contato e endereço',
-          'Segmento e status',
-        ],
+        items: _selectionRequiredItems,
       );
     }
 
     return StreamBuilder<List<Map<String, Object?>>>(
-      stream: WorkspaceProfileService(FirebaseFirestore.instance)
-          .watchRepresentedCompanies(activeTenant.tenantId),
+      stream: _workspaceProfileService().watchRepresentedCompanies(
+        activeTenant.tenantId,
+      ),
       builder: (context, snapshot) {
         final representedCompanies = _representedCompaniesFromStorage(
           snapshot.data ?? const <Map<String, Object?>>[],
         );
 
-        _RepresentedCompany? selected;
-        for (final company in representedCompanies) {
-          if (company.id == selectedId) {
-            selected = company;
-            break;
-          }
-        }
+        final selected = _findCompanyById(
+          allCompanies: representedCompanies,
+          companyId: selectedId,
+        );
 
         if (selected == null) {
-          return _SimpleCardSection(
-            title: 'Informações de cadastro',
+          return _buildDetailsInfoCard(
             subtitle:
                 'A representada selecionada não foi encontrada na base atual.',
-            items: const [
-              'Valide a representada ativa no topo',
-              'Atualize a lista de representadas',
-            ],
+            items: _notFoundItems,
           );
         }
 
@@ -1516,9 +1531,10 @@ class _RepresentedDetailsSection extends StatelessWidget {
         final displayName = selectedCompany.nomeFantasia.isEmpty
             ? (activeRepresentedCompanyName ?? selectedCompany.id)
             : selectedCompany.nomeFantasia;
-        final cityUf = selectedCompany.cidade.isEmpty
-            ? 'Não informado'
-            : '${selectedCompany.cidade}${selectedCompany.uf.isEmpty ? '' : '/${selectedCompany.uf}'}';
+        final cityUf = _cityUfLabel(
+          city: selectedCompany.cidade,
+          uf: selectedCompany.uf,
+        );
 
         return Card(
           clipBehavior: Clip.antiAlias,
@@ -1534,45 +1550,12 @@ class _RepresentedDetailsSection extends StatelessWidget {
                     bottom: BorderSide(color: Theme.of(context).dividerColor),
                   ),
                 ),
-                child: Row(
-                  children: [
-                    _RepresentedCompanyAvatar(
-                      company: selectedCompany,
-                      size: 56,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            displayName,
-                            style: Theme.of(context).textTheme.headlineSmall,
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            selectedCompany.cnpj.trim().isEmpty
-                                ? 'CNPJ não cadastrado'
-                                : selectedCompany.cnpj,
-                            style: Theme.of(context).textTheme.bodyMedium,
-                          ),
-                        ],
-                      ),
-                    ),
-                    FilledButton.icon(
-                      onPressed: canEditSettings
-                          ? () => _editRepresentedCompany(
-                              context,
-                              selectedCompany,
-                              allCompanies: representedCompanies,
-                            )
-                          : null,
-                      icon: const Icon(Icons.edit_outlined),
-                      label: Text(
-                        canEditSettings ? 'Alterar' : 'Somente leitura',
-                      ),
-                    ),
-                  ],
+                child: _buildDetailsHeader(
+                  context,
+                  selectedCompany: selectedCompany,
+                  displayName: displayName,
+                  canEditSettings: canEditSettings,
+                  representedCompanies: representedCompanies,
                 ),
               ),
               Padding(
@@ -1586,105 +1569,25 @@ class _RepresentedDetailsSection extends StatelessWidget {
                       ),
                       const SizedBox(height: 14),
                     ],
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: _profileBlock(
-                            context,
-                            title: 'Contato',
-                            rows: [
-                              _profileRow(
-                                Icons.call_outlined,
-                                selectedCompany.telefone,
-                                'Telefone não cadastrado',
-                              ),
-                              _profileRow(
-                                Icons.mail_outline,
-                                selectedCompany.email,
-                                'E-mail não cadastrado',
-                              ),
-                              _profileRow(
-                                Icons.badge_outlined,
-                                selectedCompany.contato,
-                                'Contato não cadastrado',
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 20),
-                        Expanded(
-                          child: _profileBlock(
-                            context,
-                            title: 'Cadastro',
-                            rows: [
-                              _profileLabelValue(
-                                'Razão social',
-                                selectedCompany.razaoSocial,
-                              ),
-                              _profileLabelValue(
-                                'Nome fantasia',
-                                selectedCompany.nomeFantasia,
-                              ),
-                              _profileLabelValue('CNPJ', selectedCompany.cnpj),
-                            ],
-                          ),
-                        ),
-                      ],
+                    _profileTwoColumnSection(
+                      context,
+                      leftTitle: 'Contato',
+                      leftRows: _buildContatoRows(selectedCompany),
+                      rightTitle: 'Cadastro',
+                      rightRows: _buildCadastroRows(selectedCompany),
                     ),
                     const SizedBox(height: 14),
                     Divider(color: Theme.of(context).dividerColor),
                     const SizedBox(height: 14),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: _profileBlock(
-                            context,
-                            title: 'Endereço',
-                            rows: [
-                              _profileLabelValue('CEP', selectedCompany.cep),
-                              _profileLabelValue(
-                                'Logradouro',
-                                selectedCompany.logradouro,
-                              ),
-                              _profileLabelValue(
-                                'Número',
-                                selectedCompany.numero,
-                              ),
-                              _profileLabelValue('Cidade/UF', cityUf),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 20),
-                        Expanded(
-                          child: _profileBlock(
-                            context,
-                            title: 'Comercial',
-                            rows: [
-                              _profileLabelValue(
-                                'Segmento',
-                                selectedCompany.segmento,
-                              ),
-                              _profileLabelValue(
-                                'Regime tributário',
-                                _taxRegimeLabel(selectedCompany.taxRegime),
-                              ),
-                              _profileLabelValue(
-                                'Relação empresarial',
-                                _companyRelationshipSummary(
-                                  company: selectedCompany,
-                                  allCompanies: representedCompanies,
-                                ),
-                              ),
-                              _profileLabelValue(
-                                'Status',
-                                selectedCompany.ativo ? 'Ativa' : 'Inativa',
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
+                    _profileTwoColumnSection(
+                      context,
+                      leftTitle: 'Endereço',
+                      leftRows: _buildEnderecoRows(selectedCompany, cityUf),
+                      rightTitle: 'Comercial',
+                      rightRows: _buildComercialRows(
+                        selectedCompany,
+                        representedCompanies,
+                      ),
                     ),
                   ],
                 ),
@@ -1693,6 +1596,159 @@ class _RepresentedDetailsSection extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildDetailsInfoCard({
+    required String subtitle,
+    required List<String> items,
+  }) {
+    return _SimpleCardSection(
+      title: _detailsCardTitle,
+      subtitle: subtitle,
+      items: items,
+    );
+  }
+
+  Widget _buildDetailsHeader(
+    BuildContext context, {
+    required _RepresentedCompany selectedCompany,
+    required String displayName,
+    required bool canEditSettings,
+    required List<_RepresentedCompany> representedCompanies,
+  }) {
+    final cnpjLabel = selectedCompany.cnpj.trim().isEmpty
+        ? 'CNPJ não cadastrado'
+        : selectedCompany.cnpj;
+
+    return Row(
+      children: [
+        _RepresentedCompanyAvatar(company: selectedCompany, size: 56),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                displayName,
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
+              const SizedBox(height: 4),
+              Text(cnpjLabel, style: Theme.of(context).textTheme.bodyMedium),
+            ],
+          ),
+        ),
+        FilledButton.icon(
+          onPressed: canEditSettings
+              ? () => _editRepresentedCompany(
+                  context,
+                  selectedCompany,
+                  allCompanies: representedCompanies,
+                )
+              : null,
+          icon: const Icon(Icons.edit_outlined),
+          label: Text(canEditSettings ? 'Alterar' : 'Somente leitura'),
+        ),
+      ],
+    );
+  }
+
+  List<Widget> _buildContatoRows(_RepresentedCompany selectedCompany) {
+    return [
+      _profileRow(
+        Icons.call_outlined,
+        selectedCompany.telefone,
+        'Telefone não cadastrado',
+      ),
+      _profileRow(
+        Icons.mail_outline,
+        selectedCompany.email,
+        'E-mail não cadastrado',
+      ),
+      _profileRow(
+        Icons.badge_outlined,
+        selectedCompany.contato,
+        'Contato não cadastrado',
+      ),
+    ];
+  }
+
+  List<Widget> _buildCadastroRows(_RepresentedCompany selectedCompany) {
+    return _buildLabelValueRows([
+      MapEntry('Razão social', selectedCompany.razaoSocial),
+      MapEntry('Nome fantasia', selectedCompany.nomeFantasia),
+      MapEntry('CNPJ', selectedCompany.cnpj),
+    ]);
+  }
+
+  List<Widget> _buildEnderecoRows(
+    _RepresentedCompany selectedCompany,
+    String cityUf,
+  ) {
+    return _buildLabelValueRows([
+      MapEntry('CEP', selectedCompany.cep),
+      MapEntry('Logradouro', selectedCompany.logradouro),
+      MapEntry('Número', selectedCompany.numero),
+      MapEntry('Cidade/UF', cityUf),
+    ]);
+  }
+
+  List<Widget> _buildComercialRows(
+    _RepresentedCompany selectedCompany,
+    List<_RepresentedCompany> representedCompanies,
+  ) {
+    return _buildLabelValueRows([
+      MapEntry('Segmento', selectedCompany.segmento),
+      MapEntry('Regime tributário', _taxRegimeLabel(selectedCompany.taxRegime)),
+      MapEntry(
+        'Relação empresarial',
+        _companyRelationshipSummary(
+          company: selectedCompany,
+          allCompanies: representedCompanies,
+        ),
+      ),
+      MapEntry('Status', selectedCompany.ativo ? 'Ativa' : 'Inativa'),
+    ]);
+  }
+
+  List<Widget> _buildLabelValueRows(List<MapEntry<String, String>> entries) {
+    final rows = <Widget>[];
+    for (final entry in entries) {
+      rows.add(_profileLabelValue(entry.key, entry.value));
+    }
+    return rows;
+  }
+
+  _RepresentedCompany? _findCompanyById({
+    required List<_RepresentedCompany> allCompanies,
+    required String companyId,
+  }) {
+    for (final company in allCompanies) {
+      if (company.id == companyId) {
+        return company;
+      }
+    }
+    return null;
+  }
+
+  Widget _profileTwoColumnSection(
+    BuildContext context, {
+    required String leftTitle,
+    required List<Widget> leftRows,
+    required String rightTitle,
+    required List<Widget> rightRows,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: _profileBlock(context, title: leftTitle, rows: leftRows),
+        ),
+        const SizedBox(width: 20),
+        Expanded(
+          child: _profileBlock(context, title: rightTitle, rows: rightRows),
+        ),
+      ],
     );
   }
 
@@ -1746,36 +1802,12 @@ class _RepresentedDetailsSection extends StatelessWidget {
     _RepresentedCompany company, {
     required List<_RepresentedCompany> allCompanies,
   }) async {
-    final payload = await _openRepresentedCompanyEditor(
+    await _editRepresentedCompanyForTenant(
       context,
-      initial: company,
+      tenantId: activeTenant.tenantId,
+      company: company,
       allCompanies: allCompanies,
     );
-    if (payload == null || !context.mounted) {
-      return;
-    }
-
-    try {
-      await WorkspaceProfileService(FirebaseFirestore.instance)
-          .upsertRepresentedCompany(
-            tenantId: activeTenant.tenantId,
-            companyId: company.id,
-            values: payload,
-          );
-      if (!context.mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Representada atualizada com sucesso.')),
-      );
-    } catch (error) {
-      if (!context.mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Falha ao atualizar representada: $error')),
-      );
-    }
   }
 }
 
@@ -1818,6 +1850,26 @@ String _representedCompanyNameById({
     return display.isEmpty ? company.id : display;
   }
   return companyId;
+}
+
+String _representedCompanyDisplayName(
+  _RepresentedCompany company, {
+  String fallback = 'esta representada',
+}) {
+  final displayName = company.nomeFantasia.trim();
+  if (displayName.isNotEmpty) {
+    return displayName;
+  }
+  return fallback;
+}
+
+String _cityUfLabel({required String city, required String uf}) {
+  final cityValue = city.trim();
+  final ufValue = uf.trim();
+  if (cityValue.isEmpty) {
+    return 'Não informado';
+  }
+  return '$cityValue${ufValue.isEmpty ? '' : '/$ufValue'}';
 }
 
 class _RepresentedCompany {

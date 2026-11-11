@@ -22,6 +22,7 @@ import '../../../auth/services/workspace_profile_service.dart';
 import '../../../precos/presentation/services/default_price_table_guard.dart';
 import '../../../precos/services/product_tax_engine_service.dart';
 import '../models/computed_pedido_item_values.dart';
+import '../services/pedido_campaign_catalog_resolver_service.dart';
 import '../services/pedido_cliente_lookup_service.dart';
 import '../services/pedido_commercial_pricing_service.dart';
 import '../services/pedido_discount_controller_manager.dart';
@@ -256,47 +257,16 @@ class _PedidoInlineEditorState extends State<PedidoInlineEditor> {
         return;
       }
 
-      final nowUtc = DateTime.now().toUtc();
-      final activePromotionMetaByProductId =
-          CampaignProductResolutionService.resolveActivePromotionMetaByProductId(
-            promotionLists: values[0],
-            momentUtc: nowUtc,
-          );
-      final highlightIds =
-          CampaignProductResolutionService.resolveActiveProductIds(
-            lists: values[1],
-            momentUtc: nowUtc,
-          );
-
-      final promotionProducts =
-          widget.products
-              .where(
-                (product) =>
-                    activePromotionMetaByProductId.containsKey(product.id),
-              )
-              .where((product) => product.status == ProductStatus.active)
-              .toList(growable: false)
-            ..sort(
-              (a, b) => a.descricao.toLowerCase().compareTo(
-                b.descricao.toLowerCase(),
-              ),
-            );
-
-      final highlightProducts =
-          widget.products
-              .where((product) => highlightIds.contains(product.id))
-              .where((product) => product.status == ProductStatus.active)
-              .toList(growable: false)
-            ..sort(
-              (a, b) => a.descricao.toLowerCase().compareTo(
-                b.descricao.toLowerCase(),
-              ),
-            );
+      final campaignData = PedidoCampaignCatalogResolverService.resolve(
+        products: widget.products,
+        promotionLists: values[0],
+        highlightLists: values[1],
+      );
 
       setState(() {
-        _mobilePromotionProducts = promotionProducts;
-        _mobileHighlightProducts = highlightProducts;
-        _activePromotionMetaByProductId = activePromotionMetaByProductId;
+        _mobilePromotionProducts = campaignData.promotionProducts;
+        _mobileHighlightProducts = campaignData.highlightProducts;
+        _activePromotionMetaByProductId = campaignData.promotionMetaByProductId;
       });
     } catch (_) {
       if (!mounted) {
