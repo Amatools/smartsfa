@@ -17,7 +17,9 @@ import '../../../../core/services/enterprise_represented_scope.dart';
 import '../../../../core/services/mobile_product_image_cache_service.dart';
 import '../../../../core/services/offline_sync_queue.dart';
 import '../../../../shared/presentation/widgets/product_image_preview_dialog.dart';
+import '../../../auth/services/campaign_product_resolution_service.dart';
 import '../../../auth/services/workspace_profile_service.dart';
+import '../../../precos/presentation/services/default_price_table_guard.dart';
 import '../../../precos/services/product_tax_engine_service.dart';
 import '../models/computed_pedido_item_values.dart';
 import '../services/pedido_cliente_lookup_service.dart';
@@ -120,6 +122,8 @@ class _PedidoInlineEditorState extends State<PedidoInlineEditor> {
   String _searchQuery = '';
   List<Produto> _mobilePromotionProducts = const <Produto>[];
   List<Produto> _mobileHighlightProducts = const <Produto>[];
+    Map<String, CampaignPromotionProductMeta> _activePromotionMetaByProductId =
+      const <String, CampaignPromotionProductMeta>{};
   final WorkspaceProfileService _workspaceProfileService =
       WorkspaceProfileService(FirebaseFirestore.instance);
   final CatalogSnapshotStore _catalogSnapshotStore = CatalogSnapshotStore();
@@ -223,6 +227,8 @@ class _PedidoInlineEditorState extends State<PedidoInlineEditor> {
       setState(() {
         _mobilePromotionProducts = const <Produto>[];
         _mobileHighlightProducts = const <Produto>[];
+        _activePromotionMetaByProductId =
+            const <String, CampaignPromotionProductMeta>{};
       });
       return;
     }
@@ -250,24 +256,21 @@ class _PedidoInlineEditorState extends State<PedidoInlineEditor> {
         return;
       }
 
-      final promotionIds = <String>{};
-      final highlightIds = <String>{};
-      for (final list in values[0]) {
-        if (!list.active) {
-          continue;
-        }
-        promotionIds.addAll(list.productIds);
-      }
-      for (final list in values[1]) {
-        if (!list.active) {
-          continue;
-        }
-        highlightIds.addAll(list.productIds);
-      }
+      final nowUtc = DateTime.now().toUtc();
+      final activePromotionMetaByProductId =
+          CampaignProductResolutionService.resolveActivePromotionMetaByProductId(
+            promotionLists: values[0],
+            momentUtc: nowUtc,
+          );
+      final highlightIds = CampaignProductResolutionService
+          .resolveActiveProductIds(lists: values[1], momentUtc: nowUtc);
 
       final promotionProducts =
           widget.products
-              .where((product) => promotionIds.contains(product.id))
+              .where(
+                (product) =>
+                    activePromotionMetaByProductId.containsKey(product.id),
+              )
               .where((product) => product.status == ProductStatus.active)
               .toList(growable: false)
             ..sort(
@@ -290,6 +293,7 @@ class _PedidoInlineEditorState extends State<PedidoInlineEditor> {
       setState(() {
         _mobilePromotionProducts = promotionProducts;
         _mobileHighlightProducts = highlightProducts;
+        _activePromotionMetaByProductId = activePromotionMetaByProductId;
       });
     } catch (_) {
       if (!mounted) {
@@ -298,10 +302,47 @@ class _PedidoInlineEditorState extends State<PedidoInlineEditor> {
       setState(() {
         _mobilePromotionProducts = const <Produto>[];
         _mobileHighlightProducts = const <Produto>[];
+        _activePromotionMetaByProductId =
+            const <String, CampaignPromotionProductMeta>{};
       });
     } finally {
       // no-op
     }
+  }
+
+  String _promotionPriceTableIdForScope() {
+    return DefaultPriceTableGuard.promotionCampaignPriceTableIdForScope(
+      tenantId: widget.tenantId,
+      representedCompanyId: _effectiveRepresentedCompanyId,
+    );
+  }
+
+  double? _resolveActivePromotionPrice(Produto product) {
+    final meta = _activePromotionMetaByProductId[product.id];
+    final price = meta?.promotionPrice;
+    if (price == null || price.isNaN || price.isInfinite || price < 0) {
+      return null;
+    }
+    return PedidoFormatUtils.roundCurrency(price);
+  }
+
+  bool _isSyntheticMobileCampaignSourceId(String? value) {
+    final normalized = (value ?? '').trim();
+    if (normalized.isEmpty) {
+      return false;
+    }
+    return normalized.startsWith('mobile_campaign_');
+  }
+
+  String _normalizeCampaignSourceListId(String? value) {
+    final normalized = (value ?? '').trim();
+    if (normalized.isEmpty) {
+      return '';
+    }
+    if (_isSyntheticMobileCampaignSourceId(normalized)) {
+      return '';
+    }
+    return normalized;
   }
 
   /// Leitura unica (nao continua) das regras de acrescimos/descontos
@@ -973,6 +1014,8 @@ class _PedidoInlineEditorState extends State<PedidoInlineEditor> {
       previousSnapshot: item.taxSnapshot,
       previousQuantity: item.quantity,
       appliedDiscountPercents: values,
+      sourceType: item.sourceType,
+      sourceListId: item.sourceListId,
     );
 
     if (!mounted) {
@@ -1083,6 +1126,8 @@ class _PedidoInlineEditorState extends State<PedidoInlineEditor> {
       previousSnapshot: item.taxSnapshot,
       previousQuantity: item.quantity,
       appliedDiscountPercents: values,
+      sourceType: item.sourceType,
+      sourceListId: item.sourceListId,
     );
 
     if (!mounted) {
@@ -1267,6 +1312,8 @@ class _PedidoInlineEditorState extends State<PedidoInlineEditor> {
     PedidoItemTaxSnapshot? previousSnapshot,
     double? previousQuantity,
     List<double> appliedDiscountPercents = const <double>[],
+    OrderItemSourceType sourceType = OrderItemSourceType.none,
+    String? sourceListId,
   }) async {
     await _ensureCommercialRulesLoaded();
     await _ensureOrderDiscountPolicyLoaded();
@@ -1275,7 +1322,12 @@ class _PedidoInlineEditorState extends State<PedidoInlineEditor> {
         _clienteReferenciaSelecionada?.id ??
         widget.pedido?.clienteReferencia?.id;
 
-    return _itemPricingService.resolveItemValues(
+    final preferredPromotionTableId =
+      sourceType == OrderItemSourceType.promotion
+      ? _promotionPriceTableIdForScope()
+      : null;
+
+    final computed = await _itemPricingService.resolveItemValues(
       tenantId: widget.tenantId.trim(),
       product: product,
       quantity: quantity,
@@ -1292,6 +1344,39 @@ class _PedidoInlineEditorState extends State<PedidoInlineEditor> {
       ),
       salePurpose: _selectedSalePurpose,
       commercialRules: _commercialRules,
+      preferredPriceTableId: preferredPromotionTableId,
+    );
+
+    if (sourceType != OrderItemSourceType.promotion) {
+      return computed;
+    }
+
+    final promotionMeta = _activePromotionMetaByProductId[product.id];
+    final promotionPrice = promotionMeta?.promotionPrice;
+    if (promotionPrice == null || promotionPrice.isNaN || promotionPrice < 0) {
+      return computed;
+    }
+
+    final normalizedSourceListId = _normalizeCampaignSourceListId(sourceListId);
+    final matchesRequestedList =
+        normalizedSourceListId.isEmpty ||
+        normalizedSourceListId == promotionMeta?.sourceListId;
+    if (!matchesRequestedList) {
+      return computed;
+    }
+
+    final normalizedPromoUnit = PedidoFormatUtils.roundCurrency(promotionPrice);
+    if ((computed.unitPrice - normalizedPromoUnit).abs() < 0.009) {
+      return computed;
+    }
+
+    return ComputedPedidoItemValues(
+      unitPrice: normalizedPromoUnit,
+      totalPrice: PedidoFormatUtils.roundCurrency(
+        quantity * normalizedPromoUnit,
+      ),
+      taxSnapshot: computed.taxSnapshot,
+      usedFallback: computed.usedFallback,
     );
   }
 
@@ -1317,6 +1402,8 @@ class _PedidoInlineEditorState extends State<PedidoInlineEditor> {
         previousSnapshot: item.taxSnapshot,
         previousQuantity: item.quantity,
         appliedDiscountPercents: item.appliedDiscountPercents,
+        sourceType: item.sourceType,
+        sourceListId: item.sourceListId,
       );
 
       usedFallback = usedFallback || computed.usedFallback;
@@ -1388,6 +1475,8 @@ class _PedidoInlineEditorState extends State<PedidoInlineEditor> {
       previousSnapshot: current.taxSnapshot,
       previousQuantity: current.quantity,
       appliedDiscountPercents: current.appliedDiscountPercents,
+      sourceType: current.sourceType,
+      sourceListId: current.sourceListId,
     );
 
     if (!mounted) {
@@ -1481,6 +1570,20 @@ class _PedidoInlineEditorState extends State<PedidoInlineEditor> {
       );
 
       final existing = existingIndex >= 0 ? _items[existingIndex] : null;
+      final promotionMeta = _activePromotionMetaByProductId[product.id];
+      final normalizedRequestedSourceListId = _normalizeCampaignSourceListId(
+        sourceListId,
+      );
+      final resolvedSourceListId = sourceType == OrderItemSourceType.promotion
+          ? (normalizedRequestedSourceListId.isNotEmpty
+            ? normalizedRequestedSourceListId
+            : promotionMeta?.sourceListId)
+          : sourceListId;
+      final resolvedSourceListLabel = sourceType == OrderItemSourceType.promotion
+          ? ((sourceListLabel ?? '').trim().isNotEmpty
+            ? sourceListLabel!.trim()
+            : promotionMeta?.sourceListLabel)
+          : sourceListLabel;
       final nextQty = (existing?.quantity.round() ?? 0) + quantity;
       final computed = await _resolveItemValues(
         product: product,
@@ -1489,6 +1592,8 @@ class _PedidoInlineEditorState extends State<PedidoInlineEditor> {
         previousQuantity: existing?.quantity,
         appliedDiscountPercents:
             existing?.appliedDiscountPercents ?? const <double>[],
+        sourceType: sourceType,
+        sourceListId: resolvedSourceListId,
       );
 
       if (!mounted) {
@@ -1511,10 +1616,10 @@ class _PedidoInlineEditorState extends State<PedidoInlineEditor> {
                 ? sourceType
                 : existingItem.sourceType,
             sourceListId: shouldPromoteSource
-                ? sourceListId
+              ? resolvedSourceListId
                 : existingItem.sourceListId,
             sourceListLabel: shouldPromoteSource
-                ? sourceListLabel
+              ? resolvedSourceListLabel
                 : existingItem.sourceListLabel,
           );
         } else {
@@ -1531,8 +1636,8 @@ class _PedidoInlineEditorState extends State<PedidoInlineEditor> {
               unit: product.unidade,
               ncm: product.ncm,
               sourceType: sourceType,
-              sourceListId: sourceListId,
-              sourceListLabel: sourceListLabel,
+              sourceListId: resolvedSourceListId,
+              sourceListLabel: resolvedSourceListLabel,
               taxSnapshot: computed.taxSnapshot,
             ),
           );
@@ -1625,6 +1730,7 @@ class _PedidoInlineEditorState extends State<PedidoInlineEditor> {
           readIntegerQuantity: _readIntegerQuantity,
           resolveCommercialCode: _resolveCommercialCode,
           formatMoneyBr: PedidoFormatUtils.formatMoneyBr,
+          resolvePromotionPrice: _resolveActivePromotionPrice,
           inputDecoration: _inputDecoration,
           promotionProducts: _mobilePromotionProducts,
           highlightProducts: _mobileHighlightProducts,

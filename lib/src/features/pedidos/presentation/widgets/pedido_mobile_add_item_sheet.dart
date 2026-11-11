@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../../../../core/models/domain_types.dart';
 import '../../../../core/models/produto.dart';
+import '../services/pedido_campaign_price_label_formatter.dart';
 
 enum _PedidoMobileSourceFilter { catalogo, promocoes, destaques }
 
@@ -19,6 +20,7 @@ class PedidoMobileAddItemSheet extends StatefulWidget {
     required this.readIntegerQuantity,
     required this.resolveCommercialCode,
     required this.formatMoneyBr,
+    required this.resolvePromotionPrice,
     required this.inputDecoration,
     required this.onAddProduct,
     this.promotionProducts = const <Produto>[],
@@ -31,6 +33,7 @@ class PedidoMobileAddItemSheet extends StatefulWidget {
   final int Function(String raw) readIntegerQuantity;
   final String Function(Produto product) resolveCommercialCode;
   final String Function(double value) formatMoneyBr;
+  final double? Function(Produto product) resolvePromotionPrice;
   final InputDecoration Function({required String label}) inputDecoration;
   final Future<void> Function(
     Produto product, {
@@ -83,8 +86,8 @@ class _PedidoMobileAddItemSheetState extends State<PedidoMobileAddItemSheet> {
     };
     final sourceListId = switch (_activeFilter) {
       _PedidoMobileSourceFilter.catalogo => null,
-      _PedidoMobileSourceFilter.promocoes => 'mobile_campaign_promocoes',
-      _PedidoMobileSourceFilter.destaques => 'mobile_campaign_destaques',
+      _PedidoMobileSourceFilter.promocoes => null,
+      _PedidoMobileSourceFilter.destaques => null,
     };
     final sourceListLabel = switch (_activeFilter) {
       _PedidoMobileSourceFilter.catalogo => null,
@@ -314,6 +317,16 @@ class _PedidoMobileAddItemSheetState extends State<PedidoMobileAddItemSheet> {
                         final displayCode = widget.resolveCommercialCode(
                           product,
                         );
+                        final basePrice = product.valorBruto ?? 0;
+                        final promotionPrice = widget.resolvePromotionPrice(
+                          product,
+                        );
+                        final priceLabel = PedidoCampaignPriceLabelFormatter
+                            .formatMobileSearchPriceLabel(
+                              basePrice: basePrice,
+                              promotionPrice: promotionPrice,
+                              formatMoneyBr: widget.formatMoneyBr,
+                            );
                         return ListTile(
                           dense: true,
                           onTap: widget.saving
@@ -321,7 +334,7 @@ class _PedidoMobileAddItemSheetState extends State<PedidoMobileAddItemSheet> {
                               : () => _addSelectedProduct(product),
                           title: Text(product.descricao),
                           subtitle: Text(
-                            '${displayCode.isEmpty ? '-' : displayCode} · ${product.marca?.trim().isEmpty ?? true ? '-' : product.marca} · NCM ${product.ncm?.trim().isEmpty ?? true ? '-' : product.ncm} · R\$ ${widget.formatMoneyBr(product.valorBruto ?? 0)}',
+                            '${displayCode.isEmpty ? '-' : displayCode} · ${product.marca?.trim().isEmpty ?? true ? '-' : product.marca} · NCM ${product.ncm?.trim().isEmpty ?? true ? '-' : product.ncm} · $priceLabel',
                           ),
                           trailing: IconButton.filledTonal(
                             tooltip: 'Adicionar ao pedido',

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/models/domain_types.dart';
 import '../../../../core/models/produto.dart';
 import '../../../../core/repositories/produto_paging_repository.dart';
+import '../../../auth/services/campaign_product_resolution_service.dart';
 import '../../../auth/services/workspace_profile_service.dart';
 import '../services/product_catalog_brand_filter_sync_coordinator.dart';
 import '../services/product_catalog_content_projection_coordinator.dart';
@@ -315,24 +316,9 @@ class _ProductCatalogWorkspaceSectionState
   }
 
   Set<String> _resolveActiveCampaignProductIds(List<CampaignProductList> lists) {
-    if (lists.isEmpty) {
-      return const <String>{};
-    }
-
-    final ids = <String>{};
-    for (final list in lists) {
-      if (!list.active) {
-        continue;
-      }
-      for (final productId in list.productIds) {
-        final normalizedProductId = productId.trim();
-        if (normalizedProductId.isEmpty) {
-          continue;
-        }
-        ids.add(normalizedProductId);
-      }
-    }
-    return ids;
+    return CampaignProductResolutionService.resolveActiveProductIds(
+      lists: lists,
+    );
   }
 
   Stream<Map<String, dynamic>?> _tenantStream() {

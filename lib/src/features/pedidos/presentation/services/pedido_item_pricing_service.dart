@@ -229,6 +229,7 @@ class PedidoItemPricingService {
     required String originCompanyUf,
     required SalePurpose salePurpose,
     required List<CommercialAdjustmentRule> commercialRules,
+    String? preferredPriceTableId,
   }) async {
     final fallbackUnitPrice = PedidoFormatUtils.roundCurrency(
       product.valorBruto ?? 0,
@@ -288,9 +289,7 @@ class PedidoItemPricingService {
       customerId: customerId,
       representedCompanyId: representedCompanyId,
     );
-    if (resolvedTableId.isEmpty) {
-      return finalize(fallback);
-    }
+    final normalizedPreferredTableId = (preferredPriceTableId ?? '').trim();
 
     final customerTaxProfile =
         selectedCliente?.taxProfile ?? CustomerTaxProfile.contribuinte;
@@ -353,35 +352,55 @@ class PedidoItemPricingService {
       );
     }
 
-    try {
-      final primary = await tryTable(resolvedTableId);
+    Future<ComputedPedidoItemValues?> tryTableSafely(
+      String tableId,
+      String label,
+    ) async {
+      try {
+        return await tryTable(tableId);
+      } catch (e) {
+        // ignore: avoid_print
+        print(
+          '[TAX-DEBUG] tryTable($label=$tableId) falhou para '
+          'produtoId=${product.id}: $e',
+        );
+        return null;
+      }
+    }
+
+    final attemptedTableIds = <String>{};
+
+    if (normalizedPreferredTableId.isNotEmpty &&
+        attemptedTableIds.add(normalizedPreferredTableId)) {
+      final preferred = await tryTableSafely(
+        normalizedPreferredTableId,
+        'preferredTableId',
+      );
+      if (preferred != null) {
+        return finalize(preferred);
+      }
+    }
+
+    if (resolvedTableId.isNotEmpty && attemptedTableIds.add(resolvedTableId)) {
+      final primary = await tryTableSafely(resolvedTableId, 'resolvedTableId');
       if (primary != null) {
         return finalize(primary);
       }
-    } catch (e) {
-      // ignore: avoid_print
-      print(
-        '[TAX-DEBUG] tryTable(resolvedTableId=$resolvedTableId) falhou para '
-        'produtoId=${product.id}: $e',
-      );
+    }
+
+    if (resolvedTableId.isNotEmpty) {
       final legacyDefaultTableId =
           DefaultPriceTableGuard.legacyDefaultPriceTableIdForScope(
             tenantId: tenantId,
             representedCompanyId: representedCompanyId,
           );
-
-      if (legacyDefaultTableId != resolvedTableId) {
-        try {
-          final legacy = await tryTable(legacyDefaultTableId);
-          if (legacy != null) {
-            return finalize(legacy);
-          }
-        } catch (e2) {
-          // ignore: avoid_print
-          print(
-            '[TAX-DEBUG] tryTable(legacyDefaultTableId=$legacyDefaultTableId) '
-            'tambem falhou para produtoId=${product.id}: $e2',
-          );
+      if (attemptedTableIds.add(legacyDefaultTableId)) {
+        final legacy = await tryTableSafely(
+          legacyDefaultTableId,
+          'legacyDefaultTableId',
+        );
+        if (legacy != null) {
+          return finalize(legacy);
         }
       }
     }

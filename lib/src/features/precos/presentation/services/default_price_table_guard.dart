@@ -100,6 +100,20 @@ class DefaultPriceTableGuard {
     return 'products_default_${tenantId.trim()}_$scopeKey';
   }
 
+  static String promotionCampaignPriceTableIdForScope({
+    required String tenantId,
+    String? representedCompanyId,
+  }) {
+    final scopeKey = normalizeDefaultPricingScopeKey(
+      effectiveRepresentedCompanyId(
+        tenantId: tenantId,
+        representedCompanyId: representedCompanyId,
+      ),
+    );
+    final normalizedTenantId = tenantId.trim().replaceAll('/', '_');
+    return 'pt_campaign_promo_${normalizedTenantId}_$scopeKey';
+  }
+
   static Future<void> ensureDefaultPriceTable({
     required AppIdentity identity,
     required TabelaPrecoRepository repository,
