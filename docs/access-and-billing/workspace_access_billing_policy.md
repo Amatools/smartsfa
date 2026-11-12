@@ -12,6 +12,20 @@ Centralizar em um unico documento as regras de:
 
 Este arquivo e a fonte de verdade para decisoes de produto e implementacao nesse tema.
 
+## Escopo dos documentos de referencia
+
+Para o tema acesso + billing, os 3 arquivos oficiais sao:
+
+- workspace_access_billing_policy.md: politica central e regras gerais.
+- plano_login_acesso.md: plano executavel de autenticacao/autorizacao.
+- plano_billing.md: plano executavel de billing/entitlement.
+
+Regra de governanca:
+
+- este arquivo define o contrato macro;
+- os dois planos detalham execucao, fases e criterios de pronto;
+- em caso de conflito, atualizar os 3 em conjunto no mesmo PR.
+
 ## Tipos oficiais de workspace
 
 | workspaceType | Uso principal | Convites | Papel inicial recomendado |
@@ -72,6 +86,33 @@ Regra de produto e engenharia:
 Consequencia pratica:
 
 - qualquer mudanca de hierarquia, convite ou billing precisa refletir no backend/rules e ficar valida para todas as plataformas no mesmo contrato.
+
+## Politica de acesso por plano (online e offline)
+
+### Mobile offline-first
+
+- o usuario pode continuar operando offline com sessao valida e cache local apos um login valido anterior;
+- ao recuperar conectividade, o app deve revalidar imediatamente entitlement e status de billing no backend;
+- se o plano estiver inativo no momento da revalidacao online, o app deve bloquear uso operacional.
+
+### Definicao de plano inativo
+
+Considerar inativo (bloqueio operacional) quando billingStatus for, no minimo:
+
+- suspended
+- canceled
+- no_plan
+
+### Web sem plano ativo
+
+- no web, usuario sem plano ativo pode acessar fluxo de billing/checkout para regularizacao;
+- rotas operacionais do sistema (modulos de negocio) devem permanecer bloqueadas enquanto o plano estiver inativo.
+
+### Regra de implementacao
+
+- bloqueio sempre validado server-side;
+- UI apenas reflete o estado de entitlement;
+- toda mudanca de estado deve ficar auditada.
 
 ## Fluxo esperado no produto
 
@@ -159,3 +200,128 @@ Direcao recomendada:
 1. definir fonte de verdade de billing por workspace (ou por conta, com regra explicita);
 2. vincular mudancas de plano a transicoes auditaveis de feature flags;
 3. manter esta politica como contrato entre Produto, UX e Backend.
+
+## Provedores de login e ciclo de cadastro
+
+Direcao de produto atual:
+
+- login Google como caminho preferencial;
+- login por email/senha pode existir como opcao secundaria, sob governanca de seguranca.
+
+Com login Google:
+
+- nao ha etapa propria de confirmacao de email dentro do app;
+- ainda existe onboarding de acesso (convite, solicitacao ou criacao permitida);
+- criar conta autenticada nao implica acesso automatico a tenant.
+
+LGPD e dados sensiveis:
+
+- preferir login federado reduz superficie de tratamento de credenciais no produto;
+- mesmo com login federado, dados pessoais de perfil e auditoria devem seguir base legal e minimizacao.
+
+## Dados mínimos indispensáveis (LGPD + operação SaaS)
+
+Esta seção define o mínimo de dados a coletar e manter para operar o SmartSFA com segurança jurídica e técnica.
+
+### 1. Identificação do usuário operacional (obrigatório)
+
+Em usuarios/{uid}:
+
+- uid
+- email
+- displayName (ou nome de exibição)
+- authProvider (google.com, password, etc.)
+- createdAt
+- updatedAt
+
+Finalidade:
+
+- autenticação, suporte, rastreabilidade e segurança da conta.
+
+### 2. Vínculo de acesso (obrigatório)
+
+Em tenant_memberships:
+
+- membershipId
+- tenantId
+- uid
+- role
+- state
+- ativo
+
+Finalidade:
+
+- autorização por tenant e segregação de acesso.
+
+### 3. Evidências de consentimento e auditoria (obrigatório)
+
+Coleções/eventos de auditoria:
+
+- versão de termos/política aceita
+- timestamp de aceite
+- actorUid
+- ação
+- contexto mínimo (tenant, membership, sessão)
+
+Finalidade:
+
+- conformidade, resposta a incidentes e trilha de governança.
+
+### 4. Dados mínimos de billing B2B (obrigatório para cobrança)
+
+Por tenant (conta pagadora):
+
+- razão social
+- CNPJ
+- endereço fiscal
+- e-mail financeiro
+- contato financeiro (nome)
+
+Finalidade:
+
+- contratação, faturamento e comunicação financeira.
+
+### 5. Identificadores Stripe (obrigatório para integração)
+
+Por tenant:
+
+- stripeCustomerId
+- stripeSubscriptionId
+- stripePriceId
+- stripeDefaultPaymentMethodId (quando aplicável)
+- billingStatus e períodos (início/fim)
+- último webhook processado + tabela de idempotência por eventId
+
+Finalidade:
+
+- sincronização de assinatura, cobrança e prevenção de duplicidade.
+
+### 6. Dados que NÃO devem ser padrão global
+
+- CPF de todos os usuários operacionais
+- data de nascimento de todos os usuários operacionais
+- dados de cartão fora da Stripe
+
+Somente coletar CPF/data de nascimento quando houver necessidade legal/fiscal explícita para o caso de uso.
+
+## Bases legais LGPD (referência operacional)
+
+Matriz recomendada para o cenário SaaS B2B:
+
+- autenticação e controle de acesso: execução de contrato.
+- auditoria de segurança e trilha administrativa: legítimo interesse e prevenção à fraude.
+- cobrança, faturamento e dados fiscais do tenant: execução de contrato e obrigação legal/regulatória.
+- suporte e resposta a incidentes: legítimo interesse e execução de contrato.
+
+Observação:
+
+- a definição final deve ser validada com jurídico e DPO, incluindo política de retenção e descarte.
+
+## Decisão de onboarding com login Google
+
+Com login Google como método preferencial:
+
+- não é necessário fluxo próprio de confirmação de e-mail;
+- primeiro login cria/atualiza perfil mínimo de conta;
+- autenticação concluída não implica acesso automático ao tenant;
+- acesso depende de membership ativa (convite/solicitação/criação permitida).

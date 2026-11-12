@@ -66,10 +66,14 @@ flutter run -d chrome --web-port=5400
 http://localhost:5400/?mode=web&entry=maintainer
 
 
-O login e exclusivamente via Firebase Auth (Google ou e-mail/senha cadastrados no projeto). Nao ha mais modos mock/local de desenvolvimento: a conta precisa existir no Firebase para liberar o app. Apos o primeiro login bem-sucedido, a sessao fica persistida localmente e o app continua funcionando offline (Firestore com persistencia habilitada) ate que seja necessario reautenticar.
+O login é exclusivamente via Firebase Auth (Google ou e-mail/senha cadastrados no projeto). Não há mais modos mock/local de desenvolvimento: a conta precisa existir no Firebase para liberar o app. Após o primeiro login bem-sucedido, a sessão fica persistida localmente e o app continua funcionando offline (Firestore com persistência habilitada) até que seja necessário reautenticar.
 
 ## Guias do projeto
 
-- `appdev.md`: board de execucao e proximas etapas.
-- `docs/guia_implementacao_saas.md`: referencia principal de arquitetura e regras.
-- `docs/auth_access_model.md`: modelo de login/autorizacao.
+- `appdev.md`: board de execução e próximas etapas.
+- `docs/guia_implementacao_saas.md`: referência principal de arquitetura e regras.
+- `docs/auth_access_model.md`: modelo de login/autorização.
+- `docs/access-and-billing/README.md`: índice consolidado de acesso e billing.
+- `docs/access-and-billing/workspace_access_billing_policy.md`: política central de acesso e billing.
+- `docs/access-and-billing/plano_login_acesso.md`: plano executável para fechamento de login e governança de acesso.
+- `docs/access-and-billing/plano_billing.md`: plano executável para billing, entitlement e operação admin.
