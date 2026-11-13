@@ -1978,8 +1978,9 @@ class _AccountSection extends StatelessWidget {
                             context,
                             actionType: 'delete_user_account',
                             title: 'Excluir conta',
-                            helperText: 'Antes de excluir, promova um novo Administrador (owner) no workspace.',
+                            helperText: 'Se voce for o ultimo owner ativo, sera obrigatorio definir um novo owner neste fluxo.',
                             expectedPhrase: 'EXCLUIR CONTA',
+                            enforceReplacementOwnerForLastOwner: true,
                           ),
                           icon: const Icon(Icons.delete_outline),
                           label: const Text('Excluir conta'),
@@ -2028,6 +2029,7 @@ class _AccountSection extends StatelessWidget {
     required String title,
     required String helperText,
     required String expectedPhrase,
+    bool enforceReplacementOwnerForLastOwner = false,
   }) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
@@ -2037,18 +2039,104 @@ class _AccountSection extends StatelessWidget {
       return;
     }
 
+    _OwnerTransferContext? ownerTransferContext;
+    var ownerTransferValidationStatus = enforceReplacementOwnerForLastOwner
+        ? 'pending_validation'
+        : 'not_required';
+    if (enforceReplacementOwnerForLastOwner) {
+      try {
+        ownerTransferContext = await _loadOwnerTransferContext(
+          currentUid: user.uid,
+        );
+        ownerTransferValidationStatus = 'validated';
+      } catch (error) {
+        ownerTransferValidationStatus = 'validation_unavailable';
+        if (!context.mounted) {
+          return;
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Nao foi possivel validar ownership agora. Voce pode registrar a solicitacao e o time admin validara na execucao.',
+            ),
+          ),
+        );
+      }
+      if (!context.mounted) {
+        return;
+      }
+      if ((ownerTransferContext?.requiresReplacementOwner ?? false) &&
+          (ownerTransferContext?.candidates.isEmpty ?? true)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Nao ha membros ativos para assumir ownership. Convide um membro antes de excluir sua conta.',
+            ),
+          ),
+        );
+        return;
+      }
+    }
+
     final requestData = await _openLifecycleRequestDialog(
       context,
       title: title,
       helperText: helperText,
       expectedPhrase: expectedPhrase,
+      requireReplacementOwner:
+          ownerTransferContext?.requiresReplacementOwner ?? false,
+      replacementOwnerCandidates:
+          ownerTransferContext?.candidates ?? const <_OwnerTransferCandidate>[],
     );
     if (!context.mounted || requestData == null) {
       return;
     }
 
     final reason = (requestData['reason'] ?? '').trim();
+    final replacementOwnerUid = (requestData['replacementOwnerUid'] ?? '')
+        .trim();
+    final replacementOwnerEmail = (requestData['replacementOwnerEmail'] ?? '')
+        .trim();
+    final replacementOwnerMembershipId =
+        (requestData['replacementOwnerMembershipId'] ?? '').trim();
+
+    if ((ownerTransferContext?.requiresReplacementOwner ?? false) &&
+        replacementOwnerUid.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Selecione um novo owner para prosseguir.'),
+        ),
+      );
+      return;
+    }
+
     try {
+      if (replacementOwnerUid.isNotEmpty) {
+        await _applyOwnerTransferForAccountDeletion(
+          actorUid: user.uid,
+          replacementOwnerUid: replacementOwnerUid,
+          replacementOwnerEmail: replacementOwnerEmail,
+          replacementOwnerMembershipId: replacementOwnerMembershipId,
+          candidates:
+              ownerTransferContext?.candidates ??
+              const <_OwnerTransferCandidate>[],
+        );
+      }
+
+      final tenantDoc = await FirebaseFirestore.instance
+          .collection('tenants')
+          .doc(activeTenant.tenantId)
+          .get();
+      final tenantData = tenantDoc.data() ?? const <String, dynamic>{};
+      final ownerSnapshot = <String, dynamic>{
+        'activeOwnerCountAtRequest':
+            ownerTransferContext?.activeOwnerCount ?? 0,
+        'currentUserIsActiveOwner':
+            ownerTransferContext?.currentUserIsActiveOwner ?? false,
+        'currentUserIsOnlyActiveOwner':
+            ownerTransferContext?.requiresReplacementOwner ?? false,
+      };
+
       await FirebaseFirestore.instance
           .collection('workspace_deletion_requests')
           .add({
@@ -2061,6 +2149,28 @@ class _AccountSection extends StatelessWidget {
             'requestedByEmail': (user.email ?? '').trim(),
             'actorRole': activeTenant.role,
             'reason': reason,
+            'replacementOwnerUid': replacementOwnerUid,
+            'replacementOwnerEmail': replacementOwnerEmail,
+            'replacementOwnerMembershipId': replacementOwnerMembershipId,
+            'ownerTransferRequired':
+                ownerTransferContext?.requiresReplacementOwner ?? false,
+            'ownerTransferPlanned': replacementOwnerUid.isNotEmpty,
+            'ownerTransferValidationStatus': ownerTransferValidationStatus,
+            'ownerSnapshot': ownerSnapshot,
+            'billingSnapshot': {
+              'stripeCustomerId': (tenantData['stripeCustomerId'] ?? '')
+                  .toString()
+                  .trim(),
+              'billingPlanKey': (tenantData['billingPlanKey'] ?? '')
+                  .toString()
+                  .trim(),
+              'billingStatus': (tenantData['billingStatus'] ?? '')
+                  .toString()
+                  .trim(),
+              'billingCycle': (tenantData['billingCycle'] ?? '')
+                  .toString()
+                  .trim(),
+            },
             'source': 'portal_account_section',
             'createdAt': FieldValue.serverTimestamp(),
           });
@@ -2086,73 +2196,149 @@ class _AccountSection extends StatelessWidget {
     required String title,
     required String helperText,
     required String expectedPhrase,
+    bool requireReplacementOwner = false,
+    List<_OwnerTransferCandidate> replacementOwnerCandidates =
+        const <_OwnerTransferCandidate>[],
   }) async {
     final phraseController = TextEditingController();
     final reasonController = TextEditingController();
+    var selectedReplacementOwnerUid =
+        requireReplacementOwner && replacementOwnerCandidates.isNotEmpty
+        ? replacementOwnerCandidates.first.uid
+        : '';
+    final candidateByUid = {
+      for (final candidate in replacementOwnerCandidates)
+        candidate.uid: candidate,
+    };
 
     try {
       final result = await showDialog<Map<String, String>>(
         context: context,
-        builder: (dialogContext) => AlertDialog(
-          title: Text(title),
-          content: SizedBox(
-            width: 460,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(helperText),
-                const SizedBox(height: 8),
-                SelectableText(
-                  expectedPhrase,
-                  style: const TextStyle(fontWeight: FontWeight.w700),
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (dialogContext, setDialogState) {
+            return AlertDialog(
+              title: Text(title),
+              content: SizedBox(
+                width: 460,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(helperText),
+                    const SizedBox(height: 8),
+                    SelectableText(
+                      expectedPhrase,
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    if (requireReplacementOwner) ...[
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<String>(
+                        isExpanded: true,
+                        initialValue: selectedReplacementOwnerUid.isEmpty
+                            ? null
+                            : selectedReplacementOwnerUid,
+                        decoration: const InputDecoration(
+                          labelText: 'Novo owner (obrigatorio)',
+                        ),
+                        items: replacementOwnerCandidates
+                            .map(
+                              (candidate) => DropdownMenuItem<String>(
+                                value: candidate.uid,
+                                child: Text(
+                                  candidate.label,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            )
+                            .toList(growable: false),
+                        selectedItemBuilder: (context) {
+                          return replacementOwnerCandidates
+                              .map(
+                                (candidate) => Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: Text(
+                                    candidate.label,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              )
+                              .toList(growable: false);
+                        },
+                        onChanged: (value) {
+                          setDialogState(() {
+                            selectedReplacementOwnerUid = (value ?? '').trim();
+                          });
+                        },
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: phraseController,
+                      decoration: const InputDecoration(
+                        labelText: 'Frase de confirmação',
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: reasonController,
+                      maxLines: 3,
+                      decoration: const InputDecoration(
+                        labelText: 'Motivo (obrigatório)',
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: phraseController,
-                  decoration: const InputDecoration(
-                    labelText: 'Frase de confirmação',
-                  ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Cancelar'),
                 ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: reasonController,
-                  maxLines: 3,
-                  decoration: const InputDecoration(
-                    labelText: 'Motivo (obrigatório)',
-                  ),
+                FilledButton(
+                  onPressed: () {
+                    final typedPhrase = phraseController.text.trim();
+                    final reason = reasonController.text.trim();
+                    if (typedPhrase != expectedPhrase) {
+                      ScaffoldMessenger.of(dialogContext).showSnackBar(
+                        const SnackBar(
+                          content: Text('Frase de confirmação inválida.'),
+                        ),
+                      );
+                      return;
+                    }
+                    if (requireReplacementOwner &&
+                        selectedReplacementOwnerUid.isEmpty) {
+                      ScaffoldMessenger.of(dialogContext).showSnackBar(
+                        const SnackBar(
+                          content: Text('Selecione o novo owner.'),
+                        ),
+                      );
+                      return;
+                    }
+                    if (reason.isEmpty) {
+                      ScaffoldMessenger.of(dialogContext).showSnackBar(
+                        const SnackBar(content: Text('Informe o motivo.')),
+                      );
+                      return;
+                    }
+                    final selectedCandidate =
+                        candidateByUid[selectedReplacementOwnerUid];
+                    Navigator.of(dialogContext).pop({
+                      'reason': reason,
+                      'replacementOwnerUid': selectedReplacementOwnerUid,
+                      'replacementOwnerEmail': (selectedCandidate?.email ?? '')
+                          .trim(),
+                      'replacementOwnerMembershipId':
+                          (selectedCandidate?.membershipId ?? '').trim(),
+                    });
+                  },
+                  child: const Text('Confirmar'),
                 ),
               ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('Cancelar'),
-            ),
-            FilledButton(
-              onPressed: () {
-                final typedPhrase = phraseController.text.trim();
-                final reason = reasonController.text.trim();
-                if (typedPhrase != expectedPhrase) {
-                  ScaffoldMessenger.of(dialogContext).showSnackBar(
-                    const SnackBar(
-                      content: Text('Frase de confirmação inválida.'),
-                    ),
-                  );
-                  return;
-                }
-                if (reason.isEmpty) {
-                  ScaffoldMessenger.of(dialogContext).showSnackBar(
-                    const SnackBar(content: Text('Informe o motivo.')),
-                  );
-                  return;
-                }
-                Navigator.of(dialogContext).pop({'reason': reason});
-              },
-              child: const Text('Confirmar'),
-            ),
-          ],
+            );
+          },
         ),
       );
 
@@ -2161,6 +2347,287 @@ class _AccountSection extends StatelessWidget {
       phraseController.dispose();
       reasonController.dispose();
     }
+  }
+
+  Future<_OwnerTransferContext> _loadOwnerTransferContext({
+    required String currentUid,
+  }) async {
+    final tenantId = activeTenant.tenantId.trim();
+    if (tenantId.isEmpty) {
+      return const _OwnerTransferContext(
+        requiresReplacementOwner: false,
+        currentUserIsActiveOwner: false,
+        activeOwnerCount: 0,
+        candidates: <_OwnerTransferCandidate>[],
+      );
+    }
+
+    final activeMemberships = await _loadActiveMembershipsForOwnerTransfer(
+      tenantId: tenantId,
+      currentUid: currentUid,
+    );
+
+    final activeOwners = activeMemberships
+        .where((membership) {
+          return membership.role.trim().toLowerCase() == 'owner';
+        })
+        .toList(growable: false);
+
+    final currentUserIsActiveOwner = activeOwners.any(
+      (membership) => membership.uid.trim() == currentUid.trim(),
+    );
+    final requiresReplacementOwner =
+        currentUserIsActiveOwner && activeOwners.length <= 1;
+
+    final candidatesByUid = <String, TenantMembership>{};
+    for (final membership in activeMemberships) {
+      final uid = membership.uid.trim();
+      if (uid.isEmpty || uid == currentUid.trim()) {
+        continue;
+      }
+      final existing = candidatesByUid[uid];
+      if (existing == null) {
+        candidatesByUid[uid] = membership;
+        continue;
+      }
+      final existingIsOwner = existing.role.trim().toLowerCase() == 'owner';
+      final currentIsOwner = membership.role.trim().toLowerCase() == 'owner';
+      if (!existingIsOwner && currentIsOwner) {
+        candidatesByUid[uid] = membership;
+      }
+    }
+
+    final candidates = <_OwnerTransferCandidate>[];
+    for (final entry in candidatesByUid.entries) {
+      final uid = entry.key;
+      final membership = entry.value;
+      final email = (membership.userEmail ?? '').trim();
+      final displayName = _sanitizeOwnerCandidateName(
+        (membership.userName ?? '').trim(),
+        tenantName: activeTenant.tenantName,
+      );
+      final role = membership.role.trim().toLowerCase();
+      final primaryLabel = email.isNotEmpty
+          ? email
+          : displayName.isNotEmpty
+          ? displayName
+          : uid;
+      final secondaryLabel =
+          displayName.isNotEmpty && displayName != primaryLabel
+          ? ' - $displayName'
+          : '';
+      candidates.add(
+        _OwnerTransferCandidate(
+          uid: uid,
+          membershipId: membership.membershipId,
+          email: email,
+          displayName: displayName,
+          role: role,
+          label: '$primaryLabel$secondaryLabel',
+        ),
+      );
+    }
+
+    candidates.sort((a, b) {
+      final aOwner = a.role == 'owner';
+      final bOwner = b.role == 'owner';
+      if (aOwner != bOwner) {
+        return aOwner ? -1 : 1;
+      }
+      return a.label.toLowerCase().compareTo(b.label.toLowerCase());
+    });
+
+    return _OwnerTransferContext(
+      requiresReplacementOwner: requiresReplacementOwner,
+      currentUserIsActiveOwner: currentUserIsActiveOwner,
+      activeOwnerCount: activeOwners.length,
+      candidates: candidates,
+    );
+  }
+
+  Future<List<TenantMembership>> _loadActiveMembershipsForOwnerTransfer({
+    required String tenantId,
+    required String currentUid,
+  }) async {
+    final membershipsById = <String, TenantMembership>{};
+
+    void addMembership(TenantMembership membership) {
+      final membershipId = membership.membershipId.trim();
+      if (membershipId.isEmpty) {
+        return;
+      }
+      membershipsById.putIfAbsent(membershipId, () => membership);
+    }
+
+    List<TenantMembership> parseMemberships(
+      Iterable<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
+    ) {
+      return docs
+          .map((doc) {
+            final data = doc.data();
+            data.putIfAbsent('membershipId', () => doc.id);
+            return TenantMembership.fromMap(data);
+          })
+          .where((membership) {
+            if (!membership.isActive) {
+              return false;
+            }
+            if (membership.isInInactivityPeriod()) {
+              return false;
+            }
+            return membership.uid.trim().isNotEmpty;
+          })
+          .toList(growable: false);
+    }
+
+    try {
+      final broadSnapshot = await FirebaseFirestore.instance
+          .collection('tenant_memberships')
+          .where('tenantId', isEqualTo: tenantId)
+          .where('ativo', isEqualTo: true)
+          .get();
+      for (final membership in parseMemberships(broadSnapshot.docs)) {
+        addMembership(membership);
+      }
+      return membershipsById.values.toList(growable: false);
+    } catch (_) {
+      // Fallback for legacy docs blocked by rules: load only slices that an
+      // owner can deterministically read.
+    }
+
+    try {
+      final ownerSnapshot = await FirebaseFirestore.instance
+          .collection('tenant_memberships')
+          .where('tenantId', isEqualTo: tenantId)
+          .where('ativo', isEqualTo: true)
+          .where('role', isEqualTo: 'owner')
+          .get();
+      for (final membership in parseMemberships(ownerSnapshot.docs)) {
+        addMembership(membership);
+      }
+    } catch (_) {
+      // Best-effort fallback continues below.
+    }
+
+    try {
+      final managedSnapshot = await FirebaseFirestore.instance
+          .collection('tenant_memberships')
+          .where('tenantId', isEqualTo: tenantId)
+          .where('ativo', isEqualTo: true)
+          .where('ownerId', isEqualTo: currentUid.trim())
+          .get();
+      for (final membership in parseMemberships(managedSnapshot.docs)) {
+        addMembership(membership);
+      }
+    } catch (_) {
+      // Keep best-effort result.
+    }
+
+    final selfMembershipId = '${tenantId}_${currentUid.trim()}';
+    try {
+      final selfDoc = await FirebaseFirestore.instance
+          .collection('tenant_memberships')
+          .doc(selfMembershipId)
+          .get();
+      if (selfDoc.exists) {
+        final data = selfDoc.data() ?? <String, dynamic>{};
+        data.putIfAbsent('membershipId', () => selfDoc.id);
+        final membership = TenantMembership.fromMap(data);
+        if (membership.isActive &&
+            !membership.isInInactivityPeriod() &&
+            membership.uid.trim().isNotEmpty) {
+          addMembership(membership);
+        }
+      }
+    } catch (_) {
+      // Keep best-effort result.
+    }
+
+    if (membershipsById.isNotEmpty) {
+      return membershipsById.values.toList(growable: false);
+    }
+
+    throw StateError(
+      'Nao foi possivel carregar memberships para validar ownership.',
+    );
+  }
+
+  String _sanitizeOwnerCandidateName(
+    String rawName, {
+    required String tenantName,
+  }) {
+    var normalized = rawName.trim();
+    if (normalized.isEmpty) {
+      return '';
+    }
+
+    final tenant = tenantName.trim();
+    if (tenant.isNotEmpty) {
+      normalized = normalized.replaceAll(
+        RegExp(RegExp.escape(tenant), caseSensitive: false),
+        '',
+      );
+    }
+
+    normalized = normalized.replaceAll(RegExp(r'\s{2,}'), ' ').trim();
+    if (normalized.endsWith('-')) {
+      normalized = normalized.substring(0, normalized.length - 1).trim();
+    }
+    return normalized;
+  }
+
+  Future<void> _applyOwnerTransferForAccountDeletion({
+    required String actorUid,
+    required String replacementOwnerUid,
+    required String replacementOwnerEmail,
+    required String replacementOwnerMembershipId,
+    required List<_OwnerTransferCandidate> candidates,
+  }) async {
+    final normalizedActorUid = actorUid.trim();
+    final normalizedReplacementOwnerUid = replacementOwnerUid.trim();
+    if (normalizedActorUid.isEmpty || normalizedReplacementOwnerUid.isEmpty) {
+      return;
+    }
+
+    final replacementCandidate = candidates.firstWhere(
+      (candidate) => candidate.uid.trim() == normalizedReplacementOwnerUid,
+      orElse: () => _OwnerTransferCandidate(
+        uid: normalizedReplacementOwnerUid,
+        membershipId: replacementOwnerMembershipId,
+        email: replacementOwnerEmail,
+        displayName: '',
+        role: '',
+        label: normalizedReplacementOwnerUid,
+      ),
+    );
+
+    final normalizedRole = replacementCandidate.role.trim().toLowerCase();
+    if (replacementCandidate.membershipId.trim().isNotEmpty &&
+        normalizedRole != 'owner') {
+      final membershipService = TenantMembershipService(
+        FirebaseFirestore.instance,
+      );
+      await membershipService.changeRoleByActor(
+        membershipId: replacementCandidate.membershipId,
+        newRole: 'owner',
+        actorUid: normalizedActorUid,
+      );
+    }
+
+    await FirebaseFirestore.instance
+        .collection('tenants')
+        .doc(activeTenant.tenantId)
+        .set({
+          'ownerUid': normalizedReplacementOwnerUid,
+          'billingOwnerUid': normalizedReplacementOwnerUid,
+          'billingOwnerEmail': replacementCandidate.email.trim(),
+          'workspaceIntegrityState': 'ok',
+          'ownershipLastTransferredAt': DateTime.now()
+              .toUtc()
+              .toIso8601String(),
+          'ownershipLastTransferredByUid': normalizedActorUid,
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
   }
 
   String _authProviderLabel(User? user) {
@@ -2257,6 +2724,38 @@ class _AccountSection extends StatelessWidget {
     final normalized = (result ?? '').trim();
     return normalized.isEmpty ? null : normalized;
   }
+}
+
+class _OwnerTransferContext {
+  const _OwnerTransferContext({
+    required this.requiresReplacementOwner,
+    required this.currentUserIsActiveOwner,
+    required this.activeOwnerCount,
+    required this.candidates,
+  });
+
+  final bool requiresReplacementOwner;
+  final bool currentUserIsActiveOwner;
+  final int activeOwnerCount;
+  final List<_OwnerTransferCandidate> candidates;
+}
+
+class _OwnerTransferCandidate {
+  const _OwnerTransferCandidate({
+    required this.uid,
+    required this.membershipId,
+    required this.email,
+    required this.displayName,
+    required this.role,
+    required this.label,
+  });
+
+  final String uid;
+  final String membershipId;
+  final String email;
+  final String displayName;
+  final String role;
+  final String label;
 }
 
 class _EditDisplayNameDialog extends StatefulWidget {

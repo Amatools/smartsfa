@@ -196,9 +196,14 @@ extension _MaintainerConsoleBillingPart on _MaintainerConsolePageState {
     final rows = workspaces
         .map((workspace) {
           final ownerMembership = ownerMembershipByTenant[workspace.tenantId];
-          final ownerAccount = ownerMembership == null
+          final membershipUid = (ownerMembership?.uid ?? '').trim();
+          final fallbackOwnerUid = workspace.ownerUid.trim();
+          final resolvedOwnerUid = membershipUid.isNotEmpty
+              ? membershipUid
+              : fallbackOwnerUid;
+          final ownerAccount = resolvedOwnerUid.isEmpty
               ? null
-              : usersByUid[ownerMembership.uid];
+              : usersByUid[resolvedOwnerUid];
           return _MaintainerBillingWorkspaceRow(
             workspace: workspace,
             ownerMembership: ownerMembership,
@@ -241,9 +246,10 @@ extension _MaintainerConsoleBillingPart on _MaintainerConsolePageState {
           final ownerMembership = row.ownerMembership;
           final ownerName = (owner?.displayName ?? '').toLowerCase();
           final ownerEmail = (owner?.email ?? '').toLowerCase();
-          final ownerUid = (owner?.uid ?? ownerMembership?.uid ?? '')
-              .toLowerCase()
-              .trim();
+          final ownerUid =
+              (owner?.uid ?? ownerMembership?.uid ?? row.workspace.ownerUid)
+                  .toLowerCase()
+                  .trim();
           final tenantName = row.workspace.tenantName.toLowerCase();
           final tenantId = row.workspace.tenantId.toLowerCase();
           final plan = row.workspace.billingPlanKey.toLowerCase();
@@ -495,7 +501,8 @@ extension _MaintainerConsoleBillingPart on _MaintainerConsolePageState {
     final ownerMembership = row.ownerMembership;
     final ownerName = (owner?.displayName ?? '').trim();
     final ownerEmail = (owner?.email ?? '').trim();
-    final ownerUid = (owner?.uid ?? ownerMembership?.uid ?? '').trim();
+    final ownerUid =
+        (owner?.uid ?? ownerMembership?.uid ?? row.workspace.ownerUid).trim();
     final ownerLabel = ownerEmail.isNotEmpty
         ? ownerEmail
         : ownerUid.isNotEmpty
@@ -506,6 +513,10 @@ extension _MaintainerConsoleBillingPart on _MaintainerConsolePageState {
     final stripeLabel = row.workspace.stripeCustomerId.isEmpty
         ? 'Nao vinculado'
         : 'Vinculado';
+    final integrityState = row.workspace.workspaceIntegrityState
+        .trim()
+        .toLowerCase();
+    final hasIntegrityViolation = integrityState == 'orphan_violation';
     final planLabel = row.workspace.billingPlanKey.isEmpty
         ? '--'
         : row.workspace.billingPlanKey;
@@ -533,6 +544,22 @@ extension _MaintainerConsoleBillingPart on _MaintainerConsolePageState {
                 style: const TextStyle(fontSize: 12, color: Color(0xFF576074)),
                 overflow: TextOverflow.ellipsis,
               ),
+              if (hasIntegrityViolation)
+                const Text(
+                  'Sem owner ativo (orphan_violation)',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF9A2C2C),
+                    fontWeight: FontWeight.w600,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                )
+              else if (row.workspace.workspaceAbandoned)
+                const Text(
+                  'Workspace marcado como abandonado',
+                  style: TextStyle(fontSize: 12, color: Color(0xFF9A2C2C)),
+                  overflow: TextOverflow.ellipsis,
+                ),
             ],
           ),
         ),

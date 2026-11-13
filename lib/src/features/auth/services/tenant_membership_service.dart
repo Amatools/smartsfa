@@ -521,6 +521,12 @@ class TenantMembershipService {
       throw StateError('Actor sem permissao para revogar este membership.');
     }
 
+    await _assertLastOwnerWillRemain(
+      tenantId: target.tenantId,
+      targetMembership: target,
+      operationLabel: 'revogar',
+    );
+
     final normalizedRole = target.role.trim().toLowerCase();
     if (normalizedRole == 'gerente' || normalizedRole == 'representante') {
       await _assertNoActiveSubordinates(target);
@@ -598,6 +604,12 @@ class TenantMembershipService {
     )) {
       throw StateError('Actor sem permissao para inativar este membership.');
     }
+
+    await _assertLastOwnerWillRemain(
+      tenantId: target.tenantId,
+      targetMembership: target,
+      operationLabel: 'inativar',
+    );
 
     final normalizedRole = target.role.trim().toLowerCase();
     if (normalizedRole == 'gerente' || normalizedRole == 'representante') {
@@ -814,6 +826,15 @@ class TenantMembershipService {
       target: target,
     )) {
       throw StateError('Actor sem permissao para alterar este membership.');
+    }
+
+    final normalizedRequestedRole = newRole.trim().toLowerCase();
+    if (normalizedRequestedRole != 'owner') {
+      await _assertLastOwnerWillRemain(
+        tenantId: target.tenantId,
+        targetMembership: target,
+        operationLabel: 'alterar perfil do owner',
+      );
     }
 
     await _assertRoleChangeKeepsHierarchy(
@@ -1317,6 +1338,64 @@ class TenantMembershipService {
         normalizedCurrentRole == 'representante') {
       await _assertNoActiveSubordinates(current);
     }
+  }
+
+  Future<void> _assertLastOwnerWillRemain({
+    required String tenantId,
+    required TenantMembership targetMembership,
+    required String operationLabel,
+  }) async {
+    if (!targetMembership.isActive) {
+      return;
+    }
+
+    final normalizedRole = targetMembership.role.trim().toLowerCase();
+    if (normalizedRole != 'owner') {
+      return;
+    }
+
+    final activeOwners = await _loadActiveOwnersForTenant(tenantId);
+    var activeOwnersExcludingTarget = 0;
+    for (final owner in activeOwners) {
+      if (owner.uid.trim() != targetMembership.uid.trim()) {
+        activeOwnersExcludingTarget += 1;
+      }
+    }
+
+    if (activeOwnersExcludingTarget > 0) {
+      return;
+    }
+
+    throw StateError(
+      'Nao e permitido $operationLabel o ultimo owner ativo deste workspace. Transfira ownership antes de continuar.',
+    );
+  }
+
+  Future<List<TenantMembership>> _loadActiveOwnersForTenant(
+    String tenantId,
+  ) async {
+    final snapshot = await _firestore
+        .collection('tenant_memberships')
+        .where('tenantId', isEqualTo: tenantId)
+        .where('ativo', isEqualTo: true)
+        .get();
+
+    return snapshot.docs
+        .map((doc) {
+          final data = doc.data();
+          data.putIfAbsent('membershipId', () => doc.id);
+          return TenantMembership.fromMap(data);
+        })
+        .where((membership) {
+          if (!membership.isActive) {
+            return false;
+          }
+          if (membership.isInInactivityPeriod()) {
+            return false;
+          }
+          return membership.role.trim().toLowerCase() == 'owner';
+        })
+        .toList(growable: false);
   }
 
   Future<void> _applyHierarchyAggregateDelta({

@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+import 'membership_identity_formatter.dart';
+
 class SoloWorkspaceService {
   SoloWorkspaceService(this._firestore);
 
@@ -64,6 +66,12 @@ class SoloWorkspaceService {
     );
     final tenantName = normalizedName;
     final membershipId = '${tenantId}_${user.uid}';
+    final membershipUserName = buildMembershipUserName(
+      uid: user.uid,
+      authDisplayName: user.displayName,
+      email: user.email,
+      tenantName: tenantName,
+    );
     final tenantBillingSeed = _seedTenantBillingFields(plan: plan.value);
     final userBillingSeed = _seedUserBillingFields();
 
@@ -135,7 +143,7 @@ class SoloWorkspaceService {
         'activeSellerChildrenCount': 0,
         'activeRepresentativeChildrenCount': 0,
         'activeSubordinateCount': 0,
-        'userName': user.displayName ?? user.email ?? user.uid,
+        'userName': membershipUserName,
         'userEmail': user.email ?? '',
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
@@ -215,6 +223,12 @@ class SoloWorkspaceService {
       plan: OnboardingPlan.team,
       workspaceName: normalizedName,
     );
+    final targetMembershipUserName = buildMembershipUserName(
+      uid: user.uid,
+      authDisplayName: user.displayName,
+      email: user.email,
+      tenantName: normalizedName,
+    );
     final targetMembershipId = '${targetTenantId}_${user.uid}';
     final tenantBillingSeed = _seedTenantBillingFields(
       plan: OnboardingPlan.team.value,
@@ -272,7 +286,7 @@ class SoloWorkspaceService {
         'activeSellerChildrenCount': 0,
         'activeRepresentativeChildrenCount': 0,
         'activeSubordinateCount': 0,
-        'userName': user.displayName ?? user.email ?? user.uid,
+        'userName': targetMembershipUserName,
         'userEmail': user.email ?? '',
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),

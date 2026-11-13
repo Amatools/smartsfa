@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../../core/models/tenant_invitation.dart';
 import '../../../core/models/tenant_membership.dart';
+import 'membership_identity_formatter.dart';
 import 'solo_workspace_service.dart';
 
 class TenantInvitationService {
@@ -273,6 +274,13 @@ class TenantInvitationService {
 
     final now = DateTime.now();
     final membershipId = '${invitation.tenantId}_${user.uid}';
+    final tenantName = await _resolveTenantName(invitation.tenantId);
+    final membershipUserName = buildMembershipUserName(
+      uid: user.uid,
+      authDisplayName: user.displayName,
+      email: user.email,
+      tenantName: tenantName,
+    );
     final scope = await _membershipScopeForAcceptedInvite(
       tenantId: invitation.tenantId,
       invitedRole: invitation.role,
@@ -301,7 +309,7 @@ class TenantInvitationService {
       tx.set(membershipRef, {
         ...membership.toMap(),
         'invitationToken': invitation.token,
-        'userName': user.displayName ?? user.email ?? user.uid,
+        'userName': membershipUserName,
         'userEmail': user.email ?? '',
       }, SetOptions(merge: true));
 
@@ -394,6 +402,23 @@ class TenantInvitationService {
     }, SetOptions(merge: true));
 
     await batch.commit();
+  }
+
+  Future<String> _resolveTenantName(String tenantId) async {
+    final normalizedTenantId = tenantId.trim();
+    if (normalizedTenantId.isEmpty) {
+      return '';
+    }
+
+    try {
+      final tenantDoc = await _firestore
+          .collection('tenants')
+          .doc(normalizedTenantId)
+          .get();
+      return (tenantDoc.data()?['nomeFantasia'] ?? '').toString().trim();
+    } catch (_) {
+      return '';
+    }
   }
 
   Future<_InvitationMembershipScope> _membershipScopeForAcceptedInvite({

@@ -150,6 +150,9 @@ class MaintainerTenantBillingWorkspace {
   const MaintainerTenantBillingWorkspace({
     required this.tenantId,
     required this.tenantName,
+    required this.ownerUid,
+    required this.workspaceIntegrityState,
+    required this.workspaceAbandoned,
     required this.workspaceType,
     required this.billingStatus,
     required this.billingPlanKey,
@@ -161,6 +164,9 @@ class MaintainerTenantBillingWorkspace {
 
   final String tenantId;
   final String tenantName;
+  final String ownerUid;
+  final String workspaceIntegrityState;
+  final bool workspaceAbandoned;
   final String workspaceType;
   final String billingStatus;
   final String billingPlanKey;
@@ -180,6 +186,11 @@ class MaintainerTenantBillingWorkspace {
     return MaintainerTenantBillingWorkspace(
       tenantId: doc.id.trim(),
       tenantName: tenantName.isEmpty ? doc.id.trim() : tenantName,
+      ownerUid: (data['ownerUid'] ?? '').toString().trim(),
+      workspaceIntegrityState: (data['workspaceIntegrityState'] ?? '')
+          .toString()
+          .trim(),
+      workspaceAbandoned: data['workspaceAbandoned'] == true,
       workspaceType: (data['workspaceType'] ?? '').toString().trim(),
       billingStatus: (data['billingStatus'] ?? 'active').toString().trim(),
       billingPlanKey: (data['billingPlanKey'] ?? '').toString().trim(),
@@ -588,6 +599,12 @@ class MaintainerUserAdminService {
       throw StateError('actionType e obrigatorio.');
     }
 
+    if (normalizedActionType == 'delete_user_account') {
+      await _assertUserDeletionWillNotOrphanOwnership(
+        targetUid: normalizedTargetUid,
+      );
+    }
+
     final nowIso = DateTime.now().toUtc().toIso8601String();
     await _firestore.collection('workspace_deletion_requests').add({
       'targetUid': normalizedTargetUid,
@@ -633,6 +650,9 @@ class MaintainerUserAdminService {
     }
 
     final normalizedTargetUid = targetUid.trim();
+    final workspaceSnapshot = await _buildWorkspaceOwnershipSnapshot(
+      normalizedTenantId,
+    );
     final nowIso = DateTime.now().toUtc().toIso8601String();
     await _firestore.collection('workspace_deletion_requests').add({
       'tenantId': normalizedTenantId,
@@ -643,6 +663,10 @@ class MaintainerUserAdminService {
       'requestedByEmail': actorEmail.trim(),
       'reason': reason.trim(),
       'breakGlass': true,
+      'ownerSnapshot': workspaceSnapshot['ownerSnapshot'],
+      'billingSnapshot': workspaceSnapshot['billingSnapshot'],
+      'workspaceLifecycleStatus': workspaceSnapshot['workspaceLifecycleStatus'],
+      'workspaceIntegrityState': workspaceSnapshot['workspaceIntegrityState'],
       'source': 'maintainer_console',
       'createdAt': FieldValue.serverTimestamp(),
       'createdAtIso': nowIso,
@@ -660,7 +684,177 @@ class MaintainerUserAdminService {
         'actionType': normalizedActionType,
         'reason': reason.trim(),
         'breakGlass': true,
+        'workspaceSnapshot': workspaceSnapshot,
       },
+    );
+  }
+
+  Future<void> _assertUserDeletionWillNotOrphanOwnership({
+    required String targetUid,
+  }) async {
+    final normalizedTargetUid = targetUid.trim();
+    if (normalizedTargetUid.isEmpty) {
+      return;
+    }
+
+    final membershipsSnapshot = await _firestore
+        .collection('tenant_memberships')
+        .where('uid', isEqualTo: normalizedTargetUid)
+        .where('ativo', isEqualTo: true)
+        .get();
+
+    final ownerMemberships = membershipsSnapshot.docs
+        .map((doc) {
+          final data = doc.data();
+          return _maintainerMembershipFromRaw(doc.id, data);
+        })
+        .where((membership) {
+          if (!membership.isActiveMembership) {
+            return false;
+          }
+          return membership.role.trim().toLowerCase() == 'owner';
+        })
+        .toList(growable: false);
+
+    if (ownerMemberships.isEmpty) {
+      return;
+    }
+
+    final checkedTenants = <String>{};
+    for (final membership in ownerMemberships) {
+      final tenantId = membership.tenantId.trim();
+      if (tenantId.isEmpty || !checkedTenants.add(tenantId)) {
+        continue;
+      }
+      final activeOwnerCount = await _countActiveOwnersForTenant(tenantId);
+      if (activeOwnerCount <= 1) {
+        throw StateError(
+          'Usuario e owner unico do workspace $tenantId. Transfira ownership ou solicite exclusao do workspace para manter lastro.',
+        );
+      }
+    }
+  }
+
+  Future<int> _countActiveOwnersForTenant(String tenantId) async {
+    final normalizedTenantId = tenantId.trim();
+    if (normalizedTenantId.isEmpty) {
+      return 0;
+    }
+
+    final membershipsSnapshot = await _firestore
+        .collection('tenant_memberships')
+        .where('tenantId', isEqualTo: normalizedTenantId)
+        .where('ativo', isEqualTo: true)
+        .get();
+
+    var count = 0;
+    for (final doc in membershipsSnapshot.docs) {
+      final data = doc.data();
+      final role = (data['role'] ?? '').toString().trim().toLowerCase();
+      final state = (data['state'] ?? 'active').toString().trim().toLowerCase();
+      if (role == 'owner' && state == 'active') {
+        count += 1;
+      }
+    }
+    return count;
+  }
+
+  Future<Map<String, Object?>> _buildWorkspaceOwnershipSnapshot(
+    String tenantId,
+  ) async {
+    final normalizedTenantId = tenantId.trim();
+    final tenantDoc = await _firestore
+        .collection('tenants')
+        .doc(normalizedTenantId)
+        .get();
+    final tenantData = tenantDoc.data() ?? <String, dynamic>{};
+
+    final activeOwnerMemberships = await _loadActiveOwnerMemberships(
+      normalizedTenantId,
+    );
+    final ownerUids =
+        activeOwnerMemberships
+            .map((membership) => membership.uid.trim())
+            .where((uid) => uid.isNotEmpty)
+            .toSet()
+            .toList(growable: false)
+          ..sort();
+
+    final ownerEmails = <String>[];
+    for (final ownerUid in ownerUids) {
+      final ownerDoc = await _firestore
+          .collection('usuarios')
+          .doc(ownerUid)
+          .get();
+      final ownerData = ownerDoc.data() ?? <String, dynamic>{};
+      final ownerEmail = (ownerData['email'] ?? ownerData['userEmail'] ?? '')
+          .toString()
+          .trim();
+      if (ownerEmail.isNotEmpty) {
+        ownerEmails.add(ownerEmail);
+      }
+    }
+
+    return {
+      'workspaceLifecycleStatus': (tenantData['workspaceLifecycleStatus'] ?? '')
+          .toString()
+          .trim(),
+      'workspaceIntegrityState': (tenantData['workspaceIntegrityState'] ?? '')
+          .toString()
+          .trim(),
+      'ownerSnapshot': {
+        'ownerUidFromTenant': (tenantData['ownerUid'] ?? '').toString().trim(),
+        'activeOwnerCount': ownerUids.length,
+        'activeOwnerUids': ownerUids,
+        'activeOwnerEmails': ownerEmails,
+      },
+      'billingSnapshot': {
+        'stripeCustomerId': (tenantData['stripeCustomerId'] ?? '')
+            .toString()
+            .trim(),
+        'billingPlanKey': (tenantData['billingPlanKey'] ?? '')
+            .toString()
+            .trim(),
+        'billingStatus': (tenantData['billingStatus'] ?? '').toString().trim(),
+        'billingCycle': (tenantData['billingCycle'] ?? '').toString().trim(),
+      },
+    };
+  }
+
+  Future<List<MaintainerUserTenantMembership>> _loadActiveOwnerMemberships(
+    String tenantId,
+  ) async {
+    final membershipsSnapshot = await _firestore
+        .collection('tenant_memberships')
+        .where('tenantId', isEqualTo: tenantId)
+        .where('ativo', isEqualTo: true)
+        .get();
+
+    return membershipsSnapshot.docs
+        .map((doc) {
+          final data = doc.data();
+          return _maintainerMembershipFromRaw(doc.id, data);
+        })
+        .where((membership) {
+          if (!membership.isActiveMembership) {
+            return false;
+          }
+          return membership.role.trim().toLowerCase() == 'owner';
+        })
+        .toList(growable: false);
+  }
+
+  MaintainerUserTenantMembership _maintainerMembershipFromRaw(
+    String docId,
+    Map<String, dynamic> data,
+  ) {
+    return MaintainerUserTenantMembership(
+      membershipId: docId,
+      uid: (data['uid'] ?? '').toString().trim(),
+      tenantId: (data['tenantId'] ?? '').toString().trim(),
+      role: (data['role'] ?? '').toString().trim(),
+      active: data['ativo'] == true,
+      state: (data['state'] ?? 'active').toString().trim(),
     );
   }
 
