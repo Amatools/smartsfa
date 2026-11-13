@@ -2,6 +2,7 @@ const { onRequest } = require('firebase-functions/v2/https');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const admin = require('firebase-admin');
 const crypto = require('node:crypto');
+const Stripe = require('stripe');
 
 const SANKHYA_PRODUCTION_URL = 'https://api.sankhya.com.br/authenticate';
 const SANKHYA_SANDBOX_URL =
@@ -20,6 +21,24 @@ const DEFAULT_STORAGE_BUCKET = 'smart-sfa.firebasestorage.app';
 const IMPERSONATION_DEFAULT_DURATION_MINUTES = 15;
 const IMPERSONATION_MIN_DURATION_MINUTES = 5;
 const IMPERSONATION_MAX_DURATION_MINUTES = 30;
+const STRIPE_DEFAULT_WEBHOOK_EVENTS = [
+  'checkout.session.completed',
+  'customer.subscription.created',
+  'customer.subscription.updated',
+  'customer.subscription.deleted',
+  'invoice.finalized',
+  'invoice.paid',
+  'invoice.payment_failed',
+];
+const STRIPE_SYNC_BATCH_LIMIT = 120;
+const STRIPE_CLIENT_CACHE = new Map();
+const STRIPE_RUNTIME_SECRETS = [
+  'STRIPE_SK_TEST',
+  'STRIPE_SK_LIVE',
+  'STRIPE_WHSEC_TEST',
+  'STRIPE_WHSEC_LIVE',
+  'STRIPE_ACTIVE_ENVIRONMENT',
+];
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -470,6 +489,1176 @@ exports.createImpersonationSession = onRequest(
       targetTenantId,
       targetMembershipId,
       expiresAt: expiresAtDate.toISOString(),
+    });
+  },
+);
+
+exports.createStripeCheckoutSession = onRequest(
+  {
+    cors: true,
+    region: 'us-central1',
+    timeoutSeconds: 60,
+    secrets: STRIPE_RUNTIME_SECRETS,
+  },
+  async (request, response) => {
+    if (request.method !== 'POST') {
+      response.status(405).json({ error: 'method_not_allowed' });
+      return;
+    }
+
+    const tenantId = String(request.body?.tenantId ?? '').trim();
+    const billingPlanKey = normalizeBillingPlanKey(request.body?.billingPlanKey);
+    const successUrl = String(request.body?.successUrl ?? '').trim();
+    const cancelUrl = String(request.body?.cancelUrl ?? '').trim();
+
+    if (!tenantId || !billingPlanKey || !successUrl || !cancelUrl) {
+      response.status(400).json({
+        error: 'invalid_payload',
+        message:
+          'tenantId, billingPlanKey, successUrl e cancelUrl sao obrigatorios.',
+      });
+      return;
+    }
+
+    if (!isValidHttpAbsoluteUrl(successUrl) || !isValidHttpAbsoluteUrl(cancelUrl)) {
+      response.status(400).json({
+        error: 'invalid_redirect_url',
+        message: 'successUrl e cancelUrl devem ser URLs HTTP(S) absolutas.',
+      });
+      return;
+    }
+
+    const firestore = admin.firestore();
+    const authContext = await verifyFirebaseAuthFromRequest(request);
+    if (!authContext.ok) {
+      response.status(authContext.status).json({
+        error: authContext.error,
+        message: authContext.message,
+      });
+      return;
+    }
+
+    const actorPermission = await assertTenantBillingActorPermission({
+      firestore,
+      uid: authContext.uid,
+      tenantId,
+    });
+    if (!actorPermission.allowed) {
+      response.status(actorPermission.status).json({
+        error: actorPermission.error,
+        message: actorPermission.message,
+      });
+      return;
+    }
+
+    const integrationReady = await loadStripeIntegrationRuntime({
+      firestore,
+      requireWebhookSecret: false,
+    });
+    if (!integrationReady.ok) {
+      response.status(integrationReady.status).json({
+        error: integrationReady.error,
+        message: integrationReady.message,
+      });
+      return;
+    }
+
+    const tenantRef = firestore.collection('tenants').doc(tenantId);
+    const tenantDoc = await tenantRef.get();
+    if (!tenantDoc.exists) {
+      response.status(404).json({
+        error: 'tenant_not_found',
+        message: 'Tenant nao encontrado.',
+      });
+      return;
+    }
+
+    const mapping = await loadStripePlanMapping({
+      firestore,
+      billingPlanKey,
+    });
+    if (!mapping) {
+      response.status(404).json({
+        error: 'plan_mapping_not_found',
+        message: 'Nao existe mapeamento ativo para billingPlanKey informado.',
+      });
+      return;
+    }
+
+    const tenantData = tenantDoc.data() || {};
+    const existingCustomerId = String(tenantData.stripeCustomerId ?? '').trim();
+    const stripeClient = integrationReady.stripeClient;
+    let stripeCustomerId = existingCustomerId;
+    if (!stripeCustomerId) {
+      const ownerEmail = String(authContext.email ?? '').trim();
+      const customer = await stripeClient.customers.create({
+        email: ownerEmail || undefined,
+        name: String(
+          tenantData.razaoSocial ?? tenantData.nomeFantasia ?? tenantId,
+        ).trim(),
+        metadata: {
+          tenantId,
+          billingPlanKey,
+          source: 'smartsfa',
+        },
+      });
+      stripeCustomerId = String(customer.id ?? '').trim();
+    }
+
+    const session = await stripeClient.checkout.sessions.create({
+      mode: 'subscription',
+      customer: stripeCustomerId,
+      client_reference_id: tenantId,
+      success_url: successUrl,
+      cancel_url: cancelUrl,
+      line_items: [
+        {
+          price: mapping.stripePriceId,
+          quantity: 1,
+        },
+      ],
+      metadata: {
+        tenantId,
+        billingPlanKey,
+        initiatedByUid: authContext.uid,
+        source: 'smartsfa_web_portal',
+      },
+      subscription_data: {
+        metadata: {
+          tenantId,
+          billingPlanKey,
+          initiatedByUid: authContext.uid,
+        },
+      },
+      allow_promotion_codes: true,
+    });
+
+    await tenantRef.set(
+      {
+        stripeCustomerId,
+        stripeCheckoutSessionId: String(session.id ?? '').trim(),
+        billingPlanKey,
+        billingUpdatedAt: new Date().toISOString(),
+      },
+      { merge: true },
+    );
+
+    response.status(200).json({
+      checkoutUrl: String(session.url ?? '').trim(),
+      checkoutSessionId: String(session.id ?? '').trim(),
+      stripeCustomerId,
+      activeEnvironment: integrationReady.environment,
+    });
+  },
+);
+
+exports.createStripePortalSession = onRequest(
+  {
+    cors: true,
+    region: 'us-central1',
+    timeoutSeconds: 45,
+    secrets: STRIPE_RUNTIME_SECRETS,
+  },
+  async (request, response) => {
+    if (request.method !== 'POST') {
+      response.status(405).json({ error: 'method_not_allowed' });
+      return;
+    }
+
+    const tenantId = String(request.body?.tenantId ?? '').trim();
+    const returnUrl = String(request.body?.returnUrl ?? '').trim();
+
+    if (!tenantId || !returnUrl) {
+      response.status(400).json({
+        error: 'invalid_payload',
+        message: 'tenantId e returnUrl sao obrigatorios.',
+      });
+      return;
+    }
+
+    if (!isValidHttpAbsoluteUrl(returnUrl)) {
+      response.status(400).json({
+        error: 'invalid_return_url',
+        message: 'returnUrl deve ser URL HTTP(S) absoluta.',
+      });
+      return;
+    }
+
+    const firestore = admin.firestore();
+    const authContext = await verifyFirebaseAuthFromRequest(request);
+    if (!authContext.ok) {
+      response.status(authContext.status).json({
+        error: authContext.error,
+        message: authContext.message,
+      });
+      return;
+    }
+
+    const actorPermission = await assertTenantBillingActorPermission({
+      firestore,
+      uid: authContext.uid,
+      tenantId,
+    });
+    if (!actorPermission.allowed) {
+      response.status(actorPermission.status).json({
+        error: actorPermission.error,
+        message: actorPermission.message,
+      });
+      return;
+    }
+
+    const integrationReady = await loadStripeIntegrationRuntime({
+      firestore,
+      requireWebhookSecret: false,
+    });
+    if (!integrationReady.ok) {
+      response.status(integrationReady.status).json({
+        error: integrationReady.error,
+        message: integrationReady.message,
+      });
+      return;
+    }
+
+    const tenantDoc = await firestore.collection('tenants').doc(tenantId).get();
+    if (!tenantDoc.exists) {
+      response.status(404).json({
+        error: 'tenant_not_found',
+        message: 'Tenant nao encontrado.',
+      });
+      return;
+    }
+
+    const tenantData = tenantDoc.data() || {};
+    const stripeCustomerId = String(tenantData.stripeCustomerId ?? '').trim();
+    if (!stripeCustomerId) {
+      response.status(404).json({
+        error: 'stripe_customer_missing',
+        message: 'Tenant ainda nao possui stripeCustomerId.',
+      });
+      return;
+    }
+
+    const portalSession = await integrationReady.stripeClient.billingPortal.sessions.create({
+      customer: stripeCustomerId,
+      return_url: returnUrl,
+    });
+
+    response.status(200).json({
+      portalUrl: String(portalSession.url ?? '').trim(),
+      activeEnvironment: integrationReady.environment,
+    });
+  },
+);
+
+exports.handleStripeWebhook = onRequest(
+  {
+    cors: false,
+    region: 'us-central1',
+    timeoutSeconds: 120,
+    secrets: STRIPE_RUNTIME_SECRETS,
+  },
+  async (request, response) => {
+    if (request.method !== 'POST') {
+      response.status(405).json({ error: 'method_not_allowed' });
+      return;
+    }
+
+    const firestore = admin.firestore();
+    const integrationReady = await loadStripeIntegrationRuntime({
+      firestore,
+      requireWebhookSecret: true,
+    });
+    if (!integrationReady.ok) {
+      response.status(integrationReady.status).json({
+        error: integrationReady.error,
+        message: integrationReady.message,
+      });
+      return;
+    }
+
+    const signatureHeader = String(
+      request.headers['stripe-signature'] ?? '',
+    ).trim();
+    if (!signatureHeader) {
+      response.status(400).json({
+        error: 'missing_signature',
+        message: 'Header stripe-signature ausente.',
+      });
+      return;
+    }
+
+    let event;
+    try {
+      const rawBody =
+        request.rawBody ?? Buffer.from(JSON.stringify(request.body ?? {}));
+      event = integrationReady.stripeClient.webhooks.constructEvent(
+        rawBody,
+        signatureHeader,
+        integrationReady.webhookSecret,
+      );
+    } catch (error) {
+      response.status(400).json({
+        error: 'invalid_webhook_signature',
+        message: error instanceof Error ? error.message : String(error),
+      });
+      return;
+    }
+
+    try {
+      const processing = await processStripeWebhookEvent({
+        firestore,
+        event,
+        enabledEvents: integrationReady.enabledEvents,
+      });
+
+      response.status(200).json({
+        received: true,
+        ignored: processing.ignored,
+        duplicate: processing.duplicate,
+        tenantId: processing.tenantId,
+      });
+    } catch (error) {
+      response.status(500).json({
+        error: 'webhook_processing_failed',
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  },
+);
+
+exports.reconcileStripeTenant = onRequest(
+  {
+    cors: true,
+    region: 'us-central1',
+    timeoutSeconds: 90,
+    secrets: STRIPE_RUNTIME_SECRETS,
+  },
+  async (request, response) => {
+    if (request.method !== 'POST') {
+      response.status(405).json({ error: 'method_not_allowed' });
+      return;
+    }
+
+    const tenantId = String(request.body?.tenantId ?? '').trim();
+    const reason = String(request.body?.reason ?? '').trim();
+    if (!tenantId) {
+      response.status(400).json({
+        error: 'invalid_payload',
+        message: 'tenantId e obrigatorio.',
+      });
+      return;
+    }
+
+    const firestore = admin.firestore();
+    const authContext = await verifyFirebaseAuthFromRequest(request);
+    if (!authContext.ok) {
+      response.status(authContext.status).json({
+        error: authContext.error,
+        message: authContext.message,
+      });
+      return;
+    }
+
+    const platformAccess = await assertPlatformAdminActor({
+      firestore,
+      uid: authContext.uid,
+    });
+    if (!platformAccess.allowed) {
+      response.status(platformAccess.status).json({
+        error: platformAccess.error,
+        message: platformAccess.message,
+      });
+      return;
+    }
+
+    const integrationReady = await loadStripeIntegrationRuntime({
+      firestore,
+      requireWebhookSecret: false,
+    });
+    if (!integrationReady.ok) {
+      response.status(integrationReady.status).json({
+        error: integrationReady.error,
+        message: integrationReady.message,
+      });
+      return;
+    }
+
+    try {
+      const result = await reconcileTenantStripeState({
+        firestore,
+        stripeClient: integrationReady.stripeClient,
+        tenantId,
+      });
+
+      await firestore.collection('platform_admin_audit').add({
+        action: 'billing_state_updated',
+        actorUid: authContext.uid,
+        actorEmail: authContext.email,
+        actorLabel: authContext.email || authContext.uid,
+        targetUid: authContext.uid,
+        targetEmail: authContext.email,
+        targetDisplayName: authContext.email || authContext.uid,
+        details: {
+          tenantId,
+          reason,
+          previousBillingStatus: result.previousBillingStatus,
+          currentBillingStatus: result.currentBillingStatus,
+          source: 'stripe_reconcile_tenant',
+        },
+        createdAt: admin.firestore.Timestamp.fromDate(new Date()),
+      });
+
+      response.status(200).json({
+        tenantId,
+        stripeSubscriptionId: result.stripeSubscriptionId,
+        previousBillingStatus: result.previousBillingStatus,
+        currentBillingStatus: result.currentBillingStatus,
+        updatedAt: result.updatedAt,
+      });
+    } catch (error) {
+      response.status(500).json({
+        error: 'reconcile_tenant_failed',
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  },
+);
+
+exports.reconcileAllStripeTenants = onRequest(
+  {
+    cors: true,
+    region: 'us-central1',
+    timeoutSeconds: 540,
+    secrets: STRIPE_RUNTIME_SECRETS,
+  },
+  async (request, response) => {
+    if (request.method !== 'POST') {
+      response.status(405).json({ error: 'method_not_allowed' });
+      return;
+    }
+
+    const dryRun = request.body?.dryRun === true;
+    const limitInput = Number(request.body?.limit ?? STRIPE_SYNC_BATCH_LIMIT);
+    const limit = Number.isFinite(limitInput)
+      ? Math.max(1, Math.min(500, Math.floor(limitInput)))
+      : STRIPE_SYNC_BATCH_LIMIT;
+
+    const firestore = admin.firestore();
+    const authContext = await verifyFirebaseAuthFromRequest(request);
+    if (!authContext.ok) {
+      response.status(authContext.status).json({
+        error: authContext.error,
+        message: authContext.message,
+      });
+      return;
+    }
+
+    const platformAccess = await assertPlatformAdminActor({
+      firestore,
+      uid: authContext.uid,
+    });
+    if (!platformAccess.allowed) {
+      response.status(platformAccess.status).json({
+        error: platformAccess.error,
+        message: platformAccess.message,
+      });
+      return;
+    }
+
+    const integrationReady = await loadStripeIntegrationRuntime({
+      firestore,
+      requireWebhookSecret: false,
+    });
+    if (!integrationReady.ok) {
+      response.status(integrationReady.status).json({
+        error: integrationReady.error,
+        message: integrationReady.message,
+      });
+      return;
+    }
+
+    const tenantDocs = await firestore.collection('tenants').limit(limit).get();
+    const candidates = tenantDocs.docs.filter((doc) => {
+      const data = doc.data() || {};
+      return (
+        String(data.stripeCustomerId ?? '').trim() ||
+        String(data.stripeSubscriptionId ?? '').trim()
+      );
+    });
+
+    let totalUpdated = 0;
+    let totalFailed = 0;
+    const failures = [];
+    for (const doc of candidates) {
+      const tenantId = doc.id;
+      try {
+        if (!dryRun) {
+          await reconcileTenantStripeState({
+            firestore,
+            stripeClient: integrationReady.stripeClient,
+            tenantId,
+          });
+        }
+        totalUpdated += 1;
+      } catch (error) {
+        totalFailed += 1;
+        failures.push({
+          tenantId,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    response.status(200).json({
+      totalProcessed: candidates.length,
+      totalUpdated,
+      totalFailed,
+      dryRun,
+      failures,
+    });
+  },
+);
+
+exports.manageTenantBillingState = onRequest(
+  {
+    cors: true,
+    region: 'us-central1',
+    timeoutSeconds: 90,
+    secrets: STRIPE_RUNTIME_SECRETS,
+  },
+  async (request, response) => {
+    if (request.method !== 'POST') {
+      response.status(405).json({ error: 'method_not_allowed' });
+      return;
+    }
+
+    const tenantId = String(request.body?.tenantId ?? '').trim();
+    const action = String(request.body?.action ?? '').trim().toLowerCase();
+    const reason = String(request.body?.reason ?? '').trim().slice(0, 240);
+
+    if (!tenantId) {
+      response.status(400).json({
+        error: 'invalid_payload',
+        message: 'tenantId e obrigatorio.',
+      });
+      return;
+    }
+
+    const supportedActions = new Set([
+      'grant_7_days',
+      'grant_30_days',
+      'normalize_billing',
+      'suspend_billing',
+    ]);
+    if (!supportedActions.has(action)) {
+      response.status(400).json({
+        error: 'invalid_action',
+        message:
+          'Acao invalida. Use grant_7_days, grant_30_days, normalize_billing ou suspend_billing.',
+      });
+      return;
+    }
+
+    const firestore = admin.firestore();
+    const authContext = await verifyFirebaseAuthFromRequest(request);
+    if (!authContext.ok) {
+      response.status(authContext.status).json({
+        error: authContext.error,
+        message: authContext.message,
+      });
+      return;
+    }
+
+    const platformAccess = await assertPlatformAdminActor({
+      firestore,
+      uid: authContext.uid,
+    });
+    if (!platformAccess.allowed) {
+      response.status(platformAccess.status).json({
+        error: platformAccess.error,
+        message: platformAccess.message,
+      });
+      return;
+    }
+
+    const tenantRef = firestore.collection('tenants').doc(tenantId);
+    const tenantDoc = await tenantRef.get();
+    if (!tenantDoc.exists) {
+      response.status(404).json({
+        error: 'tenant_not_found',
+        message: 'Tenant nao encontrado.',
+      });
+      return;
+    }
+
+    const tenantData = tenantDoc.data() || {};
+    const nowDate = new Date();
+    const nowIso = nowDate.toISOString();
+    const previousBillingStatus = String(tenantData.billingStatus ?? '').trim();
+
+    const patch = {
+      billingUpdatedAt: nowIso,
+      billingAccountState: '',
+      billingStatus: '',
+      billingGraceUntilAt: '',
+      billingSuspendedAt: '',
+      billingPastDueSinceAt: '',
+      billingLastManualAction: action,
+      billingLastManualReason: reason,
+      billingLastManualActorUid: authContext.uid,
+      billingLastManualActorEmail: authContext.email,
+      billingLastManualAt: nowIso,
+    };
+
+    let auditAction = 'billing_state_updated';
+    if (action === 'grant_7_days' || action === 'grant_30_days') {
+      const graceDays = action === 'grant_30_days' ? 30 : 7;
+      const graceUntil = new Date(
+        nowDate.getTime() + graceDays * 24 * 60 * 60 * 1000,
+      ).toISOString();
+      patch.billingStatus = 'grace';
+      patch.billingAccountState = 'grace';
+      patch.billingGraceUntilAt = graceUntil;
+      auditAction = 'billing_grace_set';
+    } else if (action === 'normalize_billing') {
+      patch.billingStatus = 'active';
+      patch.billingAccountState = 'active';
+      auditAction = 'billing_normalized';
+    } else if (action === 'suspend_billing') {
+      patch.billingStatus = 'suspended';
+      patch.billingAccountState = 'suspended';
+      patch.billingSuspendedAt = nowIso;
+      auditAction = 'billing_suspended';
+    }
+
+    let stripeApplied = false;
+    let stripeAction = 'not_attempted';
+    let stripeMessage = '';
+
+    const integrationReady = await loadStripeIntegrationRuntime({
+      firestore,
+      requireWebhookSecret: false,
+    });
+    if (integrationReady.ok) {
+      try {
+        const reflection = await applyTenantBillingActionToStripe({
+          stripeClient: integrationReady.stripeClient,
+          tenantId,
+          tenantData,
+          action,
+          reason,
+          actorUid: authContext.uid,
+        });
+        stripeApplied = reflection.applied;
+        stripeAction = reflection.action;
+        stripeMessage = reflection.message;
+      } catch (error) {
+        response.status(502).json({
+          error: 'stripe_action_failed',
+          message: error instanceof Error ? error.message : String(error),
+        });
+        return;
+      }
+    } else {
+      stripeAction = 'integration_not_ready';
+      stripeMessage = integrationReady.message;
+    }
+
+    await tenantRef.set(patch, { merge: true });
+
+    await firestore.collection('platform_admin_audit').add({
+      action: auditAction,
+      actorUid: authContext.uid,
+      actorEmail: authContext.email,
+      actorLabel: authContext.email || authContext.uid,
+      targetUid: authContext.uid,
+      targetEmail: authContext.email,
+      targetDisplayName: authContext.email || authContext.uid,
+      details: {
+        tenantId,
+        requestedAction: action,
+        reason,
+        previousBillingStatus,
+        currentBillingStatus: patch.billingStatus,
+        currentBillingAccountState: patch.billingAccountState,
+        billingGraceUntilAt: patch.billingGraceUntilAt,
+        billingSuspendedAt: patch.billingSuspendedAt,
+        stripeApplied,
+        stripeAction,
+        stripeMessage,
+      },
+      createdAt: admin.firestore.Timestamp.fromDate(nowDate),
+    });
+
+    response.status(200).json({
+      tenantId,
+      previousBillingStatus,
+      currentBillingStatus: patch.billingStatus,
+      billingStatus: patch.billingStatus,
+      billingGraceUntilAt: patch.billingGraceUntilAt,
+      billingSuspendedAt: patch.billingSuspendedAt,
+      updatedAt: patch.billingUpdatedAt,
+      stripeApplied,
+      stripeAction,
+      stripeMessage,
+    });
+  },
+);
+
+exports.listStripeCatalog = onRequest(
+  {
+    cors: true,
+    region: 'us-central1',
+    timeoutSeconds: 90,
+    secrets: STRIPE_RUNTIME_SECRETS,
+  },
+  async (request, response) => {
+    if (request.method !== 'POST' && request.method !== 'GET') {
+      response.status(405).json({ error: 'method_not_allowed' });
+      return;
+    }
+
+    const payload = request.method === 'GET' ? request.query : request.body;
+    const limitProductsInput = Number(payload?.limitProducts ?? 30);
+    const limitPricesInput = Number(payload?.limitPricesPerProduct ?? 20);
+    const activeOnly = payload?.activeOnly !== false;
+
+    const limitProducts = Number.isFinite(limitProductsInput)
+      ? Math.max(1, Math.min(100, Math.floor(limitProductsInput)))
+      : 30;
+    const limitPricesPerProduct = Number.isFinite(limitPricesInput)
+      ? Math.max(1, Math.min(100, Math.floor(limitPricesInput)))
+      : 20;
+
+    const firestore = admin.firestore();
+    const authContext = await verifyFirebaseAuthFromRequest(request);
+    if (!authContext.ok) {
+      response.status(authContext.status).json({
+        error: authContext.error,
+        message: authContext.message,
+      });
+      return;
+    }
+
+    const platformAccess = await assertPlatformAdminActor({
+      firestore,
+      uid: authContext.uid,
+    });
+    if (!platformAccess.allowed) {
+      response.status(platformAccess.status).json({
+        error: platformAccess.error,
+        message: platformAccess.message,
+      });
+      return;
+    }
+
+    const integrationReady = await loadStripeIntegrationRuntime({
+      firestore,
+      requireWebhookSecret: false,
+    });
+    if (!integrationReady.ok) {
+      response.status(integrationReady.status).json({
+        error: integrationReady.error,
+        message: integrationReady.message,
+      });
+      return;
+    }
+
+    try {
+      const stripeClient = integrationReady.stripeClient;
+      const stripeAccount = await stripeClient.accounts.retrieve();
+
+      const products = await stripeClient.products.list({
+        active: activeOnly ? true : undefined,
+        limit: limitProducts,
+      });
+
+      const items = [];
+      for (const product of products.data) {
+        const prices = await stripeClient.prices.list({
+          product: product.id,
+          active: activeOnly ? true : undefined,
+          limit: limitPricesPerProduct,
+        });
+
+        items.push({
+          productId: String(product.id ?? '').trim(),
+          productName: String(product.name ?? '').trim(),
+          productDescription: String(product.description ?? '').trim(),
+          active: product.active === true,
+          defaultPriceId:
+            typeof product.default_price === 'string'
+              ? String(product.default_price).trim()
+              : String(product.default_price?.id ?? '').trim(),
+          prices: prices.data.map((price) => ({
+            priceId: String(price.id ?? '').trim(),
+            lookupKey: String(price.lookup_key ?? '').trim(),
+            nickname: String(price.nickname ?? '').trim(),
+            active: price.active === true,
+            currency: String(price.currency ?? '').trim(),
+            type: String(price.type ?? '').trim(),
+            recurringInterval: String(price.recurring?.interval ?? '').trim(),
+            recurringIntervalCount: Number(price.recurring?.interval_count ?? 0),
+            unitAmount: Number(price.unit_amount ?? 0),
+            unitAmountDecimal: String(price.unit_amount_decimal ?? '').trim(),
+            taxBehavior: String(price.tax_behavior ?? '').trim(),
+          })),
+        });
+      }
+
+      response.status(200).json({
+        activeEnvironment: integrationReady.environment,
+        stripeAccountId: String(stripeAccount.id ?? '').trim(),
+        totalProducts: items.length,
+        hasMoreProducts: products.has_more === true,
+        products: items,
+      });
+    } catch (error) {
+      response.status(500).json({
+        error: 'stripe_catalog_list_failed',
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  },
+);
+
+exports.createStripeCatalogPlan = onRequest(
+  {
+    cors: true,
+    region: 'us-central1',
+    timeoutSeconds: 90,
+    secrets: STRIPE_RUNTIME_SECRETS,
+  },
+  async (request, response) => {
+    if (request.method !== 'POST') {
+      response.status(405).json({ error: 'method_not_allowed' });
+      return;
+    }
+
+    const payload = request.body || {};
+    const productName = String(payload.productName ?? '').trim();
+    const productDescription = String(payload.productDescription ?? '').trim();
+    const billingPlanKey = normalizeBillingPlanKey(payload.billingPlanKey);
+    const currency = String(payload.currency ?? 'brl').trim().toLowerCase();
+    const recurringInterval = String(payload.recurringInterval ?? 'month')
+      .trim()
+      .toLowerCase();
+    const recurringIntervalCountInput = Number(payload.recurringIntervalCount ?? 1);
+    const amountMinorUnitsInput = Number(payload.amountMinorUnits ?? 0);
+    const priceNickname = String(payload.priceNickname ?? '').trim();
+    const lookupKey = String(payload.lookupKey ?? '').trim();
+    const taxBehavior = String(payload.taxBehavior ?? '').trim().toLowerCase();
+    const active = payload.active !== false;
+
+    const amountMinorUnits = Number.isFinite(amountMinorUnitsInput)
+      ? Math.floor(amountMinorUnitsInput)
+      : 0;
+    const recurringIntervalCount = Number.isFinite(recurringIntervalCountInput)
+      ? Math.max(1, Math.min(36, Math.floor(recurringIntervalCountInput)))
+      : 1;
+    const recommendedLookupKey = buildStripeRecommendedLookupKey({
+      billingPlanKey,
+      currency,
+      recurringInterval,
+      recurringIntervalCount,
+    });
+    const effectiveLookupKey = lookupKey || recommendedLookupKey;
+
+    if (!productName) {
+      response.status(400).json({
+        error: 'invalid_payload',
+        message: 'productName e obrigatorio.',
+      });
+      return;
+    }
+
+    if (!billingPlanKey) {
+      response.status(400).json({
+        error: 'invalid_payload',
+        message: 'billingPlanKey e obrigatorio.',
+      });
+      return;
+    }
+
+    if (!Number.isInteger(amountMinorUnits) || amountMinorUnits <= 0) {
+      response.status(400).json({
+        error: 'invalid_payload',
+        message: 'amountMinorUnits deve ser inteiro positivo.',
+      });
+      return;
+    }
+
+    if (!/^[a-z]{3}$/.test(currency)) {
+      response.status(400).json({
+        error: 'invalid_payload',
+        message: 'currency deve seguir ISO 4217 em 3 letras (ex.: brl, usd).',
+      });
+      return;
+    }
+
+    if (!['day', 'week', 'month', 'year'].includes(recurringInterval)) {
+      response.status(400).json({
+        error: 'invalid_payload',
+        message: 'recurringInterval invalido. Use day, week, month ou year.',
+      });
+      return;
+    }
+
+    const firestore = admin.firestore();
+    const authContext = await verifyFirebaseAuthFromRequest(request);
+    if (!authContext.ok) {
+      response.status(authContext.status).json({
+        error: authContext.error,
+        message: authContext.message,
+      });
+      return;
+    }
+
+    const platformAccess = await assertPlatformAdminActor({
+      firestore,
+      uid: authContext.uid,
+    });
+    if (!platformAccess.allowed) {
+      response.status(platformAccess.status).json({
+        error: platformAccess.error,
+        message: platformAccess.message,
+      });
+      return;
+    }
+
+    const integrationReady = await loadStripeIntegrationRuntime({
+      firestore,
+      requireWebhookSecret: false,
+    });
+    if (!integrationReady.ok) {
+      response.status(integrationReady.status).json({
+        error: integrationReady.error,
+        message: integrationReady.message,
+      });
+      return;
+    }
+
+    try {
+      const stripeClient = integrationReady.stripeClient;
+      const stripeAccount = await stripeClient.accounts.retrieve();
+
+      const metadata = buildStripeCatalogPlanMetadata({
+        billingPlanKey,
+        amountMinorUnits,
+        currency,
+        recurringInterval,
+        recurringIntervalCount,
+        lookupKey: effectiveLookupKey,
+        actorUid: authContext.uid,
+        actorEmail: authContext.email,
+      });
+
+      const product = await stripeClient.products.create({
+        name: productName,
+        description: productDescription || undefined,
+        active,
+        metadata,
+      });
+
+      const pricePayload = {
+        product: String(product.id ?? '').trim(),
+        currency,
+        unit_amount: amountMinorUnits,
+        recurring: {
+          interval: recurringInterval,
+          interval_count: recurringIntervalCount,
+        },
+        nickname: priceNickname || undefined,
+        lookup_key: effectiveLookupKey || undefined,
+        active,
+        metadata,
+      };
+
+      if (['inclusive', 'exclusive', 'unspecified'].includes(taxBehavior)) {
+        pricePayload.tax_behavior = taxBehavior;
+      }
+
+      const price = await stripeClient.prices.create(pricePayload);
+
+      await firestore.collection('platform_admin_audit').add({
+        action: 'stripe_catalog_plan_created',
+        actorUid: authContext.uid,
+        actorEmail: authContext.email,
+        actorLabel: authContext.email || authContext.uid,
+        targetUid: authContext.uid,
+        targetEmail: authContext.email,
+        targetDisplayName: authContext.email || authContext.uid,
+        details: {
+          billingPlanKey,
+          activeEnvironment: integrationReady.environment,
+          stripeAccountId: String(stripeAccount.id ?? '').trim(),
+          productId: String(product.id ?? '').trim(),
+          priceId: String(price.id ?? '').trim(),
+          amountMinorUnits,
+          currency,
+          recurringInterval,
+          recurringIntervalCount,
+        },
+        createdAt: admin.firestore.Timestamp.fromDate(new Date()),
+      });
+
+      response.status(200).json({
+        activeEnvironment: integrationReady.environment,
+        stripeAccountId: String(stripeAccount.id ?? '').trim(),
+        productId: String(product.id ?? '').trim(),
+        productName: String(product.name ?? '').trim(),
+        productDescription: String(product.description ?? '').trim(),
+        priceId: String(price.id ?? '').trim(),
+        priceNickname: String(price.nickname ?? '').trim(),
+        lookupKey:
+          String(price.lookup_key ?? '').trim() || effectiveLookupKey,
+        currency: String(price.currency ?? '').trim(),
+        unitAmount: Number(price.unit_amount ?? 0),
+        recurringInterval: String(price.recurring?.interval ?? '').trim(),
+        recurringIntervalCount: Number(price.recurring?.interval_count ?? 0),
+        billingPlanKey,
+      });
+    } catch (error) {
+      const statusCode = Number(error?.statusCode ?? 500);
+      const safeStatus = statusCode >= 400 && statusCode < 600 ? statusCode : 500;
+      const message =
+        String(error?.raw?.message ?? '').trim() ||
+        (error instanceof Error ? error.message : String(error));
+
+      response.status(safeStatus).json({
+        error: 'stripe_catalog_create_plan_failed',
+        message: message || 'Falha ao criar Product/Price no Stripe.',
+      });
+    }
+  },
+);
+
+exports.listStripeCheckoutPlans = onRequest(
+  {
+    cors: true,
+    region: 'us-central1',
+    timeoutSeconds: 45,
+  },
+  async (request, response) => {
+    if (request.method !== 'POST' && request.method !== 'GET') {
+      response.status(405).json({ error: 'method_not_allowed' });
+      return;
+    }
+
+    const payload = request.method === 'GET' ? request.query : request.body;
+    const tenantId = String(payload?.tenantId ?? '').trim();
+    if (!tenantId) {
+      response.status(400).json({
+        error: 'invalid_payload',
+        message: 'tenantId e obrigatorio.',
+      });
+      return;
+    }
+
+    const firestore = admin.firestore();
+    const authContext = await verifyFirebaseAuthFromRequest(request);
+    if (!authContext.ok) {
+      response.status(authContext.status).json({
+        error: authContext.error,
+        message: authContext.message,
+      });
+      return;
+    }
+
+    const actorPermission = await assertTenantBillingActorPermission({
+      firestore,
+      uid: authContext.uid,
+      tenantId,
+    });
+    if (!actorPermission.allowed) {
+      response.status(actorPermission.status).json({
+        error: actorPermission.error,
+        message: actorPermission.message,
+      });
+      return;
+    }
+
+    const tenantDoc = await firestore.collection('tenants').doc(tenantId).get();
+    if (!tenantDoc.exists) {
+      response.status(404).json({
+        error: 'tenant_not_found',
+        message: 'Tenant nao encontrado.',
+      });
+      return;
+    }
+
+    const tenantData = tenantDoc.data() || {};
+    const workspaceType = String(tenantData.workspaceType ?? '')
+      .trim()
+      .toLowerCase();
+    const requiredPrefix = resolveStripePlanPrefixByWorkspaceType(workspaceType);
+
+    const snapshot = await firestore
+      .collection('billing_integrations')
+      .doc('stripe')
+      .collection('plan_mappings')
+      .where('active', '==', true)
+      .where('mappingType', '==', 'base')
+      .limit(200)
+      .get();
+
+    const plans = [];
+    for (const doc of snapshot.docs) {
+      const data = doc.data() || {};
+      const billingPlanKey = normalizeBillingPlanKey(data.billingPlanKey ?? doc.id);
+      const stripePriceId = String(data.stripePriceId ?? '').trim();
+      if (!billingPlanKey || !stripePriceId) {
+        continue;
+      }
+
+      if (requiredPrefix && !billingPlanKey.startsWith(`${requiredPrefix}_`)) {
+        continue;
+      }
+
+      const planDisplayName =
+        String(data.planDisplayName ?? '').trim() ||
+        String(data.stripeProductName ?? '').trim() ||
+        String(data.stripePriceNickname ?? '').trim() ||
+        billingPlanKey;
+
+      const planDisplayAmount =
+        String(data.planDisplayAmount ?? '').trim() ||
+        formatPlanAmountLabel({
+          amountMinorUnits: Number(data.stripeUnitAmount ?? 0),
+          currency: String(data.stripeCurrency ?? '').trim(),
+          recurringInterval: String(data.stripeRecurringInterval ?? '').trim(),
+          recurringIntervalCount: Number(data.stripeRecurringIntervalCount ?? 0),
+        });
+
+      plans.push({
+        mappingId: doc.id,
+        billingPlanKey,
+        planDisplayName,
+        planDisplayAmount,
+        stripePriceId,
+        stripeProductId: String(data.stripeProductId ?? '').trim(),
+        stripeProductName: String(data.stripeProductName ?? '').trim(),
+      });
+    }
+
+    plans.sort((a, b) => {
+      const byName = String(a.planDisplayName ?? '').localeCompare(
+        String(b.planDisplayName ?? ''),
+        'pt-BR',
+      );
+      if (byName !== 0) {
+        return byName;
+      }
+      return String(a.billingPlanKey ?? '').localeCompare(
+        String(b.billingPlanKey ?? ''),
+      );
+    });
+
+    response.status(200).json({
+      tenantId,
+      workspaceType,
+      requiredPrefix,
+      plans,
     });
   },
 );
@@ -3979,4 +5168,916 @@ function mapImpersonationConsumeError(code) {
         message: 'Falha ao consumir sessao de acesso assistido.',
       };
   }
+}
+
+function normalizeBillingPlanKey(rawValue) {
+  return String(rawValue ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '_');
+}
+
+function buildStripeRecommendedLookupKey({
+  billingPlanKey,
+  currency,
+  recurringInterval,
+  recurringIntervalCount,
+}) {
+  const normalizedPlanKey = normalizeBillingPlanKey(billingPlanKey).replace(
+    /[^a-z0-9_-]+/g,
+    '_',
+  );
+  if (!normalizedPlanKey) {
+    return '';
+  }
+
+  const normalizedCurrency = String(currency ?? '').trim().toLowerCase();
+  const normalizedInterval = String(recurringInterval ?? '').trim().toLowerCase();
+  const normalizedCount = Number.isFinite(Number(recurringIntervalCount))
+    ? Math.max(1, Math.floor(Number(recurringIntervalCount)))
+    : 1;
+  const countSuffix = normalizedCount > 1 ? `x${normalizedCount}` : '';
+
+  const raw = `smartsfa_${normalizedPlanKey}_${normalizedCurrency}_${normalizedInterval}${countSuffix}`;
+  const compact = raw
+    .replace(/[^a-z0-9_]+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_|_$/g, '');
+  return compact.length <= 120 ? compact : compact.slice(0, 120);
+}
+
+function parseBillingPlanKeyParts(billingPlanKey) {
+  const normalized = normalizeBillingPlanKey(billingPlanKey);
+  if (!normalized) {
+    return { prefix: '', slug: '' };
+  }
+
+  const separatorIndex = normalized.indexOf('_');
+  if (separatorIndex <= 0 || separatorIndex >= normalized.length - 1) {
+    return { prefix: normalized, slug: normalized };
+  }
+
+  return {
+    prefix: normalized.slice(0, separatorIndex),
+    slug: normalized.slice(separatorIndex + 1),
+  };
+}
+
+function sanitizeStripeMetadataValue(value, maxLength = 200) {
+  const text = String(value ?? '').trim();
+  if (!text) {
+    return '';
+  }
+  return text.length <= maxLength ? text : text.slice(0, maxLength);
+}
+
+function buildStripeCatalogPlanMetadata({
+  billingPlanKey,
+  amountMinorUnits,
+  currency,
+  recurringInterval,
+  recurringIntervalCount,
+  lookupKey,
+  actorUid,
+  actorEmail,
+}) {
+  const parts = parseBillingPlanKeyParts(billingPlanKey);
+  return {
+    source: 'smartsfa_admin_console',
+    billingPlanKey: sanitizeStripeMetadataValue(billingPlanKey),
+    billingPlanPrefix: sanitizeStripeMetadataValue(parts.prefix),
+    billingPlanSlug: sanitizeStripeMetadataValue(parts.slug),
+    amountMinorUnits: sanitizeStripeMetadataValue(String(amountMinorUnits ?? '')),
+    currency: sanitizeStripeMetadataValue(String(currency ?? '').toLowerCase(), 12),
+    recurringInterval: sanitizeStripeMetadataValue(
+      String(recurringInterval ?? '').toLowerCase(),
+      20,
+    ),
+    recurringIntervalCount: sanitizeStripeMetadataValue(
+      String(recurringIntervalCount ?? ''),
+      8,
+    ),
+    lookupKey: sanitizeStripeMetadataValue(lookupKey),
+    createdByUid: sanitizeStripeMetadataValue(actorUid),
+    createdByEmail: sanitizeStripeMetadataValue(actorEmail),
+  };
+}
+
+function resolveStripePlanPrefixByWorkspaceType(workspaceType) {
+  const normalized = String(workspaceType ?? '').trim().toLowerCase();
+  if (normalized === 'seller_solo_workspace') {
+    return 'individual';
+  }
+  if (normalized === 'rep_workspace') {
+    return 'representacoes';
+  }
+  if (normalized === 'brand_owner_workspace') {
+    return 'enterprise';
+  }
+  return '';
+}
+
+function formatPlanAmountLabel({
+  amountMinorUnits,
+  currency,
+  recurringInterval,
+  recurringIntervalCount,
+}) {
+  const amount = Number(amountMinorUnits ?? 0);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return '';
+  }
+
+  const normalizedCurrency = String(currency ?? '').trim().toLowerCase();
+  const currencyLabel =
+    normalizedCurrency === 'brl'
+      ? 'R$'
+      : normalizedCurrency
+        ? normalizedCurrency.toUpperCase()
+        : '';
+  const base = `${currencyLabel ? `${currencyLabel} ` : ''}${(amount / 100).toFixed(2)}`;
+
+  const interval = String(recurringInterval ?? '').trim().toLowerCase();
+  if (!interval) {
+    return base;
+  }
+
+  const intervalCount = Number(recurringIntervalCount ?? 0);
+  const normalizedCount = Number.isFinite(intervalCount) && intervalCount > 0
+    ? Math.floor(intervalCount)
+    : 1;
+
+  return `${base} / ${interval} x${normalizedCount}`;
+}
+
+function isValidHttpAbsoluteUrl(value) {
+  const raw = String(value ?? '').trim();
+  if (!raw) {
+    return false;
+  }
+
+  try {
+    const parsed = new URL(raw);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch (_) {
+    return false;
+  }
+}
+
+async function assertPlatformAdminActor({ firestore, uid }) {
+  const normalizedUid = String(uid ?? '').trim();
+  if (!normalizedUid) {
+    return {
+      allowed: false,
+      status: 401,
+      error: 'missing_uid',
+      message: 'Usuario autenticado sem UID valido.',
+      userData: null,
+    };
+  }
+
+  const userDoc = await firestore.collection('usuarios').doc(normalizedUid).get();
+  if (!userDoc.exists) {
+    return {
+      allowed: false,
+      status: 403,
+      error: 'user_not_found',
+      message: 'Usuario autenticado nao encontrado em usuarios/{uid}.',
+      userData: null,
+    };
+  }
+
+  const userData = userDoc.data() || {};
+  const platformRole = String(userData.platformRole ?? '').trim().toLowerCase();
+  const activeGlobal = userData.ativoGlobal !== false;
+  const consoleEnabled = userData.maintainerConsoleEnabled !== false;
+
+  if (platformRole !== 'platform_admin' || !activeGlobal || !consoleEnabled) {
+    return {
+      allowed: false,
+      status: 403,
+      error: 'forbidden',
+      message: 'Apenas platform_admin ativo com console habilitado pode operar billing Stripe.',
+      userData,
+    };
+  }
+
+  return {
+    allowed: true,
+    status: 200,
+    error: '',
+    message: '',
+    userData,
+  };
+}
+
+async function assertTenantBillingActorPermission({ firestore, uid, tenantId }) {
+  const platformAccess = await assertPlatformAdminActor({ firestore, uid });
+  if (platformAccess.allowed) {
+    return {
+      allowed: true,
+      status: 200,
+      error: '',
+      message: '',
+    };
+  }
+
+  const membership = await loadTenantMembershipByTenantAndUser({
+    firestore,
+    tenantId,
+    uid,
+  });
+
+  if (!membership) {
+    return {
+      allowed: false,
+      status: 403,
+      error: 'membership_not_found',
+      message: 'Usuario sem membership ativa no tenant informado.',
+    };
+  }
+
+  const role = String(membership.role ?? '').trim().toLowerCase();
+  const state = String(membership.state ?? 'active').trim().toLowerCase();
+  const active = membership.ativo !== false;
+  if (!active || state !== 'active' || role !== 'owner') {
+    return {
+      allowed: false,
+      status: 403,
+      error: 'owner_required',
+      message: 'Somente owner ativo (ou platform_admin) pode operar checkout/billing do tenant.',
+    };
+  }
+
+  return {
+    allowed: true,
+    status: 200,
+    error: '',
+    message: '',
+  };
+}
+
+async function loadStripeIntegrationRuntime({ firestore, requireWebhookSecret }) {
+  const config = await readStripeIntegrationConfig(firestore);
+  const environment = config.activeEnvironment;
+  const secretKey = getStripeSecretForEnvironment(environment);
+  if (!secretKey) {
+    return {
+      ok: false,
+      status: 503,
+      error: 'integration_not_ready',
+      message: `Secret Stripe ausente para ambiente ${environment}. Configure STRIPE_SK_${environment.toUpperCase()}.`,
+      environment,
+      webhookSecret: '',
+      enabledEvents: config.webhookEvents,
+      stripeClient: null,
+    };
+  }
+
+  const webhookSecret = getStripeWebhookSecretForEnvironment(environment);
+  if (requireWebhookSecret && !webhookSecret) {
+    return {
+      ok: false,
+      status: 503,
+      error: 'integration_not_ready',
+      message: `Webhook secret ausente para ambiente ${environment}. Configure STRIPE_WHSEC_${environment.toUpperCase()}.`,
+      environment,
+      webhookSecret: '',
+      enabledEvents: config.webhookEvents,
+      stripeClient: null,
+    };
+  }
+
+  return {
+    ok: true,
+    status: 200,
+    error: '',
+    message: '',
+    environment,
+    webhookSecret,
+    enabledEvents: config.webhookEvents,
+    stripeClient: getStripeClient(secretKey),
+  };
+}
+
+async function readStripeIntegrationConfig(firestore) {
+  const doc = await firestore.collection('billing_integrations').doc('stripe').get();
+  const data = doc.data() || {};
+  const envFromDoc = String(data.activeEnvironment ?? '').trim().toLowerCase();
+  const envFromProcess = String(process.env.STRIPE_ACTIVE_ENVIRONMENT ?? '')
+    .trim()
+    .toLowerCase();
+
+  const activeEnvironment = ['test', 'live'].includes(envFromDoc)
+    ? envFromDoc
+    : ['test', 'live'].includes(envFromProcess)
+      ? envFromProcess
+      : 'test';
+
+  const webhookEvents = Array.isArray(data.webhookEvents)
+    ? data.webhookEvents
+      .map((value) => String(value ?? '').trim())
+      .filter((value) => value)
+    : [];
+
+  return {
+    activeEnvironment,
+    webhookEvents:
+      webhookEvents.length > 0 ? webhookEvents : STRIPE_DEFAULT_WEBHOOK_EVENTS,
+  };
+}
+
+function getStripeSecretForEnvironment(environment) {
+  if (environment === 'live') {
+    return String(process.env.STRIPE_SK_LIVE ?? '').trim();
+  }
+  return String(process.env.STRIPE_SK_TEST ?? '').trim();
+}
+
+function getStripeWebhookSecretForEnvironment(environment) {
+  if (environment === 'live') {
+    return String(process.env.STRIPE_WHSEC_LIVE ?? '').trim();
+  }
+  return String(process.env.STRIPE_WHSEC_TEST ?? '').trim();
+}
+
+function getStripeClient(secretKey) {
+  const normalizedSecret = String(secretKey ?? '').trim();
+  if (!normalizedSecret) {
+    throw new Error('Missing Stripe secret key.');
+  }
+
+  if (!STRIPE_CLIENT_CACHE.has(normalizedSecret)) {
+    STRIPE_CLIENT_CACHE.set(normalizedSecret, new Stripe(normalizedSecret));
+  }
+  return STRIPE_CLIENT_CACHE.get(normalizedSecret);
+}
+
+async function loadStripePlanMapping({ firestore, billingPlanKey }) {
+  const normalizedPlanKey = normalizeBillingPlanKey(billingPlanKey);
+  if (!normalizedPlanKey) {
+    return null;
+  }
+
+  const byIdDoc = await firestore
+    .collection('billing_integrations')
+    .doc('stripe')
+    .collection('plan_mappings')
+    .doc(normalizedPlanKey)
+    .get();
+
+  if (byIdDoc.exists) {
+    const data = byIdDoc.data() || {};
+    if (data.active !== false && String(data.stripePriceId ?? '').trim()) {
+      return {
+        billingPlanKey: normalizeBillingPlanKey(data.billingPlanKey ?? normalizedPlanKey),
+        stripeProductId: String(data.stripeProductId ?? '').trim(),
+        stripePriceId: String(data.stripePriceId ?? '').trim(),
+        mappingType: String(data.mappingType ?? 'base').trim().toLowerCase(),
+        overageMetric: String(data.overageMetric ?? '').trim().toLowerCase(),
+        active: data.active !== false,
+      };
+    }
+  }
+
+  const querySnapshot = await firestore
+    .collection('billing_integrations')
+    .doc('stripe')
+    .collection('plan_mappings')
+    .where('billingPlanKey', '==', normalizedPlanKey)
+    .limit(5)
+    .get();
+
+  for (const doc of querySnapshot.docs) {
+    const data = doc.data() || {};
+    if (data.active === false) {
+      continue;
+    }
+    const priceId = String(data.stripePriceId ?? '').trim();
+    if (!priceId) {
+      continue;
+    }
+    return {
+      billingPlanKey: normalizeBillingPlanKey(data.billingPlanKey ?? normalizedPlanKey),
+      stripeProductId: String(data.stripeProductId ?? '').trim(),
+      stripePriceId: priceId,
+      mappingType: String(data.mappingType ?? 'base').trim().toLowerCase(),
+      overageMetric: String(data.overageMetric ?? '').trim().toLowerCase(),
+      active: true,
+    };
+  }
+
+  return null;
+}
+
+async function resolveBillingPlanKeyByStripePriceId({ firestore, stripePriceId }) {
+  const normalizedPriceId = String(stripePriceId ?? '').trim();
+  if (!normalizedPriceId) {
+    return '';
+  }
+
+  const snapshot = await firestore
+    .collection('billing_integrations')
+    .doc('stripe')
+    .collection('plan_mappings')
+    .where('stripePriceId', '==', normalizedPriceId)
+    .limit(10)
+    .get();
+
+  for (const doc of snapshot.docs) {
+    const data = doc.data() || {};
+    if (data.active === false) {
+      continue;
+    }
+    const planKey = normalizeBillingPlanKey(data.billingPlanKey);
+    if (planKey) {
+      return planKey;
+    }
+  }
+  return '';
+}
+
+async function processStripeWebhookEvent({ firestore, event, enabledEvents }) {
+  const type = String(event?.type ?? '').trim();
+  if (!type) {
+    throw new Error('Webhook Stripe sem event.type.');
+  }
+
+  const enabledSet = new Set(
+    (enabledEvents || STRIPE_DEFAULT_WEBHOOK_EVENTS)
+      .map((item) => String(item ?? '').trim())
+      .filter((item) => item),
+  );
+
+  if (!enabledSet.has(type)) {
+    return {
+      ignored: true,
+      duplicate: false,
+      tenantId: '',
+    };
+  }
+
+  const eventId = String(event.id ?? '').trim();
+  if (!eventId) {
+    throw new Error('Webhook Stripe sem event.id.');
+  }
+
+  const eventRef = firestore.collection('billing_webhook_events').doc(eventId);
+  let duplicate = false;
+
+  await firestore.runTransaction(async (transaction) => {
+    const existingDoc = await transaction.get(eventRef);
+    if (existingDoc.exists) {
+      const existingData = existingDoc.data() || {};
+      const status = String(existingData.processingStatus ?? '')
+        .trim()
+        .toLowerCase();
+      if (status === 'success') {
+        duplicate = true;
+        return;
+      }
+      const retryCount = Number(existingData.retryCount ?? 0);
+      transaction.set(
+        eventRef,
+        {
+          provider: 'stripe',
+          eventId,
+          type,
+          receivedAt: new Date().toISOString(),
+          processingStatus: 'processing',
+          retryCount: Number.isFinite(retryCount) ? retryCount + 1 : 1,
+        },
+        { merge: true },
+      );
+      return;
+    }
+
+    transaction.set(eventRef, {
+      provider: 'stripe',
+      eventId,
+      type,
+      receivedAt: new Date().toISOString(),
+      processingStatus: 'processing',
+      retryCount: 0,
+    });
+  });
+
+  if (duplicate) {
+    return {
+      ignored: false,
+      duplicate: true,
+      tenantId: '',
+    };
+  }
+
+  try {
+    const tenantId = await applyStripeWebhookEventToTenant({
+      firestore,
+      event,
+    });
+
+    await eventRef.set(
+      {
+        tenantId,
+        processedAt: new Date().toISOString(),
+        processingStatus: 'success',
+        errorMessage: '',
+      },
+      { merge: true },
+    );
+
+    return {
+      ignored: false,
+      duplicate: false,
+      tenantId,
+    };
+  } catch (error) {
+    await eventRef.set(
+      {
+        processedAt: new Date().toISOString(),
+        processingStatus: 'error',
+        errorMessage: error instanceof Error ? error.message : String(error),
+      },
+      { merge: true },
+    );
+    throw error;
+  }
+}
+
+async function applyStripeWebhookEventToTenant({ firestore, event }) {
+  const type = String(event?.type ?? '').trim();
+  const payload = event?.data?.object ?? {};
+
+  if (type === 'checkout.session.completed') {
+    const tenantId = await resolveTenantIdFromStripeReferences({
+      firestore,
+      explicitTenantId: payload?.metadata?.tenantId || payload?.client_reference_id,
+      stripeCustomerId: payload?.customer,
+      stripeSubscriptionId: payload?.subscription,
+    });
+    if (!tenantId) {
+      throw new Error('checkout.session.completed sem tenantId resolvido.');
+    }
+
+    const billingPlanKey = normalizeBillingPlanKey(payload?.metadata?.billingPlanKey);
+    await firestore.collection('tenants').doc(tenantId).set(
+      {
+        stripeCustomerId: String(payload?.customer ?? '').trim(),
+        stripeCheckoutSessionId: String(payload?.id ?? '').trim(),
+        stripeSubscriptionId: String(payload?.subscription ?? '').trim(),
+        ...(billingPlanKey ? { billingPlanKey } : {}),
+        billingUpdatedAt: new Date().toISOString(),
+      },
+      { merge: true },
+    );
+
+    return tenantId;
+  }
+
+  if (
+    type === 'customer.subscription.created' ||
+    type === 'customer.subscription.updated' ||
+    type === 'customer.subscription.deleted'
+  ) {
+    const tenantId = await resolveTenantIdFromStripeReferences({
+      firestore,
+      explicitTenantId: payload?.metadata?.tenantId,
+      stripeCustomerId: payload?.customer,
+      stripeSubscriptionId: payload?.id,
+    });
+    if (!tenantId) {
+      throw new Error(`${type} sem tenantId resolvido.`);
+    }
+
+    const priceId = readStripeSubscriptionPriceId(payload);
+    const mappedPlanKey = await resolveBillingPlanKeyByStripePriceId({
+      firestore,
+      stripePriceId: priceId,
+    });
+    const fallbackPlanKey = normalizeBillingPlanKey(payload?.metadata?.billingPlanKey);
+
+    await firestore.collection('tenants').doc(tenantId).set(
+      buildTenantPatchFromStripeSubscription({
+        subscription: payload,
+        billingPlanKey: mappedPlanKey || fallbackPlanKey,
+      }),
+      { merge: true },
+    );
+
+    return tenantId;
+  }
+
+  if (
+    type === 'invoice.paid' ||
+    type === 'invoice.payment_failed' ||
+    type === 'invoice.finalized'
+  ) {
+    const tenantId = await resolveTenantIdFromStripeReferences({
+      firestore,
+      explicitTenantId: payload?.metadata?.tenantId,
+      stripeCustomerId: payload?.customer,
+      stripeSubscriptionId: payload?.subscription,
+    });
+    if (!tenantId) {
+      return '';
+    }
+
+    const nowIso = new Date().toISOString();
+    const patch = {
+      stripeCustomerId: String(payload?.customer ?? '').trim(),
+      stripeSubscriptionId: String(payload?.subscription ?? '').trim(),
+      stripeInvoiceId: String(payload?.id ?? '').trim(),
+      stripePaymentIntentId: String(payload?.payment_intent ?? '').trim(),
+      billingUpdatedAt: nowIso,
+    };
+
+    if (type === 'invoice.paid') {
+      patch.billingStatus = 'active';
+      patch.billingPastDueSinceAt = '';
+    } else if (type === 'invoice.payment_failed') {
+      patch.billingStatus = 'past_due';
+      patch.billingPastDueSinceAt = nowIso;
+    }
+
+    await firestore.collection('tenants').doc(tenantId).set(patch, { merge: true });
+    return tenantId;
+  }
+
+  return '';
+}
+
+async function resolveTenantIdFromStripeReferences({
+  firestore,
+  explicitTenantId,
+  stripeCustomerId,
+  stripeSubscriptionId,
+}) {
+  const explicit = String(explicitTenantId ?? '').trim();
+  if (explicit) {
+    return explicit;
+  }
+
+  const subscriptionId = String(stripeSubscriptionId ?? '').trim();
+  if (subscriptionId) {
+    const subscriptionSnapshot = await firestore
+      .collection('tenants')
+      .where('stripeSubscriptionId', '==', subscriptionId)
+      .limit(1)
+      .get();
+    if (!subscriptionSnapshot.empty) {
+      return subscriptionSnapshot.docs[0].id;
+    }
+  }
+
+  const customerId = String(stripeCustomerId ?? '').trim();
+  if (customerId) {
+    const customerSnapshot = await firestore
+      .collection('tenants')
+      .where('stripeCustomerId', '==', customerId)
+      .limit(1)
+      .get();
+    if (!customerSnapshot.empty) {
+      return customerSnapshot.docs[0].id;
+    }
+  }
+
+  return '';
+}
+
+function readStripeSubscriptionPriceId(subscription) {
+  const items = Array.isArray(subscription?.items?.data)
+    ? subscription.items.data
+    : [];
+  const firstItem = items.length > 0 ? items[0] : null;
+  return String(firstItem?.price?.id ?? '').trim();
+}
+
+function readStripeSubscriptionCycle(subscription) {
+  const items = Array.isArray(subscription?.items?.data)
+    ? subscription.items.data
+    : [];
+  const firstItem = items.length > 0 ? items[0] : null;
+  return String(firstItem?.price?.recurring?.interval ?? '').trim() || 'month';
+}
+
+function mapStripeSubscriptionStatusToBillingStatus(rawStatus) {
+  const status = String(rawStatus ?? '').trim().toLowerCase();
+  switch (status) {
+    case 'trialing':
+      return 'trial';
+    case 'active':
+      return 'active';
+    case 'past_due':
+    case 'unpaid':
+    case 'incomplete':
+      return 'past_due';
+    case 'paused':
+      return 'suspended';
+    case 'canceled':
+    case 'incomplete_expired':
+      return 'canceled';
+    default:
+      return 'active';
+  }
+}
+
+function toIsoFromUnixSeconds(value) {
+  const seconds = Number(value);
+  if (!Number.isFinite(seconds) || seconds <= 0) {
+    return '';
+  }
+  return new Date(seconds * 1000).toISOString();
+}
+
+function buildTenantPatchFromStripeSubscription({ subscription, billingPlanKey }) {
+  const priceId = readStripeSubscriptionPriceId(subscription);
+  const nowIso = new Date().toISOString();
+  const billingStatus = mapStripeSubscriptionStatusToBillingStatus(
+    subscription?.status,
+  );
+
+  const patch = {
+    stripeCustomerId: String(subscription?.customer ?? '').trim(),
+    stripeSubscriptionId: String(subscription?.id ?? '').trim(),
+    stripePriceId: priceId,
+    billingStatus,
+    billingCycle: readStripeSubscriptionCycle(subscription),
+    billingCurrentPeriodStartAt: toIsoFromUnixSeconds(
+      subscription?.current_period_start,
+    ),
+    billingCurrentPeriodEndAt: toIsoFromUnixSeconds(
+      subscription?.current_period_end,
+    ),
+    billingUpdatedAt: nowIso,
+  };
+
+  const normalizedPlanKey = normalizeBillingPlanKey(billingPlanKey);
+  if (normalizedPlanKey) {
+    patch.billingPlanKey = normalizedPlanKey;
+  }
+
+  if (billingStatus === 'past_due') {
+    patch.billingPastDueSinceAt = nowIso;
+  }
+  if (billingStatus === 'active') {
+    patch.billingPastDueSinceAt = '';
+    patch.billingSuspendedAt = '';
+  }
+  if (billingStatus === 'canceled') {
+    patch.billingSuspendedAt = nowIso;
+  }
+
+  return patch;
+}
+
+async function reconcileTenantStripeState({ firestore, stripeClient, tenantId }) {
+  const tenantRef = firestore.collection('tenants').doc(tenantId);
+  const tenantDoc = await tenantRef.get();
+  if (!tenantDoc.exists) {
+    throw new Error('Tenant nao encontrado para reconciliacao.');
+  }
+
+  const tenantData = tenantDoc.data() || {};
+  const previousBillingStatus = String(tenantData.billingStatus ?? '').trim();
+  const stripeCustomerId = String(tenantData.stripeCustomerId ?? '').trim();
+  let stripeSubscriptionId = String(tenantData.stripeSubscriptionId ?? '').trim();
+
+  if (!stripeCustomerId && !stripeSubscriptionId) {
+    throw new Error('Tenant sem stripeCustomerId/stripeSubscriptionId para reconciliar.');
+  }
+
+  let subscription = null;
+  if (stripeSubscriptionId) {
+    try {
+      subscription = await stripeClient.subscriptions.retrieve(stripeSubscriptionId, {
+        expand: ['items.data.price'],
+      });
+    } catch (_) {
+      subscription = null;
+    }
+  }
+
+  if (!subscription && stripeCustomerId) {
+    const list = await stripeClient.subscriptions.list({
+      customer: stripeCustomerId,
+      status: 'all',
+      limit: 1,
+      expand: ['data.items.data.price'],
+    });
+    if (Array.isArray(list.data) && list.data.length > 0) {
+      subscription = list.data[0];
+      stripeSubscriptionId = String(subscription.id ?? '').trim();
+    }
+  }
+
+  let patch;
+  if (subscription) {
+    const priceId = readStripeSubscriptionPriceId(subscription);
+    const mappedPlanKey = await resolveBillingPlanKeyByStripePriceId({
+      firestore,
+      stripePriceId: priceId,
+    });
+    patch = buildTenantPatchFromStripeSubscription({
+      subscription,
+      billingPlanKey: mappedPlanKey || tenantData.billingPlanKey,
+    });
+  } else {
+    patch = {
+      stripeCustomerId,
+      stripeSubscriptionId,
+      billingStatus: 'canceled',
+      billingSuspendedAt: new Date().toISOString(),
+      billingUpdatedAt: new Date().toISOString(),
+    };
+  }
+
+  await tenantRef.set(patch, { merge: true });
+
+  return {
+    stripeSubscriptionId: String(patch.stripeSubscriptionId ?? '').trim(),
+    previousBillingStatus,
+    currentBillingStatus: String(patch.billingStatus ?? '').trim(),
+    updatedAt: String(patch.billingUpdatedAt ?? '').trim(),
+  };
+}
+
+async function applyTenantBillingActionToStripe({
+  stripeClient,
+  tenantId,
+  tenantData,
+  action,
+  reason,
+  actorUid,
+}) {
+  const stripeCustomerId = String(tenantData?.stripeCustomerId ?? '').trim();
+  const stripeSubscriptionId = String(tenantData?.stripeSubscriptionId ?? '').trim();
+  if (!stripeCustomerId && !stripeSubscriptionId) {
+    return {
+      applied: false,
+      action: 'no_stripe_reference',
+      message: 'Tenant sem stripeCustomerId/stripeSubscriptionId.',
+    };
+  }
+
+  const nowIso = new Date().toISOString();
+  const metadataBase = {
+    smartsfaTenantId: sanitizeStripeMetadataValue(tenantId, 120),
+    smartsfaBillingAction: sanitizeStripeMetadataValue(action, 60),
+    smartsfaBillingReason: sanitizeStripeMetadataValue(reason || 'manual', 120),
+    smartsfaBillingActorUid: sanitizeStripeMetadataValue(actorUid, 120),
+    smartsfaBillingUpdatedAt: sanitizeStripeMetadataValue(nowIso, 60),
+  };
+
+  if (action === 'grant_7_days' || action === 'grant_30_days') {
+    metadataBase.smartsfaGraceDays = action === 'grant_30_days' ? '30' : '7';
+  }
+
+  if (stripeCustomerId) {
+    await stripeClient.customers.update(stripeCustomerId, {
+      metadata: metadataBase,
+    });
+  }
+
+  if (!stripeSubscriptionId) {
+    return {
+      applied: true,
+      action: 'customer_metadata_updated',
+      message: 'Subscription ausente; apenas metadata do customer foi atualizada.',
+    };
+  }
+
+  if (action === 'suspend_billing') {
+    await stripeClient.subscriptions.update(stripeSubscriptionId, {
+      pause_collection: {
+        behavior: 'void',
+      },
+      metadata: metadataBase,
+    });
+    return {
+      applied: true,
+      action: 'subscription_paused_collection_void',
+      message: 'Cobranca pausada no Stripe (pause_collection=void).',
+    };
+  }
+
+  if (action === 'normalize_billing') {
+    await stripeClient.subscriptions.update(stripeSubscriptionId, {
+      pause_collection: null,
+      metadata: metadataBase,
+    });
+    return {
+      applied: true,
+      action: 'subscription_resumed_collection',
+      message: 'Cobranca normalizada no Stripe (pause_collection removido).',
+    };
+  }
+
+  await stripeClient.subscriptions.update(stripeSubscriptionId, {
+    metadata: metadataBase,
+  });
+  return {
+    applied: true,
+    action: 'subscription_metadata_updated',
+    message: 'Metadata da subscription atualizada no Stripe.',
+  };
 }

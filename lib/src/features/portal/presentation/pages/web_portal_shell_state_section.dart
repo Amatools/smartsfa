@@ -15,7 +15,6 @@ class _WebPortalShellState extends State<_WebPortalShell> {
   int _selectedIndex = 0;
   String? _activeTenantId;
   bool _showWorkspaceSelection = true;
-  bool _upgradingWorkspace = false;
   bool _settingFavoriteRepresented = false;
   String? _accountContractLockUid;
   Future<AccountContractLock>? _accountContractLockFuture;
@@ -458,12 +457,27 @@ class _WebPortalShellState extends State<_WebPortalShell> {
     }
     _requestedEntryPointApplied = true;
 
-    if (_requestedEntryPoint != 'maintainer') {
+    if (_requestedEntryPoint.isEmpty) {
+      return;
+    }
+
+    var targetLabel = '';
+    switch (_requestedEntryPoint) {
+      case 'billing':
+      case 'planos':
+      case 'checkout':
+        targetLabel = 'Billing';
+        break;
+      default:
+        targetLabel = '';
+        break;
+    }
+    if (targetLabel.isEmpty) {
       return;
     }
 
     final targetIndex = visibleItems.indexWhere(
-      (item) => item.label == 'Mantenedor',
+      (item) => item.label == targetLabel,
     );
     if (targetIndex < 0 || targetIndex == _selectedIndex) {
       return;
@@ -531,138 +545,6 @@ class _WebPortalShellState extends State<_WebPortalShell> {
     }
   }
 
-  Future<void> _openUpgradeToRepDialog(TenantEntryOption activeTenant) async {
-    if (activeTenant.workspaceType != 'seller_solo_workspace') {
-      return;
-    }
-
-    final nameController = TextEditingController(
-      text: '${activeTenant.tenantName} Representações',
-    );
-    final cnpjController = TextEditingController();
-
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Upgrade para Representações'),
-        content: SizedBox(
-          width: 520,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Este upgrade muda seu plano de Individual para Representações sem criar nova conta.',
-              ),
-              const SizedBox(height: 12),
-              const Text(
-                'Seu contexto Individual sera substituido e os dados migrados para o novo workspace.',
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(
-                  labelText: 'Nome do novo workspace de Representações',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: cnpjController,
-                decoration: const InputDecoration(
-                  labelText: 'CNPJ de referencia (informativo)',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Fazer upgrade'),
-          ),
-        ],
-      ),
-    );
-
-    if (!mounted || confirmed != true) {
-      return;
-    }
-
-    final workspaceName = nameController.text.trim();
-    if (workspaceName.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Informe o nome do workspace.')),
-      );
-      return;
-    }
-
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      return;
-    }
-
-    setState(() {
-      _upgradingWorkspace = true;
-    });
-
-    try {
-      final result = await SoloWorkspaceService(FirebaseFirestore.instance)
-          .upgradeIndividualToRepWorkspace(
-            user: user,
-            workspaceName: workspaceName,
-            representedCompanyDocument: cnpjController.text.trim(),
-          );
-
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        _activeTenantId = result.targetTenantId;
-        _selectedIndex = 0;
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Upgrade concluido. ${result.migratedScopedDocs + result.migratedTenantOnlyDocs} registros migrados para Representações.',
-          ),
-        ),
-      );
-    } on FirebaseException catch (error) {
-      if (!mounted) {
-        return;
-      }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Erro Firebase (${error.code}): ${error.message ?? 'falha no upgrade.'}',
-          ),
-        ),
-      );
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Falha no upgrade: $error')));
-    } finally {
-      if (mounted) {
-        setState(() {
-          _upgradingWorkspace = false;
-        });
-      }
-    }
-  }
-
   List<_PortalNavItem> _buildItemsForRole(
     TenantEntryOption activeTenant,
     AccountContractLock accountContractLock,
@@ -671,12 +553,8 @@ class _WebPortalShellState extends State<_WebPortalShell> {
       ' ',
       '_',
     );
-    final canOpenMaintainerPanel =
-        MaintainerAccessService.isPotentialMaintainerRole(normalizedRole);
-    final isTenantManager =
-        normalizedRole == 'owner' ||
-        normalizedRole == 'gerente' ||
-        normalizedRole == 'platform_admin';
+    final canOpenBilling =
+        normalizedRole == 'owner' || normalizedRole == 'platform_admin';
     final canAccessInvites =
         normalizedRole == 'owner' ||
         normalizedRole == 'gerente' ||
@@ -705,8 +583,6 @@ class _WebPortalShellState extends State<_WebPortalShell> {
                 _AccountSection(
                   activeTenant: activeTenant,
                   accountContractLock: accountContractLock,
-                  upgradingWorkspace: _upgradingWorkspace,
-                  onUpgradeToRep: () => _openUpgradeToRepDialog(activeTenant),
                 ),
       ),
       if (canOpenTenantAdmin)
@@ -735,16 +611,6 @@ class _WebPortalShellState extends State<_WebPortalShell> {
                   activeTenant,
                 ),
               ),
-        ),
-      if (canOpenMaintainerPanel)
-        _PortalNavItem(
-          label: 'Mantenedor',
-          icon: Icons.security_outlined,
-          section: _PortalSection.global,
-          builder: ({
-            required activeTenant,
-            required activeRepresentedCompanyName,
-          }) => MaintainerConsolePage(activeTenant: activeTenant),
         ),
       if (supportsRepresentedCompanies)
         const _PortalNavItem(
@@ -792,7 +658,7 @@ class _WebPortalShellState extends State<_WebPortalShell> {
       ]);
     }
 
-    if (isTenantManager) {
+    if (canOpenBilling) {
       items.add(
         const _PortalNavItem(
           label: 'Billing',

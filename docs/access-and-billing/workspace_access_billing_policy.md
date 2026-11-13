@@ -114,6 +114,21 @@ Considerar inativo (bloqueio operacional) quando billingStatus for, no minimo:
 - UI apenas reflete o estado de entitlement;
 - toda mudanca de estado deve ficar auditada.
 
+## Decisao operacional atual (2026-11)
+
+### Controle de billing por papel
+
+- billing e sempre atrelado ao workspace (tenant), nao ao usuario isolado;
+- o owner do workspace e o responsavel por contratar/alterar plano e manter pagamento;
+- usuarios convidados no tenant nao devem alterar plano;
+- no maximo, convidados podem visualizar resumo de plano/status em modo leitura.
+
+### Papel platform_admin
+
+- manter `platform_admin` como papel de contingencia (break-glass) para suporte operacional;
+- uso diario de billing no portal do cliente permanece no owner do tenant;
+- permissao de `platform_admin` pode evoluir no futuro sem quebrar o modelo atual de ownership.
+
 ## Fluxo esperado no produto
 
 ### Primeiro acesso

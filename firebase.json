@@ -1,1 +1,107 @@
-{"firestore":{"rules":"firestore.rules","indexes":"firestore.indexes.json"},"storage":{"rules":"storage.rules"},"functions":{"source":"functions"},"hosting":{"public":"public","ignore":["firebase.json","**/.*","**/node_modules/**"],"cleanUrls":true},"flutter":{"platforms":{"android":{"default":{"projectId":"smart-sfa","appId":"1:209774810668:android:c65d463954b4fb50d8e389","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"smart-sfa","configurations":{"android":"1:209774810668:android:c65d463954b4fb50d8e389","ios":"1:209774810668:ios:33b9601d3abb13d6d8e389","web":"1:209774810668:web:791f214b9561d723d8e389"}}}}}}
+{
+	"firestore": {
+		"rules": "firestore.rules",
+		"indexes": "firestore.indexes.json"
+	},
+	"storage": {
+		"rules": "storage.rules"
+	},
+	"functions": {
+		"source": "functions"
+	},
+	"hosting": {
+		"public": "public",
+		"ignore": [
+			"firebase.json",
+			"**/.*",
+			"**/node_modules/**"
+		],
+		"cleanUrls": true,
+		"headers": [
+			{
+				"source": "/",
+				"headers": [
+					{
+						"key": "Cache-Control",
+						"value": "no-cache, no-store, must-revalidate"
+					}
+				]
+			},
+			{
+				"source": "/admin",
+				"headers": [
+					{
+						"key": "Cache-Control",
+						"value": "no-cache, no-store, must-revalidate"
+					}
+				]
+			},
+			{
+				"source": "/app",
+				"headers": [
+					{
+						"key": "Cache-Control",
+						"value": "no-cache, no-store, must-revalidate"
+					}
+				]
+			},
+			{
+				"source": "/app/",
+				"headers": [
+					{
+						"key": "Cache-Control",
+						"value": "no-cache, no-store, must-revalidate"
+					}
+				]
+			},
+			{
+				"source": "/app/flutter_service_worker.js",
+				"headers": [
+					{
+						"key": "Cache-Control",
+						"value": "no-cache, no-store, must-revalidate"
+					}
+				]
+			}
+		],
+		"rewrites": [
+			{
+				"source": "/app",
+				"destination": "/app/index.html"
+			},
+			{
+				"source": "/app/**",
+				"destination": "/app/index.html"
+			},
+			{
+				"source": "/admin",
+				"destination": "/admin.html"
+			},
+			{
+				"source": "/admin/**",
+				"destination": "/admin.html"
+			}
+		]
+	},
+	"flutter": {
+		"platforms": {
+			"android": {
+				"default": {
+					"projectId": "smart-sfa",
+					"appId": "1:209774810668:android:c65d463954b4fb50d8e389",
+					"fileOutput": "android/app/google-services.json"
+				}
+			},
+			"dart": {
+				"lib/firebase_options.dart": {
+					"projectId": "smart-sfa",
+					"configurations": {
+						"android": "1:209774810668:android:c65d463954b4fb50d8e389",
+						"ios": "1:209774810668:ios:33b9601d3abb13d6d8e389",
+						"web": "1:209774810668:web:791f214b9561d723d8e389"
+					}
+				}
+			}
+		}
+	}
+}

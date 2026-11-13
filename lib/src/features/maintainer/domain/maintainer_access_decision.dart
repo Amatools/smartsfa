@@ -2,23 +2,29 @@ class MaintainerPermission {
   static const String viewHome = 'maintainer.view.home';
   static const String viewOverview = 'maintainer.view.overview';
   static const String viewUsers = 'maintainer.view.users';
+  static const String viewBillingIntegrations =
+      'maintainer.view.billing_integrations';
   static const String manageUserStatus = 'maintainer.manage.user_status';
   static const String manageUserBilling = 'maintainer.manage.user_billing';
   static const String manageUserCrud = 'maintainer.manage.user_crud';
   static const String manageUserPermissions =
       'maintainer.manage.user_permissions';
-    static const String manageImpersonation =
+  static const String manageImpersonation =
       'maintainer.manage.impersonation';
+  static const String manageBillingIntegrations =
+      'maintainer.manage.billing_integrations';
 
   static const Set<String> all = {
     viewHome,
     viewOverview,
     viewUsers,
+    viewBillingIntegrations,
     manageUserStatus,
     manageUserBilling,
     manageUserCrud,
     manageUserPermissions,
     manageImpersonation,
+    manageBillingIntegrations,
   };
 }
 

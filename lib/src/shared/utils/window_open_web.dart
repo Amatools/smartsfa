@@ -11,6 +11,15 @@ bool openUrlInNewTab(String url) {
   return true;
 }
 
+bool openUrlInCurrentTab(String url) {
+  if (url.trim().isEmpty) {
+    return false;
+  }
+
+  html.window.location.assign(url);
+  return true;
+}
+
 bool closeCurrentBrowserWindow() {
   html.window.close();
   return true;

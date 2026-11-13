@@ -5,6 +5,10 @@ bool openUrlInNewTab(String url) {
   return impl.openUrlInNewTab(url);
 }
 
+bool openUrlInCurrentTab(String url) {
+  return impl.openUrlInCurrentTab(url);
+}
+
 bool closeCurrentBrowserWindow() {
   return impl.closeCurrentBrowserWindow();
 }

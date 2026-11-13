@@ -19,11 +19,28 @@ service cloud.firestore {
     }
 
     function isGlobalActiveUser() {
-      return signedIn() && hasUserDoc() && me().data.ativoGlobal == true;
+      return signedIn()
+        && hasUserDoc()
+        && (!('ativoGlobal' in me().data) || me().data.ativoGlobal == true)
+        && (!('ativo' in me().data) || me().data.ativo == true);
+    }
+
+    function resolvedPlatformRole() {
+      return me().data.platformRole is string
+        ? me().data.platformRole
+        : me().data.maintainerRole is string
+        ? me().data.maintainerRole
+        : me().data.roleGlobal is string
+        ? me().data.roleGlobal
+        : me().data.globalRole is string
+        ? me().data.globalRole
+        : me().data.role is string
+        ? me().data.role
+        : 'none';
     }
 
     function myPlatformRole() {
-      return hasUserDoc() ? me().data.platformRole : 'none';
+      return hasUserDoc() ? resolvedPlatformRole() : 'none';
     }
 
     function isPlatformAdmin() {
@@ -1030,6 +1047,37 @@ service cloud.firestore {
         && data.actorUid == uid();
     }
 
+    function validStripeEnvironment(value) {
+      return value in ['test', 'live'];
+    }
+
+    function validStripeIntegrationDoc(data) {
+      return data.activeEnvironment is string
+        && validStripeEnvironment(data.activeEnvironment)
+        && (!('accountIdTest' in data) || data.accountIdTest is string)
+        && (!('accountIdLive' in data) || data.accountIdLive is string)
+        && (!('webhookEndpointTest' in data) || data.webhookEndpointTest is string)
+        && (!('webhookEndpointLive' in data) || data.webhookEndpointLive is string)
+        && (!('webhookEvents' in data) || data.webhookEvents is list)
+        && (!('updatedBy' in data) || data.updatedBy is string)
+        && (!('updatedAt' in data) || data.updatedAt is string);
+    }
+
+    function validStripePlanMappingDoc(mappingId, data) {
+      return data.billingPlanKey is string
+        && data.billingPlanKey != ''
+        && mappingId is string
+        && mappingId != ''
+        && data.stripeProductId is string
+        && data.stripePriceId is string
+        && data.mappingType is string
+        && data.mappingType in ['base', 'overage']
+        && (!('overageMetric' in data) || data.overageMetric is string)
+        && data.active is bool
+        && (!('updatedBy' in data) || data.updatedBy is string)
+        && (!('updatedAt' in data) || data.updatedAt is string);
+    }
+
     function isPossibleSelfServiceBootstrapMembership(data) {
       return data.uid == uid()
         && data.defaultTenant == true
@@ -1451,6 +1499,34 @@ service cloud.firestore {
         && canCreatePlatformAdminAuditDoc(request.resource.data);
 
       allow update, delete: if false;
+    }
+
+    match /billing_integrations/{integrationId} {
+      allow read: if signedIn()
+        && isPlatformAdmin()
+        && integrationId == 'stripe';
+
+      allow create, update: if signedIn()
+        && isPlatformAdmin()
+        && integrationId == 'stripe'
+        && validStripeIntegrationDoc(request.resource.data);
+
+      allow delete: if false;
+
+      match /plan_mappings/{mappingId} {
+        allow read: if signedIn() && isPlatformAdmin();
+
+        allow create, update: if signedIn()
+          && isPlatformAdmin()
+          && validStripePlanMappingDoc(mappingId, request.resource.data);
+
+        allow delete: if false;
+      }
+    }
+
+    match /billing_webhook_events/{eventId} {
+      allow read: if signedIn() && isPlatformAdmin();
+      allow create, update, delete: if false;
     }
 
     match /solicitacoes_acesso/{requestId} {

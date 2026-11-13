@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SmartSFA Admin</title>
+  <meta name="robots" content="noindex,nofollow" />
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f4f7fb;
+      --card: #ffffff;
+      --line: #d8e2ef;
+      --text: #0f2742;
+      --muted: #4f647d;
+      --brand: #0a66c2;
+    }
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+      background: radial-gradient(circle at top left, #e8f2ff, var(--bg) 45%);
+      color: var(--text);
+    }
+    .wrap {
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      box-sizing: border-box;
+    }
+    .card {
+      width: 100%;
+      max-width: 520px;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 22px;
+      box-sizing: border-box;
+      box-shadow: 0 10px 24px rgba(16, 52, 88, 0.08);
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: 22px;
+      line-height: 1.2;
+      color: var(--brand);
+    }
+    p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+  </style>
+  <script>
+    (function () {
+      var origin = window.location.origin;
+      var nextUrl = origin + '/app/?surface=admin';
+      window.location.replace(nextUrl);
+    })();
+  </script>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Redirecionando para o painel admin...</h1>
+      <p>Se o redirecionamento não ocorrer automaticamente, acesse /app/?surface=admin.</p>
+    </div>
+  </div>
+</body>
+</html>

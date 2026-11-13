@@ -146,6 +146,64 @@ class MaintainerUserTenantMembership {
   }
 }
 
+class MaintainerTenantBillingWorkspace {
+  const MaintainerTenantBillingWorkspace({
+    required this.tenantId,
+    required this.tenantName,
+    required this.workspaceType,
+    required this.billingStatus,
+    required this.billingPlanKey,
+    required this.billingCycle,
+    required this.billingUpdatedAt,
+    required this.billingGraceUntilAt,
+    required this.stripeCustomerId,
+  });
+
+  final String tenantId;
+  final String tenantName;
+  final String workspaceType;
+  final String billingStatus;
+  final String billingPlanKey;
+  final String billingCycle;
+  final DateTime? billingUpdatedAt;
+  final DateTime? billingGraceUntilAt;
+  final String stripeCustomerId;
+
+  String get normalizedBillingStatus => billingStatus.trim().toLowerCase();
+
+  static MaintainerTenantBillingWorkspace fromDoc(
+    DocumentSnapshot<Map<String, dynamic>> doc,
+  ) {
+    final data = doc.data() ?? const <String, dynamic>{};
+    final fallbackName = (data['slug'] ?? '').toString().trim();
+    final tenantName = (data['nomeFantasia'] ?? fallbackName).toString().trim();
+    return MaintainerTenantBillingWorkspace(
+      tenantId: doc.id.trim(),
+      tenantName: tenantName.isEmpty ? doc.id.trim() : tenantName,
+      workspaceType: (data['workspaceType'] ?? '').toString().trim(),
+      billingStatus: (data['billingStatus'] ?? 'active').toString().trim(),
+      billingPlanKey: (data['billingPlanKey'] ?? '').toString().trim(),
+      billingCycle: (data['billingCycle'] ?? '').toString().trim(),
+      billingUpdatedAt: _readDateTimeRaw(data['billingUpdatedAt']),
+      billingGraceUntilAt: _readDateTimeRaw(data['billingGraceUntilAt']),
+      stripeCustomerId: (data['stripeCustomerId'] ?? '').toString().trim(),
+    );
+  }
+
+  static DateTime? _readDateTimeRaw(Object? raw) {
+    if (raw is Timestamp) {
+      return raw.toDate();
+    }
+    if (raw is DateTime) {
+      return raw;
+    }
+    if (raw is String) {
+      return DateTime.tryParse(raw);
+    }
+    return null;
+  }
+}
+
 class MaintainerUserAdminService {
   MaintainerUserAdminService(this._firestore);
 
@@ -228,6 +286,31 @@ class MaintainerUserAdminService {
         namesById[tenantId] = rawName.isEmpty ? tenantId : rawName;
       }
       return namesById;
+    });
+  }
+
+  Stream<List<MaintainerTenantBillingWorkspace>> watchTenantBillingWorkspaces({
+    int limit = 1500,
+  }) {
+    return _firestore.collection('tenants').limit(limit).snapshots().map((
+      snapshot,
+    ) {
+      final workspaces = snapshot.docs
+          .map(MaintainerTenantBillingWorkspace.fromDoc)
+          .where((workspace) => workspace.tenantId.isNotEmpty)
+          .toList(growable: false);
+
+      workspaces.sort((a, b) {
+        final nameOrder = a.tenantName.toLowerCase().compareTo(
+          b.tenantName.toLowerCase(),
+        );
+        if (nameOrder != 0) {
+          return nameOrder;
+        }
+        return a.tenantId.compareTo(b.tenantId);
+      });
+
+      return workspaces;
     });
   }
 
@@ -483,6 +566,101 @@ class MaintainerUserAdminService {
       targetUid: normalizedUid,
       targetEmail: targetEmail,
       targetDisplayName: targetDisplayName,
+    );
+  }
+
+  Future<void> requestUserLifecycleAction({
+    required String targetUid,
+    required String actionType,
+    String reason = '',
+    String actorUid = '',
+    String actorEmail = '',
+    String actorLabel = '',
+  }) async {
+    final normalizedTargetUid = targetUid.trim();
+    final normalizedActionType = actionType.trim().toLowerCase();
+    if (normalizedTargetUid.isEmpty) {
+      throw StateError(
+        'UID alvo invalido para solicitar acao de ciclo de vida.',
+      );
+    }
+    if (normalizedActionType.isEmpty) {
+      throw StateError('actionType e obrigatorio.');
+    }
+
+    final nowIso = DateTime.now().toUtc().toIso8601String();
+    await _firestore.collection('workspace_deletion_requests').add({
+      'targetUid': normalizedTargetUid,
+      'tenantId': '',
+      'actionType': normalizedActionType,
+      'status': 'requested',
+      'requestedByUid': actorUid.trim(),
+      'requestedByEmail': actorEmail.trim(),
+      'reason': reason.trim(),
+      'source': 'maintainer_console',
+      'createdAt': FieldValue.serverTimestamp(),
+      'createdAtIso': nowIso,
+    });
+
+    await _appendPlatformAdminAudit(
+      action: 'user_lifecycle_action_requested',
+      actorUid: actorUid,
+      actorEmail: actorEmail,
+      actorLabel: actorLabel,
+      targetUid: normalizedTargetUid,
+      details: {'actionType': normalizedActionType, 'reason': reason.trim()},
+    );
+  }
+
+  Future<void> requestWorkspaceLifecycleAction({
+    required String tenantId,
+    required String actionType,
+    String targetUid = '',
+    String reason = '',
+    String actorUid = '',
+    String actorEmail = '',
+    String actorLabel = '',
+  }) async {
+    final normalizedTenantId = tenantId.trim();
+    final normalizedActionType = actionType.trim().toLowerCase();
+    if (normalizedTenantId.isEmpty) {
+      throw StateError(
+        'tenantId e obrigatorio para solicitar acao de workspace.',
+      );
+    }
+    if (normalizedActionType.isEmpty) {
+      throw StateError('actionType e obrigatorio.');
+    }
+
+    final normalizedTargetUid = targetUid.trim();
+    final nowIso = DateTime.now().toUtc().toIso8601String();
+    await _firestore.collection('workspace_deletion_requests').add({
+      'tenantId': normalizedTenantId,
+      'targetUid': normalizedTargetUid,
+      'actionType': normalizedActionType,
+      'status': 'requested',
+      'requestedByUid': actorUid.trim(),
+      'requestedByEmail': actorEmail.trim(),
+      'reason': reason.trim(),
+      'breakGlass': true,
+      'source': 'maintainer_console',
+      'createdAt': FieldValue.serverTimestamp(),
+      'createdAtIso': nowIso,
+    });
+
+    await _appendPlatformAdminAudit(
+      action: 'workspace_lifecycle_action_requested',
+      actorUid: actorUid,
+      actorEmail: actorEmail,
+      actorLabel: actorLabel,
+      targetUid: actorUid,
+      details: {
+        'tenantId': normalizedTenantId,
+        'targetUid': normalizedTargetUid,
+        'actionType': normalizedActionType,
+        'reason': reason.trim(),
+        'breakGlass': true,
+      },
     );
   }
 

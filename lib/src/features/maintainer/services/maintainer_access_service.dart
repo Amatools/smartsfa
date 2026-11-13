@@ -29,11 +29,13 @@ class MaintainerAccessService {
 
   static const Set<String> _requiresPlatformAdminPermissions = {
     MaintainerPermission.viewUsers,
+    MaintainerPermission.viewBillingIntegrations,
     MaintainerPermission.manageUserStatus,
     MaintainerPermission.manageUserBilling,
     MaintainerPermission.manageUserCrud,
     MaintainerPermission.manageUserPermissions,
     MaintainerPermission.manageImpersonation,
+    MaintainerPermission.manageBillingIntegrations,
   };
 
   static String normalizeRole(String rawRole) {

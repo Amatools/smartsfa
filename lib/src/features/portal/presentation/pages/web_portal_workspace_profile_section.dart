@@ -171,25 +171,12 @@ bool _canManageRepresentedCompanies({
 
 List<_WorkspaceInfoItem> _buildWorkspaceInfoItems({
   required TenantEntryOption activeTenant,
-  required AccountContractLock accountContractLock,
   required Map<String, dynamic> workspaceData,
 }) {
   final items = <_WorkspaceInfoItem>[
     _WorkspaceInfoItem(
-      label: 'Tipo de conta',
-      value: _accountContractLockLabel(accountContractLock),
-    ),
-    _WorkspaceInfoItem(
       label: 'Workspace',
       value: _workspaceTypeLabel(activeTenant.workspaceType),
-    ),
-    _WorkspaceInfoItem(
-      label: 'Seu acesso atual',
-      value: _roleLabel(
-        activeTenant.role,
-        activeTenant.workspaceType,
-        activeTenant.tenantName,
-      ),
     ),
     _WorkspaceInfoItem(
       label: 'Identificador interno',

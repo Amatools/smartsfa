@@ -476,7 +476,7 @@ class _PortalSalesInfoRow extends StatelessWidget {
   }
 }
 
-class _BillingSection extends StatelessWidget {
+class _BillingSection extends StatefulWidget {
   const _BillingSection({
     required this.activeTenant,
     this.activeRepresentedCompanyName,
@@ -486,16 +486,945 @@ class _BillingSection extends StatelessWidget {
   final String? activeRepresentedCompanyName;
 
   @override
+  State<_BillingSection> createState() => _BillingSectionState();
+}
+
+class _BillingSectionState extends State<_BillingSection> {
+  late final WebPortalBillingService _billingService;
+  Future<List<WebPortalAvailableBillingPlan>>? _availablePlansFuture;
+  String _selectedCheckoutPlanKey = '';
+  bool _startingCheckout = false;
+  bool _openingPortal = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _billingService = WebPortalBillingService();
+    _selectedCheckoutPlanKey = _normalizeBillingPlanKey(
+      _requestedBillingPlanFromUrl(),
+    );
+    _availablePlansFuture = _billingService.listAvailableCheckoutPlans(
+      tenantId: widget.activeTenant.tenantId,
+    );
+  }
+
+  String _requestedBillingPlanFromUrl() {
+    final direct = (Uri.base.queryParameters['plan'] ?? '').trim();
+    if (direct.isNotEmpty) {
+      return direct;
+    }
+
+    final fragment = Uri.base.fragment;
+    final queryIndex = fragment.indexOf('?');
+    if (queryIndex < 0 || queryIndex + 1 >= fragment.length) {
+      return '';
+    }
+
+    final rawQuery = fragment.substring(queryIndex + 1).trim();
+    if (rawQuery.isEmpty) {
+      return '';
+    }
+
+    try {
+      return (Uri.splitQueryString(rawQuery)['plan'] ?? '').trim();
+    } catch (_) {
+      return '';
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _BillingSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final oldTenantId = oldWidget.activeTenant.tenantId.trim();
+    final newTenantId = widget.activeTenant.tenantId.trim();
+    if (oldTenantId != newTenantId) {
+      setState(() {
+        _selectedCheckoutPlanKey = '';
+        _availablePlansFuture = _billingService.listAvailableCheckoutPlans(
+          tenantId: widget.activeTenant.tenantId,
+        );
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return _SimpleCardSection(
-      title: 'Billing',
-      subtitle: 'Conta SaaS e faturamento do tenant ativo.',
-      items: [
-        'Plano atual do tenant: ${activeTenant.tenantName}',
-        'Histórico de upgrade e downgrade',
-        'Limites por plano e uso',
-        'Cobrança por tenant, não por login',
-      ],
+    final textTheme = Theme.of(context).textTheme;
+
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 980),
+        child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+          stream: FirebaseFirestore.instance
+              .collection('tenants')
+              .doc(widget.activeTenant.tenantId)
+              .snapshots(),
+          builder: (context, snapshot) {
+            final tenantData =
+                snapshot.data?.data() ?? const <String, dynamic>{};
+            final billingStatus = _billingStatusLabel(
+              (tenantData['billingStatus'] ?? '').toString(),
+            );
+            final billingPlan = _nonEmptyOrDash(
+              (tenantData['billingPlanKey'] ??
+                      tenantData['planTier'] ??
+                      tenantData['plan'] ??
+                      '')
+                  .toString(),
+            );
+            final billingCycle = _billingCycleLabel(
+              (tenantData['billingCycle'] ?? '').toString(),
+            );
+            final stripeCustomerId = (tenantData['stripeCustomerId'] ?? '')
+                .toString()
+                .trim();
+            final hasStripeCustomerId = stripeCustomerId.isNotEmpty;
+            final graceUntil = _formatDateOrDash(
+              tenantData['billingGraceUntilAt'],
+            );
+            final updatedAt = _formatDateOrDash(tenantData['billingUpdatedAt']);
+            final periodStart = _formatDateOrDash(
+              tenantData['billingCurrentPeriodStartAt'],
+            );
+            final periodEnd = _formatDateOrDash(
+              tenantData['billingCurrentPeriodEndAt'],
+            );
+            final operationalAccess =
+                _isOperationalAccessBlocked(
+                  (tenantData['billingStatus'] ?? '').toString(),
+                )
+                ? 'Bloqueado'
+                : 'Liberado';
+            final workspaceType = (widget.activeTenant.workspaceType)
+                .trim()
+                .toLowerCase();
+            final enterpriseWorkspace =
+                workspaceType == 'brand_owner_workspace';
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Billing', style: textTheme.headlineMedium),
+                const SizedBox(height: 8),
+                Text(
+                  'Controle de plano, ciclo e elegibilidade de uso do tenant ativo.',
+                  style: textTheme.bodyLarge,
+                ),
+                const SizedBox(height: 20),
+                Wrap(
+                  spacing: 16,
+                  runSpacing: 16,
+                  children: [
+                    _SummaryCard(
+                      title: 'Tenant',
+                      value: widget.activeTenant.tenantName,
+                    ),
+                    _SummaryCard(title: 'Status', value: billingStatus),
+                    _SummaryCard(title: 'Plano', value: billingPlan),
+                    _SummaryCard(
+                      title: 'Acesso operacional',
+                      value: operationalAccess,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                'Estado de cobrança',
+                                style: textTheme.titleMedium,
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color:
+                                    _isOperationalAccessBlocked(
+                                      (tenantData['billingStatus'] ?? '')
+                                          .toString(),
+                                    )
+                                    ? const Color(0xFFFDEBEC)
+                                    : const Color(0xFFE8F5EE),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Text(
+                                operationalAccess,
+                                style: Theme.of(context).textTheme.labelMedium
+                                    ?.copyWith(
+                                      fontWeight: FontWeight.w700,
+                                      color:
+                                          _isOperationalAccessBlocked(
+                                            (tenantData['billingStatus'] ?? '')
+                                                .toString(),
+                                          )
+                                          ? const Color(0xFF9A1E2A)
+                                          : const Color(0xFF15603C),
+                                    ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        _WorkspaceInfoGrid(
+                          items: [
+                            _WorkspaceInfoItem(
+                              label: 'Ciclo de cobrança',
+                              value: billingCycle,
+                            ),
+                            _WorkspaceInfoItem(
+                              label: 'Período atual',
+                              value: (periodStart == '-' && periodEnd == '-')
+                                  ? 'Não definido'
+                                  : '$periodStart até $periodEnd',
+                            ),
+                            _WorkspaceInfoItem(
+                              label: 'Grace period até',
+                              value: graceUntil,
+                            ),
+                            _WorkspaceInfoItem(
+                              label: 'Última atualização',
+                              value: updatedAt,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            color: Theme.of(context)
+                                .colorScheme
+                                .surfaceContainerHighest
+                                .withValues(alpha: 0.2),
+                            border: Border.all(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .outlineVariant
+                                  .withValues(alpha: 0.4),
+                            ),
+                          ),
+                          child: const Text(
+                            'No web, sem plano ativo, apenas Billing/checkout permanece liberado. No mobile, o uso offline é temporário e revalida quando voltar online.',
+                          ),
+                        ),
+                        if (enterpriseWorkspace) ...[
+                          const SizedBox(height: 10),
+                          const Text(
+                            'Workspace enterprise usa cobrança contratual (boleto/NF). O checkout self-service Stripe não é usado nesse contexto.',
+                          ),
+                          const SizedBox(height: 14),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              FilledButton.icon(
+                                onPressed: null,
+                                icon: const Icon(Icons.shopping_cart_checkout),
+                                label: const Text('Checkout indisponível'),
+                              ),
+                              OutlinedButton.icon(
+                                onPressed:
+                                    _openingPortal || !hasStripeCustomerId
+                                    ? null
+                                    : () => _openPortal(),
+                                icon: const Icon(Icons.receipt_long_outlined),
+                                label: Text(
+                                  !hasStripeCustomerId
+                                      ? 'Portal indisponível (sem assinatura)'
+                                      : _openingPortal
+                                      ? 'Abrindo portal...'
+                                      : 'Abrir portal Stripe',
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (!hasStripeCustomerId) ...[
+                            const SizedBox(height: 8),
+                            const Text(
+                              'O portal Stripe só fica disponível após a primeira assinatura ativa. Para iniciar pagamento, use checkout ao selecionar um plano.',
+                            ),
+                          ],
+                        ] else ...[
+                          const SizedBox(height: 16),
+                          _buildSelfServicePlansPanel(
+                            tenantData: tenantData,
+                            textTheme: textTheme,
+                            workspaceType: workspaceType,
+                            hasStripeCustomerId: hasStripeCustomerId,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSelfServicePlansPanel({
+    required Map<String, dynamic> tenantData,
+    required TextTheme textTheme,
+    required String workspaceType,
+    required bool hasStripeCustomerId,
+  }) {
+    return FutureBuilder<List<WebPortalAvailableBillingPlan>>(
+      future: _availablePlansFuture,
+      builder: (context, plansSnapshot) {
+        final plans =
+            plansSnapshot.data ?? const <WebPortalAvailableBillingPlan>[];
+        final currentPlanKey = _normalizeBillingPlanKey(
+          (tenantData['billingPlanKey'] ?? '').toString(),
+        );
+        final selectedPlanKey = _resolveSelectedCheckoutPlanKey(
+          plans,
+          currentPlanKey: currentPlanKey,
+          workspaceType: widget.activeTenant.workspaceType,
+        );
+        final selectedIsCurrent =
+            selectedPlanKey.isNotEmpty && selectedPlanKey == currentPlanKey;
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Planos para contratação e upgrade',
+              style: textTheme.titleMedium,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Escolha o plano ideal para o tenant ativo. O plano atual fica destacado e você pode ativar upgrade em poucos cliques.',
+              style: textTheme.bodySmall,
+            ),
+            const SizedBox(height: 12),
+            if (plansSnapshot.connectionState == ConnectionState.waiting &&
+                !plansSnapshot.hasData)
+              const LinearProgressIndicator(minHeight: 2)
+            else if (plansSnapshot.hasError)
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Falha ao carregar planos: ${plansSnapshot.error}',
+                    ),
+                  ),
+                  TextButton.icon(
+                    onPressed: _reloadAvailablePlans,
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Tentar novamente'),
+                  ),
+                ],
+              )
+            else if (plans.isEmpty)
+              const Text(
+                'Nenhum plano ativo disponível para o seu workspace no momento.',
+              )
+            else
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final orderedPlans = _sortPlansForDisplay(
+                    plans,
+                    currentPlanKey: currentPlanKey,
+                    workspaceType: workspaceType,
+                  );
+                  final columns = constraints.maxWidth >= 1080
+                      ? 3
+                      : constraints.maxWidth >= 700
+                      ? 2
+                      : 1;
+                  final cardWidth =
+                      (constraints.maxWidth - ((columns - 1) * 12)) / columns;
+
+                  return Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: orderedPlans
+                        .map((plan) {
+                          final normalizedPlanKey = _normalizeBillingPlanKey(
+                            plan.billingPlanKey,
+                          );
+                          final isSelected =
+                              selectedPlanKey == normalizedPlanKey;
+                          final isCurrent =
+                              currentPlanKey.isNotEmpty &&
+                              currentPlanKey == normalizedPlanKey;
+                          final planTier = _inferPlanTierFromBillingPlanKey(
+                            normalizedPlanKey,
+                          );
+                          final isUpgrade =
+                              !isCurrent &&
+                              planTier == _planTierUpgrade &&
+                              (currentPlanKey.isEmpty ||
+                                  _inferPlanTierFromBillingPlanKey(
+                                        currentPlanKey,
+                                      ) ==
+                                      _planTierBase);
+                          final features = _featureLabelsForPlan(
+                            workspaceType: workspaceType,
+                            planTier: planTier,
+                          );
+
+                          return SizedBox(
+                            width: cardWidth,
+                            child: _BillingPlanCard(
+                              plan: plan,
+                              isSelected: isSelected,
+                              isCurrent: isCurrent,
+                              isUpgrade: isUpgrade,
+                              features: features,
+                              onTap: () {
+                                setState(() {
+                                  _selectedCheckoutPlanKey = normalizedPlanKey;
+                                });
+                              },
+                            ),
+                          );
+                        })
+                        .toList(growable: false),
+                  );
+                },
+              ),
+            const SizedBox(height: 14),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                FilledButton.icon(
+                  onPressed:
+                      _startingCheckout ||
+                          selectedPlanKey.isEmpty ||
+                          selectedIsCurrent
+                      ? null
+                      : () => _startCheckout(billingPlanKey: selectedPlanKey),
+                  icon: const Icon(Icons.shopping_cart_checkout),
+                  label: Text(
+                    _startingCheckout
+                        ? 'Abrindo checkout...'
+                        : selectedIsCurrent
+                        ? 'Plano já ativo'
+                        : 'Pagar/ativar plano selecionado',
+                  ),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _openingPortal || !hasStripeCustomerId
+                      ? null
+                      : () => _openPortal(),
+                  icon: const Icon(Icons.receipt_long_outlined),
+                  label: Text(
+                    !hasStripeCustomerId
+                        ? 'Portal indisponível (sem assinatura)'
+                        : _openingPortal
+                        ? 'Abrindo portal...'
+                        : 'Abrir portal Stripe',
+                  ),
+                ),
+              ],
+            ),
+            if (!hasStripeCustomerId) ...[
+              const SizedBox(height: 8),
+              const Text(
+                'O portal Stripe só abre após a criação da primeira assinatura. Para o primeiro pagamento, selecione um plano e clique em pagar/ativar.',
+              ),
+            ],
+          ],
+        );
+      },
+    );
+  }
+
+  void _reloadAvailablePlans() {
+    setState(() {
+      _availablePlansFuture = _billingService.listAvailableCheckoutPlans(
+        tenantId: widget.activeTenant.tenantId,
+      );
+    });
+  }
+
+  List<WebPortalAvailableBillingPlan> _sortPlansForDisplay(
+    List<WebPortalAvailableBillingPlan> plans, {
+    required String currentPlanKey,
+    required String workspaceType,
+  }) {
+    final ordered = List<WebPortalAvailableBillingPlan>.from(plans);
+    final defaultPlan = _normalizeBillingPlanKey(
+      _defaultPlanForWorkspaceType(workspaceType),
+    );
+
+    ordered.sort((a, b) {
+      final keyA = _normalizeBillingPlanKey(a.billingPlanKey);
+      final keyB = _normalizeBillingPlanKey(b.billingPlanKey);
+      final isCurrentA = currentPlanKey.isNotEmpty && keyA == currentPlanKey;
+      final isCurrentB = currentPlanKey.isNotEmpty && keyB == currentPlanKey;
+      if (isCurrentA != isCurrentB) {
+        return isCurrentA ? -1 : 1;
+      }
+
+      final isDefaultA = defaultPlan.isNotEmpty && keyA == defaultPlan;
+      final isDefaultB = defaultPlan.isNotEmpty && keyB == defaultPlan;
+      if (isDefaultA != isDefaultB) {
+        return isDefaultA ? -1 : 1;
+      }
+
+      final tierA = _inferPlanTierFromBillingPlanKey(keyA);
+      final tierB = _inferPlanTierFromBillingPlanKey(keyB);
+      if (tierA != tierB) {
+        if (tierA == _planTierBase) {
+          return -1;
+        }
+        if (tierB == _planTierBase) {
+          return 1;
+        }
+      }
+
+      return a.planDisplayName.toLowerCase().compareTo(
+        b.planDisplayName.toLowerCase(),
+      );
+    });
+
+    return ordered;
+  }
+
+  String _inferPlanTierFromBillingPlanKey(String billingPlanKey) {
+    final key = _normalizeBillingPlanKey(billingPlanKey);
+    if (key.endsWith('_upgrade') ||
+        key.contains('_upgrade_') ||
+        key.contains('premium') ||
+        key.contains('pro')) {
+      return _planTierUpgrade;
+    }
+    return _planTierBase;
+  }
+
+  List<String> _featureLabelsForPlan({
+    required String workspaceType,
+    required String planTier,
+  }) {
+    final workspaceFeatures =
+        _workspacePlanFeatureMatrix[workspaceType.trim().toLowerCase()] ??
+        const <String, Set<String>>{};
+    final planFeatures = workspaceFeatures[planTier] ?? const <String>{};
+
+    final labels = <String>[];
+    labels.add('Fluxo principal do workspace habilitado');
+    if (planFeatures.contains(_featureAdvancedPricing)) {
+      labels.add('Libera tabelas de preço avançadas');
+    }
+    labels.add('Checkout e gestão no portal Stripe');
+    return labels;
+  }
+
+  static String _nonEmptyOrDash(String value) {
+    final normalized = value.trim();
+    return normalized.isEmpty ? '-' : normalized;
+  }
+
+  static String _billingStatusLabel(String raw) {
+    final value = raw.trim().toLowerCase();
+    switch (value) {
+      case 'trial':
+        return 'Trial';
+      case 'active':
+        return 'Ativo';
+      case 'past_due':
+        return 'Em atraso';
+      case 'grace':
+        return 'Em tolerância';
+      case 'suspended':
+        return 'Suspenso';
+      case 'canceled':
+        return 'Cancelado';
+      case 'no_plan':
+        return 'Sem plano';
+      default:
+        return value.isEmpty ? 'Não definido' : value;
+    }
+  }
+
+  static String _billingCycleLabel(String raw) {
+    final value = raw.trim().toLowerCase();
+    switch (value) {
+      case 'monthly':
+        return 'Mensal';
+      case 'yearly':
+        return 'Anual';
+      default:
+        return value.isEmpty ? 'Não definido' : value;
+    }
+  }
+
+  static bool _isOperationalAccessBlocked(String rawStatus) {
+    final status = rawStatus.trim().toLowerCase();
+    return status == 'suspended' || status == 'canceled' || status == 'no_plan';
+  }
+
+  static String _formatDateOrDash(Object? value) {
+    if (value == null) {
+      return '-';
+    }
+    if (value is String && value.trim().isEmpty) {
+      return '-';
+    }
+    final parsed = _readDateTime(value);
+    if (parsed.millisecondsSinceEpoch == 0) {
+      return '-';
+    }
+    final local = parsed.toLocal();
+    final day = local.day.toString().padLeft(2, '0');
+    final month = local.month.toString().padLeft(2, '0');
+    final year = local.year.toString().padLeft(4, '0');
+    return '$day/$month/$year';
+  }
+
+  Future<void> _startCheckout({required String billingPlanKey}) async {
+    if (_startingCheckout) {
+      return;
+    }
+
+    final normalizedPlanKey = _normalizeBillingPlanKey(billingPlanKey);
+    if (normalizedPlanKey.isEmpty) {
+      _showBillingActionInfo(
+        context,
+        'Selecione um plano disponível antes de continuar.',
+      );
+      return;
+    }
+
+    final successUrl = _resolvePortalResultUrl(result: 'success');
+    final cancelUrl = _resolvePortalResultUrl(result: 'cancel');
+
+    setState(() {
+      _startingCheckout = true;
+    });
+
+    try {
+      final result = await _billingService.createCheckoutSession(
+        tenantId: widget.activeTenant.tenantId,
+        billingPlanKey: normalizedPlanKey,
+        successUrl: successUrl,
+        cancelUrl: cancelUrl,
+      );
+
+      final opened = openUrlInNewTab(result.checkoutUrl);
+      if (!opened) {
+        await Clipboard.setData(ClipboardData(text: result.checkoutUrl));
+      }
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            opened
+                ? 'Checkout Stripe aberto em nova aba.'
+                : 'Link do checkout copiado para a área de transferência.',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      _showBillingActionInfo(context, 'Falha ao abrir checkout: $error');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _startingCheckout = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _openPortal() async {
+    if (_openingPortal) {
+      return;
+    }
+
+    final returnUrl = _resolvePortalResultUrl(result: 'portal');
+
+    setState(() {
+      _openingPortal = true;
+    });
+
+    try {
+      final result = await _billingService.createPortalSession(
+        tenantId: widget.activeTenant.tenantId,
+        returnUrl: returnUrl,
+      );
+
+      final opened = openUrlInNewTab(result.portalUrl);
+      if (!opened) {
+        await Clipboard.setData(ClipboardData(text: result.portalUrl));
+      }
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            opened
+                ? 'Portal Stripe aberto em nova aba.'
+                : 'Link do portal copiado para a área de transferência.',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      _showBillingActionInfo(context, 'Falha ao abrir portal Stripe: $error');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _openingPortal = false;
+        });
+      }
+    }
+  }
+
+  String _resolvePortalResultUrl({required String result}) {
+    final current = Uri.base;
+    final query = Map<String, String>.from(current.queryParameters)
+      ..remove('billingResult')
+      ..remove('billingTenant')
+      ..addAll(<String, String>{
+        'billingResult': result,
+        'billingTenant': widget.activeTenant.tenantId,
+      });
+    return current.replace(queryParameters: query).toString();
+  }
+
+  String _resolveSelectedCheckoutPlanKey(
+    List<WebPortalAvailableBillingPlan> plans, {
+    required String currentPlanKey,
+    required String workspaceType,
+  }) {
+    if (plans.isEmpty) {
+      return '';
+    }
+
+    final selected = _normalizeBillingPlanKey(_selectedCheckoutPlanKey);
+    if (selected.isNotEmpty &&
+        plans.any((plan) => plan.billingPlanKey == selected)) {
+      return selected;
+    }
+
+    final normalizedCurrent = _normalizeBillingPlanKey(currentPlanKey);
+    if (normalizedCurrent.isNotEmpty &&
+        plans.any((plan) => plan.billingPlanKey == normalizedCurrent)) {
+      return normalizedCurrent;
+    }
+
+    final fallback = _normalizeBillingPlanKey(
+      _defaultPlanForWorkspaceType(workspaceType),
+    );
+    if (fallback.isNotEmpty &&
+        plans.any((plan) => plan.billingPlanKey == fallback)) {
+      return fallback;
+    }
+
+    return plans.first.billingPlanKey;
+  }
+
+  String _defaultPlanForWorkspaceType(String workspaceType) {
+    final normalized = workspaceType.trim().toLowerCase();
+    if (normalized == 'rep_workspace') {
+      return 'representacoes_base';
+    }
+    if (normalized == 'seller_solo_workspace') {
+      return 'individual_base';
+    }
+    if (normalized == 'brand_owner_workspace') {
+      return 'enterprise_custom';
+    }
+    return '';
+  }
+
+  String _normalizeBillingPlanKey(String raw) {
+    return raw.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '_');
+  }
+
+  static void _showBillingActionInfo(BuildContext context, String message) {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
+  }
+}
+
+class _BillingPlanCard extends StatelessWidget {
+  const _BillingPlanCard({
+    required this.plan,
+    required this.isSelected,
+    required this.isCurrent,
+    required this.isUpgrade,
+    required this.features,
+    required this.onTap,
+  });
+
+  final WebPortalAvailableBillingPlan plan;
+  final bool isSelected;
+  final bool isCurrent;
+  final bool isUpgrade;
+  final List<String> features;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final accentColor = isCurrent
+        ? const Color(0xFF0B57D0)
+        : isUpgrade
+        ? const Color(0xFF0D7A3E)
+        : colors.primary;
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              accentColor.withValues(alpha: isSelected ? 0.16 : 0.08),
+              Colors.white,
+            ],
+          ),
+          border: Border.all(
+            color: isSelected
+                ? accentColor
+                : colors.outlineVariant.withValues(alpha: 0.55),
+            width: isSelected ? 2 : 1,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: accentColor.withValues(alpha: isSelected ? 0.14 : 0.05),
+              blurRadius: isSelected ? 16 : 8,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                if (isCurrent)
+                  _BillingPlanTag(
+                    label: 'Plano ativo',
+                    background: const Color(0xFFE8F0FE),
+                    foreground: const Color(0xFF0B57D0),
+                  ),
+                if (!isCurrent && isUpgrade)
+                  _BillingPlanTag(
+                    label: 'Upgrade',
+                    background: const Color(0xFFE7F6ED),
+                    foreground: const Color(0xFF0D7A3E),
+                  ),
+                if (isSelected)
+                  _BillingPlanTag(
+                    label: 'Selecionado',
+                    background: colors.primaryContainer,
+                    foreground: colors.onPrimaryContainer,
+                  ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              plan.planDisplayName,
+              style: Theme.of(context).textTheme.titleMedium
+                  ?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              plan.planDisplayAmount.trim().isEmpty
+                  ? 'Valor sob consulta'
+                  : plan.planDisplayAmount,
+              style: Theme.of(context).textTheme.titleSmall
+                  ?.copyWith(color: accentColor, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 10),
+            for (final item in features.take(3))
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.check_circle_outline,
+                      size: 16,
+                      color: accentColor,
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        item,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            const SizedBox(height: 8),
+            Text(
+              plan.billingPlanKey,
+              style: Theme.of(context).textTheme.labelSmall
+                  ?.copyWith(color: colors.onSurfaceVariant),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BillingPlanTag extends StatelessWidget {
+  const _BillingPlanTag({
+    required this.label,
+    required this.background,
+    required this.foreground,
+  });
+
+  final String label;
+  final Color background;
+  final Color foreground;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelSmall
+            ?.copyWith(color: foreground),
+      ),
     );
   }
 }
@@ -810,27 +1739,10 @@ class _AccountSection extends StatelessWidget {
   const _AccountSection({
     required this.activeTenant,
     required this.accountContractLock,
-    required this.upgradingWorkspace,
-    required this.onUpgradeToRep,
   });
 
   final TenantEntryOption activeTenant;
   final AccountContractLock accountContractLock;
-  final bool upgradingWorkspace;
-  final VoidCallback onUpgradeToRep;
-
-  static const List<String> _enterpriseOnlyWorkspaceRules = [
-    'Esta Conta BrandOp controla apenas a propria empresa contratante.',
-    'Não é permitido criar outras empresas ou operações paralelas neste login.',
-    'Mudanças de plano/tipo devem ocorrer por migração controlada, sem criar novo workspace.',
-  ];
-
-  static const List<String> _flexibleWorkspaceRules = [
-    'Esta conta está vinculada ao tipo de workspace atual para fins de billing e governança.',
-    'O contexto Individual não adiciona usuários e não abre cadeia de representações.',
-    'Para mudar de Individual para Representações (ou outro plano), o caminho e upgrade de plano.',
-    'Não criamos workspace paralelo por esta tela para evitar divergência de billing.',
-  ];
 
   @override
   Widget build(BuildContext context) {
@@ -850,6 +1762,8 @@ class _AccountSection extends StatelessWidget {
           style: textTheme.bodyLarge,
         ),
         const SizedBox(height: 20),
+        _buildAccountDataCard(context),
+        const SizedBox(height: 16),
         Align(
           alignment: Alignment.centerLeft,
           child: ConstrainedBox(
@@ -880,7 +1794,7 @@ class _AccountSection extends StatelessWidget {
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    'Informações base da conta e do workspace em uso.',
+                                    'Informações base do workspace em uso.',
                                     style: textTheme.bodySmall,
                                   ),
                                 ],
@@ -904,7 +1818,6 @@ class _AccountSection extends StatelessWidget {
                         _WorkspaceInfoGrid(
                           items: _buildWorkspaceInfoItems(
                             activeTenant: activeTenant,
-                            accountContractLock: accountContractLock,
                             workspaceData: workspaceData,
                           ),
                         ),
@@ -920,65 +1833,481 @@ class _AccountSection extends StatelessWidget {
         const SizedBox(height: 16),
         _buildPortalUserLogoCard(context),
         const SizedBox(height: 16),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 980),
-            child: Card(
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Gestão de workspaces', style: textTheme.titleMedium),
-                    const SizedBox(height: 12),
-                    ..._buildWorkspaceManagementRules(),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
+        _buildAccountLifecycleActionsCard(context),
       ],
     );
   }
 
-  List<Widget> _buildWorkspaceManagementRules() {
-    final enterpriseOnly =
-        accountContractLock == AccountContractLock.enterpriseOnly;
-    final rules = enterpriseOnly
-        ? _enterpriseOnlyWorkspaceRules
-        : _flexibleWorkspaceRules;
+  Widget _buildAccountDataCard(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final user = FirebaseAuth.instance.currentUser;
+    final email = (user?.email ?? '').trim();
+    final displayName = (user?.displayName ?? '').trim();
+    final uid = (user?.uid ?? '').trim();
 
-    final widgets = <Widget>[];
-    for (var index = 0; index < rules.length; index++) {
-      widgets.add(_workspaceManagementBullet(rules[index]));
-      if (index < rules.length - 1) {
-        widgets.add(const SizedBox(height: 6));
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 980),
+        child: Card(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Dados da Conta',
+                        style: textTheme.titleMedium,
+                      ),
+                    ),
+                    Tooltip(
+                      message: 'Editar nome de exibição',
+                      child: IconButton.outlined(
+                        onPressed: () => _editDisplayName(context),
+                        icon: const Icon(Icons.edit_outlined),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                _WorkspaceInfoGrid(
+                  items: [
+                    _WorkspaceInfoItem(
+                      label: 'Conta autenticada',
+                      value: email.isEmpty ? uid : email,
+                    ),
+                    _WorkspaceInfoItem(
+                      label: 'Tipo de conta',
+                      value: _accountContractLockLabel(accountContractLock),
+                    ),
+                    _WorkspaceInfoItem(
+                      label: 'Nome de exibição',
+                      value: displayName.isEmpty ? '-' : displayName,
+                    ),
+                    _WorkspaceInfoItem(
+                      label: 'Provedor de login',
+                      value: _authProviderLabel(user),
+                    ),
+                    _WorkspaceInfoItem(
+                      label: 'Papel no workspace',
+                      value: _roleLabel(
+                        activeTenant.role,
+                        activeTenant.workspaceType,
+                        activeTenant.tenantName,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAccountLifecycleActionsCard(BuildContext context) {
+    final normalizedRole = activeTenant.role.trim().toLowerCase();
+    final canRequestWorkspaceDeletion =
+        normalizedRole == 'owner' || normalizedRole == 'platform_admin';
+
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 980),
+        child: Card(
+          color: const Color(0xFFFFF2F2),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: const BorderSide(color: Color(0xFFF2B8B8)),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Theme(
+              data: Theme.of(context)
+                  .copyWith(dividerColor: Colors.transparent),
+              child: ExpansionTile(
+                tilePadding: EdgeInsets.zero,
+                childrenPadding: EdgeInsets.zero,
+                collapsedIconColor: const Color(0xFF7A2E2E),
+                iconColor: const Color(0xFF7A2E2E),
+                title: Row(
+                  children: [
+                    const Icon(
+                      Icons.warning_amber_rounded,
+                      color: Color(0xFF7A2E2E),
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Desativar ou Excluir Conta',
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(
+                              color: const Color(0xFF7A2E2E),
+                              fontWeight: FontWeight.w700,
+                            ),
+                      ),
+                    ),
+                  ],
+                ),
+                children: [
+                  const SizedBox(height: 10),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: () => _submitLifecycleRequest(
+                            context,
+                            actionType: 'deactivate_account',
+                            title: 'Desativar conta',
+                            helperText: 'A conta perde acesso até reativação por administrador.',
+                            expectedPhrase: 'DESATIVAR CONTA',
+                          ),
+                          icon: const Icon(Icons.person_off_outlined),
+                          label: const Text('Desativar conta'),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: () => _submitLifecycleRequest(
+                            context,
+                            actionType: 'delete_user_account',
+                            title: 'Excluir conta',
+                            helperText: 'Antes de excluir, promova um novo Administrador (owner) no workspace.',
+                            expectedPhrase: 'EXCLUIR CONTA',
+                          ),
+                          icon: const Icon(Icons.delete_outline),
+                          label: const Text('Excluir conta'),
+                        ),
+                        FilledButton.tonalIcon(
+                          onPressed: !canRequestWorkspaceDeletion
+                              ? null
+                              : () => _submitLifecycleRequest(
+                                  context,
+                                  actionType: 'delete_account_and_workspace',
+                                  title: 'Excluir conta e workspace',
+                                  helperText: 'Ação irreversível após janela de segurança. Use apenas no encerramento definitivo da empresa.',
+                                  expectedPhrase:
+                                      'DELETAR WORKSPACE ${activeTenant.tenantId}',
+                                ),
+                          icon: const Icon(Icons.warning_amber_outlined),
+                          label: const Text('Excluir conta e workspace'),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'Excluir conta: promova novo Administrador antes da confirmação.',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  if (!canRequestWorkspaceDeletion) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      'Somente owner (ou platform_admin) pode solicitar exclusão de workspace.',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _submitLifecycleRequest(
+    BuildContext context, {
+    required String actionType,
+    required String title,
+    required String helperText,
+    required String expectedPhrase,
+  }) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Sessão expirada. Faça login novamente.')),
+      );
+      return;
+    }
+
+    final requestData = await _openLifecycleRequestDialog(
+      context,
+      title: title,
+      helperText: helperText,
+      expectedPhrase: expectedPhrase,
+    );
+    if (!context.mounted || requestData == null) {
+      return;
+    }
+
+    final reason = (requestData['reason'] ?? '').trim();
+    try {
+      await FirebaseFirestore.instance
+          .collection('workspace_deletion_requests')
+          .add({
+            'tenantId': activeTenant.tenantId,
+            'tenantName': activeTenant.tenantName,
+            'targetUid': user.uid,
+            'actionType': actionType,
+            'status': 'requested',
+            'requestedByUid': user.uid,
+            'requestedByEmail': (user.email ?? '').trim(),
+            'actorRole': activeTenant.role,
+            'reason': reason,
+            'source': 'portal_account_section',
+            'createdAt': FieldValue.serverTimestamp(),
+          });
+
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Solicitação registrada com sucesso.')),
+      );
+    } catch (error) {
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Falha ao registrar solicitação: $error')),
+      );
+    }
+  }
+
+  Future<Map<String, String>?> _openLifecycleRequestDialog(
+    BuildContext context, {
+    required String title,
+    required String helperText,
+    required String expectedPhrase,
+  }) async {
+    final phraseController = TextEditingController();
+    final reasonController = TextEditingController();
+
+    try {
+      final result = await showDialog<Map<String, String>>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text(title),
+          content: SizedBox(
+            width: 460,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(helperText),
+                const SizedBox(height: 8),
+                SelectableText(
+                  expectedPhrase,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: phraseController,
+                  decoration: const InputDecoration(
+                    labelText: 'Frase de confirmação',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: reasonController,
+                  maxLines: 3,
+                  decoration: const InputDecoration(
+                    labelText: 'Motivo (obrigatório)',
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final typedPhrase = phraseController.text.trim();
+                final reason = reasonController.text.trim();
+                if (typedPhrase != expectedPhrase) {
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
+                    const SnackBar(
+                      content: Text('Frase de confirmação inválida.'),
+                    ),
+                  );
+                  return;
+                }
+                if (reason.isEmpty) {
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
+                    const SnackBar(content: Text('Informe o motivo.')),
+                  );
+                  return;
+                }
+                Navigator.of(dialogContext).pop({'reason': reason});
+              },
+              child: const Text('Confirmar'),
+            ),
+          ],
+        ),
+      );
+
+      return result;
+    } finally {
+      phraseController.dispose();
+      reasonController.dispose();
+    }
+  }
+
+  String _authProviderLabel(User? user) {
+    final providers = <String>{};
+    for (final provider in user?.providerData ?? const <UserInfo>[]) {
+      final providerId = provider.providerId.trim().toLowerCase();
+      if (providerId.isNotEmpty) {
+        providers.add(providerId);
       }
     }
 
-    if (!enterpriseOnly &&
-        activeTenant.workspaceType == 'seller_solo_workspace') {
-      widgets.add(const SizedBox(height: 16));
-      widgets.add(
-        FilledButton.icon(
-          onPressed: upgradingWorkspace ? null : onUpgradeToRep,
-          icon: const Icon(Icons.upgrade_outlined),
-          label: Text(
-            upgradingWorkspace
-                ? 'Aplicando upgrade...'
-                : 'Upgrade para Representações',
-          ),
-        ),
-      );
+    if (providers.contains('google.com')) {
+      return 'Google';
     }
-
-    return widgets;
+    if (providers.contains('password')) {
+      return 'E-mail e senha';
+    }
+    if (providers.isEmpty) {
+      return 'Não identificado';
+    }
+    return providers.join(', ');
   }
 
-  Widget _workspaceManagementBullet(String message) {
-    return Text('• $message');
+  Future<void> _editDisplayName(BuildContext context) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Sessão expirada. Faça login novamente.')),
+      );
+      return;
+    }
+
+    final updatedName = await _openDisplayNameDialog(
+      context,
+      initialName: (user.displayName ?? '').trim(),
+    );
+    if (!context.mounted) {
+      return;
+    }
+    if (updatedName == null) {
+      return;
+    }
+    if (updatedName.length < 3) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Informe ao menos 3 caracteres.')),
+      );
+      return;
+    }
+
+    try {
+      await user.updateDisplayName(updatedName);
+      await user.reload();
+      final refreshedUser = FirebaseAuth.instance.currentUser;
+      final safeEmail = (refreshedUser?.email ?? user.email ?? '').trim();
+
+      await FirebaseFirestore.instance.collection('usuarios').doc(user.uid).set(
+        {
+          'uid': user.uid,
+          if (safeEmail.isNotEmpty) 'email': safeEmail,
+          'displayName': updatedName,
+          'name': updatedName,
+          'updatedAt': DateTime.now().toIso8601String(),
+        },
+        SetOptions(merge: true),
+      );
+
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Nome de exibição atualizado com sucesso.'),
+        ),
+      );
+    } catch (error) {
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Falha ao atualizar nome de exibição: $error')),
+      );
+    }
+  }
+
+  Future<String?> _openDisplayNameDialog(
+    BuildContext context, {
+    required String initialName,
+  }) async {
+    final result = await showDialog<String>(
+      context: context,
+      builder: (_) => _EditDisplayNameDialog(initialName: initialName),
+    );
+
+    final normalized = (result ?? '').trim();
+    return normalized.isEmpty ? null : normalized;
+  }
+}
+
+class _EditDisplayNameDialog extends StatefulWidget {
+  const _EditDisplayNameDialog({required this.initialName});
+
+  final String initialName;
+
+  @override
+  State<_EditDisplayNameDialog> createState() => _EditDisplayNameDialogState();
+}
+
+class _EditDisplayNameDialogState extends State<_EditDisplayNameDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialName);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Editar nome de exibição'),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        maxLength: 80,
+        textInputAction: TextInputAction.done,
+        decoration: const InputDecoration(
+          labelText: 'Nome de exibição',
+          hintText: 'Ex.: João da Silva',
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancelar'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(_controller.text.trim()),
+          child: const Text('Salvar'),
+        ),
+      ],
+    );
   }
 }
 

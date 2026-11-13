@@ -60,6 +60,13 @@ Campos auxiliares em usuarios/{uid} (visao de conta):
 - billingSuspendedAt
 - billingUpdatedAt
 
+## Diretriz de operacao administrativa (2026-11)
+
+- painel admin deve ter uma visao dedicada de billing por workspace, separada da gestao geral de clientes;
+- essa visao precisa listar o owner pagador vinculado ao workspace;
+- a ordem de navegacao recomendada no painel admin e exibir `Gestao de Billing` antes de `Gestao de cliente`;
+- objetivo: separar governanca de cobranca (tenant-level) da governanca de cadastro de usuarios.
+
 ## Dados mínimos de billing (Stripe)
 
 ### Dados da conta pagadora (tenant)
@@ -98,6 +105,64 @@ Obrigatório manter:
 - qualquer segredo de pagamento do cliente
 
 Esses dados devem permanecer exclusivamente na Stripe.
+
+## Catalogo de planos base (v1)
+
+Escopo comercial inicial aprovado para evolucao:
+
+- 5 planos base + excedentes.
+- 2 tiers para Individual (Base/Pro).
+- 2 tiers para Representacoes (Base/Pro).
+- 1 plano Enterprise Custom (contrato sob medida).
+
+### Planos base
+
+| Plano | Valor mensal | Limites principais | Fotos de produto | Sincronizacao |
+| --- | ---: | --- | --- | --- |
+| Individual Base | R$ 69 | 1 empresa, 1 usuario, ate 2.000 SKUs, ate 800 pedidos/mes | nao | 6h + manual |
+| Individual Pro | R$ 129 | 1 empresa, ate 3 usuarios, ate 8.000 SKUs, ate 3.000 pedidos/mes | sim | 2h + manual |
+| Representacoes Base | R$ 199 | ate 3 representadas, ate 4 usuarios, ate 12.000 SKUs, ate 5.000 pedidos/mes | nao | 2h + manual |
+| Representacoes Pro | R$ 399 | ate 12 representadas, ate 10 usuarios, ate 50.000 SKUs, ate 20.000 pedidos/mes | sim | 30min + manual |
+| Enterprise Custom | a partir de R$ 1.490 | sob contrato (multiempresa, alto volume, governanca) | sim | sob contrato |
+
+Notas de governanca:
+
+- Representacoes Base: limite duro de 3 representadas e upload de fotos bloqueado.
+- Representacoes Pro: upload de fotos habilitado e limite inicial de 12 representadas.
+- Enterprise Custom: cobranca por boleto, fluxo fiscal/nota fiscal sob contrato e SLA formal.
+
+### Politica de excedentes (v1)
+
+Excedentes iniciais para protecao de margem:
+
+- representada extra (acima do limite do plano): R$ 24 / representada / mes.
+- usuario extra: R$ 19 / usuario / mes.
+- armazenamento extra de imagens: R$ 7 / GB / mes.
+- pedidos extras: pacote de 1.000 pedidos por R$ 39.
+
+Regras obrigatorias:
+
+1. Plano sem foto: upload bloqueado em qualquer cenario.
+2. Plano com foto: ao estourar armazenamento, bloquear apenas novos uploads (sem bloquear operacao de vendas).
+3. Excedente recorrente por 2 ciclos deve abrir recomendacao de upgrade no billing.
+4. Ultrapassagem critica no ciclo corrente pode gerar cobranca de excedente sem bloqueio imediato de operacao.
+
+## Entitlement por plano (capacidades)
+
+Chaves de capacidade recomendadas para resolver billing no backend sem regra espalhada em UI:
+
+- maxRepresentedCompanies
+- canUploadProductImages
+- maxUsers
+- maxSkus
+- maxOrdersPerMonth
+- maxImageStorageGb
+- syncIntervalMinutes
+
+Diretriz:
+
+- todo gate funcional deve ler entitlement server-side com base em billingPlanKey + status.
+- UI apenas exibe limites e bloqueios, sem ser a fonte de verdade.
 
 ## Maquina de estados
 
@@ -196,6 +261,49 @@ Guardrails:
 - justificativa obrigatoria nas acoes criticas;
 - bloquear auto-aprovacao quando houver conflito de funcao.
 
+### Configuracao Stripe no painel admin (desenho inicial)
+
+Objetivo:
+
+- permitir operacao segura da integracao Stripe sem depender de script manual.
+
+Acoes minimas no painel admin:
+
+1. configurar credenciais por ambiente (sandbox/producao) via secret manager.
+2. mapear produtos e prices Stripe para billingPlanKey interno.
+3. configurar modo de cobranca por plano (cartao recorrente, boleto faturado, contrato custom).
+4. registrar e validar webhook endpoint por ambiente.
+5. visualizar status da conexao (ok/erro, ultimo webhook, ultima reconciliacao).
+6. executar reconciliacao manual por tenant em caso de divergencia.
+
+Campos operacionais por tenant (quando aplicavel):
+
+- stripeCustomerId
+- stripeSubscriptionId
+- stripePriceId
+- stripeCheckoutSessionId
+- billingPlanKey
+- billingStatus
+- billingCurrentPeriodStartAt
+- billingCurrentPeriodEndAt
+
+Permissoes e seguranca:
+
+- apenas papel admin/maintainer com permissao explicita de billing pode alterar configuracao Stripe.
+- toda mudanca deve registrar actorUid, motivo, antes/depois e timestamp.
+- valores sensiveis nunca devem ser persistidos em colecoes de app; usar Secret Manager.
+
+Fluxo recomendado (alto nivel):
+
+1. admin configura mapeamento de plans <-> prices no painel.
+2. checkout cria sessao Stripe com metadados tenantId + billingPlanKey.
+3. webhook atualiza tenant (estado/ciclo) com idempotencia por eventId.
+4. rotina diaria de reconciliacao corrige divergencias gateway x Firestore.
+
+Detalhamento completo da integracao:
+
+- stripe_integration_blueprint.md
+
 ## Arquitetura de eventos
 
 Entradas de mudanca de estado:
@@ -259,6 +367,22 @@ Entregas:
 Criterio de pronto:
 
 - divergencia entre gateway e tenant abaixo de limite alvo.
+
+### Fase E - Stripe end-to-end
+
+Entregas:
+
+- configuracao de ambiente/segredos no maintainer com Secret Manager;
+- mapeamento de billingPlanKey para product/price por ambiente;
+- endpoints de checkout e webhook com assinatura e idempotencia;
+- reconciliacao manual por tenant e reconciliacao diaria automatizada;
+- trilha de auditoria para mudancas de configuracao e overrides.
+
+Criterio de pronto:
+
+- onboarding de tenant em Stripe sem script manual;
+- webhooks processados com idempotencia e sem regressao de estado;
+- configuracao de credenciais rotacionavel sem downtime funcional.
 
 ## Testes obrigatorios
 

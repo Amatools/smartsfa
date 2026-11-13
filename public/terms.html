@@ -5,32 +5,152 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Termos de Uso | Smart SFA</title>
   <style>
-    body { margin: 0; font-family: Segoe UI, Arial, sans-serif; background: #f6f8f7; color: #1f2d2b; }
-    .wrap { max-width: 860px; margin: 0 auto; padding: 24px; }
-    .card { background: #fff; border: 1px solid #d9e3e1; border-radius: 12px; padding: 24px; }
-    h1 { color: #0b5d4b; margin-top: 0; }
-    h2 { margin-top: 22px; color: #153732; }
-    p, li { line-height: 1.6; color: #415b57; }
-    a { color: #0b5d4b; }
+    @import url("https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800&display=swap");
+
+    :root {
+      --bg: #f4f8fd;
+      --paper: #ffffff;
+      --text: #13253a;
+      --muted: #47617a;
+      --brand: #0175c2;
+      --brand-ink: #005f9f;
+      --line: #d8e4ef;
+      --shadow: 0 14px 28px rgba(1, 117, 194, 0.1);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Manrope", "Segoe UI", sans-serif;
+      background:
+        radial-gradient(1300px 560px at 85% -220px, #dceeff 0%, transparent 60%),
+        linear-gradient(180deg, #edf5ff 0%, var(--bg) 100%);
+      color: var(--text);
+    }
+
+    .shell {
+      width: min(1020px, calc(100% - 40px));
+      margin: 20px auto 40px;
+    }
+
+    .topbar {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .brand {
+      text-decoration: none;
+      color: var(--brand-ink);
+      font-weight: 800;
+      font-size: 20px;
+      justify-self: start;
+    }
+
+    .nav {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-self: center;
+    }
+
+    .nav a {
+      text-decoration: none;
+      color: var(--brand-ink);
+      border: 1px solid var(--line);
+      background: var(--paper);
+      border-radius: 10px;
+      padding: 8px 12px;
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .login-link {
+      justify-self: end;
+      text-decoration: none;
+      color: #ffffff;
+      background: var(--brand);
+      border: 1px solid var(--brand);
+      border-radius: 10px;
+      padding: 9px 14px;
+      font-size: 14px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .card {
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 24px;
+      box-shadow: var(--shadow);
+    }
+
+    h1 {
+      color: var(--brand-ink);
+      margin-top: 0;
+    }
+
+    h2 {
+      margin-top: 22px;
+      color: #1a3f60;
+    }
+
+    p, li {
+      line-height: 1.6;
+      color: var(--muted);
+    }
+
+    a {
+      color: var(--brand-ink);
+    }
+
+    @media (max-width: 900px) {
+      .topbar {
+        grid-template-columns: 1fr;
+        justify-items: center;
+      }
+
+      .brand,
+      .nav,
+      .login-link {
+        justify-self: center;
+      }
+    }
   </style>
 </head>
 <body>
-  <main class="wrap">
-    <article class="card">
-      <h1>Termos de Uso - Smart SFA</h1>
-      <p>Última atualização: 2026-09-09</p>
-      <h2>1. Aceite</h2>
-      <p>Ao utilizar o Smart SFA, o usuário concorda com estes termos.</p>
-      <h2>2. Uso permitido</h2>
-      <p>O uso é corporativo e restrito a usuários autorizados pela organização.</p>
-      <h2>3. Segurança e acesso</h2>
-      <p>O acesso depende de autenticação válida e liberação interna de permissões.</p>
-      <h2>4. Responsabilidades</h2>
-      <p>Cada organização cliente é responsável pelo uso e governança dos dados cadastrados.</p>
-      <h2>5. Contato</h2>
-      <p>Contato provisório: suporte@seu-dominio.com</p>
-      <p><a href="/">Voltar para página inicial</a></p>
-    </article>
-  </main>
+  <div class="shell">
+    <header class="topbar">
+      <a class="brand" href="/">Smart SFA</a>
+      <nav class="nav">
+        <a href="/">Home</a>
+        <a href="/planos">Planos</a>
+        <a href="/privacy">Privacidade</a>
+        <a href="/terms">Termos</a>
+      </nav>
+      <a class="login-link" href="/app/?mode=web">Fazer Login</a>
+    </header>
+
+    <main>
+      <article class="card">
+        <h1>Termos de Uso - Smart SFA</h1>
+        <p>Última atualização: 2026-09-09</p>
+        <h2>1. Aceite</h2>
+        <p>Ao utilizar o Smart SFA, o usuário concorda com estes termos.</p>
+        <h2>2. Uso permitido</h2>
+        <p>O uso é corporativo e restrito a usuários autorizados pela organização.</p>
+        <h2>3. Segurança e acesso</h2>
+        <p>O acesso depende de autenticação válida e liberação interna de permissões.</p>
+        <h2>4. Responsabilidades</h2>
+        <p>Cada organização cliente é responsável pelo uso e governança dos dados cadastrados.</p>
+        <h2>5. Contato</h2>
+        <p>Contato provisório: suporte@seu-dominio.com</p>
+      </article>
+    </main>
+  </div>
 </body>
 </html>

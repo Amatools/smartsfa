@@ -49,48 +49,50 @@ bool _isMaintainerConsoleEntryRequested() {
     return false;
   }
 
+  final explicitSurface = _resolveUrlParameter('surface')
+      .trim()
+      .toLowerCase()
+      .replaceAll(' ', '_');
+  if (explicitSurface == 'admin' || explicitSurface == 'maintainer') {
+    return true;
+  }
+
   final host = Uri.base.host.trim().toLowerCase();
   final pathSegments = Uri.base.pathSegments
       .map((segment) => segment.trim().toLowerCase())
       .where((segment) => segment.isNotEmpty)
       .toList(growable: false);
 
-  final rawEntry =
-      (Uri.base.queryParameters['entry'] ??
-              Uri.base.queryParameters['panel'] ??
-              Uri.base.queryParameters['console'] ??
-              '')
-          .trim()
-          .toLowerCase()
-          .replaceAll(' ', '_');
-  if (rawEntry == 'maintainer') {
+  if (host.startsWith('maintainer.') || host.startsWith('admin.')) {
     return true;
   }
 
-  if (host.startsWith('maintainer.')) {
+  final firstPathSegment = pathSegments.isEmpty ? '' : pathSegments.first;
+  if (firstPathSegment == 'admin' || firstPathSegment == 'maintainer') {
     return true;
   }
 
-  final fragment = Uri.base.fragment.trim().toLowerCase().replaceAll(' ', '_');
-  if (fragment.isNotEmpty) {
-    if (fragment.contains('entry=maintainer') ||
-        fragment.contains('panel=maintainer') ||
-        fragment.contains('console=maintainer')) {
-      return true;
-    }
-
-    final fragmentPath = fragment.split('?').first;
+  final fragmentPath = Uri.base.fragment
+      .trim()
+      .toLowerCase()
+      .split('?')
+      .first;
+  if (fragmentPath.isNotEmpty) {
     final fragmentSegments = fragmentPath
         .split('/')
         .map((segment) => segment.trim())
         .where((segment) => segment.isNotEmpty)
         .toList(growable: false);
-    if (fragmentSegments.contains('maintainer')) {
+    final firstFragmentSegment = fragmentSegments.isEmpty
+        ? ''
+        : fragmentSegments.first;
+    if (firstFragmentSegment == 'admin' ||
+        firstFragmentSegment == 'maintainer') {
       return true;
     }
   }
 
-  return pathSegments.contains('maintainer');
+  return false;
 }
 
 Map<String, String> _fragmentQueryParameters() {
@@ -601,6 +603,13 @@ class _UserAccessResolverState extends State<_UserAccessResolver> {
 
         final decision = snapshot.data;
         if (decision == null) {
+          if (!widget.maintainerEntryRequested) {
+            return PendingAccessPage(
+              user: widget.user,
+              onAccessUpdated: _refreshAccess,
+            );
+          }
+
           return _MaintainerOrPendingAccessGate(
             user: widget.user,
             onAccessUpdated: _refreshAccess,

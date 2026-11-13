@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Planos | Smart SFA</title>
+  <meta name="description" content="Planos Smart SFA para operação comercial B2B e contratação via web." />
+  <style>
+    @import url("https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800&display=swap");
+
+    :root {
+      --bg: #f4f8fd;
+      --paper: #ffffff;
+      --text: #13253a;
+      --muted: #4c677f;
+      --brand: #0175c2;
+      --brand-ink: #005f9f;
+      --line: #d8e4ef;
+      --accent: #e9f4ff;
+      --shadow: 0 16px 34px rgba(1, 117, 194, 0.12);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Manrope", "Segoe UI", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(1300px 600px at 15% -220px, #dceeff 0%, transparent 60%),
+        linear-gradient(180deg, #eef6ff 0%, var(--bg) 100%);
+    }
+
+    .shell {
+      width: min(1120px, calc(100% - 40px));
+      margin: 22px auto 42px;
+    }
+
+    .topbar {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .brand {
+      font-weight: 800;
+      color: var(--brand-ink);
+      font-size: 20px;
+      text-decoration: none;
+      justify-self: start;
+    }
+
+    .nav {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-self: center;
+    }
+
+    .nav a {
+      text-decoration: none;
+      border: 1px solid var(--line);
+      background: var(--paper);
+      border-radius: 10px;
+      padding: 8px 12px;
+      color: var(--brand-ink);
+      font-weight: 700;
+      font-size: 14px;
+    }
+
+    .login-link {
+      justify-self: end;
+      text-decoration: none;
+      color: #ffffff;
+      background: var(--brand);
+      border: 1px solid var(--brand);
+      border-radius: 10px;
+      padding: 9px 14px;
+      font-size: 14px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .hero {
+      border: 1px solid var(--line);
+      background: var(--paper);
+      border-radius: 16px;
+      box-shadow: var(--shadow);
+      padding: clamp(20px, 3vw, 30px);
+      margin-bottom: 14px;
+    }
+
+    .kicker {
+      display: inline-block;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      border: 1px solid #cfe5fb;
+      background: var(--accent);
+      color: var(--brand-ink);
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(28px, 4vw, 42px);
+      line-height: 1.12;
+      color: var(--brand-ink);
+    }
+
+    .lead {
+      margin: 12px 0 0;
+      color: var(--muted);
+      line-height: 1.62;
+      max-width: 820px;
+    }
+
+    .plans {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      margin-top: 14px;
+    }
+
+    .plan {
+      border: 1px solid var(--line);
+      background: var(--paper);
+      border-radius: 14px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      min-height: 290px;
+    }
+
+    .plan.featured {
+      border-color: #abd4f3;
+      box-shadow: 0 8px 20px rgba(1, 117, 194, 0.14);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .plan.featured::after {
+      content: "Mais escolhido";
+      position: absolute;
+      top: 12px;
+      right: -36px;
+      transform: rotate(35deg);
+      background: #e3f1ff;
+      color: #005f9f;
+      font-size: 11px;
+      font-weight: 800;
+      padding: 4px 36px;
+      border-top: 1px solid #c6e3fb;
+      border-bottom: 1px solid #c6e3fb;
+    }
+
+    .plan h2 {
+      margin: 0;
+      font-size: 22px;
+      color: #0d4f84;
+    }
+
+    .price {
+      font-size: 30px;
+      font-weight: 800;
+      color: var(--brand);
+      line-height: 1;
+    }
+
+    .price small {
+      font-size: 13px;
+      color: var(--muted);
+      font-weight: 600;
+      margin-left: 5px;
+    }
+
+    ul {
+      margin: 2px 0 0;
+      padding-left: 18px;
+      color: #496884;
+      line-height: 1.55;
+      font-size: 14px;
+      flex: 1;
+    }
+
+    .cta {
+      margin-top: 8px;
+      display: inline-block;
+      text-align: center;
+      text-decoration: none;
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 14px;
+      font-weight: 800;
+      border: 1px solid var(--line);
+      background: #f6fbff;
+      color: var(--brand-ink);
+    }
+
+    .cta.primary {
+      background: var(--brand);
+      border-color: var(--brand);
+      color: #ffffff;
+    }
+
+    .flow {
+      margin-top: 14px;
+      border: 1px solid var(--line);
+      background: var(--paper);
+      border-radius: 14px;
+      padding: 16px;
+    }
+
+    .flow h3 {
+      margin: 0 0 8px;
+      color: #0d4f84;
+    }
+
+    .flow ol {
+      margin: 0;
+      padding-left: 18px;
+      color: #4c677f;
+      line-height: 1.65;
+    }
+
+    .foot {
+      margin-top: 12px;
+      font-size: 13px;
+      color: #5c7490;
+      line-height: 1.6;
+    }
+
+    @media (max-width: 900px) {
+      .topbar {
+        grid-template-columns: 1fr;
+        justify-items: center;
+      }
+
+      .brand,
+      .nav,
+      .login-link {
+        justify-self: center;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <a class="brand" href="/">Smart SFA</a>
+      <nav class="nav">
+        <a href="/">Home</a>
+        <a href="/planos">Planos</a>
+        <a href="/privacy">Privacidade</a>
+        <a href="/terms">Termos</a>
+      </nav>
+      <a class="login-link" href="/app/?mode=web">Fazer Login</a>
+    </header>
+
+    <section class="hero">
+      <span class="kicker">Planos e Assinatura</span>
+      <h1>Escolha o plano ideal para sua operação.</h1>
+      <p class="lead">
+        A contratação é feita via web com checkout seguro. Após confirmação, o acesso operacional é liberado automaticamente no workspace.
+      </p>
+    </section>
+
+    <section class="plans" aria-label="Planos Smart SFA">
+      <article class="plan">
+        <h2>Starter</h2>
+        <div class="price">R$ 50<small>/mês</small></div>
+        <ul>
+          <li>1 workspace individual</li>
+          <li>Gestão de clientes, produtos e pedidos</li>
+          <li>Sincronização e suporte básico</li>
+        </ul>
+        <a class="cta primary" href="/app/?mode=web&entry=billing&plan=individual_starter">Contratar Starter</a>
+      </article>
+
+      <article class="plan featured">
+        <h2>Representações</h2>
+        <div class="price">Sob consulta</div>
+        <ul>
+          <li>Multi-representada e regras por carteira</li>
+          <li>Gestão de equipe comercial</li>
+          <li>Acompanhamento de performance</li>
+        </ul>
+        <a class="cta primary" href="/app/?mode=web&entry=billing&plan=representacoes_base">Falar com vendas</a>
+      </article>
+
+      <article class="plan">
+        <h2>Enterprise</h2>
+        <div class="price">Projeto sob medida</div>
+        <ul>
+          <li>Governança avançada e segurança corporativa</li>
+          <li>Operação contratual com atendimento dedicado</li>
+          <li>Desenho técnico personalizado</li>
+        </ul>
+        <a class="cta" href="/app/?mode=web&entry=billing&plan=enterprise_custom">Solicitar proposta</a>
+      </article>
+    </section>
+
+    <section class="flow" id="como-contratar">
+      <h3>Como funciona a contratação via web</h3>
+      <ol>
+        <li>Você acessa o portal e escolhe um plano disponível para seu tipo de workspace.</li>
+        <li>O sistema abre o checkout web para assinatura da licença.</li>
+        <li>Após confirmação do pagamento/assinatura, o acesso ao sistema é liberado automaticamente.</li>
+      </ol>
+    </section>
+
+    <p class="foot">
+      Nota: em mobile, a contratação pode ser direcionada ao fluxo web para alinhamento com políticas de distribuição.
+    </p>
+  </div>
+</body>
+</html>

@@ -7,6 +7,10 @@ Este diretório concentra os documentos oficiais de autenticação, autorizaçã
 1. workspace_access_billing_policy.md
 2. plano_login_acesso.md
 3. plano_billing.md
+4. account_workspace_deletion_policy.md
+5. stripe_integration_blueprint.md
+6. stripe_firestore_functions_contract.md
+7. stripe_configuracao_comandos.md
 
 ## Papel de cada documento
 
@@ -38,6 +42,41 @@ Plano executável de billing/entitlement:
 - integração Stripe;
 - operação admin e auditoria.
 
+### account_workspace_deletion_policy.md
+
+Politica operacional de encerramento/exclusao:
+
+- exclusao de conta de usuario (self-service/admin);
+- encerramento e exclusao definitiva de workspace;
+- guard rails de confirmacao, reautenticacao e auditoria;
+- janela de seguranca, idempotencia e retencao legal.
+
+### stripe_integration_blueprint.md
+
+Blueprint operacional de Stripe do zero:
+
+- dados e IDs que precisam ser levantados no Stripe;
+- desenho de tela no painel maintainer para configuração;
+- padrões de segurança para segredos/chaves/webhooks;
+- sequência de implementação backend + reconciliação.
+
+### stripe_firestore_functions_contract.md
+
+Contrato técnico da implementação Stripe:
+
+- estrutura exata das coleções Firestore de integração;
+- contrato dos endpoints/functions (checkout, webhook, reconciliação);
+- regras obrigatórias de segurança, idempotência e auditoria.
+
+### stripe_configuracao_comandos.md
+
+Guia operacional por comandos com placeholders para configuração segura:
+
+- cadastro de segredos Stripe no Secret Manager;
+- deploy das functions de billing;
+- configuração do webhook e eventos;
+- cadastro de planos por seção (individual, representações, enterprise).
+
 ## Decisões consolidadas (resumo)
 
 1. Login Google é preferencial; e-mail/senha é secundário.
@@ -46,6 +85,7 @@ Plano executável de billing/entitlement:
 4. Sem plano ativo, web pode abrir checkout/billing, mas não módulos operacionais.
 5. Entitlement e bloqueios devem ser validados no backend.
 6. CPF e data de nascimento não são coleta padrão global.
+7. Modelo comercial v1: 5 planos base (Individual Base/Pro, Representações Base/Pro, Enterprise Custom) + política de excedentes.
 
 ## Checklist de início de implementação
 

@@ -39,7 +39,8 @@
 			"args": [
 				"run",
 				"-d",
-				"chrome"
+				"chrome",
+				"--wasm"
 			],
 			"options": {
 				"cwd": "${workspaceFolder}"
@@ -72,7 +73,9 @@
 				"build",
 				"web",
 				"--release",
-				"--wasm"
+				"--wasm",
+				"--base-href",
+				"/app/"
 			],
 			"options": {
 				"cwd": "${workspaceFolder}"
@@ -428,6 +431,44 @@
 				"--project=smart-sfa",
 				"--only",
 				"functions:createImpersonationSession"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "deploy hosting now",
+			"type": "shell",
+			"command": "C:/Users/Aureo.Filho/AppData/Roaming/npm/firebase.cmd",
+			"args": [
+				"deploy",
+				"--project=smart-sfa",
+				"--only",
+				"hosting"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "deploy create stripe catalog function",
+			"type": "shell",
+			"command": "C:/Users/Aureo.Filho/AppData/Roaming/npm/firebase.cmd",
+			"args": [
+				"deploy",
+				"--project=smart-sfa",
+				"--only",
+				"functions:createStripeCatalogPlan"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "verify stripe create rollout",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"$js = Invoke-WebRequest -Uri 'https://smartsfa.com.br/app/main.dart.js' -UseBasicParsing; if ($js.Content -like '*Criar no Stripe e preencher IDs*') { 'FOUND_UI_CREATE_STRIPE' } else { 'MISSING_UI_CREATE_STRIPE' }; try { Invoke-WebRequest -Uri 'https://us-central1-smart-sfa.cloudfunctions.net/createStripeCatalogPlan' -Method Get -UseBasicParsing | Out-Null; 'FUNCTION_GET_200' } catch { if ($_.Exception.Response) { 'FUNCTION_GET_STATUS=' + [int]$_.Exception.Response.StatusCode } else { 'FUNCTION_ERROR=' + $_.Exception.Message } }"
 			],
 			"isBackground": false,
 			"group": "build"
