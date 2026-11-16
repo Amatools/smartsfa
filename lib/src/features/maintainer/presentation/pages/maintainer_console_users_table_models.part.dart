@@ -41,6 +41,7 @@ class _UserRowDisplayModel {
     required this.tenantLabel,
     required this.accountLabel,
     required this.billingLabel,
+    required this.showAuthOrphanBadge,
   });
 
   final String emailLabel;
@@ -48,4 +49,5 @@ class _UserRowDisplayModel {
   final String tenantLabel;
   final String accountLabel;
   final String billingLabel;
+  final bool showAuthOrphanBadge;
 }

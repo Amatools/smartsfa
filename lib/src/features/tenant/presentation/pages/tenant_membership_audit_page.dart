@@ -136,6 +136,7 @@ class _TenantMembershipAuditPageState extends State<TenantMembershipAuditPage> {
                       'membership_revoked',
                       'membership_reactivated',
                       'membership_deactivated',
+                      'membership_seat_grace_started',
                       'membership_role_changed',
                       'tenant_policy_updated',
                     ].map(

@@ -13,6 +13,7 @@ String _requestedPortalEntryPoint() {
 
 class _WebPortalShellState extends State<_WebPortalShell> {
   int _selectedIndex = 0;
+  String? _selectedItemLabel;
   String? _activeTenantId;
   bool _showWorkspaceSelection = true;
   bool _settingFavoriteRepresented = false;
@@ -137,219 +138,277 @@ class _WebPortalShellState extends State<_WebPortalShell> {
               tenants: tenants,
               preferredTenant: preferredTenant,
             );
-            final allItems = _buildItemsForRole(
-              activeTenant,
-              accountContractLock,
-            );
-            final visibleItems = allItems
-                .where((item) => !item.hideFromNavigation)
-                .toList(growable: false);
-            _applyRequestedEntryPointIfNeeded(visibleItems);
-            final tenantModuleItems = allItems
-                .where((item) => item.tenantModule)
-                .toList(growable: false);
-            final representedRequired = _requiresRepresentedSelection(
-              activeTenant,
-            );
-            final representedSelected =
-                (_effectiveRepresentedCompanyId(activeTenant) ?? '')
-                    .trim()
-                    .isNotEmpty;
-            final effectiveRepresentedCompanyId =
-                _effectiveRepresentedCompanyId(activeTenant);
-            final effectiveRepresentedCompanyName =
-                _effectiveRepresentedCompanyName(activeTenant);
-            final tenantSectionLocked =
-                representedRequired && !representedSelected;
+            return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+              stream: FirebaseFirestore.instance
+                  .collection('tenants')
+                  .doc(activeTenant.tenantId)
+                  .snapshots(),
+              builder: (context, tenantSnapshot) {
+                final tenantData =
+                    tenantSnapshot.data?.data() ?? const <String, dynamic>{};
+                final accessGate = _resolveTenantOperationalAccessGate(
+                  tenantData,
+                );
 
-            final safeIndex = _selectedIndex.clamp(0, visibleItems.length - 1);
-            if (safeIndex != _selectedIndex) {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (!mounted) {
-                  return;
-                }
-                setState(() {
-                  _selectedIndex = safeIndex;
-                });
-              });
-            }
-
-            final selectedItem = visibleItems[safeIndex];
-            final groupedItems = _groupItems(visibleItems, activeTenant);
-            final isWide = MediaQuery.sizeOf(context).width >= 1120;
-
-            final content = selectedItem.opensTenantModuleShell
-                ? Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: _TenantWorkspaceModuleArea(
-                      activeTenant: activeTenant,
-                      activeRepresentedCompanyName:
-                          effectiveRepresentedCompanyName,
-                      selectedRepresentedCompanyId:
-                          effectiveRepresentedCompanyId,
-                      tenantItems: tenantModuleItems,
-                      selectedItemLabel: tenantModuleItems.isEmpty
-                          ? selectedItem.label
-                          : tenantModuleItems.first.label,
-                      tenantSectionLocked: tenantSectionLocked,
-                      selectedSubmenuKey: (() {
-                        final selectedSubmenu =
-                            _selectedTenantSubmenuByTenant[activeTenant
-                                .tenantId];
-                        if (selectedSubmenu != null &&
-                            selectedSubmenu.trim().isNotEmpty) {
-                          return selectedSubmenu;
-                        }
-                        return null;
-                      })(),
-                      onSubmenuChanged: (submenuKey) {
-                        _setSelectedTenantSubmenu(
-                          tenantId: activeTenant.tenantId,
-                          submenuKey: submenuKey,
-                        );
-                      },
-                    ),
-                  )
-                : SingleChildScrollView(
-                    child: Padding(
-                      padding: const EdgeInsets.all(28),
-                      child: selectedItem.builder(
-                        activeTenant: activeTenant,
-                        activeRepresentedCompanyName:
-                            effectiveRepresentedCompanyName,
-                      ),
+                final allItems = _buildItemsForRole(
+                  activeTenant,
+                  accountContractLock,
+                  restrictOperationalAccess: accessGate.blocked,
+                );
+                final visibleItems = allItems
+                    .where((item) => !item.hideFromNavigation)
+                    .toList(growable: false);
+                if (visibleItems.isEmpty) {
+                  return const Scaffold(
+                    body: Center(
+                      child: Text('Nenhum menu disponivel para este contexto.'),
                     ),
                   );
+                }
+                _applyRequestedEntryPointIfNeeded(visibleItems);
+                final tenantModuleItems = allItems
+                    .where((item) => item.tenantModule)
+                    .toList(growable: false);
+                final representedRequired = _requiresRepresentedSelection(
+                  activeTenant,
+                );
+                final representedSelected =
+                    (_effectiveRepresentedCompanyId(activeTenant) ?? '')
+                        .trim()
+                        .isNotEmpty;
+                final effectiveRepresentedCompanyId =
+                    _effectiveRepresentedCompanyId(activeTenant);
+                final effectiveRepresentedCompanyName =
+                    _effectiveRepresentedCompanyName(activeTenant);
+                final tenantSectionLocked =
+                    representedRequired && !representedSelected;
 
-            return Scaffold(
-              body: SafeArea(
-                child: isWide
-                    ? Row(
-                        children: [
-                          _WebPortalSidebar(
-                            identity: widget.identity,
-                            activeTenant: activeTenant,
-                            accountContractLock: accountContractLock,
-                            sections: groupedItems,
-                            visibleItems: visibleItems,
-                            selectedIndex: safeIndex,
-                            onMenuSelected: _setSelectedIndex,
-                            tenantSectionLocked: tenantSectionLocked,
-                            selectedRepresentedCompanyName:
-                                effectiveRepresentedCompanyName,
-                          ),
-                          const VerticalDivider(width: 1),
-                          Expanded(
-                            child: Column(
-                              children: [
-                                _WebPortalTopBar(
-                                  identity: widget.identity,
-                                  activeTenant: activeTenant,
-                                  accountContractLock: accountContractLock,
-                                  selectedRepresentedCompanyId:
-                                      effectiveRepresentedCompanyId,
-                                  selectedRepresentedCompanyName:
-                                      effectiveRepresentedCompanyName,
-                                  enterpriseDefaultRepresentedCompanyId:
-                                      _isEnterpriseWorkspace(activeTenant)
-                                      ? _enterpriseDefaultRepresentedId(
-                                          activeTenant,
-                                        )
-                                      : null,
-                                  enterpriseDefaultRepresentedCompanyName:
-                                      _isEnterpriseWorkspace(activeTenant)
-                                      ? effectiveRepresentedCompanyName
-                                      : null,
-                                  onRepresentedCompanySelected:
-                                      (companyId, companyName) {
-                                        _setActiveRepresentedCompany(
-                                          tenantId: activeTenant.tenantId,
-                                          companyId: companyId,
-                                          companyName: companyName,
-                                        );
-                                      },
-                                  onToggleFavoriteRepresented:
-                                      _toggleFavoriteRepresented,
-                                  settingFavoriteRepresented:
-                                      _settingFavoriteRepresented,
-                                  onBackToWorkspaceSelection:
-                                      _backToWorkspaceSelection,
-                                  onSignOut: widget.onSignOut,
-                                ),
-                                Expanded(child: content),
-                              ],
-                            ),
-                          ),
-                        ],
+                var safeIndex = _selectedIndex.clamp(
+                  0,
+                  visibleItems.length - 1,
+                );
+                final preferredLabel = (_selectedItemLabel ?? '').trim();
+                if (preferredLabel.isNotEmpty) {
+                  final preferredIndex = visibleItems.indexWhere(
+                    (item) => item.label == preferredLabel,
+                  );
+                  if (preferredIndex >= 0) {
+                    safeIndex = preferredIndex;
+                  }
+                }
+
+                final selectedItem = visibleItems[safeIndex];
+                final groupedItems = _groupItems(visibleItems, activeTenant);
+                final isWide = MediaQuery.sizeOf(context).width >= 1120;
+
+                final billingItemIndex = visibleItems.indexWhere(
+                  (item) => item.label == 'Billing',
+                );
+
+                final normalContent = selectedItem.opensTenantModuleShell
+                    ? Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: _TenantWorkspaceModuleArea(
+                          activeTenant: activeTenant,
+                          activeRepresentedCompanyName:
+                              effectiveRepresentedCompanyName,
+                          selectedRepresentedCompanyId:
+                              effectiveRepresentedCompanyId,
+                          tenantItems: tenantModuleItems,
+                          selectedItemLabel: tenantModuleItems.isEmpty
+                              ? selectedItem.label
+                              : tenantModuleItems.first.label,
+                          tenantSectionLocked: tenantSectionLocked,
+                          selectedSubmenuKey: (() {
+                            final selectedSubmenu =
+                                _selectedTenantSubmenuByTenant[activeTenant
+                                    .tenantId];
+                            if (selectedSubmenu != null &&
+                                selectedSubmenu.trim().isNotEmpty) {
+                              return selectedSubmenu;
+                            }
+                            return null;
+                          })(),
+                          onSubmenuChanged: (submenuKey) {
+                            _setSelectedTenantSubmenu(
+                              tenantId: activeTenant.tenantId,
+                              submenuKey: submenuKey,
+                            );
+                          },
+                        ),
                       )
-                    : Column(
-                        children: [
-                          _WebPortalTopBar(
-                            identity: widget.identity,
+                    : SingleChildScrollView(
+                        child: Padding(
+                          padding: const EdgeInsets.all(28),
+                          child: selectedItem.builder(
                             activeTenant: activeTenant,
-                            accountContractLock: accountContractLock,
-                            selectedRepresentedCompanyId:
-                                effectiveRepresentedCompanyId,
-                            selectedRepresentedCompanyName:
+                            activeRepresentedCompanyName:
                                 effectiveRepresentedCompanyName,
-                            enterpriseDefaultRepresentedCompanyId:
-                                _isEnterpriseWorkspace(activeTenant)
-                                ? _enterpriseDefaultRepresentedId(activeTenant)
+                          ),
+                        ),
+                      );
+
+                final content = accessGate.blocked &&
+                        selectedItem.label != 'Billing'
+                    ? SingleChildScrollView(
+                        child: Padding(
+                          padding: const EdgeInsets.all(28),
+                          child: _PortalOperationalAccessBlockedView(
+                            statusLabel: accessGate.statusLabel,
+                            reasonLabel: accessGate.reasonLabel,
+                            canOpenBilling: billingItemIndex >= 0,
+                            onOpenBilling: billingItemIndex >= 0
+                                ? () => _setSelectedIndexFromVisibleItems(
+                                    visibleItems,
+                                    billingItemIndex,
+                                  )
                                 : null,
-                            enterpriseDefaultRepresentedCompanyName:
-                                _isEnterpriseWorkspace(activeTenant)
-                                ? effectiveRepresentedCompanyName
-                                : null,
-                            onRepresentedCompanySelected:
-                                (companyId, companyName) {
-                                  _setActiveRepresentedCompany(
-                                    tenantId: activeTenant.tenantId,
-                                    companyId: companyId,
-                                    companyName: companyName,
+                          ),
+                        ),
+                      )
+                    : normalContent;
+
+                return Scaffold(
+                  body: SafeArea(
+                    child: isWide
+                        ? Row(
+                            children: [
+                              _WebPortalSidebar(
+                                identity: widget.identity,
+                                activeTenant: activeTenant,
+                                accountContractLock: accountContractLock,
+                                sections: groupedItems,
+                                visibleItems: visibleItems,
+                                selectedIndex: safeIndex,
+                                onMenuSelected: (index) {
+                                  _setSelectedIndexFromVisibleItems(
+                                    visibleItems,
+                                    index,
                                   );
                                 },
-                            onToggleFavoriteRepresented:
-                                _toggleFavoriteRepresented,
-                            settingFavoriteRepresented:
-                                _settingFavoriteRepresented,
-                            onBackToWorkspaceSelection:
-                                _backToWorkspaceSelection,
-                            onSignOut: widget.onSignOut,
-                          ),
-                          Expanded(child: content),
-                          NavigationBar(
-                            selectedIndex: safeIndex,
-                            onDestinationSelected: (index) {
-                              if (tenantSectionLocked &&
-                                  visibleItems[index].section ==
-                                      _PortalSection.tenant) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text(
-                                      'Selecione uma representada ativa para acessar este modulo.',
+                                tenantSectionLocked: tenantSectionLocked,
+                                selectedRepresentedCompanyName:
+                                    effectiveRepresentedCompanyName,
+                              ),
+                              const VerticalDivider(width: 1),
+                              Expanded(
+                                child: Column(
+                                  children: [
+                                    _WebPortalTopBar(
+                                      identity: widget.identity,
+                                      activeTenant: activeTenant,
+                                      accountContractLock: accountContractLock,
+                                      selectedRepresentedCompanyId:
+                                          effectiveRepresentedCompanyId,
+                                      selectedRepresentedCompanyName:
+                                          effectiveRepresentedCompanyName,
+                                      enterpriseDefaultRepresentedCompanyId:
+                                          _isEnterpriseWorkspace(activeTenant)
+                                          ? _enterpriseDefaultRepresentedId(
+                                              activeTenant,
+                                            )
+                                          : null,
+                                      enterpriseDefaultRepresentedCompanyName:
+                                          _isEnterpriseWorkspace(activeTenant)
+                                          ? effectiveRepresentedCompanyName
+                                          : null,
+                                      onRepresentedCompanySelected:
+                                          (companyId, companyName) {
+                                            _setActiveRepresentedCompany(
+                                              tenantId: activeTenant.tenantId,
+                                              companyId: companyId,
+                                              companyName: companyName,
+                                            );
+                                          },
+                                      onToggleFavoriteRepresented:
+                                          _toggleFavoriteRepresented,
+                                      settingFavoriteRepresented:
+                                          _settingFavoriteRepresented,
+                                      onBackToWorkspaceSelection:
+                                          _backToWorkspaceSelection,
+                                      onSignOut: widget.onSignOut,
                                     ),
-                                  ),
-                                );
-                                return;
-                              }
-                              _setSelectedIndex(index);
-                            },
-                            destinations: visibleItems
-                                .map(
-                                  (item) => NavigationDestination(
-                                    icon: Icon(item.icon),
-                                    label: item.label,
-                                    enabled:
-                                        !(tenantSectionLocked &&
-                                            item.section ==
-                                                _PortalSection.tenant),
-                                  ),
-                                )
-                                .toList(),
+                                    Expanded(child: content),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          )
+                        : Column(
+                            children: [
+                              _WebPortalTopBar(
+                                identity: widget.identity,
+                                activeTenant: activeTenant,
+                                accountContractLock: accountContractLock,
+                                selectedRepresentedCompanyId:
+                                    effectiveRepresentedCompanyId,
+                                selectedRepresentedCompanyName:
+                                    effectiveRepresentedCompanyName,
+                                enterpriseDefaultRepresentedCompanyId:
+                                    _isEnterpriseWorkspace(activeTenant)
+                                    ? _enterpriseDefaultRepresentedId(
+                                        activeTenant,
+                                      )
+                                    : null,
+                                enterpriseDefaultRepresentedCompanyName:
+                                    _isEnterpriseWorkspace(activeTenant)
+                                    ? effectiveRepresentedCompanyName
+                                    : null,
+                                onRepresentedCompanySelected:
+                                    (companyId, companyName) {
+                                      _setActiveRepresentedCompany(
+                                        tenantId: activeTenant.tenantId,
+                                        companyId: companyId,
+                                        companyName: companyName,
+                                      );
+                                    },
+                                onToggleFavoriteRepresented:
+                                    _toggleFavoriteRepresented,
+                                settingFavoriteRepresented:
+                                    _settingFavoriteRepresented,
+                                onBackToWorkspaceSelection:
+                                    _backToWorkspaceSelection,
+                                onSignOut: widget.onSignOut,
+                              ),
+                              Expanded(child: content),
+                              NavigationBar(
+                                selectedIndex: safeIndex,
+                                onDestinationSelected: (index) {
+                                  if (tenantSectionLocked &&
+                                      visibleItems[index].section ==
+                                          _PortalSection.tenant) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                          'Selecione uma representada ativa para acessar este modulo.',
+                                        ),
+                                      ),
+                                    );
+                                    return;
+                                  }
+                                  _setSelectedIndexFromVisibleItems(
+                                    visibleItems,
+                                    index,
+                                  );
+                                },
+                                destinations: visibleItems
+                                    .map(
+                                      (item) => NavigationDestination(
+                                        icon: Icon(item.icon),
+                                        label: item.label,
+                                        enabled:
+                                            !(tenantSectionLocked &&
+                                                item.section ==
+                                                    _PortalSection.tenant),
+                                      ),
+                                    )
+                                    .toList(),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
-              ),
+                  ),
+                );
+              },
             );
           },
         );
@@ -384,6 +443,7 @@ class _WebPortalShellState extends State<_WebPortalShell> {
       _activeTenantId = tenantId;
       _showWorkspaceSelection = false;
       _selectedIndex = 0;
+      _selectedItemLabel = null;
     });
   }
 
@@ -391,6 +451,7 @@ class _WebPortalShellState extends State<_WebPortalShell> {
     setState(() {
       _showWorkspaceSelection = true;
       _selectedIndex = 0;
+      _selectedItemLabel = null;
     });
   }
 
@@ -445,9 +506,19 @@ class _WebPortalShellState extends State<_WebPortalShell> {
     });
   }
 
-  void _setSelectedIndex(int index) {
+  void _setSelectedIndexFromVisibleItems(
+    List<_PortalNavItem> visibleItems,
+    int index,
+  ) {
+    if (visibleItems.isEmpty) {
+      return;
+    }
+
+    final safeIndex = index.clamp(0, visibleItems.length - 1);
+    final label = visibleItems[safeIndex].label;
     setState(() {
-      _selectedIndex = index;
+      _selectedIndex = safeIndex;
+      _selectedItemLabel = label;
     });
   }
 
@@ -489,6 +560,7 @@ class _WebPortalShellState extends State<_WebPortalShell> {
       }
       setState(() {
         _selectedIndex = targetIndex;
+        _selectedItemLabel = visibleItems[targetIndex].label;
       });
     });
   }
@@ -547,14 +619,16 @@ class _WebPortalShellState extends State<_WebPortalShell> {
 
   List<_PortalNavItem> _buildItemsForRole(
     TenantEntryOption activeTenant,
-    AccountContractLock accountContractLock,
-  ) {
+    AccountContractLock accountContractLock, {
+    bool restrictOperationalAccess = false,
+  }) {
     final normalizedRole = activeTenant.role.trim().toLowerCase().replaceAll(
       ' ',
       '_',
     );
-    final canOpenBilling =
+    final canManageBilling =
         normalizedRole == 'owner' || normalizedRole == 'platform_admin';
+    const canOpenBilling = true;
     final canAccessInvites =
         normalizedRole == 'owner' ||
         normalizedRole == 'gerente' ||
@@ -660,11 +734,17 @@ class _WebPortalShellState extends State<_WebPortalShell> {
 
     if (canOpenBilling) {
       items.add(
-        const _PortalNavItem(
+        _PortalNavItem(
           label: 'Billing',
           icon: Icons.payments_outlined,
           section: _PortalSection.global,
-          builder: _BillingSection.new,
+          builder:
+              ({required activeTenant, required activeRepresentedCompanyName}) =>
+                  _BillingSection(
+                    activeTenant: activeTenant,
+                    activeRepresentedCompanyName: activeRepresentedCompanyName,
+                    canManageBillingActions: canManageBilling,
+                  ),
         ),
       );
 
@@ -754,78 +834,6 @@ class _WebPortalShellState extends State<_WebPortalShell> {
           ),
         ]);
       }
-    } else {
-      if (isEnterpriseWorkspace) {
-        items.addAll(const [
-          _PortalNavItem(
-            label: 'Produtos',
-            icon: Icons.inventory_2_outlined,
-            section: _PortalSection.tenant,
-            builder: _ProductsCatalogSection.new,
-            tenantModule: true,
-            hideFromNavigation: true,
-          ),
-          _PortalNavItem(
-            label: 'Tabelas de preço',
-            icon: Icons.price_change_outlined,
-            section: _PortalSection.tenant,
-            builder: _PricingCatalogSection.new,
-            tenantModule: true,
-            hideFromNavigation: true,
-          ),
-          _PortalNavItem(
-            label: 'Políticas',
-            icon: Icons.policy_outlined,
-            section: _PortalSection.tenant,
-            builder: _SimpleSectionPage.enterprisePoliticas,
-            tenantModule: true,
-            hideFromNavigation: true,
-          ),
-          _PortalNavItem(
-            label: 'Configurações',
-            icon: Icons.settings_outlined,
-            section: _PortalSection.tenant,
-            builder: _SimpleSectionPage.enterpriseConfiguracoes,
-            tenantModule: true,
-            hideFromNavigation: true,
-          ),
-        ]);
-      } else {
-        items.addAll(const [
-          _PortalNavItem(
-            label: 'Produtos',
-            icon: Icons.inventory_2_outlined,
-            section: _PortalSection.tenant,
-            builder: _ProductsCatalogSection.new,
-            tenantModule: true,
-            hideFromNavigation: true,
-          ),
-          _PortalNavItem(
-            label: 'Tabelas de preço',
-            icon: Icons.price_change_outlined,
-            section: _PortalSection.tenant,
-            builder: _PricingCatalogSection.new,
-            tenantModule: true,
-            hideFromNavigation: true,
-          ),
-          _PortalNavItem(
-            label: 'Condições de pagamento',
-            icon: Icons.receipt_long_outlined,
-            section: _PortalSection.tenant,
-            builder: _PaymentConditionsSection.new,
-            tenantModule: true,
-            hideFromNavigation: true,
-          ),
-          _PortalNavItem(
-            label: 'Políticas',
-            icon: Icons.policy_outlined,
-            section: _PortalSection.tenant,
-            builder: _SimpleSectionPage.politicas,
-            tenantModule: true,
-            hideFromNavigation: true,
-          ),
-        ]);
-      }
     }
 
     if (canAccessInvites) {
@@ -849,6 +857,13 @@ class _WebPortalShellState extends State<_WebPortalShell> {
         }
         items[index] = item.copyWith(hideFromNavigation: false);
       }
+    }
+
+    if (restrictOperationalAccess) {
+      const allowedLabels = <String>{'Resumo', 'Conta', 'Billing'};
+      return items
+          .where((item) => allowedLabels.contains(item.label))
+          .toList(growable: false);
     }
 
     return items;
@@ -963,4 +978,139 @@ class _PortalMenuSection {
 
   final String title;
   final List<_PortalNavItem> items;
+}
+
+class _TenantOperationalAccessGate {
+  const _TenantOperationalAccessGate({
+    required this.blocked,
+    required this.statusLabel,
+    required this.reasonLabel,
+  });
+
+  final bool blocked;
+  final String statusLabel;
+  final String reasonLabel;
+}
+
+_TenantOperationalAccessGate _resolveTenantOperationalAccessGate(
+  Map<String, dynamic> tenantData,
+) {
+  final status = (tenantData['billingStatus'] ?? '').toString().trim().toLowerCase();
+  final planKey = (tenantData['billingPlanKey'] ?? '').toString().trim();
+  final hasPlan = planKey.isNotEmpty;
+  final graceUntil = _tryReadBillingDateTime(tenantData['billingGraceUntilAt']);
+  final hasValidGrace =
+      status == 'grace' &&
+      graceUntil != null &&
+      DateTime.now().toUtc().isBefore(graceUntil.toUtc());
+
+  var blocked = false;
+  var reasonLabel = '';
+  if (status == 'suspended') {
+    blocked = true;
+    reasonLabel = 'Assinatura suspensa';
+  } else if (status == 'canceled') {
+    blocked = true;
+    reasonLabel = 'Assinatura cancelada';
+  } else if (status == 'no_plan') {
+    blocked = true;
+    reasonLabel = 'Sem plano ativo';
+  } else if (!hasPlan && !hasValidGrace) {
+    blocked = true;
+    reasonLabel = 'Sem plano e sem grace ativo';
+  } else if (status == 'grace' && !hasValidGrace) {
+    blocked = true;
+    reasonLabel = 'Grace expirado';
+  }
+
+  final statusLabel = _billingStatusLabelForGate(status);
+  return _TenantOperationalAccessGate(
+    blocked: blocked,
+    statusLabel: statusLabel,
+    reasonLabel: reasonLabel,
+  );
+}
+
+DateTime? _tryReadBillingDateTime(Object? raw) {
+  if (raw is Timestamp) {
+    return raw.toDate();
+  }
+  if (raw is DateTime) {
+    return raw;
+  }
+  if (raw is String) {
+    return DateTime.tryParse(raw);
+  }
+  if (raw is int) {
+    return DateTime.fromMillisecondsSinceEpoch(raw);
+  }
+  return null;
+}
+
+String _billingStatusLabelForGate(String rawStatus) {
+  switch (rawStatus) {
+    case 'trial':
+      return 'Trial';
+    case 'active':
+      return 'Ativo';
+    case 'past_due':
+      return 'Em atraso';
+    case 'grace':
+      return 'Em grace';
+    case 'suspended':
+      return 'Suspenso';
+    case 'canceled':
+      return 'Cancelado';
+    case 'no_plan':
+      return 'Sem plano';
+    default:
+      return rawStatus.isEmpty ? 'Nao definido' : rawStatus;
+  }
+}
+
+class _PortalOperationalAccessBlockedView extends StatelessWidget {
+  const _PortalOperationalAccessBlockedView({
+    required this.statusLabel,
+    required this.reasonLabel,
+    required this.canOpenBilling,
+    this.onOpenBilling,
+  });
+
+  final String statusLabel;
+  final String reasonLabel;
+  final bool canOpenBilling;
+  final VoidCallback? onOpenBilling;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Sem acesso operacional', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 8),
+            Text('Status de billing: $statusLabel.'),
+            if (reasonLabel.trim().isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text('Motivo: $reasonLabel.'),
+            ],
+            const SizedBox(height: 12),
+            const Text(
+              'Para voltar a operar o sistema, regularize o plano em Billing.',
+            ),
+            if (canOpenBilling) ...[
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                onPressed: onOpenBilling,
+                icon: const Icon(Icons.payments_outlined),
+                label: const Text('Ir para Billing'),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
 }

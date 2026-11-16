@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../core/models/tenant_entry_decision.dart';
 import '../../../core/models/tenant_membership.dart';
+import 'tenant_seat_capacity.dart';
 
 class TenantMembershipService {
   TenantMembershipService(this._firestore);
@@ -243,6 +244,73 @@ class TenantMembershipService {
 
           return entries;
         });
+  }
+
+  Future<TenantSeatCapacitySnapshot> loadSeatCapacity(String tenantId) async {
+    final normalizedTenantId = tenantId.trim();
+    if (normalizedTenantId.isEmpty) {
+      throw StateError('Tenant invalido para calcular capacidade de usuarios.');
+    }
+
+    final tenantDoc = await _firestore
+        .collection('tenants')
+        .doc(normalizedTenantId)
+        .get();
+    final activeMemberships = await _loadActiveMembershipDocs(normalizedTenantId);
+
+    return TenantSeatCapacitySnapshot.fromTenantData(
+      tenantData: tenantDoc.data() ?? <String, dynamic>{},
+      activeMembers: activeMemberships.length,
+    );
+  }
+
+  Future<void> assertSeatCapacityForActivation({
+    required String tenantId,
+    String? targetMembershipId,
+  }) async {
+    final normalizedTenantId = tenantId.trim();
+    if (normalizedTenantId.isEmpty) {
+      throw StateError('Tenant invalido para validar capacidade de usuarios.');
+    }
+
+    final normalizedTargetMembershipId = (targetMembershipId ?? '').trim();
+    final tenantDoc = await _firestore
+        .collection('tenants')
+        .doc(normalizedTenantId)
+        .get();
+    final activeMemberships = await _loadActiveMembershipDocs(normalizedTenantId);
+    final targetAlreadyActive =
+        normalizedTargetMembershipId.isNotEmpty &&
+        activeMemberships.any((doc) => doc.id == normalizedTargetMembershipId);
+
+    final currentCapacity = TenantSeatCapacitySnapshot.fromTenantData(
+      tenantData: tenantDoc.data() ?? <String, dynamic>{},
+      activeMembers: activeMemberships.length,
+    );
+    final projectedActiveMembers =
+        targetAlreadyActive ? currentCapacity.activeMembers : currentCapacity.activeMembers + 1;
+
+    if (projectedActiveMembers > currentCapacity.effectiveLimit) {
+      throw StateError(
+        'Limite de usuarios ativos atingido (${currentCapacity.activeMembers}/${currentCapacity.effectiveLimit}). '
+        'Adicione expansoes de seats para continuar.',
+      );
+    }
+  }
+
+  Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>> _loadActiveMembershipDocs(
+    String tenantId,
+  ) async {
+    final snapshot = await _firestore
+        .collection('tenant_memberships')
+        .where('tenantId', isEqualTo: tenantId)
+        .where('ativo', isEqualTo: true)
+        .get();
+
+    return snapshot.docs.where((doc) {
+      final state = (doc.data()['state'] ?? 'active').toString().trim().toLowerCase();
+      return state == 'active';
+    }).toList(growable: false);
   }
 
   Future<TenantMembership?> loadById(String membershipId) async {
@@ -628,6 +696,18 @@ class TenantMembershipService {
     String? reactivatedByUid,
     String? reason,
   }) async {
+    final currentMembership = await loadById(membershipId);
+    if (currentMembership == null) {
+      throw StateError('Membership nao encontrado.');
+    }
+
+    if (!currentMembership.isActive) {
+      await assertSeatCapacityForActivation(
+        tenantId: currentMembership.tenantId,
+        targetMembershipId: currentMembership.membershipId,
+      );
+    }
+
     final actorUidForAudit = reactivatedByUid ?? 'system';
     final actorIdentity = await _resolveAuditActorIdentity(actorUidForAudit);
     final updated = await _firestore.runTransaction<TenantMembership>((

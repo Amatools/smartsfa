@@ -15,6 +15,10 @@ class MaintainerUserAccount {
     required this.billingAccountState,
     required this.billingGraceUntilAt,
     required this.billingSuspendedAt,
+    required this.authSyncStatus,
+    required this.authLastCheckedAt,
+    required this.authMissingSince,
+    required this.authSyncMessage,
     required this.updatedAt,
   });
 
@@ -31,7 +35,14 @@ class MaintainerUserAccount {
   final String billingAccountState;
   final DateTime? billingGraceUntilAt;
   final DateTime? billingSuspendedAt;
+  final String authSyncStatus;
+  final DateTime? authLastCheckedAt;
+  final DateTime? authMissingSince;
+  final String authSyncMessage;
   final DateTime? updatedAt;
+
+  bool get isAuthOrphan =>
+      authSyncStatus.trim().toLowerCase() == 'missing_auth';
 
   static MaintainerUserAccount fromDoc(
     DocumentSnapshot<Map<String, dynamic>> doc,
@@ -57,6 +68,10 @@ class MaintainerUserAccount {
           .trim(),
       billingGraceUntilAt: _readDateTime(data['billingGraceUntilAt']),
       billingSuspendedAt: _readDateTime(data['billingSuspendedAt']),
+      authSyncStatus: (data['authSyncStatus'] ?? '').toString().trim(),
+      authLastCheckedAt: _readDateTime(data['authLastCheckedAt']),
+      authMissingSince: _readDateTime(data['authMissingSince']),
+      authSyncMessage: (data['authSyncMessage'] ?? '').toString().trim(),
       updatedAt: _readDateTime(data['updatedAt']),
     );
   }

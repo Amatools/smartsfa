@@ -193,6 +193,9 @@ class MaintainerStripePlanMapping {
     required this.stripeRecurringIntervalCount,
     required this.mappingType,
     required this.overageMetric,
+    required this.includedSeats,
+    required this.seatAddonPlanKey,
+    required this.linkedBasePlanKey,
     required this.active,
     required this.updatedAt,
     required this.updatedBy,
@@ -212,6 +215,9 @@ class MaintainerStripePlanMapping {
   final int stripeRecurringIntervalCount;
   final String mappingType;
   final String overageMetric;
+  final int includedSeats;
+  final String seatAddonPlanKey;
+  final String linkedBasePlanKey;
   final bool active;
   final DateTime? updatedAt;
   final String updatedBy;
@@ -256,6 +262,9 @@ class MaintainerStripePlanMapping {
           _readInt(data['stripeRecurringIntervalCount']) ?? 0,
       mappingType: _readString(data['mappingType'], fallback: 'base'),
       overageMetric: _readString(data['overageMetric']),
+      includedSeats: _readInt(data['includedSeats']) ?? 0,
+      seatAddonPlanKey: _readString(data['seatAddonPlanKey']),
+      linkedBasePlanKey: _readString(data['linkedBasePlanKey']),
       active: data['active'] != false,
       updatedAt: _readDateTime(data['updatedAt']),
       updatedBy: _readString(data['updatedBy']),
@@ -449,6 +458,9 @@ class MaintainerBillingIntegrationService {
     required int stripeRecurringIntervalCount,
     required String mappingType,
     required String overageMetric,
+    required int includedSeats,
+    required String seatAddonPlanKey,
+    required String linkedBasePlanKey,
     required bool active,
     required String actorUid,
   }) async {
@@ -474,6 +486,9 @@ class MaintainerBillingIntegrationService {
           ? 'base'
           : mappingType.trim().toLowerCase(),
       'overageMetric': overageMetric.trim().toLowerCase(),
+      'includedSeats': includedSeats < 0 ? 0 : includedSeats,
+      'seatAddonPlanKey': seatAddonPlanKey.trim().toLowerCase(),
+      'linkedBasePlanKey': linkedBasePlanKey.trim().toLowerCase(),
       'active': active,
       'updatedBy': actorUid.trim(),
       'updatedAt': DateTime.now().toIso8601String(),

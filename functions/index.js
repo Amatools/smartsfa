@@ -39,6 +39,14 @@ const STRIPE_RUNTIME_SECRETS = [
   'STRIPE_WHSEC_LIVE',
   'STRIPE_ACTIVE_ENVIRONMENT',
 ];
+const TENANT_SEAT_OVER_LIMIT_GRACE_DAYS = 3;
+const TENANT_SEAT_ENFORCEMENT_ACTOR_UID = 'system_seat_enforcement';
+const TENANT_SEAT_ENFORCEMENT_ACTIVE_BILLING_STATUSES = new Set([
+  'active',
+  'trial',
+  'past_due',
+  'grace',
+]);
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -584,8 +592,52 @@ exports.createStripeCheckoutSession = onRequest(
       });
       return;
     }
+    if (mapping.mappingType !== 'base') {
+      response.status(400).json({
+        error: 'invalid_plan_mapping_type',
+        message: 'billingPlanKey informado nao aponta para mapeamento base ativo.',
+      });
+      return;
+    }
 
     const tenantData = tenantDoc.data() || {};
+    const addonSeatsInput = Number(
+      request.body?.addonSeats ?? tenantData.billingSeatsAddon ?? 0,
+    );
+    const addonSeats = Number.isFinite(addonSeatsInput)
+      ? Math.max(0, Math.floor(addonSeatsInput))
+      : 0;
+
+    if (addonSeats > 0 && !mapping.seatAddonPlanKey) {
+      response.status(400).json({
+        error: 'seat_addon_not_configured',
+        message:
+          'Plano base nao possui seatAddonPlanKey configurado para adicionais de usuarios.',
+      });
+      return;
+    }
+
+    let addonMapping = null;
+    if (addonSeats > 0 && mapping.seatAddonPlanKey) {
+      addonMapping = await loadStripePlanMapping({
+        firestore,
+        billingPlanKey: mapping.seatAddonPlanKey,
+      });
+
+      if (
+        !addonMapping ||
+        addonMapping.mappingType !== 'overage' ||
+        addonMapping.overageMetric !== 'extra_usuario'
+      ) {
+        response.status(400).json({
+          error: 'invalid_seat_addon_mapping',
+          message:
+            'Plano base possui seatAddonPlanKey sem mapeamento overage/extra_usuario valido.',
+        });
+        return;
+      }
+    }
+
     const existingCustomerId = String(tenantData.stripeCustomerId ?? '').trim();
     const stripeClient = integrationReady.stripeClient;
     let stripeCustomerId = existingCustomerId;
@@ -605,49 +657,69 @@ exports.createStripeCheckoutSession = onRequest(
       stripeCustomerId = String(customer.id ?? '').trim();
     }
 
+    const lineItems = [
+      {
+        price: mapping.stripePriceId,
+        quantity: 1,
+      },
+    ];
+    if (addonMapping && addonSeats > 0) {
+      lineItems.push({
+        price: addonMapping.stripePriceId,
+        quantity: addonSeats,
+      });
+    }
+
     const session = await stripeClient.checkout.sessions.create({
       mode: 'subscription',
       customer: stripeCustomerId,
       client_reference_id: tenantId,
       success_url: successUrl,
       cancel_url: cancelUrl,
-      line_items: [
-        {
-          price: mapping.stripePriceId,
-          quantity: 1,
-        },
-      ],
+      line_items: lineItems,
       metadata: {
         tenantId,
         billingPlanKey,
         initiatedByUid: authContext.uid,
         source: 'smartsfa_web_portal',
+        billingSeatsAddon: String(addonSeats),
       },
       subscription_data: {
         metadata: {
           tenantId,
           billingPlanKey,
           initiatedByUid: authContext.uid,
+          billingSeatsAddon: String(addonSeats),
         },
       },
       allow_promotion_codes: true,
     });
 
-    await tenantRef.set(
-      {
-        stripeCustomerId,
-        stripeCheckoutSessionId: String(session.id ?? '').trim(),
-        billingPlanKey,
-        billingUpdatedAt: new Date().toISOString(),
-      },
-      { merge: true },
-    );
+    const tenantPatch = {
+      stripeCustomerId,
+      stripeCheckoutSessionId: String(session.id ?? '').trim(),
+      billingPlanKey,
+      billingUpdatedAt: new Date().toISOString(),
+      billingSeatsAddon: addonSeats,
+    };
+    if (Number.isInteger(mapping.includedSeats) && mapping.includedSeats > 0) {
+      tenantPatch.billingSeatsIncluded = mapping.includedSeats;
+    }
+    if (mapping.seatAddonPlanKey) {
+      tenantPatch.billingSeatAddonPlanKey = mapping.seatAddonPlanKey;
+    }
+    if (addonMapping && Number.isInteger(addonMapping.stripeUnitAmount)) {
+      tenantPatch.billingSeatAddonUnitPriceCents = addonMapping.stripeUnitAmount;
+    }
+
+    await tenantRef.set(tenantPatch, { merge: true });
 
     response.status(200).json({
       checkoutUrl: String(session.url ?? '').trim(),
       checkoutSessionId: String(session.id ?? '').trim(),
       stripeCustomerId,
       activeEnvironment: integrationReady.environment,
+      billingSeatsAddon: addonSeats,
     });
   },
 );
@@ -1049,12 +1121,13 @@ exports.manageTenantBillingState = onRequest(
       'grant_30_days',
       'normalize_billing',
       'suspend_billing',
+      'clear_plan_link',
     ]);
     if (!supportedActions.has(action)) {
       response.status(400).json({
         error: 'invalid_action',
         message:
-          'Acao invalida. Use grant_7_days, grant_30_days, normalize_billing ou suspend_billing.',
+          'Acao invalida. Use grant_7_days, grant_30_days, normalize_billing, suspend_billing ou clear_plan_link.',
       });
       return;
     }
@@ -1129,6 +1202,24 @@ exports.manageTenantBillingState = onRequest(
       patch.billingAccountState = 'suspended';
       patch.billingSuspendedAt = nowIso;
       auditAction = 'billing_suspended';
+    } else if (action === 'clear_plan_link') {
+      patch.billingStatus = 'no_plan';
+      patch.billingAccountState = 'inactive';
+      patch.billingPlanKey = '';
+      patch.billingCycle = '';
+      patch.stripePriceId = '';
+      patch.stripeSubscriptionId = '';
+      patch.stripeCheckoutSessionId = '';
+      patch.billingCurrentPeriodStartAt = '';
+      patch.billingCurrentPeriodEndAt = '';
+      patch.billingSuspendedAt = nowIso;
+      patch.billingSeatsIncluded = '';
+      patch.billingSeatsAddon = '';
+      patch.billingSeatAddons = '';
+      patch.billingSeatAddonPlanKey = '';
+      patch.billingSeatAddonUnitPriceCents = '';
+      patch.billingDelinquencyStage = 'none';
+      auditAction = 'billing_plan_unlinked_and_blocked';
     }
 
     let stripeApplied = false;
@@ -1166,6 +1257,24 @@ exports.manageTenantBillingState = onRequest(
 
     await tenantRef.set(patch, { merge: true });
 
+    let seatEnforcementSummary = null;
+    let seatEnforcementError = '';
+    try {
+      seatEnforcementSummary = await enforceTenantSeatAllowanceForTenant({
+        firestore,
+        tenantId,
+        nowDate,
+      });
+    } catch (error) {
+      seatEnforcementError =
+        error instanceof Error ? error.message : String(error);
+      console.error('manageTenantBillingState seat enforcement failed', {
+        tenantId,
+        action,
+        error: seatEnforcementError,
+      });
+    }
+
     await firestore.collection('platform_admin_audit').add({
       action: auditAction,
       actorUid: authContext.uid,
@@ -1186,6 +1295,8 @@ exports.manageTenantBillingState = onRequest(
         stripeApplied,
         stripeAction,
         stripeMessage,
+        seatEnforcementSummary,
+        seatEnforcementError,
       },
       createdAt: admin.firestore.Timestamp.fromDate(nowDate),
     });
@@ -1194,6 +1305,7 @@ exports.manageTenantBillingState = onRequest(
       tenantId,
       previousBillingStatus,
       currentBillingStatus: patch.billingStatus,
+      currentBillingAccountState: patch.billingAccountState,
       billingStatus: patch.billingStatus,
       billingGraceUntilAt: patch.billingGraceUntilAt,
       billingSuspendedAt: patch.billingSuspendedAt,
@@ -1201,7 +1313,153 @@ exports.manageTenantBillingState = onRequest(
       stripeApplied,
       stripeAction,
       stripeMessage,
+      seatEnforcementSummary,
+      seatEnforcementError,
     });
+  },
+);
+
+exports.expireTenantGraceDaily = onSchedule(
+  { region: 'us-central1', timeoutSeconds: 540, schedule: '23 2 * * *' },
+  async () => {
+    const firestore = admin.firestore();
+    const nowDate = new Date();
+    const nowMs = nowDate.getTime();
+    const nowIso = nowDate.toISOString();
+
+    const graceSnapshot = await firestore
+      .collection('tenants')
+      .where('billingStatus', '==', 'grace')
+      .get();
+
+    let processed = 0;
+    let convertedNoPlan = 0;
+    let skippedMissingGraceUntil = 0;
+    let skippedNotExpiredYet = 0;
+    let skippedHasStripeSubscription = 0;
+
+    for (const tenantDoc of graceSnapshot.docs) {
+      processed += 1;
+      const tenantData = tenantDoc.data() || {};
+
+      const graceUntilIso = String(tenantData.billingGraceUntilAt ?? '').trim();
+      if (!graceUntilIso) {
+        skippedMissingGraceUntil += 1;
+        continue;
+      }
+
+      const graceUntilDate = new Date(graceUntilIso);
+      const graceUntilMs = graceUntilDate.getTime();
+      if (!Number.isFinite(graceUntilMs)) {
+        skippedMissingGraceUntil += 1;
+        continue;
+      }
+
+      if (graceUntilMs > nowMs) {
+        skippedNotExpiredYet += 1;
+        continue;
+      }
+
+      const stripeSubscriptionId = String(
+        tenantData.stripeSubscriptionId ?? '',
+      ).trim();
+      if (stripeSubscriptionId) {
+        skippedHasStripeSubscription += 1;
+        continue;
+      }
+
+      await tenantDoc.ref.set(
+        {
+          billingStatus: 'no_plan',
+          billingAccountState: 'inactive',
+          billingPlanKey: '',
+          billingCycle: '',
+          stripePriceId: '',
+          stripeCheckoutSessionId: '',
+          billingCurrentPeriodStartAt: '',
+          billingCurrentPeriodEndAt: '',
+          billingGraceUntilAt: '',
+          billingPastDueSinceAt: '',
+          billingSuspendedAt: nowIso,
+          billingDelinquencyStage: 'none',
+          billingUpdatedAt: nowIso,
+          billingLastAutoAction: 'grace_expired_blocked',
+          billingLastAutoAt: nowIso,
+        },
+        { merge: true },
+      );
+
+      convertedNoPlan += 1;
+    }
+
+    return {
+      processed,
+      convertedNoPlan,
+      skippedMissingGraceUntil,
+      skippedNotExpiredYet,
+      skippedHasStripeSubscription,
+      updatedAt: nowIso,
+    };
+  },
+);
+
+exports.enforceTenantSeatAllowanceHourly = onSchedule(
+  { region: 'us-central1', timeoutSeconds: 540, schedule: '11 * * * *' },
+  async () => {
+    const firestore = admin.firestore();
+    const nowDate = new Date();
+    const nowIso = nowDate.toISOString();
+
+    const tenantsSnapshot = await firestore.collection('tenants').get();
+    let processed = 0;
+    let skipped = 0;
+    let overLimitGrace = 0;
+    let deactivated = 0;
+    const failures = [];
+
+    for (const tenantDoc of tenantsSnapshot.docs) {
+      processed += 1;
+      try {
+        const summary = await enforceTenantSeatAllowanceForTenant({
+          firestore,
+          tenantId: tenantDoc.id,
+          tenantDoc,
+          nowDate,
+        });
+        if (summary.state === 'skipped') {
+          skipped += 1;
+        }
+        if (summary.state === 'over_limit_grace') {
+          overLimitGrace += 1;
+        }
+        if (summary.deactivatedCount > 0) {
+          deactivated += summary.deactivatedCount;
+        }
+      } catch (error) {
+        failures.push({
+          tenantId: tenantDoc.id,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    console.info('enforceTenantSeatAllowanceHourly', {
+      processed,
+      skipped,
+      overLimitGrace,
+      deactivated,
+      failures: failures.length,
+      updatedAt: nowIso,
+    });
+
+    return {
+      processed,
+      skipped,
+      overLimitGrace,
+      deactivated,
+      failures,
+      updatedAt: nowIso,
+    };
   },
 );
 
@@ -1630,6 +1888,12 @@ exports.listStripeCheckoutPlans = onRequest(
           recurringIntervalCount: Number(data.stripeRecurringIntervalCount ?? 0),
         });
 
+      const includedSeatsInput = Number(data.includedSeats ?? 0);
+      const includedSeats = Number.isFinite(includedSeatsInput)
+        ? Math.max(0, Math.floor(includedSeatsInput))
+        : 0;
+      const seatAddonPlanKey = normalizeBillingPlanKey(data.seatAddonPlanKey);
+
       plans.push({
         mappingId: doc.id,
         billingPlanKey,
@@ -1638,6 +1902,8 @@ exports.listStripeCheckoutPlans = onRequest(
         stripePriceId,
         stripeProductId: String(data.stripeProductId ?? '').trim(),
         stripeProductName: String(data.stripeProductName ?? '').trim(),
+        includedSeats,
+        seatAddonPlanKey,
       });
     }
 
@@ -5513,6 +5779,31 @@ function getStripeClient(secretKey) {
   return STRIPE_CLIENT_CACHE.get(normalizedSecret);
 }
 
+function buildStripePlanMappingFromDocData(data, fallbackPlanKey = '') {
+  const priceId = String(data.stripePriceId ?? '').trim();
+  if (!priceId || data.active === false) {
+    return null;
+  }
+
+  const includedSeatsInput = Number(data.includedSeats ?? 0);
+  const includedSeats = Number.isFinite(includedSeatsInput)
+    ? Math.max(0, Math.floor(includedSeatsInput))
+    : 0;
+
+  return {
+    billingPlanKey: normalizeBillingPlanKey(data.billingPlanKey ?? fallbackPlanKey),
+    stripeProductId: String(data.stripeProductId ?? '').trim(),
+    stripePriceId: priceId,
+    stripeUnitAmount: Number(data.stripeUnitAmount ?? 0),
+    mappingType: String(data.mappingType ?? 'base').trim().toLowerCase(),
+    overageMetric: String(data.overageMetric ?? '').trim().toLowerCase(),
+    includedSeats,
+    seatAddonPlanKey: normalizeBillingPlanKey(data.seatAddonPlanKey),
+    linkedBasePlanKey: normalizeBillingPlanKey(data.linkedBasePlanKey),
+    active: data.active !== false,
+  };
+}
+
 async function loadStripePlanMapping({ firestore, billingPlanKey }) {
   const normalizedPlanKey = normalizeBillingPlanKey(billingPlanKey);
   if (!normalizedPlanKey) {
@@ -5528,15 +5819,9 @@ async function loadStripePlanMapping({ firestore, billingPlanKey }) {
 
   if (byIdDoc.exists) {
     const data = byIdDoc.data() || {};
-    if (data.active !== false && String(data.stripePriceId ?? '').trim()) {
-      return {
-        billingPlanKey: normalizeBillingPlanKey(data.billingPlanKey ?? normalizedPlanKey),
-        stripeProductId: String(data.stripeProductId ?? '').trim(),
-        stripePriceId: String(data.stripePriceId ?? '').trim(),
-        mappingType: String(data.mappingType ?? 'base').trim().toLowerCase(),
-        overageMetric: String(data.overageMetric ?? '').trim().toLowerCase(),
-        active: data.active !== false,
-      };
+    const mapping = buildStripePlanMappingFromDocData(data, normalizedPlanKey);
+    if (mapping) {
+      return mapping;
     }
   }
 
@@ -5550,30 +5835,19 @@ async function loadStripePlanMapping({ firestore, billingPlanKey }) {
 
   for (const doc of querySnapshot.docs) {
     const data = doc.data() || {};
-    if (data.active === false) {
-      continue;
+    const mapping = buildStripePlanMappingFromDocData(data, normalizedPlanKey);
+    if (mapping) {
+      return mapping;
     }
-    const priceId = String(data.stripePriceId ?? '').trim();
-    if (!priceId) {
-      continue;
-    }
-    return {
-      billingPlanKey: normalizeBillingPlanKey(data.billingPlanKey ?? normalizedPlanKey),
-      stripeProductId: String(data.stripeProductId ?? '').trim(),
-      stripePriceId: priceId,
-      mappingType: String(data.mappingType ?? 'base').trim().toLowerCase(),
-      overageMetric: String(data.overageMetric ?? '').trim().toLowerCase(),
-      active: true,
-    };
   }
 
   return null;
 }
 
-async function resolveBillingPlanKeyByStripePriceId({ firestore, stripePriceId }) {
+async function resolveStripePlanMappingByPriceId({ firestore, stripePriceId }) {
   const normalizedPriceId = String(stripePriceId ?? '').trim();
   if (!normalizedPriceId) {
-    return '';
+    return null;
   }
 
   const snapshot = await firestore
@@ -5585,16 +5859,21 @@ async function resolveBillingPlanKeyByStripePriceId({ firestore, stripePriceId }
     .get();
 
   for (const doc of snapshot.docs) {
-    const data = doc.data() || {};
-    if (data.active === false) {
-      continue;
-    }
-    const planKey = normalizeBillingPlanKey(data.billingPlanKey);
-    if (planKey) {
-      return planKey;
+    const mapping = buildStripePlanMappingFromDocData(doc.data() || {}, doc.id);
+    if (mapping) {
+      return mapping;
     }
   }
-  return '';
+
+  return null;
+}
+
+async function resolveBillingPlanKeyByStripePriceId({ firestore, stripePriceId }) {
+  const mapping = await resolveStripePlanMappingByPriceId({
+    firestore,
+    stripePriceId,
+  });
+  return mapping?.billingPlanKey ?? '';
 }
 
 async function processStripeWebhookEvent({ firestore, event, enabledEvents }) {
@@ -5749,20 +6028,89 @@ async function applyStripeWebhookEventToTenant({ firestore, event }) {
       throw new Error(`${type} sem tenantId resolvido.`);
     }
 
-    const priceId = readStripeSubscriptionPriceId(payload);
-    const mappedPlanKey = await resolveBillingPlanKeyByStripePriceId({
-      firestore,
-      stripePriceId: priceId,
-    });
-    const fallbackPlanKey = normalizeBillingPlanKey(payload?.metadata?.billingPlanKey);
-
-    await firestore.collection('tenants').doc(tenantId).set(
-      buildTenantPatchFromStripeSubscription({
-        subscription: payload,
-        billingPlanKey: mappedPlanKey || fallbackPlanKey,
-      }),
-      { merge: true },
+    const fallbackPlanKey = normalizeBillingPlanKey(
+      payload?.metadata?.billingPlanKey,
     );
+    const lineItems = readStripeSubscriptionLineItems(payload);
+    const mappedItems = [];
+
+    for (const item of lineItems) {
+      const mapping = await resolveStripePlanMappingByPriceId({
+        firestore,
+        stripePriceId: item.priceId,
+      });
+      if (mapping) {
+        mappedItems.push({
+          ...mapping,
+          quantity: item.quantity,
+        });
+      }
+    }
+
+    const baseItem =
+      mappedItems.find((item) => item.mappingType === 'base') ?? null;
+    const effectivePlanKey =
+      baseItem?.billingPlanKey || fallbackPlanKey || '';
+
+    const seatAddonQuantity = mappedItems
+      .filter((item) => {
+        if (
+          item.mappingType !== 'overage' ||
+          item.overageMetric !== 'extra_usuario'
+        ) {
+          return false;
+        }
+        if (!effectivePlanKey) {
+          return true;
+        }
+        return !item.linkedBasePlanKey || item.linkedBasePlanKey === effectivePlanKey;
+      })
+      .reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+
+    const tenantPatch = buildTenantPatchFromStripeSubscription({
+      subscription: payload,
+      billingPlanKey: effectivePlanKey,
+    });
+
+    if (baseItem?.stripePriceId) {
+      tenantPatch.stripePriceId = baseItem.stripePriceId;
+    }
+    if (baseItem && Number.isInteger(baseItem.includedSeats) && baseItem.includedSeats > 0) {
+      tenantPatch.billingSeatsIncluded = baseItem.includedSeats;
+    }
+    if (baseItem?.seatAddonPlanKey) {
+      tenantPatch.billingSeatAddonPlanKey = baseItem.seatAddonPlanKey;
+    }
+    tenantPatch.billingSeatsAddon = seatAddonQuantity < 0 ? 0 : seatAddonQuantity;
+
+    const seatAddonItem = mappedItems.find(
+      (item) =>
+        item.mappingType === 'overage' && item.overageMetric === 'extra_usuario',
+    );
+    if (seatAddonItem && Number.isFinite(seatAddonItem.stripeUnitAmount)) {
+      tenantPatch.billingSeatAddonUnitPriceCents = Math.max(
+        0,
+        Math.floor(Number(seatAddonItem.stripeUnitAmount) || 0),
+      );
+    }
+
+    await firestore
+      .collection('tenants')
+      .doc(tenantId)
+      .set(tenantPatch, { merge: true });
+
+    try {
+      await enforceTenantSeatAllowanceForTenant({
+        firestore,
+        tenantId,
+      });
+    } catch (error) {
+      console.error('stripe subscription seat enforcement failed', {
+        tenantId,
+        type,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
 
     return tenantId;
   }
@@ -5800,6 +6148,20 @@ async function applyStripeWebhookEventToTenant({ firestore, event }) {
     }
 
     await firestore.collection('tenants').doc(tenantId).set(patch, { merge: true });
+
+    try {
+      await enforceTenantSeatAllowanceForTenant({
+        firestore,
+        tenantId,
+      });
+    } catch (error) {
+      console.error('stripe invoice seat enforcement failed', {
+        tenantId,
+        type,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
     return tenantId;
   }
 
@@ -5844,12 +6206,445 @@ async function resolveTenantIdFromStripeReferences({
   return '';
 }
 
+function normalizeSeatBillingStatus(rawStatus) {
+  return String(rawStatus ?? '').trim().toLowerCase();
+}
+
+function readNonNegativeInteger(value, fallback = 0) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return Math.max(0, Math.floor(Number(fallback) || 0));
+  }
+  return Math.max(0, Math.floor(parsed));
+}
+
+function parseDateToUnixMs(raw) {
+  if (!raw) {
+    return 0;
+  }
+  if (raw instanceof Date) {
+    return raw.getTime();
+  }
+  if (typeof raw?.toDate === 'function') {
+    try {
+      const asDate = raw.toDate();
+      if (asDate instanceof Date) {
+        return asDate.getTime();
+      }
+    } catch (_) {
+      return 0;
+    }
+  }
+  if (typeof raw === 'number') {
+    return Number.isFinite(raw) ? raw : 0;
+  }
+  if (typeof raw === 'string') {
+    const date = new Date(raw);
+    const time = date.getTime();
+    return Number.isFinite(time) ? time : 0;
+  }
+  return 0;
+}
+
+function readMembershipOrderingMs(membershipDoc, nowMs) {
+  const data = membershipDoc.data() || {};
+  const dateCandidates = [
+    data.activatedAt,
+    data.lastSyncedAt,
+    data.createdAt,
+    data.updatedAt,
+  ];
+
+  for (const candidate of dateCandidates) {
+    const ms = parseDateToUnixMs(candidate);
+    if (ms > 0) {
+      return ms;
+    }
+  }
+
+  const createTimeMs = parseDateToUnixMs(membershipDoc.createTime);
+  if (createTimeMs > 0) {
+    return createTimeMs;
+  }
+
+  return nowMs;
+}
+
+function resolveDefaultIncludedSeatsForTenant(tenantData) {
+  const workspaceType = String(tenantData.workspaceType ?? '')
+    .trim()
+    .toLowerCase();
+  const billingPlanKey = normalizeBillingPlanKey(tenantData.billingPlanKey);
+  const planTier = String(tenantData.planTier ?? '').trim().toLowerCase();
+
+  const tierMatch = /(\d+)/.exec(planTier);
+  if (tierMatch) {
+    const parsedTierSeats = Number(tierMatch[1]);
+    if (Number.isFinite(parsedTierSeats) && parsedTierSeats > 0) {
+      return Math.floor(parsedTierSeats);
+    }
+  }
+
+  if (workspaceType === 'brand_owner_workspace' || billingPlanKey === 'enterprise') {
+    return 3;
+  }
+
+  if (workspaceType === 'seller_solo_workspace' || billingPlanKey === 'solo') {
+    return 1;
+  }
+
+  return 1;
+}
+
+function readTenantSeatAllowance(tenantData) {
+  const fallbackIncludedSeats = resolveDefaultIncludedSeatsForTenant(tenantData);
+  const includedSeats = readNonNegativeInteger(
+    tenantData.billingSeatsIncluded,
+    fallbackIncludedSeats,
+  );
+  const addonSeats = readNonNegativeInteger(
+    tenantData.billingSeatsAddon,
+    readNonNegativeInteger(tenantData.billingSeatAddons, 0),
+  );
+
+  const configuredLimit = Math.max(1, includedSeats + addonSeats);
+  return {
+    includedSeats,
+    addonSeats,
+    configuredLimit,
+  };
+}
+
+function shouldEnforceTenantSeatAllowance(tenantData) {
+  const billingStatus = normalizeSeatBillingStatus(tenantData.billingStatus);
+  if (!TENANT_SEAT_ENFORCEMENT_ACTIVE_BILLING_STATUSES.has(billingStatus)) {
+    return false;
+  }
+
+  const billingPlanKey = normalizeBillingPlanKey(tenantData.billingPlanKey);
+  return Boolean(billingPlanKey);
+}
+
+async function writeTenantMembershipAuditEvent({
+  firestore,
+  tenantId,
+  membershipId,
+  action,
+  actorUid,
+  details,
+  createdAtIso,
+}) {
+  await firestore.collection('tenant_membership_audit').add({
+    tenantId,
+    membershipId,
+    action,
+    actorUid,
+    actorLabel: actorUid,
+    details: details || {},
+    createdAt: createdAtIso,
+  });
+}
+
+async function enforceTenantSeatAllowanceForTenant({
+  firestore,
+  tenantId,
+  tenantDoc = null,
+  nowDate = new Date(),
+}) {
+  const normalizedTenantId = String(tenantId ?? '').trim();
+  if (!normalizedTenantId) {
+    return {
+      tenantId: '',
+      state: 'skipped',
+      reason: 'missing_tenant_id',
+      activeMembers: 0,
+      configuredLimit: 0,
+      overLimitBy: 0,
+      graceCount: 0,
+      deactivatedCount: 0,
+    };
+  }
+
+  const tenantSnapshot = tenantDoc || await firestore
+    .collection('tenants')
+    .doc(normalizedTenantId)
+    .get();
+
+  if (!tenantSnapshot?.exists) {
+    return {
+      tenantId: normalizedTenantId,
+      state: 'skipped',
+      reason: 'tenant_not_found',
+      activeMembers: 0,
+      configuredLimit: 0,
+      overLimitBy: 0,
+      graceCount: 0,
+      deactivatedCount: 0,
+    };
+  }
+
+  const tenantData = tenantSnapshot.data() || {};
+  if (!shouldEnforceTenantSeatAllowance(tenantData)) {
+    return {
+      tenantId: normalizedTenantId,
+      state: 'skipped',
+      reason: 'billing_not_enforceable',
+      activeMembers: 0,
+      configuredLimit: 0,
+      overLimitBy: 0,
+      graceCount: 0,
+      deactivatedCount: 0,
+    };
+  }
+
+  const nowMs = nowDate.getTime();
+  const nowIso = nowDate.toISOString();
+  const graceUntilIso = new Date(
+    nowMs + TENANT_SEAT_OVER_LIMIT_GRACE_DAYS * 24 * 60 * 60 * 1000,
+  ).toISOString();
+
+  const seatConfig = readTenantSeatAllowance(tenantData);
+  const membershipsSnapshot = await firestore
+    .collection('tenant_memberships')
+    .where('tenantId', '==', normalizedTenantId)
+    .where('ativo', '==', true)
+    .get();
+
+  const activeMemberships = membershipsSnapshot.docs
+    .map((doc) => {
+      const data = doc.data() || {};
+      const state = String(data.state || 'active').trim().toLowerCase();
+      const uid = String(data.uid || '').trim();
+      const role = String(data.role || '').trim().toLowerCase();
+      return {
+        doc,
+        data,
+        id: doc.id,
+        uid,
+        role,
+        state,
+        orderingMs: readMembershipOrderingMs(doc, nowMs),
+      };
+    })
+    .filter((item) => item.uid && item.state === 'active');
+
+  activeMemberships.sort((a, b) => {
+    if (a.orderingMs !== b.orderingMs) {
+      return a.orderingMs - b.orderingMs;
+    }
+    return a.uid.localeCompare(b.uid);
+  });
+
+  const ownerUid = String(tenantData.ownerUid || '').trim();
+  const protectedOwnerMemberships = activeMemberships.filter((item) => {
+    if (ownerUid && item.uid === ownerUid) {
+      return true;
+    }
+    return item.role === 'owner';
+  });
+  const protectedOwnerMembershipIds = new Set(
+    protectedOwnerMemberships.map((item) => item.id),
+  );
+
+  const nonOwnerMemberships = activeMemberships.filter(
+    (item) => !protectedOwnerMembershipIds.has(item.id),
+  );
+
+  const availableNonOwnerSlots = Math.max(
+    seatConfig.configuredLimit - protectedOwnerMemberships.length,
+    0,
+  );
+  const keptNonOwnerMemberships = nonOwnerMemberships.slice(0, availableNonOwnerSlots);
+  const excessMemberships = nonOwnerMemberships.slice(availableNonOwnerSlots);
+
+  const keptMembershipIds = new Set([
+    ...protectedOwnerMemberships,
+    ...keptNonOwnerMemberships,
+  ].map((item) => item.id));
+
+  let graceCount = 0;
+  let deactivatedCount = 0;
+
+  for (const membership of activeMemberships) {
+    const currentState = String(membership.data.seatAccessState || '')
+      .trim()
+      .toLowerCase();
+    const shouldRemainActive = keptMembershipIds.has(membership.id);
+
+    if (shouldRemainActive) {
+      const hasGraceTrail =
+        String(membership.data.seatGraceUntilAt || '').trim().length > 0 ||
+        String(membership.data.seatGraceStartedAt || '').trim().length > 0 ||
+        String(membership.data.seatGraceReason || '').trim().length > 0 ||
+        String(membership.data.seatGraceExpiredAt || '').trim().length > 0;
+
+      if (currentState !== 'regular' || hasGraceTrail) {
+        await membership.doc.ref.set(
+          {
+            seatAccessState: 'regular',
+            seatGraceStartedAt: '',
+            seatGraceUntilAt: '',
+            seatGraceReason: '',
+            seatGraceExpiredAt: '',
+            seatStatusUpdatedAt: nowIso,
+            updatedAt: nowIso,
+          },
+          { merge: true },
+        );
+      }
+      continue;
+    }
+
+    const existingGraceUntilIso = String(
+      membership.data.seatGraceUntilAt || '',
+    ).trim();
+    const existingGraceUntilMs = parseDateToUnixMs(existingGraceUntilIso);
+
+    if (!existingGraceUntilMs || existingGraceUntilMs <= nowMs) {
+      if (!existingGraceUntilMs) {
+        graceCount += 1;
+        await membership.doc.ref.set(
+          {
+            seatAccessState: 'over_limit_grace',
+            seatGraceStartedAt: nowIso,
+            seatGraceUntilAt: graceUntilIso,
+            seatGraceReason: 'seat_limit_exceeded',
+            seatStatusUpdatedAt: nowIso,
+            updatedAt: nowIso,
+          },
+          { merge: true },
+        );
+
+        await writeTenantMembershipAuditEvent({
+          firestore,
+          tenantId: normalizedTenantId,
+          membershipId: membership.id,
+          action: 'membership_seat_grace_started',
+          actorUid: TENANT_SEAT_ENFORCEMENT_ACTOR_UID,
+          details: {
+            reason: 'seat_limit_exceeded',
+            configuredLimit: seatConfig.configuredLimit,
+            includedSeats: seatConfig.includedSeats,
+            addonSeats: seatConfig.addonSeats,
+            graceDays: TENANT_SEAT_OVER_LIMIT_GRACE_DAYS,
+            graceUntilAt: graceUntilIso,
+          },
+          createdAtIso: nowIso,
+        });
+        continue;
+      }
+
+      deactivatedCount += 1;
+      await membership.doc.ref.set(
+        {
+          ativo: false,
+          state: 'inactive',
+          revokedByUid: TENANT_SEAT_ENFORCEMENT_ACTOR_UID,
+          revokedReason: 'seat_limit_exceeded_grace_expired',
+          revokedAt: nowIso,
+          seatAccessState: 'over_limit_deactivated',
+          seatGraceExpiredAt: nowIso,
+          seatStatusUpdatedAt: nowIso,
+          updatedAt: nowIso,
+        },
+        { merge: true },
+      );
+
+      await writeTenantMembershipAuditEvent({
+        firestore,
+        tenantId: normalizedTenantId,
+        membershipId: membership.id,
+        action: 'membership_deactivated',
+        actorUid: TENANT_SEAT_ENFORCEMENT_ACTOR_UID,
+        details: {
+          reason: 'seat_limit_exceeded_grace_expired',
+          configuredLimit: seatConfig.configuredLimit,
+          includedSeats: seatConfig.includedSeats,
+          addonSeats: seatConfig.addonSeats,
+          graceUntilAt: existingGraceUntilIso,
+        },
+        createdAtIso: nowIso,
+      });
+      continue;
+    }
+
+    graceCount += 1;
+    if (currentState !== 'over_limit_grace') {
+      await membership.doc.ref.set(
+        {
+          seatAccessState: 'over_limit_grace',
+          seatGraceReason: 'seat_limit_exceeded',
+          seatStatusUpdatedAt: nowIso,
+          updatedAt: nowIso,
+        },
+        { merge: true },
+      );
+    }
+  }
+
+  const overLimitBy = Math.max(
+    activeMemberships.length - seatConfig.configuredLimit,
+    0,
+  );
+  const seatEnforcementState =
+    overLimitBy <= 0
+      ? 'within_limit'
+      : deactivatedCount > 0
+        ? 'over_limit_enforced'
+        : 'over_limit_grace';
+
+  await tenantSnapshot.ref.set(
+    {
+      seatEnforcementState,
+      seatEnforcementGraceDays: TENANT_SEAT_OVER_LIMIT_GRACE_DAYS,
+      seatEnforcementLimitConfigured: seatConfig.configuredLimit,
+      seatEnforcementIncludedSeats: seatConfig.includedSeats,
+      seatEnforcementAddonSeats: seatConfig.addonSeats,
+      seatEnforcementActiveMembers: activeMemberships.length,
+      seatEnforcementOverLimitBy: overLimitBy,
+      seatEnforcementProtectedOwnerCount: protectedOwnerMemberships.length,
+      seatEnforcementGraceCount: graceCount,
+      seatEnforcementDeactivatedCount: deactivatedCount,
+      seatEnforcementUpdatedAt: nowIso,
+    },
+    { merge: true },
+  );
+
+  return {
+    tenantId: normalizedTenantId,
+    state: seatEnforcementState,
+    reason: '',
+    activeMembers: activeMemberships.length,
+    configuredLimit: seatConfig.configuredLimit,
+    overLimitBy,
+    graceCount,
+    deactivatedCount,
+  };
+}
+
 function readStripeSubscriptionPriceId(subscription) {
   const items = Array.isArray(subscription?.items?.data)
     ? subscription.items.data
     : [];
   const firstItem = items.length > 0 ? items[0] : null;
   return String(firstItem?.price?.id ?? '').trim();
+}
+
+function readStripeSubscriptionLineItems(subscription) {
+  const items = Array.isArray(subscription?.items?.data)
+    ? subscription.items.data
+    : [];
+
+  return items
+    .map((item) => {
+      const priceId = String(item?.price?.id ?? '').trim();
+      const quantityInput = Number(item?.quantity ?? 0);
+      const quantity = Number.isFinite(quantityInput)
+        ? Math.max(0, Math.floor(quantityInput))
+        : 0;
+      return { priceId, quantity };
+    })
+    .filter((item) => item.priceId);
 }
 
 function readStripeSubscriptionCycle(subscription) {
@@ -6069,6 +6864,18 @@ async function applyTenantBillingActionToStripe({
       applied: true,
       action: 'subscription_resumed_collection',
       message: 'Cobranca normalizada no Stripe (pause_collection removido).',
+    };
+  }
+
+  if (action === 'clear_plan_link') {
+    await stripeClient.subscriptions.cancel(stripeSubscriptionId, {
+      invoice_now: false,
+      prorate: false,
+    });
+    return {
+      applied: true,
+      action: 'subscription_canceled_plan_unlinked',
+      message: 'Subscription cancelada no Stripe e plano desvinculado no tenant.',
     };
   }
 

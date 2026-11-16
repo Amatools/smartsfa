@@ -8,10 +8,13 @@ import '../../../../shared/presentation/widgets/app_info_card.dart';
 import '../../../../shared/presentation/widgets/app_pagination_bar.dart';
 import '../../../../shared/presentation/widgets/pagination_slice.dart';
 import '../../../auth/services/tenant_membership_service.dart';
+import '../../../auth/services/tenant_seat_capacity.dart';
 import '../../domain/tenant_membership_filter.dart';
 import '../../domain/tenant_admin_permissions.dart';
 import '../controllers/tenant_admin_action_controller.dart';
 import 'tenant_invitations_page.dart';
+
+enum _TenantAdminSettingsTab { members, governance }
 
 class TenantAdminPage extends StatefulWidget {
   const TenantAdminPage({
@@ -38,6 +41,7 @@ class _TenantAdminPageState extends State<TenantAdminPage> {
   int _pageSize = 10;
   Map<String, bool>? _policy;
   bool _savingPolicy = false;
+  _TenantAdminSettingsTab _selectedSettingsTab = _TenantAdminSettingsTab.members;
 
   TenantMembershipService get _membershipService =>
       widget.membershipService ??
@@ -324,6 +328,428 @@ class _TenantAdminPageState extends State<TenantAdminPage> {
     );
   }
 
+  Widget _buildSettingsTabs(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            ChoiceChip(
+              selected: _selectedSettingsTab == _TenantAdminSettingsTab.members,
+              label: const Text('Membros e convites'),
+              selectedColor: colorScheme.primaryContainer,
+              onSelected: (_) {
+                setState(() {
+                  _selectedSettingsTab = _TenantAdminSettingsTab.members;
+                });
+              },
+            ),
+            ChoiceChip(
+              selected:
+                  _selectedSettingsTab == _TenantAdminSettingsTab.governance,
+              label: const Text('Politicas de governanca'),
+              selectedColor: colorScheme.primaryContainer,
+              onSelected: (_) {
+                setState(() {
+                  _selectedSettingsTab = _TenantAdminSettingsTab.governance;
+                });
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGovernancePolicyCard(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Politica de governanca do tenant',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            SwitchListTile(
+              value: _allowManagerDisableRepresentative,
+              title: const Text('Gerente pode desligar representante'),
+              contentPadding: EdgeInsets.zero,
+              onChanged: _savingPolicy || _actorRole != 'owner'
+                  ? null
+                  : (value) {
+                      _savePolicy(
+                        allowManagerDisableRepresentative: value,
+                        allowRepresentativeDisableSeller:
+                            _allowRepresentativeDisableSeller,
+                        allowManagerSendInvites: _allowManagerSendInvites,
+                        allowRepresentativeSendInvites:
+                            _allowRepresentativeSendInvites,
+                      );
+                    },
+            ),
+            SwitchListTile(
+              value: _allowRepresentativeDisableSeller,
+              title: const Text('Representante pode desligar vendedor'),
+              contentPadding: EdgeInsets.zero,
+              onChanged: _savingPolicy || _actorRole != 'owner'
+                  ? null
+                  : (value) {
+                      _savePolicy(
+                        allowManagerDisableRepresentative:
+                            _allowManagerDisableRepresentative,
+                        allowRepresentativeDisableSeller: value,
+                        allowManagerSendInvites: _allowManagerSendInvites,
+                        allowRepresentativeSendInvites:
+                            _allowRepresentativeSendInvites,
+                      );
+                    },
+            ),
+            SwitchListTile(
+              value: _allowManagerSendInvites,
+              title: const Text('Gerente pode enviar convites'),
+              subtitle: const Text(
+                'Quando ligado, gerente pode convidar representante.',
+              ),
+              contentPadding: EdgeInsets.zero,
+              onChanged: _savingPolicy || _actorRole != 'owner'
+                  ? null
+                  : (value) {
+                      _savePolicy(
+                        allowManagerDisableRepresentative:
+                            _allowManagerDisableRepresentative,
+                        allowRepresentativeDisableSeller:
+                            _allowRepresentativeDisableSeller,
+                        allowManagerSendInvites: value,
+                        allowRepresentativeSendInvites:
+                            _allowRepresentativeSendInvites,
+                      );
+                    },
+            ),
+            SwitchListTile(
+              value: _allowRepresentativeSendInvites,
+              title: const Text('Representante pode enviar convites'),
+              subtitle: const Text(
+                'Quando ligado, representante pode convidar vendedor.',
+              ),
+              contentPadding: EdgeInsets.zero,
+              onChanged: _savingPolicy || _actorRole != 'owner'
+                  ? null
+                  : (value) {
+                      _savePolicy(
+                        allowManagerDisableRepresentative:
+                            _allowManagerDisableRepresentative,
+                        allowRepresentativeDisableSeller:
+                            _allowRepresentativeDisableSeller,
+                        allowManagerSendInvites: _allowManagerSendInvites,
+                        allowRepresentativeSendInvites: value,
+                      );
+                    },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSeatCapacityCard(
+    BuildContext context,
+    TenantSeatCapacitySnapshot capacity,
+  ) {
+    final ratio = capacity.effectiveLimit <= 0
+        ? 0.0
+        : (capacity.activeMembers / capacity.effectiveLimit).clamp(0.0, 1.0);
+    final theme = Theme.of(context);
+    final isAtLimit = capacity.remainingSeats == 0;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.groups_2_outlined,
+                  color: isAtLimit
+                      ? theme.colorScheme.error
+                      : theme.colorScheme.primary,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Capacidade de usuarios ativos',
+                    style: theme.textTheme.titleSmall,
+                  ),
+                ),
+                Text(
+                  '${capacity.activeMembers}/${capacity.effectiveLimit}',
+                  style: theme.textTheme.titleSmall,
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            LinearProgressIndicator(value: ratio),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 10,
+              runSpacing: 6,
+              children: [
+                Text('Plano: ${capacity.includedSeats}'),
+                Text('Expansoes: +${capacity.addonSeats}'),
+                Text('Disponiveis: ${capacity.remainingSeats}'),
+              ],
+            ),
+            if (capacity.autoAdjustedToCurrentUsage) ...[
+              const SizedBox(height: 6),
+              Text(
+                'Limite efetivo ajustado para o uso atual. Configure assinatura/expansoes para liberar novas vagas.',
+                style: theme.textTheme.bodySmall,
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInvitationCard(BuildContext context, {required bool atLimit}) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Convites e acessos de membros'),
+            const SizedBox(height: 6),
+            const Text(
+              'Convites ficam em tela dedicada. O limite de seats e validado automaticamente ao convidar e ao reativar membros.',
+            ),
+            if (atLimit) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Limite de usuarios ativos atingido. Para novas entradas, adicione expansoes de seats na assinatura.',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+            ],
+            const SizedBox(height: 10),
+            if (_canOpenInvitationsPage)
+              FilledButton.tonalIcon(
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => TenantInvitationsPage(
+                        identity: widget.identity,
+                      ),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.mail_outline),
+                label: const Text('Abrir convites'),
+              )
+            else
+              Text(
+                'Envio de convites bloqueado para seu perfil. O owner pode liberar isso na politica do tenant.',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMembersAndInvitationsSection(BuildContext context) {
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('tenants')
+          .doc(widget.identity.tenantId)
+          .snapshots(),
+      builder: (context, tenantSnapshot) {
+        final tenantData = tenantSnapshot.data?.data() ?? <String, dynamic>{};
+
+        return StreamBuilder<List<TenantMembership>>(
+          stream: _membershipService.watchMembershipsForTenant(
+            widget.identity.tenantId,
+          ),
+          builder: (context, snapshot) {
+            if (snapshot.hasError) {
+              final error = snapshot.error;
+              final isPermissionDenied =
+                  error is FirebaseException &&
+                  error.code == 'permission-denied';
+              if (isPermissionDenied) {
+                return const AppInfoCard(
+                  title: 'Sem permissao para memberships',
+                  subtitle:
+                      'Seu perfil atual nao possui acesso para listar memberships deste tenant.',
+                );
+              }
+
+              return AppInfoCard(
+                title: 'Falha ao carregar memberships',
+                subtitle: '$error',
+              );
+            }
+
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const AppInfoCard(
+                title: 'Carregando memberships',
+                subtitle: 'Buscando membros vinculados ao tenant...',
+              );
+            }
+
+            final memberships = snapshot.data ?? const <TenantMembership>[];
+            final activeMembers = memberships.where((item) => item.isActive).length;
+            final capacity = TenantSeatCapacitySnapshot.fromTenantData(
+              tenantData: tenantData,
+              activeMembers: activeMembers,
+            );
+
+            final sectionChildren = <Widget>[
+              _buildSeatCapacityCard(context, capacity),
+              const SizedBox(height: 12),
+              _buildInvitationCard(
+                context,
+                atLimit: capacity.remainingSeats == 0,
+              ),
+              const SizedBox(height: 16),
+            ];
+
+            if (memberships.isEmpty) {
+              sectionChildren.add(
+                const AppInfoCard(
+                  title: 'Sem memberships',
+                  subtitle: 'Nenhum usuario vinculado ao tenant no momento.',
+                ),
+              );
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: sectionChildren,
+              );
+            }
+
+            sectionChildren.add(
+              _MembershipFilters(
+                searchController: _searchController,
+                selectedRoleFilter: _selectedRoleFilter,
+                selectedStatusFilter: _selectedStatusFilter,
+                onSearchChanged: (_) {
+                  setState(() {
+                    _currentPage = 0;
+                  });
+                },
+                onRoleChanged: (value) {
+                  setState(() {
+                    _selectedRoleFilter = value;
+                    _currentPage = 0;
+                  });
+                },
+                onStatusChanged: (value) {
+                  setState(() {
+                    _selectedStatusFilter = value;
+                    _currentPage = 0;
+                  });
+                },
+              ),
+            );
+            sectionChildren.add(const SizedBox(height: 12));
+
+            final filteredMemberships = _applyFilters(memberships);
+            if (filteredMemberships.isEmpty) {
+              sectionChildren.add(
+                const AppInfoCard(
+                  title: 'Sem resultados para o filtro atual',
+                  subtitle:
+                      'Ajuste busca, papel ou status para visualizar os memberships.',
+                ),
+              );
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: sectionChildren,
+              );
+            }
+
+            final page = buildPaginationSlice(
+              source: filteredMemberships,
+              requestedPage: _currentPage,
+              pageSize: _pageSize,
+            );
+
+            if (page.currentPage != _currentPage) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) {
+                  setState(() {
+                    _currentPage = page.currentPage;
+                  });
+                }
+              });
+            }
+
+            sectionChildren.add(
+              AppPaginationBar(
+                currentPage: page.currentPage,
+                totalPages: page.totalPages,
+                pageSize: _pageSize,
+                startDisplay: page.startDisplay,
+                endDisplay: page.endDisplay,
+                totalItems: page.totalItems,
+                onPageSizeChanged: (value) {
+                  setState(() {
+                    _pageSize = value;
+                    _currentPage = 0;
+                  });
+                },
+                onPrevious: !page.hasPrevious
+                    ? null
+                    : () {
+                        setState(() {
+                          _currentPage = page.currentPage - 1;
+                        });
+                      },
+                onNext: !page.hasNext
+                    ? null
+                    : () {
+                        setState(() {
+                          _currentPage = page.currentPage + 1;
+                        });
+                      },
+              ),
+            );
+            sectionChildren.add(const SizedBox(height: 10));
+            sectionChildren.add(
+              _HierarchyMembershipList(
+                memberships: page.items,
+                tenantId: widget.identity.tenantId,
+                tenantName: widget.identity.tenantName,
+                actorUid: _actorUid,
+                permissions: _permissions,
+                processingMembershipId: _processingMembershipId,
+                availableRoleTargetsBuilder: _availableRoleTargets,
+                onDeactivate: _deactivate,
+                onRevoke: _revoke,
+                onReactivate: _reactivate,
+                onChangeRole: _changeRole,
+              ),
+            );
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: sectionChildren,
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
@@ -347,277 +773,14 @@ class _TenantAdminPageState extends State<TenantAdminPage> {
                 title: 'Acesso restrito',
                 subtitle: 'Somente owner, gerente, representante e platform admin acessam esta area.',
               )
-            else
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Política de governança do tenant',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 8),
-                      SwitchListTile(
-                        value: _allowManagerDisableRepresentative,
-                        title: const Text(
-                          'Gerente pode desligar representante',
-                        ),
-                        contentPadding: EdgeInsets.zero,
-                        onChanged: _savingPolicy || _actorRole != 'owner'
-                            ? null
-                            : (value) {
-                                _savePolicy(
-                                  allowManagerDisableRepresentative: value,
-                                  allowRepresentativeDisableSeller:
-                                      _allowRepresentativeDisableSeller,
-                                  allowManagerSendInvites:
-                                      _allowManagerSendInvites,
-                                  allowRepresentativeSendInvites:
-                                      _allowRepresentativeSendInvites,
-                                );
-                              },
-                      ),
-                      SwitchListTile(
-                        value: _allowRepresentativeDisableSeller,
-                        title: const Text(
-                          'Representante pode desligar vendedor',
-                        ),
-                        contentPadding: EdgeInsets.zero,
-                        onChanged: _savingPolicy || _actorRole != 'owner'
-                            ? null
-                            : (value) {
-                                _savePolicy(
-                                  allowManagerDisableRepresentative:
-                                      _allowManagerDisableRepresentative,
-                                  allowRepresentativeDisableSeller: value,
-                                  allowManagerSendInvites:
-                                      _allowManagerSendInvites,
-                                  allowRepresentativeSendInvites:
-                                      _allowRepresentativeSendInvites,
-                                );
-                              },
-                      ),
-                      SwitchListTile(
-                        value: _allowManagerSendInvites,
-                        title: const Text('Gerente pode enviar convites'),
-                        subtitle: const Text(
-                          'Quando ligado, gerente pode convidar representante.',
-                        ),
-                        contentPadding: EdgeInsets.zero,
-                        onChanged: _savingPolicy || _actorRole != 'owner'
-                            ? null
-                            : (value) {
-                                _savePolicy(
-                                  allowManagerDisableRepresentative:
-                                      _allowManagerDisableRepresentative,
-                                  allowRepresentativeDisableSeller:
-                                      _allowRepresentativeDisableSeller,
-                                  allowManagerSendInvites: value,
-                                  allowRepresentativeSendInvites:
-                                      _allowRepresentativeSendInvites,
-                                );
-                              },
-                      ),
-                      SwitchListTile(
-                        value: _allowRepresentativeSendInvites,
-                        title: const Text('Representante pode enviar convites'),
-                        subtitle: const Text(
-                          'Quando ligado, representante pode convidar vendedor.',
-                        ),
-                        contentPadding: EdgeInsets.zero,
-                        onChanged: _savingPolicy || _actorRole != 'owner'
-                            ? null
-                            : (value) {
-                                _savePolicy(
-                                  allowManagerDisableRepresentative:
-                                      _allowManagerDisableRepresentative,
-                                  allowRepresentativeDisableSeller:
-                                      _allowRepresentativeDisableSeller,
-                                  allowManagerSendInvites:
-                                      _allowManagerSendInvites,
-                                  allowRepresentativeSendInvites: value,
-                                );
-                              },
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            const SizedBox(height: 12),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Convites de acesso ficam em uma tela dedicada dentro de Tenant.',
-                    ),
-                    const SizedBox(height: 6),
-                    const Text(
-                      'Auditoria de memberships agora fica centralizada no menu Auditoria do portal.',
-                    ),
-                    const SizedBox(height: 10),
-                    if (_canOpenInvitationsPage)
-                      FilledButton.tonalIcon(
-                        onPressed: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute<void>(
-                              builder: (_) => TenantInvitationsPage(
-                                identity: widget.identity,
-                              ),
-                            ),
-                          );
-                        },
-                        icon: const Icon(Icons.mail_outline),
-                        label: const Text('Abrir convites'),
-                      )
-                    else
-                      Text(
-                        'Envio de convites bloqueado para seu perfil. O owner pode liberar isso na política do tenant.',
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            _MembershipFilters(
-              searchController: _searchController,
-              selectedRoleFilter: _selectedRoleFilter,
-              selectedStatusFilter: _selectedStatusFilter,
-              onSearchChanged: (_) {
-                setState(() {
-                  _currentPage = 0;
-                });
-              },
-              onRoleChanged: (value) {
-                setState(() {
-                  _selectedRoleFilter = value;
-                  _currentPage = 0;
-                });
-              },
-              onStatusChanged: (value) {
-                setState(() {
-                  _selectedStatusFilter = value;
-                  _currentPage = 0;
-                });
-              },
-            ),
-            const SizedBox(height: 12),
-            StreamBuilder<List<TenantMembership>>(
-              stream: _membershipService.watchMembershipsForTenant(
-                widget.identity.tenantId,
-              ),
-              builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  final error = snapshot.error;
-                  final isPermissionDenied =
-                      error is FirebaseException &&
-                      error.code == 'permission-denied';
-                  if (isPermissionDenied) {
-                    return const AppInfoCard(
-                      title: 'Sem permissão para memberships',
-                      subtitle: 'Seu perfil atual não possui acesso para listar memberships deste tenant.',
-                    );
-                  }
-
-                  return AppInfoCard(
-                    title: 'Falha ao carregar memberships',
-                    subtitle: '$error',
-                  );
-                }
-
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const AppInfoCard(
-                    title: 'Carregando memberships',
-                    subtitle: 'Buscando membros vinculados ao tenant...',
-                  );
-                }
-
-                final memberships = snapshot.data ?? const [];
-                if (memberships.isEmpty) {
-                  return const AppInfoCard(
-                    title: 'Sem memberships',
-                    subtitle: 'Nenhum usuario vinculado ao tenant no momento.',
-                  );
-                }
-
-                final filteredMemberships = _applyFilters(memberships);
-                if (filteredMemberships.isEmpty) {
-                  return const AppInfoCard(
-                    title: 'Sem resultados para o filtro atual',
-                    subtitle: 'Ajuste busca, papel ou status para visualizar os memberships.',
-                  );
-                }
-
-                final page = buildPaginationSlice(
-                  source: filteredMemberships,
-                  requestedPage: _currentPage,
-                  pageSize: _pageSize,
-                );
-
-                if (page.currentPage != _currentPage) {
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    if (mounted) {
-                      setState(() {
-                        _currentPage = page.currentPage;
-                      });
-                    }
-                  });
-                }
-
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    AppPaginationBar(
-                      currentPage: page.currentPage,
-                      totalPages: page.totalPages,
-                      pageSize: _pageSize,
-                      startDisplay: page.startDisplay,
-                      endDisplay: page.endDisplay,
-                      totalItems: page.totalItems,
-                      onPageSizeChanged: (value) {
-                        setState(() {
-                          _pageSize = value;
-                          _currentPage = 0;
-                        });
-                      },
-                      onPrevious: !page.hasPrevious
-                          ? null
-                          : () {
-                              setState(() {
-                                _currentPage = page.currentPage - 1;
-                              });
-                            },
-                      onNext: !page.hasNext
-                          ? null
-                          : () {
-                              setState(() {
-                                _currentPage = page.currentPage + 1;
-                              });
-                            },
-                    ),
-                    const SizedBox(height: 10),
-                    _HierarchyMembershipList(
-                      memberships: page.items,
-                      tenantId: widget.identity.tenantId,
-                      tenantName: widget.identity.tenantName,
-                      actorUid: _actorUid,
-                      permissions: _permissions,
-                      processingMembershipId: _processingMembershipId,
-                      availableRoleTargetsBuilder: _availableRoleTargets,
-                      onDeactivate: _deactivate,
-                      onRevoke: _revoke,
-                      onReactivate: _reactivate,
-                      onChangeRole: _changeRole,
-                    ),
-                  ],
-                );
-              },
-            ),
+            else ...[
+              _buildSettingsTabs(context),
+              const SizedBox(height: 12),
+              if (_selectedSettingsTab == _TenantAdminSettingsTab.members)
+                _buildMembersAndInvitationsSection(context)
+              else
+                _buildGovernancePolicyCard(context),
+            ],
           ],
         ),
       ),

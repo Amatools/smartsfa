@@ -3,6 +3,8 @@ part of 'maintainer_console_page.dart';
 extension _MaintainerConsoleStripeCatalogPart on _MaintainerConsolePageState {
   Future<void> _openStripeCatalogImportDialog({
     _StripePlanSection initialSection = _StripePlanSection.individual,
+    List<MaintainerStripePlanMapping> existingSectionMappings =
+        const <MaintainerStripePlanMapping>[],
   }) async {
     final catalogFuture = _billingIntegrationService.listStripeCatalog();
     var selectedSection = initialSection;
@@ -131,13 +133,15 @@ extension _MaintainerConsoleStripeCatalogPart on _MaintainerConsolePageState {
                                     ),
                                   const SizedBox(height: 6),
                                   if (product.prices.isEmpty)
-                                    const Text('Sem prices ativos neste produto.')
+                                    const Text(
+                                      'Sem prices ativos neste produto.',
+                                    )
                                   else
                                     ...product.prices.map((price) {
                                       final recurring =
                                           price.recurringInterval.isEmpty
-                                              ? 'one_time'
-                                              : '${price.recurringInterval} x${price.recurringIntervalCount <= 0 ? 1 : price.recurringIntervalCount}';
+                                          ? 'one_time'
+                                          : '${price.recurringInterval} x${price.recurringIntervalCount <= 0 ? 1 : price.recurringIntervalCount}';
                                       final amountLabel =
                                           _formatStripeAmountLabel(
                                             amountInMinorUnit: price.unitAmount,
@@ -164,14 +168,16 @@ extension _MaintainerConsoleStripeCatalogPart on _MaintainerConsolePageState {
                                                 Navigator.of(dialogContext).pop(
                                                   _StripeCatalogImportSelection(
                                                     section: selectedSection,
-                                                    productId: product.productId,
+                                                    productId:
+                                                        product.productId,
                                                     productName:
                                                         product.productName,
                                                     priceId: price.priceId,
                                                     lookupKey: price.lookupKey,
                                                     priceNickname:
                                                         price.nickname,
-                                                    unitAmount: price.unitAmount,
+                                                    unitAmount:
+                                                        price.unitAmount,
                                                     currency: price.currency,
                                                     recurringInterval:
                                                         price.recurringInterval,
@@ -179,16 +185,18 @@ extension _MaintainerConsoleStripeCatalogPart on _MaintainerConsolePageState {
                                                         .recurringIntervalCount,
                                                     planDisplayAmount:
                                                         _buildPlanDisplayAmountLabel(
-                                                      amountInMinorUnit:
-                                                          price.unitAmount,
-                                                      currency:
-                                                          price.currency,
-                                                      recurringInterval: price
-                                                          .recurringInterval,
-                                                      recurringIntervalCount: price
-                                                          .recurringIntervalCount,
-                                                    ),
-                                                    suggestedSlug: price.lookupKey
+                                                          amountInMinorUnit:
+                                                              price.unitAmount,
+                                                          currency:
+                                                              price.currency,
+                                                          recurringInterval: price
+                                                              .recurringInterval,
+                                                          recurringIntervalCount:
+                                                              price
+                                                                  .recurringIntervalCount,
+                                                        ),
+                                                    suggestedSlug:
+                                                        price.lookupKey
                                                             .trim()
                                                             .isNotEmpty
                                                         ? price.lookupKey
@@ -196,7 +204,9 @@ extension _MaintainerConsoleStripeCatalogPart on _MaintainerConsolePageState {
                                                   ),
                                                 );
                                               },
-                                              child: const Text('Usar este price'),
+                                              child: const Text(
+                                                'Usar este price',
+                                              ),
                                             ),
                                           ],
                                         ),
@@ -228,6 +238,12 @@ extension _MaintainerConsoleStripeCatalogPart on _MaintainerConsolePageState {
       return;
     }
 
+    final inferredMappingType = _inferStripeMappingTypeFromCatalogSelection(
+      productName: selected.productName,
+      priceNickname: selected.priceNickname,
+      lookupKey: selected.lookupKey,
+    );
+
     await _openStripePlanMappingDialog(
       initialSection: selected.section,
       initialPlanSlug: selected.suggestedSlug,
@@ -241,6 +257,32 @@ extension _MaintainerConsoleStripeCatalogPart on _MaintainerConsolePageState {
       initialCurrency: selected.currency,
       initialRecurringInterval: selected.recurringInterval,
       initialRecurringIntervalCount: selected.recurringIntervalCount,
+      initialMappingType: inferredMappingType,
+      initialOverageMetric: inferredMappingType == 'overage'
+          ? 'extra_usuario'
+          : '',
+      availableMappings: existingSectionMappings,
     );
+  }
+
+  String _inferStripeMappingTypeFromCatalogSelection({
+    required String productName,
+    required String priceNickname,
+    required String lookupKey,
+  }) {
+    final normalizedSource = '$productName $priceNickname $lookupKey'
+        .trim()
+        .toLowerCase();
+    final addonHints = <String>[
+      'aditivo',
+      'adicion',
+      'addon',
+      'add_on',
+      'extra',
+      'overage',
+    ];
+
+    final isAddon = addonHints.any(normalizedSource.contains);
+    return isAddon ? 'overage' : 'base';
   }
 }

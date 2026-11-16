@@ -107,6 +107,7 @@ class _AppShellPageState extends State<AppShellPage> {
   SyncCostAlert? _costAlert;
   bool _queryReviewOverdue = true;
   final List<int> _navigationHistory = <int>[];
+  List<AppShellItem> _activeNavigationItems = const <AppShellItem>[];
   bool _produtosInlineBackActive = false;
   bool _pedidosInlineBackActive = false;
 
@@ -1111,6 +1112,13 @@ class _AppShellPageState extends State<AppShellPage> {
     );
   }
 
+  List<AppShellItem> _navigationItemsForInteraction() {
+    if (_activeNavigationItems.isNotEmpty) {
+      return _activeNavigationItems;
+    }
+    return _buildItems();
+  }
+
   void _setProdutosInlineBackActive(bool active) {
     if (_produtosInlineBackActive == active || !mounted) {
       return;
@@ -1152,7 +1160,7 @@ class _AppShellPageState extends State<AppShellPage> {
   }
 
   void _setSelectedIndex(int index, {bool recordHistory = true}) {
-    final items = _buildItems();
+    final items = _navigationItemsForInteraction();
     if (items.isEmpty) {
       return;
     }
@@ -1297,22 +1305,128 @@ class _AppShellPageState extends State<AppShellPage> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    if (kIsWeb && !widget.forceMobilePreviewOnWeb) {
-      return WebPortalPage(
-        identity: widget.identity,
-        onSignOut: widget.onSignOut,
-      );
+  String _normalizeNavLabel(String label) {
+    return label.trim().toLowerCase();
+  }
+
+  bool _isAllowedDuringOperationalBlock(String label) {
+    final normalized = _normalizeNavLabel(label);
+    return normalized == 'inicio' ||
+        normalized == 'dashboard' ||
+        normalized == 'avisos' ||
+        normalized == 'conta';
+  }
+
+  List<AppShellItem> _applyOperationalAccessGateToItems(
+    List<AppShellItem> items,
+    _MobileOperationalAccessGate gate,
+  ) {
+    if (!gate.blocked) {
+      return items;
     }
 
-    if (!_viewState.hasRepositories) {
-      return const Scaffold(
-        body: SafeArea(child: Center(child: CircularProgressIndicator())),
-      );
+    final filtered = <AppShellItem>[];
+    for (final item in items) {
+      if (_isAllowedDuringOperationalBlock(item.label)) {
+        if (_isHomeNavigationLabel(item.label)) {
+          filtered.add(
+            AppShellItem(
+              label: item.label,
+              icon: item.icon,
+              builder: (context, identity) => _MobileOperationalAccessBlockedView(
+                statusLabel: gate.statusLabel,
+                reasonLabel: gate.reasonLabel,
+              ),
+            ),
+          );
+        } else {
+          filtered.add(item);
+        }
+      }
     }
 
-    final items = _buildItems();
+    return filtered.isEmpty ? items : filtered;
+  }
+
+  _MobileOperationalAccessGate _resolveMobileOperationalAccessGate(
+    Map<String, dynamic> tenantData,
+  ) {
+    final status =
+        (tenantData['billingStatus'] ?? '').toString().trim().toLowerCase();
+    final planKey = (tenantData['billingPlanKey'] ?? '').toString().trim();
+    final hasPlan = planKey.isNotEmpty;
+    final graceUntil = _tryReadTenantDateTime(tenantData['billingGraceUntilAt']);
+    final hasValidGrace =
+        status == 'grace' &&
+        graceUntil != null &&
+        DateTime.now().toUtc().isBefore(graceUntil.toUtc());
+
+    var blocked = false;
+    var reasonLabel = '';
+    if (status == 'suspended') {
+      blocked = true;
+      reasonLabel = 'Assinatura suspensa';
+    } else if (status == 'canceled') {
+      blocked = true;
+      reasonLabel = 'Assinatura cancelada';
+    } else if (status == 'no_plan') {
+      blocked = true;
+      reasonLabel = 'Sem plano ativo';
+    } else if (!hasPlan && !hasValidGrace) {
+      blocked = true;
+      reasonLabel = 'Sem plano e sem grace ativo';
+    } else if (status == 'grace' && !hasValidGrace) {
+      blocked = true;
+      reasonLabel = 'Grace expirado';
+    }
+
+    return _MobileOperationalAccessGate(
+      blocked: blocked,
+      statusLabel: _billingStatusLabelForMobileGate(status),
+      reasonLabel: reasonLabel,
+    );
+  }
+
+  DateTime? _tryReadTenantDateTime(Object? raw) {
+    if (raw is Timestamp) {
+      return raw.toDate();
+    }
+    if (raw is DateTime) {
+      return raw;
+    }
+    if (raw is String) {
+      return DateTime.tryParse(raw);
+    }
+    if (raw is int) {
+      return DateTime.fromMillisecondsSinceEpoch(raw);
+    }
+    return null;
+  }
+
+  String _billingStatusLabelForMobileGate(String rawStatus) {
+    switch (rawStatus) {
+      case 'trial':
+        return 'Trial';
+      case 'active':
+        return 'Ativo';
+      case 'past_due':
+        return 'Em atraso';
+      case 'grace':
+        return 'Em grace';
+      case 'suspended':
+        return 'Suspenso';
+      case 'canceled':
+        return 'Cancelado';
+      case 'no_plan':
+        return 'Sem plano';
+      default:
+        return rawStatus.isEmpty ? 'Nao definido' : rawStatus;
+    }
+  }
+
+  Widget _buildShellFromItems(List<AppShellItem> items) {
+    _activeNavigationItems = items;
+
     final AppShellSelection? selection = _selectionCoordinator.resolve(
       selectedIndex: _viewState.selectedIndex,
       items: items,
@@ -1351,6 +1465,40 @@ class _AppShellPageState extends State<AppShellPage> {
       child: AppShellScaffold(payload: scaffoldPayload),
     );
   }
+
+  @override
+  Widget build(BuildContext context) {
+    if (kIsWeb && !widget.forceMobilePreviewOnWeb) {
+      return WebPortalPage(
+        identity: widget.identity,
+        onSignOut: widget.onSignOut,
+      );
+    }
+
+    if (!_viewState.hasRepositories) {
+      return const Scaffold(
+        body: SafeArea(child: Center(child: CircularProgressIndicator())),
+      );
+    }
+
+    final baseItems = _buildItems();
+    if (_usingLocalFallback) {
+      return _buildShellFromItems(baseItems);
+    }
+
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('tenants')
+          .doc(widget.identity.tenantId)
+          .snapshots(),
+      builder: (context, tenantSnapshot) {
+        final tenantData = tenantSnapshot.data?.data() ?? const <String, dynamic>{};
+        final gate = _resolveMobileOperationalAccessGate(tenantData);
+        final items = _applyOperationalAccessGateToItems(baseItems, gate);
+        return _buildShellFromItems(items);
+      },
+    );
+  }
 }
 
 class _RepresentedScopeOption {
@@ -1374,6 +1522,62 @@ class _RepresentedScopeOption {
       return representedCompanyName;
     }
     return '$representedCompanyName ($uf)';
+  }
+}
+
+class _MobileOperationalAccessGate {
+  const _MobileOperationalAccessGate({
+    required this.blocked,
+    required this.statusLabel,
+    required this.reasonLabel,
+  });
+
+  final bool blocked;
+  final String statusLabel;
+  final String reasonLabel;
+}
+
+class _MobileOperationalAccessBlockedView extends StatelessWidget {
+  const _MobileOperationalAccessBlockedView({
+    required this.statusLabel,
+    required this.reasonLabel,
+  });
+
+  final String statusLabel;
+  final String reasonLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Sem acesso no app', style: textTheme.titleLarge),
+              const SizedBox(height: 8),
+              Text('Status de billing: $statusLabel.'),
+              if (reasonLabel.trim().isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text('Motivo: $reasonLabel.'),
+              ],
+              const SizedBox(height: 12),
+              const Text(
+                'Para regularizar assinatura, use o portal web oficial do SmartSFA. No app mobile, o billing nao e exibido.',
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Se estiver testando no navegador com modo mobile, remova ?mode=mobile da URL para acessar o portal web com Billing.',
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 

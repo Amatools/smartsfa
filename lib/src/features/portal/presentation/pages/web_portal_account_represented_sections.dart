@@ -479,10 +479,12 @@ class _PortalSalesInfoRow extends StatelessWidget {
 class _BillingSection extends StatefulWidget {
   const _BillingSection({
     required this.activeTenant,
+    required this.canManageBillingActions,
     this.activeRepresentedCompanyName,
   });
 
   final TenantEntryOption activeTenant;
+  final bool canManageBillingActions;
   final String? activeRepresentedCompanyName;
 
   @override
@@ -563,16 +565,14 @@ class _BillingSectionState extends State<_BillingSection> {
           builder: (context, snapshot) {
             final tenantData =
                 snapshot.data?.data() ?? const <String, dynamic>{};
+            final rawBillingStatus =
+                (tenantData['billingStatus'] ?? '').toString();
+            final rawBillingPlanKey =
+                (tenantData['billingPlanKey'] ?? '').toString();
             final billingStatus = _billingStatusLabel(
-              (tenantData['billingStatus'] ?? '').toString(),
+              rawBillingStatus,
             );
-            final billingPlan = _nonEmptyOrDash(
-              (tenantData['billingPlanKey'] ??
-                      tenantData['planTier'] ??
-                      tenantData['plan'] ??
-                      '')
-                  .toString(),
-            );
+            final billingPlan = _nonEmptyOrDash(rawBillingPlanKey);
             final billingCycle = _billingCycleLabel(
               (tenantData['billingCycle'] ?? '').toString(),
             );
@@ -590,11 +590,19 @@ class _BillingSectionState extends State<_BillingSection> {
             final periodEnd = _formatDateOrDash(
               tenantData['billingCurrentPeriodEndAt'],
             );
-            final operationalAccess =
-                _isOperationalAccessBlocked(
-                  (tenantData['billingStatus'] ?? '').toString(),
-                )
-                ? 'Bloqueado'
+            final periodLabel = _billingCurrentPeriodLabel(
+              periodStart: periodStart,
+              periodEnd: periodEnd,
+              rawBillingStatus: rawBillingStatus,
+              stripeCustomerId: stripeCustomerId,
+            );
+            final isOperationalAccessBlocked = _isOperationalAccessBlocked(
+              rawStatus: rawBillingStatus,
+              rawPlanKey: rawBillingPlanKey,
+              rawGraceUntilAt: tenantData['billingGraceUntilAt'],
+            );
+            final operationalAccess = isOperationalAccessBlocked
+                ? 'Sem acesso'
                 : 'Liberado';
             final workspaceType = (widget.activeTenant.workspaceType)
                 .trim()
@@ -650,10 +658,7 @@ class _BillingSectionState extends State<_BillingSection> {
                               ),
                               decoration: BoxDecoration(
                                 color:
-                                    _isOperationalAccessBlocked(
-                                      (tenantData['billingStatus'] ?? '')
-                                          .toString(),
-                                    )
+                                    isOperationalAccessBlocked
                                     ? const Color(0xFFFDEBEC)
                                     : const Color(0xFFE8F5EE),
                                 borderRadius: BorderRadius.circular(999),
@@ -664,10 +669,7 @@ class _BillingSectionState extends State<_BillingSection> {
                                     ?.copyWith(
                                       fontWeight: FontWeight.w700,
                                       color:
-                                          _isOperationalAccessBlocked(
-                                            (tenantData['billingStatus'] ?? '')
-                                                .toString(),
-                                          )
+                                          isOperationalAccessBlocked
                                           ? const Color(0xFF9A1E2A)
                                           : const Color(0xFF15603C),
                                     ),
@@ -684,9 +686,7 @@ class _BillingSectionState extends State<_BillingSection> {
                             ),
                             _WorkspaceInfoItem(
                               label: 'Período atual',
-                              value: (periodStart == '-' && periodEnd == '-')
-                                  ? 'Não definido'
-                                  : '$periodStart até $periodEnd',
+                              value: periodLabel,
                             ),
                             _WorkspaceInfoItem(
                               label: 'Grace period até',
@@ -698,26 +698,10 @@ class _BillingSectionState extends State<_BillingSection> {
                             ),
                           ],
                         ),
-                        const SizedBox(height: 10),
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(12),
-                            color: Theme.of(context)
-                                .colorScheme
-                                .surfaceContainerHighest
-                                .withValues(alpha: 0.2),
-                            border: Border.all(
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .outlineVariant
-                                  .withValues(alpha: 0.4),
-                            ),
-                          ),
-                          child: const Text(
-                            'No web, sem plano ativo, apenas Billing/checkout permanece liberado. No mobile, o uso offline é temporário e revalida quando voltar online.',
-                          ),
+                        const SizedBox(height: 16),
+                        _buildSeatGovernancePanel(
+                          tenantData: tenantData,
+                          textTheme: textTheme,
                         ),
                         if (enterpriseWorkspace) ...[
                           const SizedBox(height: 10),
@@ -736,12 +720,16 @@ class _BillingSectionState extends State<_BillingSection> {
                               ),
                               OutlinedButton.icon(
                                 onPressed:
-                                    _openingPortal || !hasStripeCustomerId
+                                    !widget.canManageBillingActions ||
+                                        _openingPortal ||
+                                        !hasStripeCustomerId
                                     ? null
                                     : () => _openPortal(),
                                 icon: const Icon(Icons.receipt_long_outlined),
                                 label: Text(
-                                  !hasStripeCustomerId
+                                  !widget.canManageBillingActions
+                                      ? 'Somente owner/admin pode gerir billing'
+                                      : !hasStripeCustomerId
                                       ? 'Portal indisponível (sem assinatura)'
                                       : _openingPortal
                                       ? 'Abrindo portal...'
@@ -763,6 +751,10 @@ class _BillingSectionState extends State<_BillingSection> {
                             textTheme: textTheme,
                             workspaceType: workspaceType,
                             hasStripeCustomerId: hasStripeCustomerId,
+                            rawBillingStatus: rawBillingStatus,
+                            rawGraceUntilAt: tenantData['billingGraceUntilAt'],
+                            canManageBillingActions:
+                                widget.canManageBillingActions,
                           ),
                         ],
                       ],
@@ -782,6 +774,9 @@ class _BillingSectionState extends State<_BillingSection> {
     required TextTheme textTheme,
     required String workspaceType,
     required bool hasStripeCustomerId,
+    required String rawBillingStatus,
+    required Object? rawGraceUntilAt,
+    required bool canManageBillingActions,
   }) {
     return FutureBuilder<List<WebPortalAvailableBillingPlan>>(
       future: _availablePlansFuture,
@@ -796,20 +791,21 @@ class _BillingSectionState extends State<_BillingSection> {
           currentPlanKey: currentPlanKey,
           workspaceType: widget.activeTenant.workspaceType,
         );
+        final hasActiveCurrentPlan = _isCurrentPlanEffectivelyActive(
+          rawStatus: rawBillingStatus,
+          rawGraceUntilAt: rawGraceUntilAt,
+        );
         final selectedIsCurrent =
-            selectedPlanKey.isNotEmpty && selectedPlanKey == currentPlanKey;
+            hasActiveCurrentPlan &&
+            selectedPlanKey.isNotEmpty &&
+            selectedPlanKey == currentPlanKey;
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Planos para contratação e upgrade',
+              'Escolha seu Plano',
               style: textTheme.titleMedium,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Escolha o plano ideal para o tenant ativo. O plano atual fica destacado e você pode ativar upgrade em poucos cliques.',
-              style: textTheme.bodySmall,
             ),
             const SizedBox(height: 12),
             if (plansSnapshot.connectionState == ConnectionState.waiting &&
@@ -841,6 +837,7 @@ class _BillingSectionState extends State<_BillingSection> {
                     plans,
                     currentPlanKey: currentPlanKey,
                     workspaceType: workspaceType,
+                    hasActiveCurrentPlan: hasActiveCurrentPlan,
                   );
                   final columns = constraints.maxWidth >= 1080
                       ? 3
@@ -861,6 +858,7 @@ class _BillingSectionState extends State<_BillingSection> {
                           final isSelected =
                               selectedPlanKey == normalizedPlanKey;
                           final isCurrent =
+                              hasActiveCurrentPlan &&
                               currentPlanKey.isNotEmpty &&
                               currentPlanKey == normalizedPlanKey;
                           final planTier = _inferPlanTierFromBillingPlanKey(
@@ -906,27 +904,35 @@ class _BillingSectionState extends State<_BillingSection> {
               children: [
                 FilledButton.icon(
                   onPressed:
-                      _startingCheckout ||
+                      !canManageBillingActions ||
+                          _startingCheckout ||
                           selectedPlanKey.isEmpty ||
                           selectedIsCurrent
                       ? null
                       : () => _startCheckout(billingPlanKey: selectedPlanKey),
                   icon: const Icon(Icons.shopping_cart_checkout),
                   label: Text(
-                    _startingCheckout
+                    !canManageBillingActions
+                        ? 'Somente owner/admin pode contratar ou alterar plano'
+                        : _startingCheckout
                         ? 'Abrindo checkout...'
                         : selectedIsCurrent
                         ? 'Plano já ativo'
-                        : 'Pagar/ativar plano selecionado',
+                        : 'Contratar e ativar plano selecionado',
                   ),
                 ),
                 OutlinedButton.icon(
-                  onPressed: _openingPortal || !hasStripeCustomerId
+                  onPressed:
+                      !canManageBillingActions ||
+                          _openingPortal ||
+                          !hasStripeCustomerId
                       ? null
                       : () => _openPortal(),
                   icon: const Icon(Icons.receipt_long_outlined),
                   label: Text(
-                    !hasStripeCustomerId
+                    !canManageBillingActions
+                        ? 'Somente owner/admin pode gerir billing'
+                        : !hasStripeCustomerId
                         ? 'Portal indisponível (sem assinatura)'
                         : _openingPortal
                         ? 'Abrindo portal...'
@@ -935,10 +941,10 @@ class _BillingSectionState extends State<_BillingSection> {
                 ),
               ],
             ),
-            if (!hasStripeCustomerId) ...[
+            if (canManageBillingActions && !hasStripeCustomerId) ...[
               const SizedBox(height: 8),
               const Text(
-                'O portal Stripe só abre após a criação da primeira assinatura. Para o primeiro pagamento, selecione um plano e clique em pagar/ativar.',
+                'O portal Stripe só abre após a criação da primeira assinatura. Para o primeiro pagamento, selecione um plano e clique em contratar e ativar.',
               ),
             ],
           ],
@@ -959,6 +965,7 @@ class _BillingSectionState extends State<_BillingSection> {
     List<WebPortalAvailableBillingPlan> plans, {
     required String currentPlanKey,
     required String workspaceType,
+    required bool hasActiveCurrentPlan,
   }) {
     final ordered = List<WebPortalAvailableBillingPlan>.from(plans);
     final defaultPlan = _normalizeBillingPlanKey(
@@ -968,8 +975,14 @@ class _BillingSectionState extends State<_BillingSection> {
     ordered.sort((a, b) {
       final keyA = _normalizeBillingPlanKey(a.billingPlanKey);
       final keyB = _normalizeBillingPlanKey(b.billingPlanKey);
-      final isCurrentA = currentPlanKey.isNotEmpty && keyA == currentPlanKey;
-      final isCurrentB = currentPlanKey.isNotEmpty && keyB == currentPlanKey;
+      final isCurrentA =
+          hasActiveCurrentPlan &&
+          currentPlanKey.isNotEmpty &&
+          keyA == currentPlanKey;
+      final isCurrentB =
+          hasActiveCurrentPlan &&
+          currentPlanKey.isNotEmpty &&
+          keyB == currentPlanKey;
       if (isCurrentA != isCurrentB) {
         return isCurrentA ? -1 : 1;
       }
@@ -1058,8 +1071,10 @@ class _BillingSectionState extends State<_BillingSection> {
   static String _billingCycleLabel(String raw) {
     final value = raw.trim().toLowerCase();
     switch (value) {
+      case 'month':
       case 'monthly':
         return 'Mensal';
+      case 'year':
       case 'yearly':
         return 'Anual';
       default:
@@ -1067,9 +1082,93 @@ class _BillingSectionState extends State<_BillingSection> {
     }
   }
 
-  static bool _isOperationalAccessBlocked(String rawStatus) {
+  static String _billingCurrentPeriodLabel({
+    required String periodStart,
+    required String periodEnd,
+    required String rawBillingStatus,
+    required String stripeCustomerId,
+  }) {
+    final status = rawBillingStatus.trim().toLowerCase();
+    final hasStripeLink = stripeCustomerId.trim().isNotEmpty;
+    final hasStart = periodStart != '-';
+    final hasEnd = periodEnd != '-';
+
+    if (hasStart && hasEnd) {
+      return '$periodStart até $periodEnd';
+    }
+    if (hasStart && !hasEnd) {
+      return 'Iniciado em $periodStart (fim pendente)';
+    }
+    if (!hasStart && hasEnd) {
+      return 'Até $periodEnd (início pendente)';
+    }
+
+    if (status == 'active' && hasStripeLink) {
+      return 'Aguardando sincronização do ciclo no Stripe';
+    }
+
+    return 'Não definido';
+  }
+
+  static bool _isOperationalAccessBlocked({
+    required String rawStatus,
+    required String rawPlanKey,
+    Object? rawGraceUntilAt,
+  }) {
     final status = rawStatus.trim().toLowerCase();
-    return status == 'suspended' || status == 'canceled' || status == 'no_plan';
+    if (status == 'suspended' || status == 'canceled' || status == 'no_plan') {
+      return true;
+    }
+
+    final hasBillingPlan = rawPlanKey.trim().isNotEmpty;
+    if (status == 'active' && !hasBillingPlan) {
+      return true;
+    }
+
+    if (status == 'grace') {
+      final graceUntil = _tryReadDateTime(rawGraceUntilAt);
+      if (graceUntil != null && !DateTime.now().toUtc().isBefore(graceUntil.toUtc())) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  static bool _isCurrentPlanEffectivelyActive({
+    required String rawStatus,
+    Object? rawGraceUntilAt,
+  }) {
+    final status = rawStatus.trim().toLowerCase();
+    if (status == 'active' || status == 'trial' || status == 'past_due') {
+      return true;
+    }
+
+    if (status == 'grace') {
+      final graceUntil = _tryReadDateTime(rawGraceUntilAt);
+      if (graceUntil == null) {
+        return false;
+      }
+      return DateTime.now().toUtc().isBefore(graceUntil.toUtc());
+    }
+
+    return false;
+  }
+
+  static DateTime? _tryReadDateTime(Object? raw) {
+    if (raw is Timestamp) {
+      return raw.toDate();
+    }
+    if (raw is DateTime) {
+      return raw;
+    }
+    if (raw is String) {
+      return DateTime.tryParse(raw);
+    }
+    if (raw is int) {
+      return DateTime.fromMillisecondsSinceEpoch(raw);
+    }
+    return null;
   }
 
   static String _formatDateOrDash(Object? value) {
@@ -1088,6 +1187,137 @@ class _BillingSectionState extends State<_BillingSection> {
     final month = local.month.toString().padLeft(2, '0');
     final year = local.year.toString().padLeft(4, '0');
     return '$day/$month/$year';
+  }
+
+  Widget _buildSeatGovernancePanel({
+    required Map<String, dynamic> tenantData,
+    required TextTheme textTheme,
+  }) {
+    final tenantId = widget.activeTenant.tenantId.trim();
+    if (tenantId.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final includedSeats = _readNonNegativeInt(
+      tenantData['billingSeatsIncluded'],
+      fallback: 0,
+    );
+    final addonSeats = _readNonNegativeInt(
+      tenantData['billingSeatsAddon'],
+      fallback: _readNonNegativeInt(tenantData['billingSeatAddons']),
+    );
+    final configuredLimit = (includedSeats + addonSeats).clamp(0, 999999);
+
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('tenant_memberships')
+          .where('tenantId', isEqualTo: tenantId)
+          .where('ativo', isEqualTo: true)
+          .snapshots(),
+      builder: (context, snapshot) {
+        final docs = snapshot.data?.docs ?? const [];
+
+        var activeCount = 0;
+        var graceCount = 0;
+        var regularCount = 0;
+        final graceLabels = <String>[];
+
+        for (final doc in docs) {
+          final data = doc.data();
+          final state = (data['state'] ?? '').toString().trim().toLowerCase();
+          if (state != 'active') {
+            continue;
+          }
+          activeCount += 1;
+
+          final seatState = (data['seatAccessState'] ?? '')
+              .toString()
+              .trim()
+              .toLowerCase();
+          if (seatState == 'over_limit_grace') {
+            graceCount += 1;
+            final uid = (data['uid'] ?? '').toString().trim();
+            final role = (data['role'] ?? '').toString().trim();
+            final until = _formatDateOrDash(data['seatGraceUntilAt']);
+            final roleLabel = role.isEmpty ? 'membro' : role;
+            final uidLabel = uid.isEmpty ? doc.id : uid;
+            graceLabels.add('$roleLabel • $uidLabel • até $until');
+          } else if (seatState.isEmpty || seatState == 'regular') {
+            regularCount += 1;
+          }
+        }
+
+        final overLimitBy = configuredLimit > 0
+            ? (activeCount - configuredLimit).clamp(0, 999999)
+            : 0;
+        final usageSummary = configuredLimit > 0
+            ? '$activeCount / $configuredLimit ativos'
+            : '$activeCount ativos';
+
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF6F8FC),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFDCE3F0)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Governança de assentos',
+                style: textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 14,
+                runSpacing: 8,
+                children: [
+                  Text('Uso: $usageSummary'),
+                  Text('Regulares: $regularCount'),
+                  Text('Em grace: $graceCount'),
+                  Text('Excesso: $overLimitBy'),
+                ],
+              ),
+              if (graceLabels.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'Membros em grace',
+                  style: textTheme.labelLarge,
+                ),
+                const SizedBox(height: 4),
+                ...graceLabels.map(
+                  (label) => Padding(
+                    padding: const EdgeInsets.only(bottom: 2),
+                    child: Text('• $label'),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  static int _readNonNegativeInt(Object? value, {int fallback = 0}) {
+    if (value is int) {
+      return value < 0 ? 0 : value;
+    }
+    if (value is num) {
+      final parsed = value.toInt();
+      return parsed < 0 ? 0 : parsed;
+    }
+    if (value is String) {
+      final parsed = int.tryParse(value.trim());
+      if (parsed != null) {
+        return parsed < 0 ? 0 : parsed;
+      }
+    }
+    return fallback < 0 ? 0 : fallback;
   }
 
   Future<void> _startCheckout({required String billingPlanKey}) async {
@@ -1119,7 +1349,7 @@ class _BillingSectionState extends State<_BillingSection> {
         cancelUrl: cancelUrl,
       );
 
-      final opened = openUrlInNewTab(result.checkoutUrl);
+      final opened = openUrlInCurrentTab(result.checkoutUrl);
       if (!opened) {
         await Clipboard.setData(ClipboardData(text: result.checkoutUrl));
       }
@@ -1168,7 +1398,7 @@ class _BillingSectionState extends State<_BillingSection> {
         returnUrl: returnUrl,
       );
 
-      final opened = openUrlInNewTab(result.portalUrl);
+      final opened = openUrlInCurrentTab(result.portalUrl);
       if (!opened) {
         await Clipboard.setData(ClipboardData(text: result.portalUrl));
       }

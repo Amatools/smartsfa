@@ -31,7 +31,7 @@ extension _MaintainerConsoleStripePlanMappingDialogUiPart
         const SizedBox(height: 12),
         _buildStripePlanDisplayAmountField(dialogState),
         const SizedBox(height: 12),
-        _buildStripeMappingTypeField(
+        _buildStripeAddonToggleField(
           dialogState: dialogState,
           setLocalState: setLocalState,
         ),
@@ -45,8 +45,20 @@ extension _MaintainerConsoleStripePlanMappingDialogUiPart
           dialogState: dialogState,
           setLocalState: setLocalState,
         ),
-        const SizedBox(height: 12),
-        _buildStripeOverageMetricField(dialogState),
+        if (dialogState.isAddonMapping) ...[
+          const SizedBox(height: 12),
+          _buildStripeOverageMetricField(dialogState),
+          const SizedBox(height: 12),
+          _buildStripeLinkedBasePlanKeySelectorField(
+            dialogState: dialogState,
+            setLocalState: setLocalState,
+          ),
+        ] else ...[
+          const SizedBox(height: 12),
+          _buildStripeIncludedSeatsField(dialogState),
+          const SizedBox(height: 12),
+          _buildStripeSeatAddonPlanKeyField(dialogState),
+        ],
         const SizedBox(height: 12),
         _buildStripeActiveSwitch(
           dialogState: dialogState,
@@ -110,6 +122,9 @@ extension _MaintainerConsoleStripePlanMappingDialogUiPart
         hintText: dialogState.selectedSection == _StripePlanSection.outros
             ? 'ex.: extra_orders_pack_1000'
             : 'ex.: base | pro | custom',
+        helperText: dialogState.isAddonMapping
+            ? 'Quando aditivo, a sugestao usa o plano base selecionado (ex.: extra_usuario).'
+            : null,
         border: const OutlineInputBorder(),
       ),
     );
@@ -141,23 +156,46 @@ extension _MaintainerConsoleStripePlanMappingDialogUiPart
     );
   }
 
-  Widget _buildStripeMappingTypeField({
+  Widget _buildStripeAddonToggleField({
     required _StripePlanMappingDialogState dialogState,
     required StateSetter setLocalState,
   }) {
-    return DropdownButtonFormField<String>(
-      initialValue: dialogState.mappingType,
-      decoration: const InputDecoration(
-        labelText: 'Tipo',
-        border: OutlineInputBorder(),
+    return SwitchListTile.adaptive(
+      value: dialogState.isAddonMapping,
+      contentPadding: EdgeInsets.zero,
+      title: const Text('Este plano e aditivo?'),
+      subtitle: Text(
+        dialogState.isAddonMapping
+            ? 'Aditivo: exige plano base vinculado e usa metrica de excedente.'
+            : 'Plano normal/base: pode informar seats inclusos e addon de seats.',
       ),
-      items: const [
-        DropdownMenuItem(value: 'base', child: Text('base')),
-        DropdownMenuItem(value: 'overage', child: Text('overage')),
-      ],
       onChanged: (value) {
         setLocalState(() {
-          dialogState.mappingType = (value ?? 'base').trim();
+          dialogState.mappingType = value ? 'overage' : 'base';
+
+          if (dialogState.isAddonMapping &&
+              dialogState.overageMetricController.text.trim().isEmpty) {
+            dialogState.overageMetricController.text = 'extra_usuario';
+          }
+
+          if (dialogState.isAddonMapping &&
+              dialogState.linkedBasePlanKeyController.text.trim().isEmpty &&
+              dialogState.basePlanOptions.isNotEmpty) {
+            dialogState.linkedBasePlanKeyController.text =
+                dialogState.basePlanOptions.first.billingPlanKey;
+          }
+
+          if (dialogState.isAddonMapping) {
+            _maybeApplyAddonPlanSlugSuggestion(
+              dialogState,
+              linkedBasePlanKey: dialogState.linkedBasePlanKeyController.text,
+            );
+          }
+
+          if (!dialogState.isAddonMapping) {
+            dialogState.linkedBasePlanKeyController.clear();
+            dialogState.overageMetricController.clear();
+          }
         });
       },
     );
@@ -195,6 +233,96 @@ extension _MaintainerConsoleStripePlanMappingDialogUiPart
         hintText: 'extra_representada | extra_usuario',
         border: OutlineInputBorder(),
       ),
+    );
+  }
+
+  Widget _buildStripeIncludedSeatsField(
+    _StripePlanMappingDialogState dialogState,
+  ) {
+    final isBase = dialogState.mappingType.trim().toLowerCase() == 'base';
+    return TextField(
+      controller: dialogState.includedSeatsController,
+      keyboardType: TextInputType.number,
+      decoration: InputDecoration(
+        labelText: 'Seats incluidos no plano',
+        hintText: isBase ? 'Ex.: 1, 2, 3' : 'Opcional para overage',
+        helperText: isBase
+            ? 'Usado como capacidade base da assinatura no tenant.'
+            : 'Normalmente deixe vazio para mapeamentos overage.',
+        border: const OutlineInputBorder(),
+      ),
+    );
+  }
+
+  Widget _buildStripeSeatAddonPlanKeyField(
+    _StripePlanMappingDialogState dialogState,
+  ) {
+    return TextField(
+      controller: dialogState.seatAddonPlanKeyController,
+      decoration: const InputDecoration(
+        labelText: 'billingPlanKey do adicional de seats',
+        hintText: 'Ex.: representacoes_extra_usuario',
+        helperText: 'No plano base, informe o billingPlanKey do mapeamento overage de usuarios.',
+        border: OutlineInputBorder(),
+      ),
+    );
+  }
+
+  Widget _buildStripeLinkedBasePlanKeySelectorField({
+    required _StripePlanMappingDialogState dialogState,
+    required StateSetter setLocalState,
+  }) {
+    final currentBaseKey = dialogState.linkedBasePlanKeyController.text
+        .trim()
+        .toLowerCase();
+    final options = dialogState.basePlanOptions;
+
+    if (options.isEmpty) {
+      return TextField(
+        controller: dialogState.linkedBasePlanKeyController,
+        onChanged: (value) {
+          setLocalState(() {
+            _maybeApplyAddonPlanSlugSuggestion(
+              dialogState,
+              linkedBasePlanKey: value,
+            );
+          });
+        },
+        decoration: const InputDecoration(
+          labelText: 'Plano base vinculado (obrigatorio para aditivo)',
+          hintText: 'Ex.: representacoes_base',
+          helperText: 'Nenhum plano base encontrado nesta secao. Informe o billingPlanKey manualmente.',
+          border: OutlineInputBorder(),
+        ),
+      );
+    }
+
+    return DropdownButtonFormField<String>(
+      initialValue: currentBaseKey.isEmpty ? null : currentBaseKey,
+      decoration: const InputDecoration(
+        labelText: 'Plano base vinculado (obrigatorio para aditivo)',
+        border: OutlineInputBorder(),
+        helperText: 'Selecione o plano base ao qual este aditivo pertence para reconciliar quantity de seats extras.',
+      ),
+      items: options
+          .map(
+            (option) => DropdownMenuItem<String>(
+              value: option.billingPlanKey,
+              child: Text(option.displayLabel),
+            ),
+          )
+          .toList(growable: false),
+      onChanged: (value) {
+        setLocalState(() {
+          dialogState.linkedBasePlanKeyController.text = (value ?? '')
+              .trim()
+              .toLowerCase();
+          _maybeApplyAddonPlanSlugSuggestion(
+            dialogState,
+            linkedBasePlanKey: dialogState.linkedBasePlanKeyController.text,
+          );
+        });
+      },
     );
   }
 

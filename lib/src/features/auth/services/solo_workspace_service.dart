@@ -665,30 +665,47 @@ class SoloWorkspaceService {
 
   Map<String, Object?> _seedTenantBillingFields({required String plan}) {
     final now = DateTime.now().toUtc();
-    final periodEnd = now.add(const Duration(days: 30));
+    final graceUntil = now.add(const Duration(days: 7));
     return <String, Object?>{
       'planTier': 'base',
       'billingScope': 'tenant',
       'billingPlanKey': plan,
-      'billingStatus': 'active',
+      'billingStatus': 'grace',
       'billingCycle': 'monthly',
       'billingCurrentPeriodStartAt': now.toIso8601String(),
-      'billingCurrentPeriodEndAt': periodEnd.toIso8601String(),
+      'billingCurrentPeriodEndAt': graceUntil.toIso8601String(),
       'billingGracePeriodDays': 7,
-      'billingGraceUntilAt': null,
+      'billingSeatsIncluded': _seedIncludedSeatsForPlan(plan),
+      'billingSeatsAddon': 0,
+      'billingSeatAddonUnitPriceCents': 5000,
+      'billingGraceUntilAt': graceUntil.toIso8601String(),
       'billingPastDueSinceAt': null,
       'billingSuspendedAt': null,
-      'billingDelinquencyStage': 'none',
+      'billingDelinquencyStage': 'grace',
       'billingUpdatedAt': now.toIso8601String(),
     };
   }
 
+  int _seedIncludedSeatsForPlan(String plan) {
+    switch (plan.trim().toLowerCase()) {
+      case 'enterprise':
+        return 3;
+      case 'team':
+        return 1;
+      case 'solo':
+      default:
+        return 1;
+    }
+  }
+
   Map<String, Object?> _seedUserBillingFields() {
+    final now = DateTime.now().toUtc();
+    final graceUntil = now.add(const Duration(days: 7));
     return <String, Object?>{
-      'billingAccountState': 'active',
-      'billingGraceUntilAt': null,
+      'billingAccountState': 'grace',
+      'billingGraceUntilAt': graceUntil.toIso8601String(),
       'billingSuspendedAt': null,
-      'billingUpdatedAt': DateTime.now().toUtc().toIso8601String(),
+      'billingUpdatedAt': now.toIso8601String(),
     };
   }
 }

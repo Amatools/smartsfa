@@ -1520,7 +1520,7 @@ service cloud.firestore {
           && isPlatformAdmin()
           && validStripePlanMappingDoc(mappingId, request.resource.data);
 
-        allow delete: if false;
+        allow delete: if signedIn() && isPlatformAdmin();
       }
     }
 

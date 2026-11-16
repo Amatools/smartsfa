@@ -5,11 +5,14 @@ import '../../../core/models/tenant_invitation.dart';
 import '../../../core/models/tenant_membership.dart';
 import 'membership_identity_formatter.dart';
 import 'solo_workspace_service.dart';
+import 'tenant_membership_service.dart';
 
 class TenantInvitationService {
   TenantInvitationService(this._firestore);
 
   final FirebaseFirestore _firestore;
+  TenantMembershipService get _membershipService =>
+      TenantMembershipService(_firestore);
 
   Stream<List<TenantInvitation>> watchInvitationsForTenant(String tenantId) {
     final normalizedTenantId = tenantId.trim();
@@ -122,6 +125,9 @@ class TenantInvitationService {
       tenantId: normalizedTenantId,
       uid: normalizedCreatedByUid,
       invitedRole: normalizedRole,
+    );
+    await _membershipService.assertSeatCapacityForActivation(
+      tenantId: normalizedTenantId,
     );
 
     final now = DateTime.now();
@@ -274,6 +280,10 @@ class TenantInvitationService {
 
     final now = DateTime.now();
     final membershipId = '${invitation.tenantId}_${user.uid}';
+    await _membershipService.assertSeatCapacityForActivation(
+      tenantId: invitation.tenantId,
+      targetMembershipId: membershipId,
+    );
     final tenantName = await _resolveTenantName(invitation.tenantId);
     final membershipUserName = buildMembershipUserName(
       uid: user.uid,

@@ -45,6 +45,7 @@ extension _MaintainerConsoleStripePlansPart on _MaintainerConsolePageState {
                       initialSection: canCreateFromSection
                           ? section
                           : _StripePlanSection.outros,
+                      existingSectionMappings: mappings,
                     ),
                     icon: const Icon(Icons.download_outlined),
                     label: const Text('Importar da Stripe'),
@@ -53,8 +54,11 @@ extension _MaintainerConsoleStripePlansPart on _MaintainerConsolePageState {
                     onPressed: canCreateFromSection
                         ? () => _openStripePlanMappingDialog(
                             initialSection: section,
+                            availableMappings: mappings,
                           )
-                        : _openStripePlanMappingDialog,
+                        : () => _openStripePlanMappingDialog(
+                            availableMappings: mappings,
+                          ),
                     icon: const Icon(Icons.add_link_outlined),
                     label: const Text('Cadastrar plano'),
                   ),
@@ -80,9 +84,12 @@ extension _MaintainerConsoleStripePlansPart on _MaintainerConsolePageState {
                   DataColumn(label: Text('Acoes')),
                   DataColumn(label: Text('Plan key')),
                   DataColumn(label: Text('Tipo')),
+                  DataColumn(label: Text('Seats base')),
+                  DataColumn(label: Text('Addon seats')),
                   DataColumn(label: Text('Stripe product')),
                   DataColumn(label: Text('Stripe price')),
                   DataColumn(label: Text('Metrica excedente')),
+                  DataColumn(label: Text('Plano base vinculado')),
                   DataColumn(label: Text('Ativo')),
                   DataColumn(label: Text('Atualizado')),
                 ],
@@ -126,10 +133,11 @@ extension _MaintainerConsoleStripePlansPart on _MaintainerConsolePageState {
                                         : 'Reativar para novas contratações',
                                     child: IconButton(
                                       visualDensity: VisualDensity.compact,
-                                      constraints: const BoxConstraints.tightFor(
-                                        width: 34,
-                                        height: 34,
-                                      ),
+                                      constraints:
+                                          const BoxConstraints.tightFor(
+                                            width: 34,
+                                            height: 34,
+                                          ),
                                       padding: EdgeInsets.zero,
                                       icon: Icon(
                                         mapping.active
@@ -148,10 +156,11 @@ extension _MaintainerConsoleStripePlansPart on _MaintainerConsolePageState {
                                     message: 'Excluir plano',
                                     child: IconButton(
                                       visualDensity: VisualDensity.compact,
-                                      constraints: const BoxConstraints.tightFor(
-                                        width: 34,
-                                        height: 34,
-                                      ),
+                                      constraints:
+                                          const BoxConstraints.tightFor(
+                                            width: 34,
+                                            height: 34,
+                                          ),
                                       padding: EdgeInsets.zero,
                                       icon: const Icon(
                                         Icons.delete_outline,
@@ -159,7 +168,9 @@ extension _MaintainerConsoleStripePlansPart on _MaintainerConsolePageState {
                                         size: 20,
                                       ),
                                       onPressed: () =>
-                                          _confirmDeleteStripePlanMapping(mapping),
+                                          _confirmDeleteStripePlanMapping(
+                                            mapping,
+                                          ),
                                     ),
                                   ),
                                 ],
@@ -181,6 +192,24 @@ extension _MaintainerConsoleStripePlansPart on _MaintainerConsolePageState {
                               width: 70,
                               child: Text(
                                 mapping.mappingType,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ),
+                          DataCell(
+                            SizedBox(
+                              width: 84,
+                              child: Text('${mapping.includedSeats}'),
+                            ),
+                          ),
+                          DataCell(
+                            SizedBox(
+                              width: 170,
+                              child: Text(
+                                mapping.seatAddonPlanKey.isEmpty
+                                    ? '--'
+                                    : mapping.seatAddonPlanKey,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -217,6 +246,18 @@ extension _MaintainerConsoleStripePlansPart on _MaintainerConsolePageState {
                                 mapping.overageMetric.isEmpty
                                     ? '--'
                                     : mapping.overageMetric,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ),
+                          DataCell(
+                            SizedBox(
+                              width: 150,
+                              child: Text(
+                                mapping.linkedBasePlanKey.isEmpty
+                                    ? '--'
+                                    : mapping.linkedBasePlanKey,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -291,16 +332,16 @@ extension _MaintainerConsoleStripePlansPart on _MaintainerConsolePageState {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Plano removido da lista.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Plano removido da lista.')));
     } catch (error) {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Falha ao excluir plano: $error')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Falha ao excluir plano: $error')));
     }
   }
 

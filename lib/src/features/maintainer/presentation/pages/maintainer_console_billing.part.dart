@@ -646,7 +646,11 @@ extension _MaintainerConsoleBillingPart on _MaintainerConsolePageState {
           ),
           PopupMenuItem<_MaintainerBillingAction>(
             value: _MaintainerBillingAction.suspendBilling,
-            child: Text('Suspender billing'),
+            child: Text('Suspender billing (sem acesso)'),
+          ),
+          PopupMenuItem<_MaintainerBillingAction>(
+            value: _MaintainerBillingAction.clearPlanLink,
+            child: Text('Sem plano e sem acesso'),
           ),
           PopupMenuDivider(),
           PopupMenuItem<_MaintainerBillingAction>(
@@ -677,6 +681,7 @@ extension _MaintainerConsoleBillingPart on _MaintainerConsolePageState {
       _MaintainerBillingAction.grant30days => 'grant_30_days',
       _MaintainerBillingAction.normalizeBilling => 'normalize_billing',
       _MaintainerBillingAction.suspendBilling => 'suspend_billing',
+      _MaintainerBillingAction.clearPlanLink => 'clear_plan_link',
       _MaintainerBillingAction.requestCloseWorkspace => 'close_workspace',
       _MaintainerBillingAction.requestDeleteWorkspace => 'delete_workspace',
     };
@@ -686,6 +691,7 @@ extension _MaintainerConsoleBillingPart on _MaintainerConsolePageState {
       _MaintainerBillingAction.grant30days => 'Billing liberado por 30 dias',
       _MaintainerBillingAction.normalizeBilling => 'Billing normalizado',
       _MaintainerBillingAction.suspendBilling => 'Billing suspenso',
+      _MaintainerBillingAction.clearPlanLink => 'Plano removido e acesso bloqueado',
       _MaintainerBillingAction.requestCloseWorkspace =>
         'Solicitacao de encerramento registrada',
       _MaintainerBillingAction.requestDeleteWorkspace =>
@@ -743,12 +749,28 @@ extension _MaintainerConsoleBillingPart on _MaintainerConsolePageState {
       return;
     }
 
+    var actionReason = 'maintainer_console';
+    if (action == _MaintainerBillingAction.clearPlanLink) {
+      final expectedPhrase = 'REMOVER PLANO ${row.workspace.tenantId}';
+      final reason = await _openWorkspaceLifecycleReasonDialog(
+        context,
+        title: 'Sem plano e sem acesso',
+        expectedPhrase: expectedPhrase,
+        helperText:
+          'Essa acao remove o plano do tenant, bloqueia acesso operacional e cancela a subscription no Stripe quando existir. Digite a frase de confirmacao.',
+      );
+      if (reason == null) {
+        return;
+      }
+      actionReason = reason;
+    }
+
     _markBillingTenantProcessing(tenantId);
     try {
       final payload = await _billingIntegrationService.manageTenantBillingState(
         tenantId: tenantId,
         action: actionName,
-        reason: 'maintainer_console',
+        reason: actionReason,
       );
       if (!mounted) {
         return;

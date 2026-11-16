@@ -16,7 +16,17 @@ extension _MaintainerConsoleStripePlanMappingDialogPart
     String initialRecurringInterval = '',
     int initialRecurringIntervalCount = 0,
     String initialMappingType = 'base',
+    String initialOverageMetric = '',
+    int initialIncludedSeats = 0,
+    String initialSeatAddonPlanKey = '',
+    String initialLinkedBasePlanKey = '',
+    List<MaintainerStripePlanMapping> availableMappings =
+        const <MaintainerStripePlanMapping>[],
   }) async {
+    final basePlanOptions = _buildStripeBasePlanOptions(
+      mappings: availableMappings,
+    );
+
     final dialogState = _StripePlanMappingDialogState(
       initialSection: initialSection,
       initialPlanSlug: initialPlanSlug,
@@ -31,6 +41,11 @@ extension _MaintainerConsoleStripePlanMappingDialogPart
       initialRecurringInterval: initialRecurringInterval,
       initialProductName: initialProductName,
       initialPriceNickname: initialPriceNickname,
+      initialOverageMetric: initialOverageMetric,
+      initialIncludedSeats: initialIncludedSeats,
+      initialSeatAddonPlanKey: initialSeatAddonPlanKey,
+      initialLinkedBasePlanKey: initialLinkedBasePlanKey,
+      initialBasePlanOptions: basePlanOptions,
     );
 
     _initializeStripeDialogLookupKey(
@@ -38,6 +53,13 @@ extension _MaintainerConsoleStripePlanMappingDialogPart
       initialPlanSlug: initialPlanSlug,
       initialRecurringIntervalCount: initialRecurringIntervalCount,
     );
+
+    if (dialogState.isAddonMapping) {
+      _maybeApplyAddonPlanSlugSuggestion(
+        dialogState,
+        linkedBasePlanKey: dialogState.linkedBasePlanKeyController.text,
+      );
+    }
 
     final saved = await _showStripePlanMappingDialog(
       dialogState: dialogState,
@@ -138,6 +160,24 @@ extension _MaintainerConsoleStripePlanMappingDialogPart
     ).showSnackBar(const SnackBar(content: Text('Mapeamento Stripe salvo.')));
   }
 
+  List<_StripeBasePlanOption> _buildStripeBasePlanOptions({
+    required List<MaintainerStripePlanMapping> mappings,
+  }) {
+    return mappings
+        .where(
+          (mapping) =>
+              mapping.mappingType.trim().toLowerCase() == 'base' &&
+              mapping.billingPlanKey.trim().isNotEmpty,
+        )
+        .map(
+          (mapping) => _StripeBasePlanOption(
+            billingPlanKey: mapping.billingPlanKey,
+            planDisplayName: mapping.planDisplayName,
+          ),
+        )
+        .toList(growable: false);
+  }
+
   Future<void> _createStripeCatalogArtifactsFromDialog({
     required _StripePlanMappingDialogState dialogState,
     required StateSetter setLocalState,
@@ -217,6 +257,15 @@ extension _MaintainerConsoleStripePlanMappingDialogPart
       setLocalState: setLocalState,
     );
     if (billingPlanKey == null) {
+      return;
+    }
+
+    final relationIsValid = _validateStripePlanMappingTypeRelations(
+      dialogState: dialogState,
+      setLocalState: setLocalState,
+      billingPlanKey: billingPlanKey,
+    );
+    if (!relationIsValid) {
       return;
     }
 

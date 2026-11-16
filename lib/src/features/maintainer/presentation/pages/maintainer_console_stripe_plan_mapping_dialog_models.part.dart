@@ -1,5 +1,23 @@
 part of 'maintainer_console_page.dart';
 
+class _StripeBasePlanOption {
+  const _StripeBasePlanOption({
+    required this.billingPlanKey,
+    required this.planDisplayName,
+  });
+
+  final String billingPlanKey;
+  final String planDisplayName;
+
+  String get displayLabel {
+    final name = planDisplayName.trim();
+    if (name.isEmpty) {
+      return billingPlanKey;
+    }
+    return '$name ($billingPlanKey)';
+  }
+}
+
 class _StripePlanMappingDialogState {
   _StripePlanMappingDialogState({
     required _StripePlanSection initialSection,
@@ -15,6 +33,11 @@ class _StripePlanMappingDialogState {
     required String initialRecurringInterval,
     required String initialProductName,
     required String initialPriceNickname,
+    required String initialOverageMetric,
+    required int initialIncludedSeats,
+    required String initialSeatAddonPlanKey,
+    required String initialLinkedBasePlanKey,
+    required List<_StripeBasePlanOption> initialBasePlanOptions,
   }) : selectedSection = initialSection,
        planSlugController = TextEditingController(text: initialPlanSlug),
        planDisplayNameController = TextEditingController(
@@ -25,7 +48,22 @@ class _StripePlanMappingDialogState {
        ),
        productIdController = TextEditingController(text: initialProductId),
        priceIdController = TextEditingController(text: initialPriceId),
-       overageMetricController = TextEditingController(),
+       overageMetricController = TextEditingController(
+         text: initialOverageMetric,
+       ),
+       includedSeatsController = TextEditingController(
+         text: initialIncludedSeats > 0 ? initialIncludedSeats.toString() : '',
+       ),
+       seatAddonPlanKeyController = TextEditingController(
+         text: initialSeatAddonPlanKey,
+       ),
+       linkedBasePlanKeyController = TextEditingController(
+         text: _resolveInitialLinkedBasePlanKey(
+           initialMappingType: initialMappingType,
+           initialLinkedBasePlanKey: initialLinkedBasePlanKey,
+           initialBasePlanOptions: initialBasePlanOptions,
+         ),
+       ),
        createAmountController = TextEditingController(
          text: initialUnitAmount > 0
              ? (initialUnitAmount / 100).toStringAsFixed(2)
@@ -50,6 +88,10 @@ class _StripePlanMappingDialogState {
        stripeCurrency = initialCurrency.trim().toLowerCase(),
        stripeRecurringInterval = initialRecurringInterval.trim().toLowerCase(),
        stripeRecurringIntervalCount = initialRecurringIntervalCount,
+       basePlanOptions = _normalizeBasePlanOptions(
+         options: initialBasePlanOptions,
+         initialLinkedBasePlanKey: initialLinkedBasePlanKey,
+       ),
        active = true;
 
   final TextEditingController planSlugController;
@@ -58,6 +100,9 @@ class _StripePlanMappingDialogState {
   final TextEditingController productIdController;
   final TextEditingController priceIdController;
   final TextEditingController overageMetricController;
+  final TextEditingController includedSeatsController;
+  final TextEditingController seatAddonPlanKeyController;
+  final TextEditingController linkedBasePlanKeyController;
   final TextEditingController createAmountController;
   final TextEditingController createIntervalCountController;
   final TextEditingController createLookupKeyController;
@@ -72,11 +117,15 @@ class _StripePlanMappingDialogState {
   String stripeCurrency;
   String stripeRecurringInterval;
   int stripeRecurringIntervalCount;
+  final List<_StripeBasePlanOption> basePlanOptions;
   bool active;
   bool isSaving = false;
   bool isCreatingInStripe = false;
   String stripeCreateStatus = '';
   String? errorText;
+  String lastAutoSuggestedPlanSlug = '';
+
+  bool get isAddonMapping => mappingType.trim().toLowerCase() == 'overage';
 
   List<TextEditingController> get controllers => [
     planSlugController,
@@ -85,6 +134,9 @@ class _StripePlanMappingDialogState {
     productIdController,
     priceIdController,
     overageMetricController,
+    includedSeatsController,
+    seatAddonPlanKeyController,
+    linkedBasePlanKeyController,
     createAmountController,
     createIntervalCountController,
     createLookupKeyController,
@@ -108,6 +160,62 @@ class _StripePlanMappingDialogState {
     }
     return 'month';
   }
+
+  static List<_StripeBasePlanOption> _normalizeBasePlanOptions({
+    required List<_StripeBasePlanOption> options,
+    required String initialLinkedBasePlanKey,
+  }) {
+    final normalized = <_StripeBasePlanOption>[];
+    final seenKeys = <String>{};
+
+    for (final option in options) {
+      final key = option.billingPlanKey.trim().toLowerCase();
+      if (key.isEmpty || !seenKeys.add(key)) {
+        continue;
+      }
+      normalized.add(
+        _StripeBasePlanOption(
+          billingPlanKey: key,
+          planDisplayName: option.planDisplayName.trim(),
+        ),
+      );
+    }
+
+    normalized.sort((a, b) => a.billingPlanKey.compareTo(b.billingPlanKey));
+
+    final initialKey = initialLinkedBasePlanKey.trim().toLowerCase();
+    if (initialKey.isNotEmpty && seenKeys.add(initialKey)) {
+      normalized.add(
+        _StripeBasePlanOption(billingPlanKey: initialKey, planDisplayName: ''),
+      );
+    }
+
+    return List<_StripeBasePlanOption>.unmodifiable(normalized);
+  }
+
+  static String _resolveInitialLinkedBasePlanKey({
+    required String initialMappingType,
+    required String initialLinkedBasePlanKey,
+    required List<_StripeBasePlanOption> initialBasePlanOptions,
+  }) {
+    final normalizedInitial = initialLinkedBasePlanKey.trim().toLowerCase();
+    if (normalizedInitial.isNotEmpty) {
+      return normalizedInitial;
+    }
+
+    final isAddon = initialMappingType.trim().toLowerCase() == 'overage';
+    if (!isAddon) {
+      return '';
+    }
+
+    for (final option in initialBasePlanOptions) {
+      final key = option.billingPlanKey.trim().toLowerCase();
+      if (key.isNotEmpty) {
+        return key;
+      }
+    }
+    return '';
+  }
 }
 
 class _StripePlanMappingUpsertPayload {
@@ -125,6 +233,9 @@ class _StripePlanMappingUpsertPayload {
     required this.stripeRecurringIntervalCount,
     required this.mappingType,
     required this.overageMetric,
+    required this.includedSeats,
+    required this.seatAddonPlanKey,
+    required this.linkedBasePlanKey,
     required this.active,
     required this.actorUid,
   });
@@ -142,6 +253,9 @@ class _StripePlanMappingUpsertPayload {
   final int stripeRecurringIntervalCount;
   final String mappingType;
   final String overageMetric;
+  final int includedSeats;
+  final String seatAddonPlanKey;
+  final String linkedBasePlanKey;
   final bool active;
   final String actorUid;
 }

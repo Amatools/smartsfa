@@ -2,6 +2,70 @@ part of 'maintainer_console_page.dart';
 
 extension _MaintainerConsoleStripePlanMappingDialogHelpersPart
     on _MaintainerConsolePageState {
+  void _maybeApplyAddonPlanSlugSuggestion(
+    _StripePlanMappingDialogState dialogState, {
+    required String linkedBasePlanKey,
+  }) {
+    if (!dialogState.isAddonMapping) {
+      return;
+    }
+
+    final suggestedSlug = _suggestAddonPlanSlug(
+      section: dialogState.selectedSection,
+      linkedBasePlanKey: linkedBasePlanKey,
+    );
+    if (suggestedSlug.isEmpty) {
+      return;
+    }
+
+    final currentSlug = dialogState.planSlugController.text
+        .trim()
+        .toLowerCase();
+    final lastAutoSlug = dialogState.lastAutoSuggestedPlanSlug
+        .trim()
+        .toLowerCase();
+
+    final canOverride =
+        currentSlug.isEmpty ||
+        (lastAutoSlug.isNotEmpty && currentSlug == lastAutoSlug);
+    if (!canOverride) {
+      return;
+    }
+
+    dialogState.planSlugController.text = suggestedSlug;
+    dialogState.lastAutoSuggestedPlanSlug = suggestedSlug;
+  }
+
+  String _suggestAddonPlanSlug({
+    required _StripePlanSection section,
+    required String linkedBasePlanKey,
+  }) {
+    final normalizedBaseKey = linkedBasePlanKey
+        .trim()
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9_-]+'), '_')
+        .replaceAll(RegExp(r'_+'), '_')
+        .replaceAll(RegExp(r'^_|_$'), '');
+    if (normalizedBaseKey.isEmpty) {
+      return '';
+    }
+
+    if (section != _StripePlanSection.outros) {
+      return 'extra_usuario';
+    }
+
+    final knownPrefixes = <String>{
+      'individual',
+      'representacoes',
+      'enterprise',
+    };
+    final firstToken = normalizedBaseKey.split('_').first;
+    if (knownPrefixes.contains(firstToken)) {
+      return '${firstToken}_extra_usuario';
+    }
+    return '${normalizedBaseKey}_extra_usuario';
+  }
+
   void _beginStripeCatalogCreationState({
     required _StripePlanMappingDialogState dialogState,
     required StateSetter setLocalState,
@@ -212,6 +276,36 @@ extension _MaintainerConsoleStripePlanMappingDialogHelpersPart
     required String normalizedPlanDisplayName,
     required String normalizedPlanDisplayAmount,
   }) {
+    final normalizedMappingType =
+        dialogState.mappingType.trim().toLowerCase() == 'overage'
+        ? 'overage'
+        : 'base';
+
+    final includedSeatsRaw = int.tryParse(
+      dialogState.includedSeatsController.text.trim(),
+    );
+    final parsedIncludedSeats = includedSeatsRaw == null
+        ? 0
+        : (includedSeatsRaw < 0 ? 0 : includedSeatsRaw);
+
+    final normalizedOverageMetric = normalizedMappingType == 'overage'
+        ? (dialogState.overageMetricController.text.trim().isEmpty
+              ? 'extra_usuario'
+              : dialogState.overageMetricController.text.trim())
+        : '';
+
+    final normalizedSeatAddonPlanKey = normalizedMappingType == 'base'
+        ? dialogState.seatAddonPlanKeyController.text
+        : '';
+
+    final normalizedLinkedBasePlanKey = normalizedMappingType == 'overage'
+        ? dialogState.linkedBasePlanKeyController.text
+        : '';
+
+    final includedSeats = normalizedMappingType == 'base'
+        ? parsedIncludedSeats
+        : 0;
+
     return _StripePlanMappingUpsertPayload(
       billingPlanKey: billingPlanKey,
       planDisplayName: normalizedPlanDisplayName,
@@ -226,11 +320,49 @@ extension _MaintainerConsoleStripePlanMappingDialogHelpersPart
       stripeCurrency: dialogState.stripeCurrency,
       stripeRecurringInterval: dialogState.stripeRecurringInterval,
       stripeRecurringIntervalCount: dialogState.stripeRecurringIntervalCount,
-      mappingType: dialogState.mappingType,
-      overageMetric: dialogState.overageMetricController.text,
+      mappingType: normalizedMappingType,
+      overageMetric: normalizedOverageMetric,
+      includedSeats: includedSeats,
+      seatAddonPlanKey: normalizedSeatAddonPlanKey,
+      linkedBasePlanKey: normalizedLinkedBasePlanKey,
       active: dialogState.active,
       actorUid: _currentActorUid(),
     );
+  }
+
+  bool _validateStripePlanMappingTypeRelations({
+    required _StripePlanMappingDialogState dialogState,
+    required StateSetter setLocalState,
+    required String billingPlanKey,
+  }) {
+    final normalizedMappingType = dialogState.mappingType.trim().toLowerCase();
+    if (normalizedMappingType != 'overage') {
+      return true;
+    }
+
+    final linkedBasePlanKey = dialogState.linkedBasePlanKeyController.text
+        .trim()
+        .toLowerCase();
+    if (linkedBasePlanKey.isEmpty) {
+      _finishStripePlanMappingSaveWithError(
+        dialogState: dialogState,
+        setLocalState: setLocalState,
+        message:
+            'Para aditivo, selecione um plano base em "Plano base vinculado".',
+      );
+      return false;
+    }
+
+    if (linkedBasePlanKey == billingPlanKey.trim().toLowerCase()) {
+      _finishStripePlanMappingSaveWithError(
+        dialogState: dialogState,
+        setLocalState: setLocalState,
+        message: 'Plano aditivo nao pode apontar para ele mesmo como base.',
+      );
+      return false;
+    }
+
+    return true;
   }
 
   Future<void> _persistStripePlanMapping(
@@ -250,6 +382,9 @@ extension _MaintainerConsoleStripePlanMappingDialogHelpersPart
       stripeRecurringIntervalCount: payload.stripeRecurringIntervalCount,
       mappingType: payload.mappingType,
       overageMetric: payload.overageMetric,
+      includedSeats: payload.includedSeats,
+      seatAddonPlanKey: payload.seatAddonPlanKey,
+      linkedBasePlanKey: payload.linkedBasePlanKey,
       active: payload.active,
       actorUid: payload.actorUid,
     );

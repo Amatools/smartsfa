@@ -97,6 +97,7 @@ enum _MaintainerBillingAction {
   grant30days,
   normalizeBilling,
   suspendBilling,
+  clearPlanLink,
   requestCloseWorkspace,
   requestDeleteWorkspace,
 }

@@ -61,6 +61,7 @@ extension _MaintainerConsoleUsersTableRowUiPart on _MaintainerConsolePageState {
       tenantLabel: tenantLabel,
       accountLabel: accountLabel,
       billingLabel: billingLabel,
+      showAuthOrphanBadge: user.isAuthOrphan,
     );
   }
 
@@ -79,6 +80,7 @@ extension _MaintainerConsoleUsersTableRowUiPart on _MaintainerConsolePageState {
       _buildUserIdentityDataCell(
         emailLabel: displayModel.emailLabel,
         nameLabel: displayModel.nameLabel,
+        showAuthOrphanBadge: displayModel.showAuthOrphanBadge,
       ),
       _buildUserUidDataCell(user.uid),
       _buildUserTenantDataCell(displayModel.tenantLabel),
@@ -102,16 +104,28 @@ extension _MaintainerConsoleUsersTableRowUiPart on _MaintainerConsolePageState {
   DataCell _buildUserIdentityDataCell({
     required String emailLabel,
     required String nameLabel,
+    required bool showAuthOrphanBadge,
   }) {
     return DataCell(
       Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Tooltip(
-            message: emailLabel,
-            waitDuration: const Duration(milliseconds: 350),
-            child: Text(emailLabel, overflow: TextOverflow.ellipsis),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: Tooltip(
+                  message: emailLabel,
+                  waitDuration: const Duration(milliseconds: 350),
+                  child: Text(emailLabel, overflow: TextOverflow.ellipsis),
+                ),
+              ),
+              if (showAuthOrphanBadge) ...[
+                const SizedBox(width: 8),
+                _buildAuthOrphanBadge(),
+              ],
+            ],
           ),
           Tooltip(
             message: nameLabel,
@@ -123,6 +137,26 @@ extension _MaintainerConsoleUsersTableRowUiPart on _MaintainerConsolePageState {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildAuthOrphanBadge() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF7E8),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: const Color(0xFFD97706), width: 1),
+      ),
+      child: const Text(
+        'ORFAO',
+        style: TextStyle(
+          fontSize: 10,
+          color: Color(0xFF9A3412),
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.2,
+        ),
       ),
     );
   }

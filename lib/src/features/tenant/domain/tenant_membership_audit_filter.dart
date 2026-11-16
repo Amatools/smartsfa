@@ -9,6 +9,8 @@ class TenantMembershipAuditFilter {
         return 'Membership reativado';
       case 'membership_deactivated':
         return 'Membership inativado';
+      case 'membership_seat_grace_started':
+        return 'Grace por excesso de seats iniciado';
       case 'membership_role_changed':
         return 'Papel de membership alterado';
       case 'tenant_policy_updated':
