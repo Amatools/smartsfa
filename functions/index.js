@@ -6811,12 +6811,120 @@ function toIsoFromUnixSeconds(value) {
   return new Date(seconds * 1000).toISOString();
 }
 
+function readStripeSubscriptionPeriodBounds(subscription) {
+  const directStart = Number(
+    subscription?.current_period_start ?? subscription?.current_period?.start,
+  );
+  const directEnd = Number(
+    subscription?.current_period_end ?? subscription?.current_period?.end,
+  );
+
+  if (Number.isFinite(directStart) && directStart > 0 && Number.isFinite(directEnd) && directEnd > 0) {
+    return {
+      startIso: toIsoFromUnixSeconds(directStart),
+      endIso: toIsoFromUnixSeconds(directEnd),
+    };
+  }
+
+  const items = Array.isArray(subscription?.items?.data)
+    ? subscription.items.data
+    : [];
+
+  let startSeconds = Number.isFinite(directStart) && directStart > 0 ? directStart : 0;
+  let endSeconds = Number.isFinite(directEnd) && directEnd > 0 ? directEnd : 0;
+
+  for (const item of items) {
+    const itemStart = Number(
+      item?.current_period_start ?? item?.current_period?.start,
+    );
+    const itemEnd = Number(
+      item?.current_period_end ?? item?.current_period?.end,
+    );
+
+    if (!startSeconds && Number.isFinite(itemStart) && itemStart > 0) {
+      startSeconds = itemStart;
+    }
+    if (!endSeconds && Number.isFinite(itemEnd) && itemEnd > 0) {
+      endSeconds = itemEnd;
+    }
+
+    if (startSeconds && endSeconds) {
+      break;
+    }
+  }
+
+  return {
+    startIso: toIsoFromUnixSeconds(startSeconds),
+    endIso: toIsoFromUnixSeconds(endSeconds),
+  };
+}
+
+function readStripeInvoicePeriodBounds(invoice) {
+  const lines = Array.isArray(invoice?.lines?.data) ? invoice.lines.data : [];
+  let minStart = 0;
+  let maxEnd = 0;
+
+  for (const line of lines) {
+    const start = Number(line?.period?.start ?? 0);
+    const end = Number(line?.period?.end ?? 0);
+    if (Number.isFinite(start) && start > 0) {
+      if (!minStart || start < minStart) {
+        minStart = start;
+      }
+    }
+    if (Number.isFinite(end) && end > 0) {
+      if (!maxEnd || end > maxEnd) {
+        maxEnd = end;
+      }
+    }
+  }
+
+  return {
+    startIso: toIsoFromUnixSeconds(minStart),
+    endIso: toIsoFromUnixSeconds(maxEnd),
+  };
+}
+
+async function readStripeSubscriptionPeriodFromInvoices({
+  stripeClient,
+  subscriptionId,
+}) {
+  const normalizedSubscriptionId = String(subscriptionId ?? '').trim();
+  if (!stripeClient || !normalizedSubscriptionId) {
+    return { startIso: '', endIso: '' };
+  }
+
+  try {
+    const invoiceList = await stripeClient.invoices.list({
+      subscription: normalizedSubscriptionId,
+      limit: 5,
+      expand: ['data.lines.data'],
+    });
+
+    const invoices = Array.isArray(invoiceList?.data) ? invoiceList.data : [];
+    for (const invoice of invoices) {
+      const bounds = readStripeInvoicePeriodBounds(invoice);
+      if (bounds.startIso && bounds.endIso) {
+        return bounds;
+      }
+    }
+  } catch (error) {
+    console.error('stripe invoice period fallback failed', {
+      subscriptionId: normalizedSubscriptionId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+
+  return { startIso: '', endIso: '' };
+}
+
 function buildTenantPatchFromStripeSubscription({ subscription, billingPlanKey }) {
   const priceId = readStripeSubscriptionPriceId(subscription);
   const nowIso = new Date().toISOString();
   const billingStatus = mapStripeSubscriptionStatusToBillingStatus(
     subscription?.status,
   );
+  const periodBounds = readStripeSubscriptionPeriodBounds(subscription);
 
   const patch = {
     stripeCustomerId: String(subscription?.customer ?? '').trim(),
@@ -6824,14 +6932,15 @@ function buildTenantPatchFromStripeSubscription({ subscription, billingPlanKey }
     stripePriceId: priceId,
     billingStatus,
     billingCycle: readStripeSubscriptionCycle(subscription),
-    billingCurrentPeriodStartAt: toIsoFromUnixSeconds(
-      subscription?.current_period_start,
-    ),
-    billingCurrentPeriodEndAt: toIsoFromUnixSeconds(
-      subscription?.current_period_end,
-    ),
     billingUpdatedAt: nowIso,
   };
+
+  if (periodBounds.startIso) {
+    patch.billingCurrentPeriodStartAt = periodBounds.startIso;
+  }
+  if (periodBounds.endIso) {
+    patch.billingCurrentPeriodEndAt = periodBounds.endIso;
+  }
 
   const normalizedPlanKey = normalizeBillingPlanKey(billingPlanKey);
   if (normalizedPlanKey) {
@@ -6903,6 +7012,19 @@ async function reconcileTenantStripeState({ firestore, stripeClient, tenantId })
       subscription,
       billingPlanKey: mappedPlanKey || tenantData.billingPlanKey,
     });
+
+    if (!patch.billingCurrentPeriodStartAt || !patch.billingCurrentPeriodEndAt) {
+      const invoicePeriodBounds = await readStripeSubscriptionPeriodFromInvoices({
+        stripeClient,
+        subscriptionId: stripeSubscriptionId,
+      });
+      if (invoicePeriodBounds.startIso && !patch.billingCurrentPeriodStartAt) {
+        patch.billingCurrentPeriodStartAt = invoicePeriodBounds.startIso;
+      }
+      if (invoicePeriodBounds.endIso && !patch.billingCurrentPeriodEndAt) {
+        patch.billingCurrentPeriodEndAt = invoicePeriodBounds.endIso;
+      }
+    }
   } else {
     patch = {
       stripeCustomerId,
