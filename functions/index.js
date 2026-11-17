@@ -3,6 +3,43 @@ const { onSchedule } = require('firebase-functions/v2/scheduler');
 const admin = require('firebase-admin');
 const crypto = require('node:crypto');
 const Stripe = require('stripe');
+const {
+  formatPlanAmountLabel,
+  isValidHttpAbsoluteUrl,
+  normalizeBillingPlanKey,
+  normalizeBillingSelfServiceAction,
+  parseBillingPlanKeyParts,
+  readNonNegativeInteger,
+  resolveStripePlanPrefixByWorkspaceType,
+  sanitizeStripeMetadataValue,
+} = require('./src/billing/shared_helpers');
+const {
+  normalizeBillingProviderKey,
+  resolveCheckoutApiProviderSelection,
+  resolveTenantBillingProviderKey,
+  resolveTenantLinkedBillingProvider,
+} = require('./src/billing/provider_resolution');
+const {
+  buildStripePlanMappingFromDocData,
+  loadStripePlanMapping,
+  resolveStripePlanMappingByPriceId,
+  resolveStripeSeatAddonMappingForBasePlan,
+} = require('./src/billing/stripe_plan_mappings');
+const {
+  buildStripeCatalogPlanMetadata,
+  buildStripeRecommendedLookupKey,
+} = require('./src/billing/stripe_catalog_helpers');
+const {
+  extractAsaasReferenceInfo,
+  mapAsaasCycleToBillingCycle,
+  mapAsaasSubscriptionStatusToBillingStatus,
+  mapBillingStatusToAccountState,
+  normalizeAsaasDateToIso,
+} = require('./src/billing/asaas_webhook_helpers');
+const {
+  resolveTenantIdFromAsaasReferences,
+  resolveTenantIdFromStripeReferences,
+} = require('./src/billing/webhook_tenant_resolution');
 
 const SANKHYA_PRODUCTION_URL = 'https://api.sankhya.com.br/authenticate';
 const SANKHYA_SANDBOX_URL =
@@ -6553,65 +6590,6 @@ function mapImpersonationConsumeError(code) {
   }
 }
 
-function normalizeBillingPlanKey(rawValue) {
-  return String(rawValue ?? '')
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, '_');
-}
-
-function normalizeBillingProviderKey(rawValue) {
-  const normalized = String(rawValue ?? '').trim().toLowerCase();
-  if (!normalized) {
-    return BILLING_PROVIDER_DEFAULT;
-  }
-  if (normalized === 'stripe') {
-    return BILLING_PROVIDER_STRIPE;
-  }
-  if (normalized === 'asaas') {
-    return BILLING_PROVIDER_ASAAS;
-  }
-  return normalized;
-}
-
-function normalizeBillingSelfServiceAction(rawValue) {
-  const normalized = String(rawValue ?? '').trim().toLowerCase();
-  if (!normalized) {
-    return '';
-  }
-
-  if (
-    normalized === 'stop_renewal' ||
-    normalized === 'pause_renewal' ||
-    normalized === 'suspend_renewal' ||
-    normalized === 'suspend'
-  ) {
-    return 'stop_renewal';
-  }
-
-  if (
-    normalized === 'cancel_now' ||
-    normalized === 'cancel_plan' ||
-    normalized === 'cancel'
-  ) {
-    return 'cancel_now';
-  }
-
-  return '';
-}
-
-function resolveTenantBillingProviderKey({ tenantData, providerHint }) {
-  const rawHint = String(providerHint ?? '').trim();
-  const hint = rawHint ? normalizeBillingProviderKey(rawHint) : '';
-  if (
-    hint === BILLING_PROVIDER_STRIPE ||
-    hint === BILLING_PROVIDER_ASAAS
-  ) {
-    return hint;
-  }
-
-  const linkedProvider = resolveTenantLinkedBillingProvider(tenantData);
-
 exports.manageTenantBillingSelfService = onRequest(
   {
     cors: true,
@@ -6840,207 +6818,6 @@ exports.manageTenantBillingSelfService = onRequest(
     });
   },
 );
-  if (linkedProvider) {
-    return linkedProvider;
-  }
-
-  const tenantProvider = normalizeBillingProviderKey(
-    tenantData?.billingProvider ?? tenantData?.billingGateway,
-  );
-  if (
-    tenantProvider === BILLING_PROVIDER_STRIPE ||
-    tenantProvider === BILLING_PROVIDER_ASAAS
-  ) {
-    return tenantProvider;
-  }
-
-  return BILLING_PROVIDER_DEFAULT;
-}
-
-function resolveTenantLinkedBillingProvider(tenantData) {
-  const data = tenantData && typeof tenantData === 'object' ? tenantData : {};
-
-  const explicitContractProvider = normalizeBillingProviderKey(
-    data.billingContractProvider,
-  );
-  if (
-    explicitContractProvider === BILLING_PROVIDER_STRIPE ||
-    explicitContractProvider === BILLING_PROVIDER_ASAAS
-  ) {
-    return explicitContractProvider;
-  }
-
-  const stripeSubscriptionId = String(data.stripeSubscriptionId ?? '').trim();
-  const asaasSubscriptionId = String(data.asaasSubscriptionId ?? '').trim();
-  const hasStripeLink = Boolean(stripeSubscriptionId);
-  const hasAsaasLink = Boolean(asaasSubscriptionId);
-
-  if (hasStripeLink && !hasAsaasLink) {
-    return BILLING_PROVIDER_STRIPE;
-  }
-  if (hasAsaasLink && !hasStripeLink) {
-    return BILLING_PROVIDER_ASAAS;
-  }
-
-  if (hasStripeLink && hasAsaasLink) {
-    const providerFromTenant = normalizeBillingProviderKey(data.billingProvider);
-    if (
-      providerFromTenant === BILLING_PROVIDER_STRIPE ||
-      providerFromTenant === BILLING_PROVIDER_ASAAS
-    ) {
-      return providerFromTenant;
-    }
-  }
-
-  return '';
-}
-
-function buildStripeRecommendedLookupKey({
-  billingPlanKey,
-  currency,
-  recurringInterval,
-  recurringIntervalCount,
-}) {
-  const normalizedPlanKey = normalizeBillingPlanKey(billingPlanKey).replace(
-    /[^a-z0-9_-]+/g,
-    '_',
-  );
-  if (!normalizedPlanKey) {
-    return '';
-  }
-
-  const normalizedCurrency = String(currency ?? '').trim().toLowerCase();
-  const normalizedInterval = String(recurringInterval ?? '').trim().toLowerCase();
-  const normalizedCount = Number.isFinite(Number(recurringIntervalCount))
-    ? Math.max(1, Math.floor(Number(recurringIntervalCount)))
-    : 1;
-  const countSuffix = normalizedCount > 1 ? `x${normalizedCount}` : '';
-
-  const raw = `smartsfa_${normalizedPlanKey}_${normalizedCurrency}_${normalizedInterval}${countSuffix}`;
-  const compact = raw
-    .replace(/[^a-z0-9_]+/g, '_')
-    .replace(/_+/g, '_')
-    .replace(/^_|_$/g, '');
-  return compact.length <= 120 ? compact : compact.slice(0, 120);
-}
-
-function parseBillingPlanKeyParts(billingPlanKey) {
-  const normalized = normalizeBillingPlanKey(billingPlanKey);
-  if (!normalized) {
-    return { prefix: '', slug: '' };
-  }
-
-  const separatorIndex = normalized.indexOf('_');
-  if (separatorIndex <= 0 || separatorIndex >= normalized.length - 1) {
-    return { prefix: normalized, slug: normalized };
-  }
-
-  return {
-    prefix: normalized.slice(0, separatorIndex),
-    slug: normalized.slice(separatorIndex + 1),
-  };
-}
-
-function sanitizeStripeMetadataValue(value, maxLength = 200) {
-  const text = String(value ?? '').trim();
-  if (!text) {
-    return '';
-  }
-  return text.length <= maxLength ? text : text.slice(0, maxLength);
-}
-
-function buildStripeCatalogPlanMetadata({
-  billingPlanKey,
-  amountMinorUnits,
-  currency,
-  recurringInterval,
-  recurringIntervalCount,
-  lookupKey,
-  actorUid,
-  actorEmail,
-}) {
-  const parts = parseBillingPlanKeyParts(billingPlanKey);
-  return {
-    source: 'smartsfa_admin_console',
-    billingPlanKey: sanitizeStripeMetadataValue(billingPlanKey),
-    billingPlanPrefix: sanitizeStripeMetadataValue(parts.prefix),
-    billingPlanSlug: sanitizeStripeMetadataValue(parts.slug),
-    amountMinorUnits: sanitizeStripeMetadataValue(String(amountMinorUnits ?? '')),
-    currency: sanitizeStripeMetadataValue(String(currency ?? '').toLowerCase(), 12),
-    recurringInterval: sanitizeStripeMetadataValue(
-      String(recurringInterval ?? '').toLowerCase(),
-      20,
-    ),
-    recurringIntervalCount: sanitizeStripeMetadataValue(
-      String(recurringIntervalCount ?? ''),
-      8,
-    ),
-    lookupKey: sanitizeStripeMetadataValue(lookupKey),
-    createdByUid: sanitizeStripeMetadataValue(actorUid),
-    createdByEmail: sanitizeStripeMetadataValue(actorEmail),
-  };
-}
-
-function resolveStripePlanPrefixByWorkspaceType(workspaceType) {
-  const normalized = String(workspaceType ?? '').trim().toLowerCase();
-  if (normalized === 'seller_solo_workspace') {
-    return 'individual';
-  }
-  if (normalized === 'rep_workspace') {
-    return 'representacoes';
-  }
-  if (normalized === 'brand_owner_workspace') {
-    return 'enterprise';
-  }
-  return '';
-}
-
-function formatPlanAmountLabel({
-  amountMinorUnits,
-  currency,
-  recurringInterval,
-  recurringIntervalCount,
-}) {
-  const amount = Number(amountMinorUnits ?? 0);
-  if (!Number.isFinite(amount) || amount <= 0) {
-    return '';
-  }
-
-  const normalizedCurrency = String(currency ?? '').trim().toLowerCase();
-  const currencyLabel =
-    normalizedCurrency === 'brl'
-      ? 'R$'
-      : normalizedCurrency
-        ? normalizedCurrency.toUpperCase()
-        : '';
-  const base = `${currencyLabel ? `${currencyLabel} ` : ''}${(amount / 100).toFixed(2)}`;
-
-  const interval = String(recurringInterval ?? '').trim().toLowerCase();
-  if (!interval) {
-    return base;
-  }
-
-  const intervalCount = Number(recurringIntervalCount ?? 0);
-  const normalizedCount = Number.isFinite(intervalCount) && intervalCount > 0
-    ? Math.floor(intervalCount)
-    : 1;
-
-  return `${base} / ${interval} x${normalizedCount}`;
-}
-
-function isValidHttpAbsoluteUrl(value) {
-  const raw = String(value ?? '').trim();
-  if (!raw) {
-    return false;
-  }
-
-  try {
-    const parsed = new URL(raw);
-    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
-  } catch (_) {
-    return false;
-  }
-}
 
 async function assertPlatformAdminActor({ firestore, uid }) {
   const normalizedUid = String(uid ?? '').trim();
@@ -7449,51 +7226,6 @@ async function readCheckoutApiConfig(firestore) {
   return {
     activeProviders: [...normalizedActiveProviders],
     preferredProvider,
-  };
-}
-
-function resolveCheckoutApiProviderSelection({
-  payload,
-  checkoutApiConfig,
-  tenantData,
-}) {
-  const linkedProvider = resolveTenantLinkedBillingProvider(tenantData);
-  if (linkedProvider) {
-    return {
-      provider: linkedProvider,
-      hasLinkedContract: true,
-      source: 'existing_contract',
-    };
-  }
-
-  const rawProvider = String(payload?.provider ?? '').trim().toLowerCase();
-  const requestedProvider = rawProvider
-    ? normalizeBillingProviderKey(rawProvider)
-    : '';
-
-  if (
-    requestedProvider &&
-    checkoutApiConfig.activeProviders.includes(requestedProvider)
-  ) {
-    return {
-      provider: requestedProvider,
-      hasLinkedContract: false,
-      source: 'payload_provider',
-    };
-  }
-
-  if (checkoutApiConfig.activeProviders.includes(checkoutApiConfig.preferredProvider)) {
-    return {
-      provider: checkoutApiConfig.preferredProvider,
-      hasLinkedContract: false,
-      source: 'preferred_provider',
-    };
-  }
-
-  return {
-    provider: checkoutApiConfig.activeProviders[0] || BILLING_PROVIDER_DEFAULT,
-    hasLinkedContract: false,
-    source: 'first_active_provider',
   };
 }
 
@@ -8311,161 +8043,6 @@ function getStripeClient(secretKey) {
   return STRIPE_CLIENT_CACHE.get(normalizedSecret);
 }
 
-function buildStripePlanMappingFromDocData(data, fallbackPlanKey = '') {
-  const priceId = String(data.stripePriceId ?? '').trim();
-  if (!priceId || data.active === false) {
-    return null;
-  }
-
-  const includedSeatsInput = Number(data.includedSeats ?? 0);
-  const includedSeats = Number.isFinite(includedSeatsInput)
-    ? Math.max(0, Math.floor(includedSeatsInput))
-    : 0;
-
-  return {
-    billingPlanKey: normalizeBillingPlanKey(data.billingPlanKey ?? fallbackPlanKey),
-    planDisplayName: String(data.planDisplayName ?? '').trim(),
-    planDisplayAmount: String(data.planDisplayAmount ?? '').trim(),
-    stripeProductId: String(data.stripeProductId ?? '').trim(),
-    stripeProductName: String(data.stripeProductName ?? '').trim(),
-    stripePriceId: priceId,
-    stripePriceNickname: String(data.stripePriceNickname ?? '').trim(),
-    stripeUnitAmount: Number(data.stripeUnitAmount ?? 0),
-    stripeCurrency: String(data.stripeCurrency ?? '').trim().toLowerCase(),
-    stripeRecurringInterval: String(data.stripeRecurringInterval ?? '')
-      .trim()
-      .toLowerCase(),
-    stripeRecurringIntervalCount: Number(data.stripeRecurringIntervalCount ?? 0),
-    mappingType: String(data.mappingType ?? 'base').trim().toLowerCase(),
-    overageMetric: String(data.overageMetric ?? '').trim().toLowerCase(),
-    includedSeats,
-    seatAddonPlanKey: normalizeBillingPlanKey(data.seatAddonPlanKey),
-    linkedBasePlanKey: normalizeBillingPlanKey(data.linkedBasePlanKey),
-    active: data.active !== false,
-  };
-}
-
-async function loadStripePlanMapping({ firestore, billingPlanKey }) {
-  const normalizedPlanKey = normalizeBillingPlanKey(billingPlanKey);
-  if (!normalizedPlanKey) {
-    return null;
-  }
-
-  const byIdDoc = await firestore
-    .collection('billing_integrations')
-    .doc('stripe')
-    .collection('plan_mappings')
-    .doc(normalizedPlanKey)
-    .get();
-
-  if (byIdDoc.exists) {
-    const data = byIdDoc.data() || {};
-    const mapping = buildStripePlanMappingFromDocData(data, normalizedPlanKey);
-    if (mapping) {
-      return mapping;
-    }
-  }
-
-  const querySnapshot = await firestore
-    .collection('billing_integrations')
-    .doc('stripe')
-    .collection('plan_mappings')
-    .where('billingPlanKey', '==', normalizedPlanKey)
-    .limit(5)
-    .get();
-
-  for (const doc of querySnapshot.docs) {
-    const data = doc.data() || {};
-    const mapping = buildStripePlanMappingFromDocData(data, normalizedPlanKey);
-    if (mapping) {
-      return mapping;
-    }
-  }
-
-  return null;
-}
-
-async function resolveStripePlanMappingByPriceId({ firestore, stripePriceId }) {
-  const normalizedPriceId = String(stripePriceId ?? '').trim();
-  if (!normalizedPriceId) {
-    return null;
-  }
-
-  const snapshot = await firestore
-    .collection('billing_integrations')
-    .doc('stripe')
-    .collection('plan_mappings')
-    .where('stripePriceId', '==', normalizedPriceId)
-    .limit(10)
-    .get();
-
-  for (const doc of snapshot.docs) {
-    const mapping = buildStripePlanMappingFromDocData(doc.data() || {}, doc.id);
-    if (mapping) {
-      return mapping;
-    }
-  }
-
-  return null;
-}
-
-async function resolveStripeSeatAddonMappingForBasePlan({
-  firestore,
-  baseMapping,
-}) {
-  const normalizedBasePlanKey = normalizeBillingPlanKey(baseMapping?.billingPlanKey);
-  if (!normalizedBasePlanKey) {
-    return null;
-  }
-
-  const seatAddonPlanKey = normalizeBillingPlanKey(baseMapping?.seatAddonPlanKey);
-  if (seatAddonPlanKey) {
-    const directMapping = await loadStripePlanMapping({
-      firestore,
-      billingPlanKey: seatAddonPlanKey,
-    });
-    if (
-      directMapping &&
-      directMapping.mappingType === 'overage' &&
-      directMapping.overageMetric === 'extra_usuario'
-    ) {
-      return directMapping;
-    }
-  }
-
-  const fallbackSnapshot = await firestore
-    .collection('billing_integrations')
-    .doc('stripe')
-    .collection('plan_mappings')
-    .where('linkedBasePlanKey', '==', normalizedBasePlanKey)
-    .limit(20)
-    .get();
-
-  for (const doc of fallbackSnapshot.docs) {
-    const mapping = buildStripePlanMappingFromDocData(doc.data() || {}, doc.id);
-    if (!mapping) {
-      continue;
-    }
-    if (mapping.mappingType !== 'overage') {
-      continue;
-    }
-    if (mapping.overageMetric !== 'extra_usuario') {
-      continue;
-    }
-    return mapping;
-  }
-
-  return null;
-}
-
-async function resolveBillingPlanKeyByStripePriceId({ firestore, stripePriceId }) {
-  const mapping = await resolveStripePlanMappingByPriceId({
-    firestore,
-    stripePriceId,
-  });
-  return mapping?.billingPlanKey ?? '';
-}
-
 async function processStripeWebhookEvent({
   firestore,
   event,
@@ -8679,103 +8256,6 @@ async function applyAsaasWebhookEventToTenant({
   };
 }
 
-async function resolveTenantIdFromAsaasReferences({
-  firestore,
-  eventPayload,
-}) {
-  const payment = eventPayload?.payment ?? {};
-  const subscription = eventPayload?.subscription ?? {};
-  const checkout = eventPayload?.checkout ?? {};
-  const invoice = eventPayload?.invoice ?? {};
-
-  const referenceInfos = [
-    extractAsaasReferenceInfo(payment?.externalReference),
-    extractAsaasReferenceInfo(subscription?.externalReference),
-    extractAsaasReferenceInfo(checkout?.externalReference),
-  ];
-
-  for (const info of referenceInfos) {
-    const candidateTenantId = String(info?.tenantId ?? '').trim();
-    if (!candidateTenantId) {
-      continue;
-    }
-    const tenantDoc = await firestore.collection('tenants').doc(candidateTenantId).get();
-    if (tenantDoc.exists) {
-      return candidateTenantId;
-    }
-  }
-
-  const subscriptionId = String(
-    payment?.subscription ?? subscription?.id ?? checkout?.subscription?.id ?? '',
-  ).trim();
-  if (subscriptionId) {
-    const snapshot = await firestore
-      .collection('tenants')
-      .where('asaasSubscriptionId', '==', subscriptionId)
-      .limit(1)
-      .get();
-    if (!snapshot.empty) {
-      return snapshot.docs[0].id;
-    }
-  }
-
-  const customerId = String(
-    payment?.customer ??
-      subscription?.customer ??
-      checkout?.customer ??
-      invoice?.customer ??
-      '',
-  ).trim();
-  if (customerId) {
-    const snapshot = await firestore
-      .collection('tenants')
-      .where('asaasCustomerId', '==', customerId)
-      .limit(1)
-      .get();
-    if (!snapshot.empty) {
-      return snapshot.docs[0].id;
-    }
-  }
-
-  const checkoutId = String(checkout?.id ?? '').trim();
-  if (checkoutId) {
-    const snapshot = await firestore
-      .collection('tenants')
-      .where('asaasCheckoutId', '==', checkoutId)
-      .limit(1)
-      .get();
-    if (!snapshot.empty) {
-      return snapshot.docs[0].id;
-    }
-  }
-
-  const paymentId = String(payment?.id ?? '').trim();
-  if (paymentId) {
-    const snapshot = await firestore
-      .collection('tenants')
-      .where('asaasPaymentId', '==', paymentId)
-      .limit(1)
-      .get();
-    if (!snapshot.empty) {
-      return snapshot.docs[0].id;
-    }
-  }
-
-  const invoicePaymentId = String(invoice?.payment ?? '').trim();
-  if (invoicePaymentId) {
-    const snapshot = await firestore
-      .collection('tenants')
-      .where('asaasPaymentId', '==', invoicePaymentId)
-      .limit(1)
-      .get();
-    if (!snapshot.empty) {
-      return snapshot.docs[0].id;
-    }
-  }
-
-  return '';
-}
-
 function buildTenantPatchFromAsaasEvent({
   eventPayload,
   eventType,
@@ -8963,134 +8443,6 @@ function mapAsaasEventToBillingStatus({
   }
 
   return '';
-}
-
-function mapAsaasSubscriptionStatusToBillingStatus(rawStatus) {
-  const normalized = String(rawStatus ?? '').trim().toUpperCase();
-  if (!normalized) {
-    return '';
-  }
-
-  if (normalized === 'ACTIVE') {
-    return 'active';
-  }
-  if (normalized === 'INACTIVE') {
-    return 'suspended';
-  }
-  if (normalized === 'EXPIRED' || normalized === 'CANCELED') {
-    return 'canceled';
-  }
-  return '';
-}
-
-function mapBillingStatusToAccountState(billingStatus) {
-  const normalized = String(billingStatus ?? '').trim().toLowerCase();
-  if (!normalized) {
-    return '';
-  }
-  if (normalized === 'active' || normalized === 'trial') {
-    return 'active';
-  }
-  if (normalized === 'past_due') {
-    return 'past_due';
-  }
-  if (normalized === 'grace') {
-    return 'grace';
-  }
-  if (normalized === 'suspended') {
-    return 'suspended';
-  }
-  return 'inactive';
-}
-
-function mapAsaasCycleToBillingCycle(rawCycle) {
-  const normalized = String(rawCycle ?? '').trim().toUpperCase();
-  if (!normalized) {
-    return '';
-  }
-  if (normalized === 'MONTHLY') {
-    return 'month';
-  }
-  if (normalized === 'YEARLY') {
-    return 'year';
-  }
-  if (normalized === 'WEEKLY') {
-    return 'week';
-  }
-  if (normalized === 'BIWEEKLY') {
-    return 'biweek';
-  }
-  return normalized.toLowerCase();
-}
-
-function normalizeAsaasDateToIso(rawValue) {
-  const text = String(rawValue ?? '').trim();
-  if (!text) {
-    return '';
-  }
-
-  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) {
-    return new Date(`${text}T00:00:00.000Z`).toISOString();
-  }
-
-  const normalizedText = text.includes(' ') ? text.replace(' ', 'T') : text;
-  const parsedDate = new Date(normalizedText);
-  const time = parsedDate.getTime();
-  if (!Number.isFinite(time)) {
-    return '';
-  }
-  return parsedDate.toISOString();
-}
-
-function extractAsaasReferenceInfo(rawValue) {
-  const text = String(rawValue ?? '').trim();
-  if (!text) {
-    return {
-      tenantId: '',
-      billingPlanKey: '',
-    };
-  }
-
-  let tenantId = '';
-  let billingPlanKey = '';
-
-  if (text.startsWith('{') && text.endsWith('}')) {
-    try {
-      const parsed = JSON.parse(text);
-      tenantId = String(
-        parsed?.tenantId ?? parsed?.tenant_id ?? parsed?.tenant ?? '',
-      ).trim();
-      billingPlanKey = normalizeBillingPlanKey(
-        parsed?.billingPlanKey ?? parsed?.billing_plan_key ?? parsed?.plan ?? '',
-      );
-    } catch (_) {
-      // Ignore invalid JSON and continue trying query-like parsing.
-    }
-  }
-
-  if (!tenantId || !billingPlanKey) {
-    const queryLike = text.includes('?') ? text.split('?').pop() : text;
-    const params = new URLSearchParams(queryLike || '');
-    if (!tenantId) {
-      tenantId = String(
-        params.get('tenantId') || params.get('tenant_id') || params.get('tenant') || '',
-      ).trim();
-    }
-    if (!billingPlanKey) {
-      billingPlanKey = normalizeBillingPlanKey(
-        params.get('billingPlanKey') || params.get('plan') || params.get('billing_plan_key') || '',
-      );
-    }
-  }
-
-  if (!tenantId && !text.includes('=') && !text.includes('&') && text.length <= 120) {
-    tenantId = text;
-  }
-
-  return {
-    tenantId,
-    billingPlanKey,
-  };
 }
 
 async function applyStripeWebhookEventToTenant({
@@ -9412,54 +8764,8 @@ async function reconcileTenantStripePeriodIfMissing({
   }
 }
 
-async function resolveTenantIdFromStripeReferences({
-  firestore,
-  explicitTenantId,
-  stripeCustomerId,
-  stripeSubscriptionId,
-}) {
-  const explicit = String(explicitTenantId ?? '').trim();
-  if (explicit) {
-    return explicit;
-  }
-
-  const subscriptionId = String(stripeSubscriptionId ?? '').trim();
-  if (subscriptionId) {
-    const subscriptionSnapshot = await firestore
-      .collection('tenants')
-      .where('stripeSubscriptionId', '==', subscriptionId)
-      .limit(1)
-      .get();
-    if (!subscriptionSnapshot.empty) {
-      return subscriptionSnapshot.docs[0].id;
-    }
-  }
-
-  const customerId = String(stripeCustomerId ?? '').trim();
-  if (customerId) {
-    const customerSnapshot = await firestore
-      .collection('tenants')
-      .where('stripeCustomerId', '==', customerId)
-      .limit(1)
-      .get();
-    if (!customerSnapshot.empty) {
-      return customerSnapshot.docs[0].id;
-    }
-  }
-
-  return '';
-}
-
 function normalizeSeatBillingStatus(rawStatus) {
   return String(rawStatus ?? '').trim().toLowerCase();
-}
-
-function readNonNegativeInteger(value, fallback = 0) {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) {
-    return Math.max(0, Math.floor(Number(fallback) || 0));
-  }
-  return Math.max(0, Math.floor(parsed));
 }
 
 function parseDateToUnixMs(raw) {
@@ -10127,10 +9433,11 @@ async function reconcileTenantStripeState({ firestore, stripeClient, tenantId })
   let patch;
   if (subscription) {
     const priceId = readStripeSubscriptionPriceId(subscription);
-    const mappedPlanKey = await resolveBillingPlanKeyByStripePriceId({
+    const priceMapping = await resolveStripePlanMappingByPriceId({
       firestore,
       stripePriceId: priceId,
     });
+    const mappedPlanKey = priceMapping?.billingPlanKey ?? '';
     patch = buildTenantPatchFromStripeSubscription({
       subscription,
       billingPlanKey: mappedPlanKey || tenantData.billingPlanKey,
