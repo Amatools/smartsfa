@@ -6049,20 +6049,37 @@ async function applyStripeWebhookEventToTenant({
     type === 'customer.subscription.updated' ||
     type === 'customer.subscription.deleted'
   ) {
+    const rawSubscriptionId = String(payload?.id ?? '').trim();
+    let subscriptionPayload = payload;
+    if (stripeClient && rawSubscriptionId) {
+      try {
+        subscriptionPayload = await stripeClient.subscriptions.retrieve(
+          rawSubscriptionId,
+          { expand: ['items.data.price'] },
+        );
+      } catch (error) {
+        console.error('stripe subscription fetch from event failed', {
+          type,
+          rawSubscriptionId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
     const tenantId = await resolveTenantIdFromStripeReferences({
       firestore,
-      explicitTenantId: payload?.metadata?.tenantId,
-      stripeCustomerId: payload?.customer,
-      stripeSubscriptionId: payload?.id,
+      explicitTenantId: subscriptionPayload?.metadata?.tenantId,
+      stripeCustomerId: subscriptionPayload?.customer,
+      stripeSubscriptionId: subscriptionPayload?.id,
     });
     if (!tenantId) {
       throw new Error(`${type} sem tenantId resolvido.`);
     }
 
     const fallbackPlanKey = normalizeBillingPlanKey(
-      payload?.metadata?.billingPlanKey,
+      subscriptionPayload?.metadata?.billingPlanKey,
     );
-    const lineItems = readStripeSubscriptionLineItems(payload);
+    const lineItems = readStripeSubscriptionLineItems(subscriptionPayload);
     const mappedItems = [];
 
     for (const item of lineItems) {
@@ -6099,7 +6116,7 @@ async function applyStripeWebhookEventToTenant({
       .reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
 
     const tenantPatch = buildTenantPatchFromStripeSubscription({
-      subscription: payload,
+      subscription: subscriptionPayload,
       billingPlanKey: effectivePlanKey,
     });
 
@@ -6247,7 +6264,6 @@ async function reconcileTenantStripePeriodIfMissing({
 
   const tenantData = tenantDoc.data() || {};
   const billingStatus = String(tenantData.billingStatus ?? '').trim().toLowerCase();
-  const billingPlanKey = normalizeBillingPlanKey(tenantData.billingPlanKey);
   const stripeCustomerId = String(tenantData.stripeCustomerId ?? '').trim();
   const stripeSubscriptionId = String(tenantData.stripeSubscriptionId ?? '').trim();
   const periodStart = String(tenantData.billingCurrentPeriodStartAt ?? '').trim();
@@ -6260,7 +6276,7 @@ async function reconcileTenantStripePeriodIfMissing({
     billingStatus === 'past_due';
   const hasStripeReference = Boolean(stripeCustomerId || stripeSubscriptionId);
 
-  if (!billingPlanKey || !statusAllowsReconcile || !hasStripeReference || !needsPeriod) {
+  if (!statusAllowsReconcile || !hasStripeReference || !needsPeriod) {
     return;
   }
 
