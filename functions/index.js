@@ -881,6 +881,7 @@ exports.handleStripeWebhook = onRequest(
         firestore,
         event,
         enabledEvents: integrationReady.enabledEvents,
+        stripeClient: integrationReady.stripeClient,
       });
 
       response.status(200).json({
@@ -5876,7 +5877,12 @@ async function resolveBillingPlanKeyByStripePriceId({ firestore, stripePriceId }
   return mapping?.billingPlanKey ?? '';
 }
 
-async function processStripeWebhookEvent({ firestore, event, enabledEvents }) {
+async function processStripeWebhookEvent({
+  firestore,
+  event,
+  enabledEvents,
+  stripeClient,
+}) {
   const type = String(event?.type ?? '').trim();
   if (!type) {
     throw new Error('Webhook Stripe sem event.type.');
@@ -5953,6 +5959,7 @@ async function processStripeWebhookEvent({ firestore, event, enabledEvents }) {
     const tenantId = await applyStripeWebhookEventToTenant({
       firestore,
       event,
+      stripeClient,
     });
 
     await eventRef.set(
@@ -5983,7 +5990,11 @@ async function processStripeWebhookEvent({ firestore, event, enabledEvents }) {
   }
 }
 
-async function applyStripeWebhookEventToTenant({ firestore, event }) {
+async function applyStripeWebhookEventToTenant({
+  firestore,
+  event,
+  stripeClient,
+}) {
   const type = String(event?.type ?? '').trim();
   const payload = event?.data?.object ?? {};
 
@@ -6009,6 +6020,26 @@ async function applyStripeWebhookEventToTenant({ firestore, event }) {
       },
       { merge: true },
     );
+
+    await reconcileTenantStripePeriodIfMissing({
+      firestore,
+      stripeClient,
+      tenantId,
+      source: type,
+    });
+
+    try {
+      await enforceTenantSeatAllowanceForTenant({
+        firestore,
+        tenantId,
+      });
+    } catch (error) {
+      console.error('stripe checkout seat enforcement failed', {
+        tenantId,
+        type,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
 
     return tenantId;
   }
@@ -6099,6 +6130,13 @@ async function applyStripeWebhookEventToTenant({ firestore, event }) {
       .doc(tenantId)
       .set(tenantPatch, { merge: true });
 
+    await reconcileTenantStripePeriodIfMissing({
+      firestore,
+      stripeClient,
+      tenantId,
+      source: type,
+    });
+
     try {
       await enforceTenantSeatAllowanceForTenant({
         firestore,
@@ -6132,12 +6170,28 @@ async function applyStripeWebhookEventToTenant({ firestore, event }) {
 
     const nowIso = new Date().toISOString();
     const patch = {
-      stripeCustomerId: String(payload?.customer ?? '').trim(),
-      stripeSubscriptionId: String(payload?.subscription ?? '').trim(),
-      stripeInvoiceId: String(payload?.id ?? '').trim(),
-      stripePaymentIntentId: String(payload?.payment_intent ?? '').trim(),
       billingUpdatedAt: nowIso,
     };
+
+    const stripeCustomerId = String(payload?.customer ?? '').trim();
+    if (stripeCustomerId) {
+      patch.stripeCustomerId = stripeCustomerId;
+    }
+
+    const stripeSubscriptionId = String(payload?.subscription ?? '').trim();
+    if (stripeSubscriptionId) {
+      patch.stripeSubscriptionId = stripeSubscriptionId;
+    }
+
+    const stripeInvoiceId = String(payload?.id ?? '').trim();
+    if (stripeInvoiceId) {
+      patch.stripeInvoiceId = stripeInvoiceId;
+    }
+
+    const stripePaymentIntentId = String(payload?.payment_intent ?? '').trim();
+    if (stripePaymentIntentId) {
+      patch.stripePaymentIntentId = stripePaymentIntentId;
+    }
 
     if (type === 'invoice.paid') {
       patch.billingStatus = 'active';
@@ -6148,6 +6202,13 @@ async function applyStripeWebhookEventToTenant({ firestore, event }) {
     }
 
     await firestore.collection('tenants').doc(tenantId).set(patch, { merge: true });
+
+    await reconcileTenantStripePeriodIfMissing({
+      firestore,
+      stripeClient,
+      tenantId,
+      source: type,
+    });
 
     try {
       await enforceTenantSeatAllowanceForTenant({
@@ -6166,6 +6227,56 @@ async function applyStripeWebhookEventToTenant({ firestore, event }) {
   }
 
   return '';
+}
+
+async function reconcileTenantStripePeriodIfMissing({
+  firestore,
+  stripeClient,
+  tenantId,
+  source,
+}) {
+  if (!stripeClient) {
+    return;
+  }
+
+  const tenantRef = firestore.collection('tenants').doc(tenantId);
+  const tenantDoc = await tenantRef.get();
+  if (!tenantDoc.exists) {
+    return;
+  }
+
+  const tenantData = tenantDoc.data() || {};
+  const billingStatus = String(tenantData.billingStatus ?? '').trim().toLowerCase();
+  const billingPlanKey = normalizeBillingPlanKey(tenantData.billingPlanKey);
+  const stripeCustomerId = String(tenantData.stripeCustomerId ?? '').trim();
+  const stripeSubscriptionId = String(tenantData.stripeSubscriptionId ?? '').trim();
+  const periodStart = String(tenantData.billingCurrentPeriodStartAt ?? '').trim();
+  const periodEnd = String(tenantData.billingCurrentPeriodEndAt ?? '').trim();
+
+  const needsPeriod = !periodStart || !periodEnd;
+  const statusAllowsReconcile =
+    billingStatus === 'active' ||
+    billingStatus === 'trial' ||
+    billingStatus === 'past_due';
+  const hasStripeReference = Boolean(stripeCustomerId || stripeSubscriptionId);
+
+  if (!billingPlanKey || !statusAllowsReconcile || !hasStripeReference || !needsPeriod) {
+    return;
+  }
+
+  try {
+    await reconcileTenantStripeState({
+      firestore,
+      stripeClient,
+      tenantId,
+    });
+  } catch (error) {
+    console.error('stripe period reconcile fallback failed', {
+      tenantId,
+      source,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
 }
 
 async function resolveTenantIdFromStripeReferences({
