@@ -330,6 +330,133 @@ class MaintainerStripeIntegrationConfig {
   }
 }
 
+class MaintainerCheckoutApiConfig {
+  const MaintainerCheckoutApiConfig({
+    required this.activeProviders,
+    required this.preferredProvider,
+    required this.updatedAt,
+    required this.updatedBy,
+  });
+
+  final Set<String> activeProviders;
+  final String preferredProvider;
+  final DateTime? updatedAt;
+  final String updatedBy;
+
+  bool get isStripeEnabled => activeProviders.contains('stripe');
+  bool get isAsaasEnabled => activeProviders.contains('asaas');
+
+  static const MaintainerCheckoutApiConfig empty = MaintainerCheckoutApiConfig(
+    activeProviders: <String>{'stripe'},
+    preferredProvider: 'stripe',
+    updatedAt: null,
+    updatedBy: '',
+  );
+
+  factory MaintainerCheckoutApiConfig.fromDoc(
+    DocumentSnapshot<Map<String, dynamic>> doc,
+  ) {
+    final data = doc.data() ?? const <String, dynamic>{};
+    final providersFromList = _readStringList(data['activeProviders'])
+        .map(_normalizeBillingProviderValue)
+        .where((value) => value.isNotEmpty)
+        .toSet();
+
+    final providers = providersFromList.isEmpty
+        ? <String>{'stripe'}
+        : providersFromList;
+
+    var preferredProvider = _normalizeBillingProviderValue(
+      data['preferredProvider'],
+    );
+    if (preferredProvider.isEmpty || !providers.contains(preferredProvider)) {
+      preferredProvider = providers.contains('stripe')
+          ? 'stripe'
+          : providers.first;
+    }
+
+    return MaintainerCheckoutApiConfig(
+      activeProviders: providers,
+      preferredProvider: preferredProvider,
+      updatedAt: _readDateTime(data['updatedAt']),
+      updatedBy: _readString(data['updatedBy']),
+    );
+  }
+}
+
+class MaintainerAsaasIntegrationConfig {
+  const MaintainerAsaasIntegrationConfig({
+    required this.activeEnvironment,
+    required this.walletIdSandbox,
+    required this.walletIdProduction,
+    required this.webhookEndpoint,
+    required this.updatedAt,
+    required this.updatedBy,
+  });
+
+  final String activeEnvironment;
+  final String walletIdSandbox;
+  final String walletIdProduction;
+  final String webhookEndpoint;
+  final DateTime? updatedAt;
+  final String updatedBy;
+
+  String get activeWalletId =>
+      activeEnvironment == 'production' ? walletIdProduction : walletIdSandbox;
+
+  static const MaintainerAsaasIntegrationConfig empty =
+      MaintainerAsaasIntegrationConfig(
+        activeEnvironment: 'sandbox',
+        walletIdSandbox: '',
+        walletIdProduction: '',
+        webhookEndpoint: '',
+        updatedAt: null,
+        updatedBy: '',
+      );
+
+  factory MaintainerAsaasIntegrationConfig.fromDoc(
+    DocumentSnapshot<Map<String, dynamic>> doc,
+  ) {
+    final data = doc.data() ?? const <String, dynamic>{};
+    final rawEnvironment = _readString(
+      data['activeEnvironment'],
+      fallback: 'sandbox',
+    ).toLowerCase();
+
+    final environment = rawEnvironment == 'production'
+        ? 'production'
+        : 'sandbox';
+
+    final legacyWalletId = _readString(data['accountId']);
+    final walletIdSandbox = _readString(
+      data['walletIdSandbox'],
+      fallback: _readString(data['accountIdSandbox']),
+    );
+    final walletIdProduction = _readString(
+      data['walletIdProduction'],
+      fallback: _readString(data['accountIdProduction']),
+    );
+
+    final resolvedSandboxWalletId =
+        walletIdSandbox.isNotEmpty || environment != 'sandbox'
+        ? walletIdSandbox
+        : legacyWalletId;
+    final resolvedProductionWalletId =
+        walletIdProduction.isNotEmpty || environment != 'production'
+        ? walletIdProduction
+        : legacyWalletId;
+
+    return MaintainerAsaasIntegrationConfig(
+      activeEnvironment: environment,
+      walletIdSandbox: resolvedSandboxWalletId,
+      walletIdProduction: resolvedProductionWalletId,
+      webhookEndpoint: _readString(data['webhookEndpoint']),
+      updatedAt: _readDateTime(data['updatedAt']),
+      updatedBy: _readString(data['updatedBy']),
+    );
+  }
+}
+
 class MaintainerBillingIntegrationService {
   MaintainerBillingIntegrationService(
     this._firestore, {
@@ -385,6 +512,12 @@ class MaintainerBillingIntegrationService {
   DocumentReference<Map<String, dynamic>> get _stripeConfigRef =>
       _firestore.collection('billing_integrations').doc('stripe');
 
+  DocumentReference<Map<String, dynamic>> get _checkoutApiConfigRef =>
+      _firestore.collection('billing_integrations').doc('checkout_api');
+
+  DocumentReference<Map<String, dynamic>> get _asaasConfigRef =>
+      _firestore.collection('billing_integrations').doc('asaas');
+
   CollectionReference<Map<String, dynamic>> get _stripePlanMappingsRef =>
       _stripeConfigRef.collection('plan_mappings');
 
@@ -395,6 +528,84 @@ class MaintainerBillingIntegrationService {
       }
       return MaintainerStripeIntegrationConfig.fromDoc(doc);
     });
+  }
+
+  Stream<MaintainerCheckoutApiConfig> watchCheckoutApiConfig() {
+    return _checkoutApiConfigRef.snapshots().map((doc) {
+      if (!doc.exists) {
+        return MaintainerCheckoutApiConfig.empty;
+      }
+      return MaintainerCheckoutApiConfig.fromDoc(doc);
+    });
+  }
+
+  Future<void> upsertCheckoutApiConfig({
+    required Set<String> activeProviders,
+    required String preferredProvider,
+    required String actorUid,
+  }) async {
+    final normalizedProviders = activeProviders
+        .map(_normalizeBillingProviderValue)
+        .where((value) => value.isNotEmpty)
+        .toSet();
+
+    if (normalizedProviders.isEmpty) {
+      throw StateError('Selecione ao menos um provider ativo.');
+    }
+
+    final normalizedPreferredProvider = _normalizeBillingProviderValue(
+      preferredProvider,
+    );
+    final resolvedPreferredProvider =
+        normalizedPreferredProvider.isNotEmpty &&
+            normalizedProviders.contains(normalizedPreferredProvider)
+        ? normalizedPreferredProvider
+        : normalizedProviders.contains('stripe')
+        ? 'stripe'
+        : normalizedProviders.first;
+
+    await _checkoutApiConfigRef.set({
+      'activeProviders': normalizedProviders.toList(growable: false)..sort(),
+      'preferredProvider': resolvedPreferredProvider,
+      'updatedBy': actorUid.trim(),
+      'updatedAt': DateTime.now().toIso8601String(),
+    }, SetOptions(merge: true));
+  }
+
+  Stream<MaintainerAsaasIntegrationConfig> watchAsaasConfig() {
+    return _asaasConfigRef.snapshots().map((doc) {
+      if (!doc.exists) {
+        return MaintainerAsaasIntegrationConfig.empty;
+      }
+      return MaintainerAsaasIntegrationConfig.fromDoc(doc);
+    });
+  }
+
+  Future<void> upsertAsaasConfig({
+    required String activeEnvironment,
+    required String walletIdSandbox,
+    required String walletIdProduction,
+    required String webhookEndpoint,
+    required String actorUid,
+  }) async {
+    final environment = activeEnvironment.trim().toLowerCase() == 'production'
+        ? 'production'
+        : 'sandbox';
+    final normalizedWalletIdSandbox = walletIdSandbox.trim();
+    final normalizedWalletIdProduction = walletIdProduction.trim();
+    final normalizedActiveWalletId = environment == 'production'
+        ? normalizedWalletIdProduction
+        : normalizedWalletIdSandbox;
+
+    await _asaasConfigRef.set({
+      'activeEnvironment': environment,
+      'walletIdSandbox': normalizedWalletIdSandbox,
+      'walletIdProduction': normalizedWalletIdProduction,
+      'accountId': normalizedActiveWalletId,
+      'webhookEndpoint': webhookEndpoint.trim(),
+      'updatedBy': actorUid.trim(),
+      'updatedAt': DateTime.now().toIso8601String(),
+    }, SetOptions(merge: true));
   }
 
   Stream<List<MaintainerStripePlanMapping>> watchStripePlanMappings() {
@@ -827,6 +1038,14 @@ int? _readInt(Object? raw) {
     return raw;
   }
   return int.tryParse(raw.toString().trim());
+}
+
+String _normalizeBillingProviderValue(Object? raw) {
+  final value = _readString(raw).toLowerCase();
+  if (value == 'stripe' || value == 'asaas') {
+    return value;
+  }
+  return '';
 }
 
 String _formatPlanAmountLabel({

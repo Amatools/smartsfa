@@ -81,9 +81,17 @@ extension _MaintainerConsoleAccessPart on _MaintainerConsolePageState {
         canManageImpersonation
             ? _MaintainerConsoleTab.impersonation
             : _MaintainerConsoleTab.home,
+      _MaintainerConsoleTab.apiCheckout =>
+        canAccessStripeTab
+            ? _MaintainerConsoleTab.apiCheckout
+            : _MaintainerConsoleTab.home,
       _MaintainerConsoleTab.stripe =>
         canAccessStripeTab
             ? _MaintainerConsoleTab.stripe
+            : _MaintainerConsoleTab.home,
+      _MaintainerConsoleTab.asaas =>
+        canAccessStripeTab
+            ? _MaintainerConsoleTab.asaas
             : _MaintainerConsoleTab.home,
     };
   }

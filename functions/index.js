@@ -30,6 +30,40 @@ const STRIPE_DEFAULT_WEBHOOK_EVENTS = [
   'invoice.paid',
   'invoice.payment_failed',
 ];
+const ASAAS_DEFAULT_WEBHOOK_EVENTS = [
+  'CHECKOUT_CREATED',
+  'CHECKOUT_PAID',
+  'CHECKOUT_CANCELED',
+  'CHECKOUT_EXPIRED',
+  'SUBSCRIPTION_CREATED',
+  'SUBSCRIPTION_UPDATED',
+  'SUBSCRIPTION_INACTIVATED',
+  'SUBSCRIPTION_DELETED',
+  'PAYMENT_CREATED',
+  'PAYMENT_UPDATED',
+  'PAYMENT_CONFIRMED',
+  'PAYMENT_RECEIVED',
+  'PAYMENT_OVERDUE',
+  'PAYMENT_DELETED',
+  'PAYMENT_RESTORED',
+  'PAYMENT_CREDIT_CARD_CAPTURE_REFUSED',
+  'PAYMENT_REFUNDED',
+  'PAYMENT_PARTIALLY_REFUNDED',
+  'PAYMENT_REFUND_IN_PROGRESS',
+  'PAYMENT_REFUND_DENIED',
+  'PAYMENT_RECEIVED_IN_CASH_UNDONE',
+  'PAYMENT_CHARGEBACK_REQUESTED',
+  'PAYMENT_CHARGEBACK_DISPUTE',
+  'PAYMENT_AWAITING_CHARGEBACK_REVERSAL',
+  'INVOICE_CREATED',
+  'INVOICE_UPDATED',
+  'INVOICE_SYNCHRONIZED',
+  'INVOICE_AUTHORIZED',
+  'INVOICE_PROCESSING_CANCELLATION',
+  'INVOICE_CANCELED',
+  'INVOICE_CANCELLATION_DENIED',
+  'INVOICE_ERROR',
+];
 const STRIPE_SYNC_BATCH_LIMIT = 120;
 const STRIPE_CLIENT_CACHE = new Map();
 const STRIPE_RUNTIME_SECRETS = [
@@ -39,6 +73,33 @@ const STRIPE_RUNTIME_SECRETS = [
   'STRIPE_WHSEC_LIVE',
   'STRIPE_ACTIVE_ENVIRONMENT',
 ];
+const ASAAS_RUNTIME_SECRETS = [
+  'ASAAS_WEBHOOK_TOKEN_SANDBOX',
+  'ASAAS_WEBHOOK_TOKEN_PRODUCTION',
+  'ASAAS_API_KEY_SANDBOX',
+  'ASAAS_API_KEY_PRODUCTION',
+];
+const BILLING_RUNTIME_SECRETS = [
+  ...STRIPE_RUNTIME_SECRETS,
+  ...ASAAS_RUNTIME_SECRETS,
+];
+const ASAAS_SANDBOX_API_BASE_URL = 'https://sandbox.asaas.com/api/v3';
+const ASAAS_PRODUCTION_API_BASE_URL = 'https://api.asaas.com/v3';
+const ASAAS_CHECKOUT_DEFAULT_BILLING_TYPES = ['PIX', 'CREDIT_CARD'];
+const ASAAS_CHECKOUT_DEFAULT_CHARGE_TYPE = 'RECURRENT';
+const ASAAS_CHECKOUT_DEFAULT_MINUTES_TO_EXPIRE = 60;
+const ASAAS_CHECKOUT_PLACEHOLDER_IMAGE_BASE64 =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO6QX5wAAAAASUVORK5CYII=';
+const CLOUD_FUNCTIONS_BASE_URL = 'https://us-central1-smart-sfa.cloudfunctions.net';
+const STRIPE_CHECKOUT_FUNCTION_URL =
+  `${CLOUD_FUNCTIONS_BASE_URL}/createStripeCheckoutSession`;
+const STRIPE_PORTAL_FUNCTION_URL =
+  `${CLOUD_FUNCTIONS_BASE_URL}/createStripePortalSession`;
+const STRIPE_LIST_PLANS_FUNCTION_URL =
+  `${CLOUD_FUNCTIONS_BASE_URL}/listStripeCheckoutPlans`;
+const BILLING_PROVIDER_STRIPE = 'stripe';
+const BILLING_PROVIDER_ASAAS = 'asaas';
+const BILLING_PROVIDER_DEFAULT = BILLING_PROVIDER_STRIPE;
 const TENANT_SEAT_OVER_LIMIT_GRACE_DAYS = 3;
 const TENANT_SEAT_ENFORCEMENT_ACTOR_UID = 'system_seat_enforcement';
 const TENANT_SEAT_ENFORCEMENT_ACTIVE_BILLING_STATUSES = new Set([
@@ -559,6 +620,16 @@ exports.createStripeCheckoutSession = onRequest(
       return;
     }
 
+    const checkoutApiConfig = await readCheckoutApiConfig(firestore);
+    if (!checkoutApiConfig.activeProviders.includes(BILLING_PROVIDER_STRIPE)) {
+      response.status(409).json({
+        error: 'provider_disabled',
+        message:
+          'Stripe esta desativado na API Checkout. Habilite Stripe ou use provider Asaas conforme configuracao.',
+      });
+      return;
+    }
+
     const integrationReady = await loadStripeIntegrationRuntime({
       firestore,
       requireWebhookSecret: false,
@@ -608,31 +679,18 @@ exports.createStripeCheckoutSession = onRequest(
       ? Math.max(0, Math.floor(addonSeatsInput))
       : 0;
 
-    if (addonSeats > 0 && !mapping.seatAddonPlanKey) {
-      response.status(400).json({
-        error: 'seat_addon_not_configured',
-        message:
-          'Plano base nao possui seatAddonPlanKey configurado para adicionais de usuarios.',
-      });
-      return;
-    }
-
     let addonMapping = null;
-    if (addonSeats > 0 && mapping.seatAddonPlanKey) {
-      addonMapping = await loadStripePlanMapping({
+    if (addonSeats > 0) {
+      addonMapping = await resolveStripeSeatAddonMappingForBasePlan({
         firestore,
-        billingPlanKey: mapping.seatAddonPlanKey,
+        baseMapping: mapping,
       });
 
-      if (
-        !addonMapping ||
-        addonMapping.mappingType !== 'overage' ||
-        addonMapping.overageMetric !== 'extra_usuario'
-      ) {
+      if (!addonMapping) {
         response.status(400).json({
           error: 'invalid_seat_addon_mapping',
           message:
-            'Plano base possui seatAddonPlanKey sem mapeamento overage/extra_usuario valido.',
+            'Plano base sem mapeamento overage/extra_usuario valido (seatAddonPlanKey ou linkedBasePlanKey).',
         });
         return;
       }
@@ -698,6 +756,7 @@ exports.createStripeCheckoutSession = onRequest(
     const tenantPatch = {
       stripeCustomerId,
       stripeCheckoutSessionId: String(session.id ?? '').trim(),
+      billingProvider: BILLING_PROVIDER_STRIPE,
       billingPlanKey,
       billingUpdatedAt: new Date().toISOString(),
       billingSeatsAddon: addonSeats,
@@ -705,7 +764,9 @@ exports.createStripeCheckoutSession = onRequest(
     if (Number.isInteger(mapping.includedSeats) && mapping.includedSeats > 0) {
       tenantPatch.billingSeatsIncluded = mapping.includedSeats;
     }
-    if (mapping.seatAddonPlanKey) {
+    if (addonMapping?.billingPlanKey) {
+      tenantPatch.billingSeatAddonPlanKey = addonMapping.billingPlanKey;
+    } else if (mapping.seatAddonPlanKey) {
       tenantPatch.billingSeatAddonPlanKey = mapping.seatAddonPlanKey;
     }
     if (addonMapping && Number.isInteger(addonMapping.stripeUnitAmount)) {
@@ -775,6 +836,16 @@ exports.createStripePortalSession = onRequest(
       response.status(actorPermission.status).json({
         error: actorPermission.error,
         message: actorPermission.message,
+      });
+      return;
+    }
+
+    const checkoutApiConfig = await readCheckoutApiConfig(firestore);
+    if (!checkoutApiConfig.activeProviders.includes(BILLING_PROVIDER_STRIPE)) {
+      response.status(409).json({
+        error: 'provider_disabled',
+        message:
+          'Stripe esta desativado na API Checkout. Habilite Stripe ou use provider Asaas conforme configuracao.',
       });
       return;
     }
@@ -877,8 +948,9 @@ exports.handleStripeWebhook = onRequest(
     }
 
     try {
-      const processing = await processStripeWebhookEvent({
+      const processing = await processBillingWebhookEvent({
         firestore,
+        providerKey: BILLING_PROVIDER_STRIPE,
         event,
         enabledEvents: integrationReady.enabledEvents,
         stripeClient: integrationReady.stripeClient,
@@ -891,6 +963,202 @@ exports.handleStripeWebhook = onRequest(
         tenantId: processing.tenantId,
       });
     } catch (error) {
+      response.status(500).json({
+        error: 'webhook_processing_failed',
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  },
+);
+
+exports.handleAsaasWebhook = onRequest(
+  {
+    cors: false,
+    region: 'us-central1',
+    timeoutSeconds: 120,
+    secrets: ASAAS_RUNTIME_SECRETS,
+  },
+  async (request, response) => {
+    if (request.method !== 'POST') {
+      response.status(405).json({ error: 'method_not_allowed' });
+      return;
+    }
+
+    const firestore = admin.firestore();
+    const integrationConfig = await readAsaasIntegrationConfig(firestore);
+    const sandboxToken = getAsaasWebhookTokenForEnvironment('sandbox');
+    const productionToken = getAsaasWebhookTokenForEnvironment('production');
+
+    if (!sandboxToken && !productionToken) {
+      response.status(503).json({
+        error: 'integration_not_ready',
+        message:
+          'Webhook token Asaas ausente. Configure ASAAS_WEBHOOK_TOKEN_SANDBOX ou ASAAS_WEBHOOK_TOKEN_PRODUCTION.',
+      });
+      return;
+    }
+
+    const tokenHeader = String(
+      request.headers['asaas-access-token'] ?? '',
+    ).trim();
+    if (!tokenHeader) {
+      response.status(401).json({
+        error: 'missing_auth_token',
+        message: 'Header asaas-access-token ausente.',
+      });
+      return;
+    }
+
+    let matchedEnvironment = '';
+    if (sandboxToken && tokenHeader === sandboxToken) {
+      matchedEnvironment = 'sandbox';
+    }
+    if (productionToken && tokenHeader === productionToken) {
+      matchedEnvironment = 'production';
+    }
+
+    if (!matchedEnvironment) {
+      response.status(401).json({
+        error: 'invalid_auth_token',
+        message: 'Token de autenticacao do webhook Asaas invalido.',
+      });
+      return;
+    }
+
+    const eventPayload =
+      request.body && typeof request.body === 'object' ? request.body : {};
+    const eventType = String(eventPayload?.event ?? '').trim();
+    const eventId = String(eventPayload?.id ?? '').trim();
+
+    if (!eventType) {
+      response.status(400).json({
+        error: 'invalid_payload',
+        message: 'Evento Asaas sem campo event.',
+      });
+      return;
+    }
+
+    const enabledSet = new Set(
+      (integrationConfig.webhookEvents || [])
+        .map((item) => String(item ?? '').trim())
+        .filter((item) => item),
+    );
+
+    if (enabledSet.size > 0 && !enabledSet.has(eventType)) {
+      response.status(200).json({
+        received: true,
+        ignored: true,
+        duplicate: false,
+        reason: 'event_not_enabled',
+        eventType,
+        webhookEnvironment: matchedEnvironment,
+      });
+      return;
+    }
+
+    const eventDocId = eventId
+      ? `asaas_${eventId}`
+      : createAsaasWebhookFallbackEventId(eventPayload);
+    const eventRef = firestore.collection('billing_webhook_events').doc(eventDocId);
+    let duplicate = false;
+
+    await firestore.runTransaction(async (transaction) => {
+      const existingDoc = await transaction.get(eventRef);
+      if (existingDoc.exists) {
+        const existingData = existingDoc.data() || {};
+        const status = String(existingData.processingStatus ?? '')
+          .trim()
+          .toLowerCase();
+        if (status === 'success') {
+          duplicate = true;
+          return;
+        }
+
+        const retryCount = Number(existingData.retryCount ?? 0);
+        transaction.set(
+          eventRef,
+          {
+            provider: BILLING_PROVIDER_ASAAS,
+            eventId: eventDocId,
+            type: eventType,
+            receivedAt: new Date().toISOString(),
+            processingStatus: 'processing',
+            retryCount: Number.isFinite(retryCount) ? retryCount + 1 : 1,
+            webhookEnvironment: matchedEnvironment,
+            payload: eventPayload,
+          },
+          { merge: true },
+        );
+        return;
+      }
+
+      transaction.set(eventRef, {
+        provider: BILLING_PROVIDER_ASAAS,
+        eventId: eventDocId,
+        type: eventType,
+        receivedAt: new Date().toISOString(),
+        processingStatus: 'processing',
+        retryCount: 0,
+        webhookEnvironment: matchedEnvironment,
+        payload: eventPayload,
+      });
+    });
+
+    if (duplicate) {
+      response.status(200).json({
+        received: true,
+        ignored: false,
+        duplicate: true,
+        eventId: eventDocId,
+        eventType,
+        webhookEnvironment: matchedEnvironment,
+      });
+      return;
+    }
+
+    try {
+      const processing = await processBillingWebhookEvent({
+        firestore,
+        providerKey: BILLING_PROVIDER_ASAAS,
+        event: eventPayload,
+        enabledEvents: integrationConfig.webhookEvents,
+        stripeClient: null,
+        asaasRuntime: {
+          environment: matchedEnvironment,
+        },
+      });
+
+      await eventRef.set(
+        {
+          tenantId: processing.tenantId,
+          processedAt: new Date().toISOString(),
+          processingStatus: 'success',
+          errorMessage: '',
+        },
+        { merge: true },
+      );
+
+      response.status(200).json({
+        received: true,
+        ignored: processing.ignored,
+        duplicate: false,
+        eventId: eventDocId,
+        eventType,
+        tenantId: processing.tenantId,
+        billingStatus: processing.billingStatus,
+        provider: BILLING_PROVIDER_ASAAS,
+        webhookEnvironment: matchedEnvironment,
+      });
+    } catch (error) {
+      await eventRef.set(
+        {
+          processedAt: new Date().toISOString(),
+          processingStatus: 'error',
+          errorMessage: error instanceof Error ? error.message : String(error),
+        },
+        { merge: true },
+      );
+
       response.status(500).json({
         error: 'webhook_processing_failed',
         message: error instanceof Error ? error.message : String(error),
@@ -957,8 +1225,9 @@ exports.reconcileStripeTenant = onRequest(
     }
 
     try {
-      const result = await reconcileTenantStripeState({
+      const result = await reconcileTenantBillingState({
         firestore,
+        providerKey: BILLING_PROVIDER_STRIPE,
         stripeClient: integrationReady.stripeClient,
         tenantId,
       });
@@ -976,7 +1245,8 @@ exports.reconcileStripeTenant = onRequest(
           reason,
           previousBillingStatus: result.previousBillingStatus,
           currentBillingStatus: result.currentBillingStatus,
-          source: 'stripe_reconcile_tenant',
+          source: 'billing_reconcile_tenant',
+          billingProvider: BILLING_PROVIDER_STRIPE,
         },
         createdAt: admin.firestore.Timestamp.fromDate(new Date()),
       });
@@ -984,6 +1254,112 @@ exports.reconcileStripeTenant = onRequest(
       response.status(200).json({
         tenantId,
         stripeSubscriptionId: result.stripeSubscriptionId,
+        previousBillingStatus: result.previousBillingStatus,
+        currentBillingStatus: result.currentBillingStatus,
+        updatedAt: result.updatedAt,
+      });
+    } catch (error) {
+      response.status(500).json({
+        error: 'reconcile_tenant_failed',
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  },
+);
+
+exports.reconcileAsaasTenant = onRequest(
+  {
+    cors: true,
+    region: 'us-central1',
+    timeoutSeconds: 90,
+    secrets: ASAAS_RUNTIME_SECRETS,
+  },
+  async (request, response) => {
+    if (request.method !== 'POST') {
+      response.status(405).json({ error: 'method_not_allowed' });
+      return;
+    }
+
+    const tenantId = String(request.body?.tenantId ?? '').trim();
+    const reason = String(request.body?.reason ?? '').trim();
+    if (!tenantId) {
+      response.status(400).json({
+        error: 'invalid_payload',
+        message: 'tenantId e obrigatorio.',
+      });
+      return;
+    }
+
+    const firestore = admin.firestore();
+    const authContext = await verifyFirebaseAuthFromRequest(request);
+    if (!authContext.ok) {
+      response.status(authContext.status).json({
+        error: authContext.error,
+        message: authContext.message,
+      });
+      return;
+    }
+
+    const platformAccess = await assertPlatformAdminActor({
+      firestore,
+      uid: authContext.uid,
+    });
+    if (!platformAccess.allowed) {
+      response.status(platformAccess.status).json({
+        error: platformAccess.error,
+        message: platformAccess.message,
+      });
+      return;
+    }
+
+    const integrationReady = await loadBillingProviderRuntime({
+      firestore,
+      providerKey: BILLING_PROVIDER_ASAAS,
+      requireWebhookSecret: false,
+    });
+    if (!integrationReady.ok) {
+      response.status(integrationReady.status).json({
+        error: integrationReady.error,
+        message: integrationReady.message,
+      });
+      return;
+    }
+
+    try {
+      const result = await reconcileTenantBillingState({
+        firestore,
+        providerKey: BILLING_PROVIDER_ASAAS,
+        asaasRuntime: {
+          environment: integrationReady.environment,
+          apiKey: integrationReady.asaasApiKey,
+          apiBaseUrl: integrationReady.asaasApiBaseUrl,
+        },
+        tenantId,
+      });
+
+      await firestore.collection('platform_admin_audit').add({
+        action: 'billing_state_updated',
+        actorUid: authContext.uid,
+        actorEmail: authContext.email,
+        actorLabel: authContext.email || authContext.uid,
+        targetUid: authContext.uid,
+        targetEmail: authContext.email,
+        targetDisplayName: authContext.email || authContext.uid,
+        details: {
+          tenantId,
+          reason,
+          previousBillingStatus: result.previousBillingStatus,
+          currentBillingStatus: result.currentBillingStatus,
+          source: 'billing_reconcile_tenant_asaas',
+          billingProvider: BILLING_PROVIDER_ASAAS,
+        },
+        createdAt: admin.firestore.Timestamp.fromDate(new Date()),
+      });
+
+      response.status(200).json({
+        tenantId,
+        asaasSubscriptionId: result.asaasSubscriptionId,
+        asaasCustomerId: result.asaasCustomerId,
         previousBillingStatus: result.previousBillingStatus,
         currentBillingStatus: result.currentBillingStatus,
         updatedAt: result.updatedAt,
@@ -1066,8 +1442,9 @@ exports.reconcileAllStripeTenants = onRequest(
       const tenantId = doc.id;
       try {
         if (!dryRun) {
-          await reconcileTenantStripeState({
+          await reconcileTenantBillingState({
             firestore,
+            providerKey: BILLING_PROVIDER_STRIPE,
             stripeClient: integrationReady.stripeClient,
             tenantId,
           });
@@ -1097,7 +1474,7 @@ exports.manageTenantBillingState = onRequest(
     cors: true,
     region: 'us-central1',
     timeoutSeconds: 90,
-    secrets: STRIPE_RUNTIME_SECRETS,
+    secrets: BILLING_RUNTIME_SECRETS,
   },
   async (request, response) => {
     if (request.method !== 'POST') {
@@ -1169,6 +1546,25 @@ exports.manageTenantBillingState = onRequest(
     const nowDate = new Date();
     const nowIso = nowDate.toISOString();
     const previousBillingStatus = String(tenantData.billingStatus ?? '').trim();
+    const checkoutApiConfig = await readCheckoutApiConfig(firestore);
+    const billingProvider = resolveTenantBillingProviderKey({
+      tenantData,
+      providerHint: String(request.body?.provider ?? '').trim(),
+    });
+
+    const effectiveBillingProvider =
+      billingProvider === BILLING_PROVIDER_STRIPE ||
+      billingProvider === BILLING_PROVIDER_ASAAS
+        ? billingProvider
+        : checkoutApiConfig.preferredProvider;
+
+    if (!checkoutApiConfig.activeProviders.includes(effectiveBillingProvider)) {
+      response.status(409).json({
+        error: 'provider_disabled',
+        message: `Provider ${effectiveBillingProvider} nao esta ativo na API Checkout.`,
+      });
+      return;
+    }
 
     const patch = {
       billingUpdatedAt: nowIso,
@@ -1206,11 +1602,29 @@ exports.manageTenantBillingState = onRequest(
     } else if (action === 'clear_plan_link') {
       patch.billingStatus = 'no_plan';
       patch.billingAccountState = 'inactive';
+      patch.billingProvider = '';
+      patch.billingContractProvider = '';
+      patch.billingContractLinkedAt = '';
       patch.billingPlanKey = '';
       patch.billingCycle = '';
       patch.stripePriceId = '';
+      patch.stripeCustomerId = '';
       patch.stripeSubscriptionId = '';
       patch.stripeCheckoutSessionId = '';
+      patch.stripeInvoiceId = '';
+      patch.stripePaymentIntentId = '';
+      patch.asaasCustomerId = '';
+      patch.asaasSubscriptionId = '';
+      patch.asaasCheckoutId = '';
+      patch.asaasPaymentId = '';
+      patch.asaasInvoiceUrl = '';
+      patch.asaasBankSlipUrl = '';
+      patch.asaasInvoiceNumber = '';
+      patch.asaasInvoiceStatus = '';
+      patch.asaasBillingType = '';
+      patch.asaasLastEventId = '';
+      patch.asaasLastEventType = '';
+      patch.asaasWebhookEnvironment = '';
       patch.billingCurrentPeriodStartAt = '';
       patch.billingCurrentPeriodEndAt = '';
       patch.billingSuspendedAt = nowIso;
@@ -1226,32 +1640,47 @@ exports.manageTenantBillingState = onRequest(
     let stripeApplied = false;
     let stripeAction = 'not_attempted';
     let stripeMessage = '';
+    let providerApplied = false;
+    let providerAction = 'not_attempted';
+    let providerMessage = '';
 
-    const integrationReady = await loadStripeIntegrationRuntime({
+    const integrationReady = await loadBillingProviderRuntime({
       firestore,
+      providerKey: effectiveBillingProvider,
       requireWebhookSecret: false,
     });
     if (integrationReady.ok) {
       try {
-        const reflection = await applyTenantBillingActionToStripe({
+        const reflection = await applyTenantBillingActionToProvider({
+          providerKey: effectiveBillingProvider,
           stripeClient: integrationReady.stripeClient,
+          asaasRuntime: {
+            environment: integrationReady.environment,
+            apiKey: integrationReady.asaasApiKey,
+            apiBaseUrl: integrationReady.asaasApiBaseUrl,
+          },
           tenantId,
           tenantData,
           action,
           reason,
           actorUid: authContext.uid,
         });
+        providerApplied = reflection.applied;
+        providerAction = reflection.action;
+        providerMessage = reflection.message;
         stripeApplied = reflection.applied;
         stripeAction = reflection.action;
         stripeMessage = reflection.message;
       } catch (error) {
         response.status(502).json({
-          error: 'stripe_action_failed',
+          error: 'provider_action_failed',
           message: error instanceof Error ? error.message : String(error),
         });
         return;
       }
     } else {
+      providerAction = 'integration_not_ready';
+      providerMessage = integrationReady.message;
       stripeAction = 'integration_not_ready';
       stripeMessage = integrationReady.message;
     }
@@ -1293,6 +1722,10 @@ exports.manageTenantBillingState = onRequest(
         currentBillingAccountState: patch.billingAccountState,
         billingGraceUntilAt: patch.billingGraceUntilAt,
         billingSuspendedAt: patch.billingSuspendedAt,
+        billingProvider: effectiveBillingProvider,
+        providerApplied,
+        providerAction,
+        providerMessage,
         stripeApplied,
         stripeAction,
         stripeMessage,
@@ -1311,6 +1744,10 @@ exports.manageTenantBillingState = onRequest(
       billingGraceUntilAt: patch.billingGraceUntilAt,
       billingSuspendedAt: patch.billingSuspendedAt,
       updatedAt: patch.billingUpdatedAt,
+      billingProvider: effectiveBillingProvider,
+      providerApplied,
+      providerAction,
+      providerMessage,
       stripeApplied,
       stripeAction,
       stripeMessage,
@@ -1837,6 +2274,16 @@ exports.listStripeCheckoutPlans = onRequest(
       return;
     }
 
+    const checkoutApiConfig = await readCheckoutApiConfig(firestore);
+    if (!checkoutApiConfig.activeProviders.includes(BILLING_PROVIDER_STRIPE)) {
+      response.status(409).json({
+        error: 'provider_disabled',
+        message:
+          'Stripe esta desativado na API Checkout. Habilite Stripe para listar planos Stripe.',
+      });
+      return;
+    }
+
     const tenantDoc = await firestore.collection('tenants').doc(tenantId).get();
     if (!tenantDoc.exists) {
       response.status(404).json({
@@ -1860,6 +2307,66 @@ exports.listStripeCheckoutPlans = onRequest(
       .where('mappingType', '==', 'base')
       .limit(200)
       .get();
+
+    const overageSnapshot = await firestore
+      .collection('billing_integrations')
+      .doc('stripe')
+      .collection('plan_mappings')
+      .where('active', '==', true)
+      .where('mappingType', '==', 'overage')
+      .limit(200)
+      .get();
+
+    const seatAddonByPlanKey = new Map();
+    const linkedSeatAddonByBasePlanKey = new Map();
+    for (const overageDoc of overageSnapshot.docs) {
+      const overageData = overageDoc.data() || {};
+      const overageMapping = buildStripePlanMappingFromDocData(
+        overageData,
+        overageDoc.id,
+      );
+      if (!overageMapping) {
+        continue;
+      }
+      if (overageMapping.mappingType !== 'overage') {
+        continue;
+      }
+      if (overageMapping.overageMetric !== 'extra_usuario') {
+        continue;
+      }
+      const overageUnitPriceCentsInput = Number(overageMapping.stripeUnitAmount ?? 0);
+      const overageUnitPriceCents = Number.isFinite(overageUnitPriceCentsInput)
+        ? Math.max(0, Math.floor(overageUnitPriceCentsInput))
+        : 0;
+      const overageDisplayAmount =
+        String(overageMapping.planDisplayAmount ?? '').trim() ||
+        formatPlanAmountLabel({
+          amountMinorUnits: overageUnitPriceCents,
+          currency: String(overageMapping.stripeCurrency ?? '').trim(),
+          recurringInterval: String(overageMapping.stripeRecurringInterval ?? '').trim(),
+          recurringIntervalCount: Number(overageMapping.stripeRecurringIntervalCount ?? 0),
+        });
+
+      const seatAddonInfo = {
+        billingPlanKey: overageMapping.billingPlanKey,
+        unitPriceCents: overageUnitPriceCents,
+        displayAmount: overageDisplayAmount,
+      };
+
+      if (!seatAddonByPlanKey.has(overageMapping.billingPlanKey)) {
+        seatAddonByPlanKey.set(overageMapping.billingPlanKey, seatAddonInfo);
+      }
+
+      if (!overageMapping.linkedBasePlanKey) {
+        continue;
+      }
+      if (!linkedSeatAddonByBasePlanKey.has(overageMapping.linkedBasePlanKey)) {
+        linkedSeatAddonByBasePlanKey.set(
+          overageMapping.linkedBasePlanKey,
+          seatAddonInfo,
+        );
+      }
+    }
 
     const plans = [];
     for (const doc of snapshot.docs) {
@@ -1893,7 +2400,28 @@ exports.listStripeCheckoutPlans = onRequest(
       const includedSeats = Number.isFinite(includedSeatsInput)
         ? Math.max(0, Math.floor(includedSeatsInput))
         : 0;
-      const seatAddonPlanKey = normalizeBillingPlanKey(data.seatAddonPlanKey);
+
+      let seatAddonInfo = null;
+      let seatAddonPlanKey = normalizeBillingPlanKey(data.seatAddonPlanKey);
+      if (seatAddonPlanKey) {
+        seatAddonInfo = seatAddonByPlanKey.get(seatAddonPlanKey) || null;
+      }
+      if (!seatAddonPlanKey) {
+        seatAddonInfo = linkedSeatAddonByBasePlanKey.get(billingPlanKey) || null;
+        seatAddonPlanKey = String(seatAddonInfo?.billingPlanKey ?? '').trim();
+      }
+      if (!seatAddonInfo && seatAddonPlanKey) {
+        seatAddonInfo = seatAddonByPlanKey.get(seatAddonPlanKey) || null;
+      }
+
+      const seatAddonUnitPriceCents = Number.isFinite(
+        Number(seatAddonInfo?.unitPriceCents ?? 0),
+      )
+        ? Math.max(0, Math.floor(Number(seatAddonInfo?.unitPriceCents ?? 0)))
+        : 0;
+      const seatAddonDisplayAmount = String(
+        seatAddonInfo?.displayAmount ?? '',
+      ).trim();
 
       plans.push({
         mappingId: doc.id,
@@ -1905,6 +2433,8 @@ exports.listStripeCheckoutPlans = onRequest(
         stripeProductName: String(data.stripeProductName ?? '').trim(),
         includedSeats,
         seatAddonPlanKey,
+        seatAddonUnitPriceCents,
+        seatAddonDisplayAmount,
       });
     }
 
@@ -1926,6 +2456,592 @@ exports.listStripeCheckoutPlans = onRequest(
       workspaceType,
       requiredPrefix,
       plans,
+    });
+  },
+);
+
+exports.createBillingCheckoutSession = onRequest(
+  {
+    cors: true,
+    region: 'us-central1',
+    timeoutSeconds: 60,
+  },
+  async (request, response) => {
+    if (request.method !== 'POST') {
+      response.status(405).json({ error: 'method_not_allowed' });
+      return;
+    }
+
+    const payload = request.body && typeof request.body === 'object'
+      ? request.body
+      : {};
+    const tenantId = String(payload?.tenantId ?? '').trim();
+    if (!tenantId) {
+      response.status(400).json({
+        error: 'invalid_payload',
+        message: 'tenantId e obrigatorio.',
+      });
+      return;
+    }
+
+    const firestore = admin.firestore();
+    const authContext = await verifyFirebaseAuthFromRequest(request);
+    if (!authContext.ok) {
+      response.status(authContext.status).json({
+        error: authContext.error,
+        message: authContext.message,
+      });
+      return;
+    }
+
+    const actorPermission = await assertTenantBillingActorPermission({
+      firestore,
+      uid: authContext.uid,
+      tenantId,
+    });
+    if (!actorPermission.allowed) {
+      response.status(actorPermission.status).json({
+        error: actorPermission.error,
+        message: actorPermission.message,
+      });
+      return;
+    }
+
+    const tenantDoc = await firestore.collection('tenants').doc(tenantId).get();
+    if (!tenantDoc.exists) {
+      response.status(404).json({
+        error: 'tenant_not_found',
+        message: 'Tenant nao encontrado.',
+      });
+      return;
+    }
+
+    const tenantData = tenantDoc.data() || {};
+
+    const checkoutApiConfig = await readCheckoutApiConfig(firestore);
+    const providerSelection = resolveCheckoutApiProviderSelection({
+      payload,
+      checkoutApiConfig,
+      tenantData,
+    });
+    const billingProvider = providerSelection.provider;
+
+    if (
+      !providerSelection.hasLinkedContract &&
+      !checkoutApiConfig.activeProviders.includes(billingProvider)
+    ) {
+      response.status(409).json({
+        error: 'provider_disabled',
+        message: `Provider ${billingProvider} nao esta ativo na API Checkout.`,
+      });
+      return;
+    }
+
+    if (billingProvider === BILLING_PROVIDER_STRIPE) {
+      await proxyBillingRequestToFunction({
+        request,
+        response,
+        targetUrl: STRIPE_CHECKOUT_FUNCTION_URL,
+        method: 'POST',
+        extraResponseFields: {
+          billingProvider,
+          providerSelectionSource: providerSelection.source,
+          hasLinkedContract: providerSelection.hasLinkedContract,
+        },
+      });
+      return;
+    }
+
+    if (billingProvider === BILLING_PROVIDER_ASAAS) {
+      try {
+        const checkoutResult = await createAsaasCheckoutSession({
+          firestore,
+          tenantId,
+          tenantData,
+          payload,
+          providerSelection,
+        });
+
+        if (!checkoutResult.ok) {
+          response.status(checkoutResult.status).json({
+            error: checkoutResult.error,
+            message: checkoutResult.message,
+            billingProvider,
+            providerSelectionSource: providerSelection.source,
+            hasLinkedContract: providerSelection.hasLinkedContract,
+          });
+          return;
+        }
+
+        response.status(checkoutResult.status).json(checkoutResult.body);
+        return;
+      } catch (error) {
+        response.status(502).json({
+          error: 'provider_checkout_failed',
+          message: error instanceof Error ? error.message : String(error),
+          billingProvider,
+          providerSelectionSource: providerSelection.source,
+          hasLinkedContract: providerSelection.hasLinkedContract,
+        });
+        return;
+      }
+    }
+
+    response.status(400).json({
+      error: 'provider_not_supported',
+      message: `Provider de billing nao suportado: ${billingProvider}.`,
+      billingProvider,
+      providerSelectionSource: providerSelection.source,
+      hasLinkedContract: providerSelection.hasLinkedContract,
+      activeProviders: checkoutApiConfig.activeProviders,
+      preferredProvider: checkoutApiConfig.preferredProvider,
+    });
+  },
+);
+
+exports.createBillingPortalSession = onRequest(
+  {
+    cors: true,
+    region: 'us-central1',
+    timeoutSeconds: 45,
+  },
+  async (request, response) => {
+    if (request.method !== 'POST') {
+      response.status(405).json({ error: 'method_not_allowed' });
+      return;
+    }
+
+    const payload = request.body && typeof request.body === 'object'
+      ? request.body
+      : {};
+    const tenantId = String(payload?.tenantId ?? '').trim();
+    if (!tenantId) {
+      response.status(400).json({
+        error: 'invalid_payload',
+        message: 'tenantId e obrigatorio.',
+      });
+      return;
+    }
+
+    const firestore = admin.firestore();
+    const authContext = await verifyFirebaseAuthFromRequest(request);
+    if (!authContext.ok) {
+      response.status(authContext.status).json({
+        error: authContext.error,
+        message: authContext.message,
+      });
+      return;
+    }
+
+    const actorPermission = await assertTenantBillingActorPermission({
+      firestore,
+      uid: authContext.uid,
+      tenantId,
+    });
+    if (!actorPermission.allowed) {
+      response.status(actorPermission.status).json({
+        error: actorPermission.error,
+        message: actorPermission.message,
+      });
+      return;
+    }
+
+    const tenantDoc = await firestore.collection('tenants').doc(tenantId).get();
+    if (!tenantDoc.exists) {
+      response.status(404).json({
+        error: 'tenant_not_found',
+        message: 'Tenant nao encontrado.',
+      });
+      return;
+    }
+
+    const tenantData = tenantDoc.data() || {};
+
+    const checkoutApiConfig = await readCheckoutApiConfig(firestore);
+    const providerSelection = resolveCheckoutApiProviderSelection({
+      payload,
+      checkoutApiConfig,
+      tenantData,
+    });
+    const billingProvider = providerSelection.provider;
+
+    if (
+      !providerSelection.hasLinkedContract &&
+      !checkoutApiConfig.activeProviders.includes(billingProvider)
+    ) {
+      response.status(409).json({
+        error: 'provider_disabled',
+        message: `Provider ${billingProvider} nao esta ativo na API Checkout.`,
+      });
+      return;
+    }
+
+    if (billingProvider === BILLING_PROVIDER_STRIPE) {
+      await proxyBillingRequestToFunction({
+        request,
+        response,
+        targetUrl: STRIPE_PORTAL_FUNCTION_URL,
+        method: 'POST',
+        extraResponseFields: {
+          billingProvider,
+          providerSelectionSource: providerSelection.source,
+          hasLinkedContract: providerSelection.hasLinkedContract,
+        },
+      });
+      return;
+    }
+
+    if (billingProvider === BILLING_PROVIDER_ASAAS) {
+      const asaasConfig = await readAsaasIntegrationConfig(firestore);
+      const portalUrl = resolveAsaasPortalFallbackUrl({ tenantData });
+
+      if (!portalUrl) {
+        response.status(409).json({
+          error: 'portal_reference_not_found',
+          message:
+            'Nao ha referencia Asaas para autoatendimento deste tenant (invoice/checkouts). Inicie um checkout e confirme pagamento para habilitar o acesso rapido.',
+          billingProvider,
+          providerSelectionSource: providerSelection.source,
+          hasLinkedContract: providerSelection.hasLinkedContract,
+          activeEnvironment: asaasConfig.activeEnvironment,
+        });
+        return;
+      }
+
+      response.status(200).json({
+        portalUrl,
+        activeEnvironment: asaasConfig.activeEnvironment,
+        billingProvider,
+        providerSelectionSource: providerSelection.source,
+        hasLinkedContract: providerSelection.hasLinkedContract,
+        message:
+          'Asaas nao possui portal de assinatura equivalente ao Stripe Billing Portal. Retornando link operacional mais recente (invoice/checkout) para autoatendimento.',
+      });
+      return;
+    }
+
+    response.status(400).json({
+      error: 'provider_not_supported',
+      message: `Provider de billing nao suportado: ${billingProvider}.`,
+      billingProvider,
+      providerSelectionSource: providerSelection.source,
+      hasLinkedContract: providerSelection.hasLinkedContract,
+      activeProviders: checkoutApiConfig.activeProviders,
+      preferredProvider: checkoutApiConfig.preferredProvider,
+    });
+  },
+);
+
+exports.updateBillingSeatAddons = onRequest(
+  {
+    cors: true,
+    region: 'us-central1',
+    timeoutSeconds: 60,
+    secrets: BILLING_RUNTIME_SECRETS,
+  },
+  async (request, response) => {
+    if (request.method !== 'POST') {
+      response.status(405).json({ error: 'method_not_allowed' });
+      return;
+    }
+
+    const payload =
+      request.body && typeof request.body === 'object'
+        ? request.body
+        : {};
+    const tenantId = String(payload?.tenantId ?? '').trim();
+    const billingPlanKey = normalizeBillingPlanKey(payload?.billingPlanKey);
+    const addonSeatsDelta = readNonNegativeInteger(payload?.addonSeatsDelta, 0);
+
+    if (!tenantId) {
+      response.status(400).json({
+        error: 'invalid_payload',
+        message: 'tenantId e obrigatorio.',
+      });
+      return;
+    }
+
+    if (addonSeatsDelta <= 0 || addonSeatsDelta > 10) {
+      response.status(400).json({
+        error: 'invalid_payload',
+        message: 'addonSeatsDelta deve ser inteiro entre 1 e 10.',
+      });
+      return;
+    }
+
+    const firestore = admin.firestore();
+    const authContext = await verifyFirebaseAuthFromRequest(request);
+    if (!authContext.ok) {
+      response.status(authContext.status).json({
+        error: authContext.error,
+        message: authContext.message,
+      });
+      return;
+    }
+
+    const actorPermission = await assertTenantBillingActorPermission({
+      firestore,
+      uid: authContext.uid,
+      tenantId,
+    });
+    if (!actorPermission.allowed) {
+      response.status(actorPermission.status).json({
+        error: actorPermission.error,
+        message: actorPermission.message,
+      });
+      return;
+    }
+
+    const tenantRef = firestore.collection('tenants').doc(tenantId);
+    const tenantDoc = await tenantRef.get();
+    if (!tenantDoc.exists) {
+      response.status(404).json({
+        error: 'tenant_not_found',
+        message: 'Tenant nao encontrado.',
+      });
+      return;
+    }
+
+    const tenantData = tenantDoc.data() || {};
+    const checkoutApiConfig = await readCheckoutApiConfig(firestore);
+    const providerSelection = resolveCheckoutApiProviderSelection({
+      payload,
+      checkoutApiConfig,
+      tenantData,
+    });
+    const billingProvider = providerSelection.provider;
+
+    if (
+      !providerSelection.hasLinkedContract &&
+      !checkoutApiConfig.activeProviders.includes(billingProvider)
+    ) {
+      response.status(409).json({
+        error: 'provider_disabled',
+        message: `Provider ${billingProvider} nao esta ativo na API Checkout.`,
+      });
+      return;
+    }
+
+    if (billingProvider !== BILLING_PROVIDER_STRIPE) {
+      response.status(409).json({
+        error: 'seat_addon_update_not_supported_for_provider',
+        message:
+          'Ajuste self-service de seats extras esta disponivel apenas para Stripe neste fluxo.',
+        billingProvider,
+        providerSelectionSource: providerSelection.source,
+        hasLinkedContract: providerSelection.hasLinkedContract,
+      });
+      return;
+    }
+
+    const runtime = await loadBillingProviderRuntime({
+      firestore,
+      providerKey: billingProvider,
+      requireWebhookSecret: false,
+    });
+    if (!runtime.ok) {
+      response.status(runtime.status).json({
+        error: runtime.error,
+        message: runtime.message,
+        billingProvider,
+      });
+      return;
+    }
+
+    let updateResult;
+    try {
+      updateResult = await applyStripeSeatAddonDeltaToActiveSubscription({
+        firestore,
+        stripeClient: runtime.stripeClient,
+        tenantId,
+        tenantData,
+        billingPlanKey,
+        addonSeatsDelta,
+        actorUid: authContext.uid,
+      });
+    } catch (error) {
+      response.status(502).json({
+        error: 'seat_addon_update_failed',
+        message: error instanceof Error ? error.message : String(error),
+        billingProvider,
+      });
+      return;
+    }
+
+    if (!updateResult.applied) {
+      response.status(updateResult.status || 409).json({
+        error: updateResult.error,
+        message: updateResult.message,
+        billingProvider,
+        action: updateResult.action,
+        providerSelectionSource: providerSelection.source,
+        hasLinkedContract: providerSelection.hasLinkedContract,
+      });
+      return;
+    }
+
+    let seatEnforcementSummary = null;
+    let seatEnforcementError = '';
+    try {
+      seatEnforcementSummary = await enforceTenantSeatAllowanceForTenant({
+        firestore,
+        tenantId,
+        nowDate: new Date(),
+      });
+    } catch (error) {
+      seatEnforcementError =
+        error instanceof Error ? error.message : String(error);
+      console.error('updateBillingSeatAddons seat enforcement failed', {
+        tenantId,
+        addonSeatsDelta,
+        error: seatEnforcementError,
+      });
+    }
+
+    response.status(200).json({
+      tenantId,
+      billingProvider,
+      billingPlanKey: updateResult.billingPlanKey,
+      addedSeats: updateResult.addedSeats,
+      previousAddonSeats: updateResult.previousAddonSeats,
+      currentAddonSeats: updateResult.currentAddonSeats,
+      stripeSubscriptionId: updateResult.stripeSubscriptionId,
+      stripeAddonPriceId: updateResult.stripeAddonPriceId,
+      invoiceId: updateResult.invoiceId,
+      invoiceStatus: updateResult.invoiceStatus,
+      invoiceUrl: updateResult.invoiceUrl,
+      message: updateResult.message,
+      seatEnforcementSummary,
+      seatEnforcementError,
+      providerSelectionSource: providerSelection.source,
+      hasLinkedContract: providerSelection.hasLinkedContract,
+    });
+  },
+);
+
+exports.listBillingCheckoutPlans = onRequest(
+  {
+    cors: true,
+    region: 'us-central1',
+    timeoutSeconds: 45,
+  },
+  async (request, response) => {
+    if (request.method !== 'POST' && request.method !== 'GET') {
+      response.status(405).json({ error: 'method_not_allowed' });
+      return;
+    }
+
+    const payload =
+      request.method === 'GET'
+        ? request.query
+        : request.body && typeof request.body === 'object'
+          ? request.body
+          : {};
+
+    const tenantId = String(payload?.tenantId ?? '').trim();
+    if (!tenantId) {
+      response.status(400).json({
+        error: 'invalid_payload',
+        message: 'tenantId e obrigatorio.',
+      });
+      return;
+    }
+
+    const firestore = admin.firestore();
+    const authContext = await verifyFirebaseAuthFromRequest(request);
+    if (!authContext.ok) {
+      response.status(authContext.status).json({
+        error: authContext.error,
+        message: authContext.message,
+      });
+      return;
+    }
+
+    const actorPermission = await assertTenantBillingActorPermission({
+      firestore,
+      uid: authContext.uid,
+      tenantId,
+    });
+    if (!actorPermission.allowed) {
+      response.status(actorPermission.status).json({
+        error: actorPermission.error,
+        message: actorPermission.message,
+      });
+      return;
+    }
+
+    const tenantDoc = await firestore.collection('tenants').doc(tenantId).get();
+    if (!tenantDoc.exists) {
+      response.status(404).json({
+        error: 'tenant_not_found',
+        message: 'Tenant nao encontrado.',
+      });
+      return;
+    }
+
+    const tenantData = tenantDoc.data() || {};
+
+    const checkoutApiConfig = await readCheckoutApiConfig(firestore);
+    const providerSelection = resolveCheckoutApiProviderSelection({
+      payload,
+      checkoutApiConfig,
+      tenantData,
+    });
+    const billingProvider = providerSelection.provider;
+
+    if (
+      !providerSelection.hasLinkedContract &&
+      !checkoutApiConfig.activeProviders.includes(billingProvider)
+    ) {
+      response.status(409).json({
+        error: 'provider_disabled',
+        message: `Provider ${billingProvider} nao esta ativo na API Checkout.`,
+      });
+      return;
+    }
+
+    if (billingProvider === BILLING_PROVIDER_STRIPE) {
+      await proxyBillingRequestToFunction({
+        request,
+        response,
+        targetUrl: STRIPE_LIST_PLANS_FUNCTION_URL,
+        method: request.method,
+        extraResponseFields: {
+          billingProvider,
+          providerSelectionSource: providerSelection.source,
+          hasLinkedContract: providerSelection.hasLinkedContract,
+        },
+      });
+      return;
+    }
+
+    if (billingProvider === BILLING_PROVIDER_ASAAS) {
+      const listed = await listAsaasCheckoutPlansForTenant({
+        firestore,
+        tenantData,
+      });
+
+      response.status(200).json({
+        tenantId,
+        billingProvider,
+        providerSelectionSource: providerSelection.source,
+        hasLinkedContract: providerSelection.hasLinkedContract,
+        workspaceType: listed.workspaceType,
+        requiredPrefix: listed.requiredPrefix,
+        plans: listed.plans,
+      });
+      return;
+    }
+
+    response.status(200).json({
+      tenantId,
+      billingProvider,
+      providerSelectionSource: providerSelection.source,
+      hasLinkedContract: providerSelection.hasLinkedContract,
+      workspaceType: '',
+      requiredPrefix: '',
+      plans: [],
+      message: `Provider de billing nao suportado: ${billingProvider}.`,
     });
   },
 );
@@ -5444,6 +6560,341 @@ function normalizeBillingPlanKey(rawValue) {
     .replace(/\s+/g, '_');
 }
 
+function normalizeBillingProviderKey(rawValue) {
+  const normalized = String(rawValue ?? '').trim().toLowerCase();
+  if (!normalized) {
+    return BILLING_PROVIDER_DEFAULT;
+  }
+  if (normalized === 'stripe') {
+    return BILLING_PROVIDER_STRIPE;
+  }
+  if (normalized === 'asaas') {
+    return BILLING_PROVIDER_ASAAS;
+  }
+  return normalized;
+}
+
+function normalizeBillingSelfServiceAction(rawValue) {
+  const normalized = String(rawValue ?? '').trim().toLowerCase();
+  if (!normalized) {
+    return '';
+  }
+
+  if (
+    normalized === 'stop_renewal' ||
+    normalized === 'pause_renewal' ||
+    normalized === 'suspend_renewal' ||
+    normalized === 'suspend'
+  ) {
+    return 'stop_renewal';
+  }
+
+  if (
+    normalized === 'cancel_now' ||
+    normalized === 'cancel_plan' ||
+    normalized === 'cancel'
+  ) {
+    return 'cancel_now';
+  }
+
+  return '';
+}
+
+function resolveTenantBillingProviderKey({ tenantData, providerHint }) {
+  const rawHint = String(providerHint ?? '').trim();
+  const hint = rawHint ? normalizeBillingProviderKey(rawHint) : '';
+  if (
+    hint === BILLING_PROVIDER_STRIPE ||
+    hint === BILLING_PROVIDER_ASAAS
+  ) {
+    return hint;
+  }
+
+  const linkedProvider = resolveTenantLinkedBillingProvider(tenantData);
+
+exports.manageTenantBillingSelfService = onRequest(
+  {
+    cors: true,
+    region: 'us-central1',
+    timeoutSeconds: 60,
+    secrets: BILLING_RUNTIME_SECRETS,
+  },
+  async (request, response) => {
+    if (request.method !== 'POST') {
+      response.status(405).json({ error: 'method_not_allowed' });
+      return;
+    }
+
+    const payload = request.body && typeof request.body === 'object'
+      ? request.body
+      : {};
+
+    const tenantId = String(payload?.tenantId ?? '').trim();
+    const action = normalizeBillingSelfServiceAction(payload?.action);
+    const reason = String(payload?.reason ?? '').trim().slice(0, 240);
+
+    if (!tenantId) {
+      response.status(400).json({
+        error: 'invalid_payload',
+        message: 'tenantId e obrigatorio.',
+      });
+      return;
+    }
+
+    if (!action) {
+      response.status(400).json({
+        error: 'invalid_action',
+        message: 'Acao invalida. Use stop_renewal ou cancel_now.',
+      });
+      return;
+    }
+
+    const firestore = admin.firestore();
+    const authContext = await verifyFirebaseAuthFromRequest(request);
+    if (!authContext.ok) {
+      response.status(authContext.status).json({
+        error: authContext.error,
+        message: authContext.message,
+      });
+      return;
+    }
+
+    const actorPermission = await assertTenantBillingActorPermission({
+      firestore,
+      uid: authContext.uid,
+      tenantId,
+    });
+    if (!actorPermission.allowed) {
+      response.status(actorPermission.status).json({
+        error: actorPermission.error,
+        message: actorPermission.message,
+      });
+      return;
+    }
+
+    const tenantRef = firestore.collection('tenants').doc(tenantId);
+    const tenantDoc = await tenantRef.get();
+    if (!tenantDoc.exists) {
+      response.status(404).json({
+        error: 'tenant_not_found',
+        message: 'Tenant nao encontrado.',
+      });
+      return;
+    }
+
+    const tenantData = tenantDoc.data() || {};
+    const checkoutApiConfig = await readCheckoutApiConfig(firestore);
+    const providerSelection = resolveCheckoutApiProviderSelection({
+      payload,
+      checkoutApiConfig,
+      tenantData,
+    });
+    const billingProvider = providerSelection.provider;
+
+    if (
+      !providerSelection.hasLinkedContract &&
+      !checkoutApiConfig.activeProviders.includes(billingProvider)
+    ) {
+      response.status(409).json({
+        error: 'provider_disabled',
+        message: `Provider ${billingProvider} nao esta ativo na API Checkout.`,
+      });
+      return;
+    }
+
+    if (billingProvider !== BILLING_PROVIDER_ASAAS) {
+      response.status(409).json({
+        error: 'self_service_action_not_supported_for_provider',
+        message:
+          'Acoes self-service de cancelamento/interrupcao estao disponiveis apenas para Asaas. Para Stripe, utilize o portal de billing.',
+        billingProvider,
+        providerSelectionSource: providerSelection.source,
+        hasLinkedContract: providerSelection.hasLinkedContract,
+      });
+      return;
+    }
+
+    const runtime = await loadBillingProviderRuntime({
+      firestore,
+      providerKey: billingProvider,
+      requireWebhookSecret: false,
+    });
+    if (!runtime.ok) {
+      response.status(runtime.status).json({
+        error: runtime.error,
+        message: runtime.message,
+        billingProvider,
+      });
+      return;
+    }
+
+    const nowDate = new Date();
+    const nowIso = nowDate.toISOString();
+
+    let actionResult;
+    try {
+      actionResult = await applyTenantBillingSelfServiceActionToProvider({
+        providerKey: billingProvider,
+        asaasRuntime: {
+          environment: runtime.environment,
+          apiKey: runtime.asaasApiKey,
+          apiBaseUrl: runtime.asaasApiBaseUrl,
+        },
+        tenantData,
+        action,
+      });
+    } catch (error) {
+      response.status(502).json({
+        error: 'provider_action_failed',
+        message: error instanceof Error ? error.message : String(error),
+        billingProvider,
+      });
+      return;
+    }
+
+    if (!actionResult.applied) {
+      response.status(409).json({
+        error: 'provider_action_not_applied',
+        message: actionResult.message,
+        billingProvider,
+        requestedAction: action,
+        providerAction: actionResult.action,
+      });
+      return;
+    }
+
+    const nextBillingStatus = String(
+      actionResult.billingStatus ||
+        (action === 'cancel_now' ? 'canceled' : 'suspended'),
+    )
+      .trim()
+      .toLowerCase();
+
+    const patch = {
+      billingProvider,
+      billingUpdatedAt: nowIso,
+      billingStatus: nextBillingStatus,
+      billingAccountState: mapBillingStatusToAccountState(nextBillingStatus),
+      billingPastDueSinceAt: '',
+      billingSuspendedAt:
+        nextBillingStatus === 'active' || nextBillingStatus === 'trial'
+          ? ''
+          : nowIso,
+      billingLastSelfServiceAction: action,
+      billingLastSelfServiceReason: reason,
+      billingLastSelfServiceActorUid: authContext.uid,
+      billingLastSelfServiceActorEmail: authContext.email,
+      billingLastSelfServiceAt: nowIso,
+    };
+
+    await tenantRef.set(patch, { merge: true });
+
+    let seatEnforcementSummary = null;
+    let seatEnforcementError = '';
+    try {
+      seatEnforcementSummary = await enforceTenantSeatAllowanceForTenant({
+        firestore,
+        tenantId,
+        nowDate,
+      });
+    } catch (error) {
+      seatEnforcementError =
+        error instanceof Error ? error.message : String(error);
+      console.error('manageTenantBillingSelfService seat enforcement failed', {
+        tenantId,
+        action,
+        error: seatEnforcementError,
+      });
+    }
+
+    await firestore.collection('tenant_billing_audit').add({
+      action: `self_service_${action}`,
+      tenantId,
+      actorUid: authContext.uid,
+      actorEmail: authContext.email,
+      actorLabel: authContext.email || authContext.uid,
+      details: {
+        reason,
+        billingProvider,
+        providerAction: actionResult.action,
+        providerMessage: actionResult.message,
+        billingStatus: patch.billingStatus,
+        billingAccountState: patch.billingAccountState,
+        seatEnforcementSummary,
+        seatEnforcementError,
+      },
+      createdAt: admin.firestore.Timestamp.fromDate(nowDate),
+    });
+
+    response.status(200).json({
+      tenantId,
+      billingProvider,
+      requestedAction: action,
+      providerAction: actionResult.action,
+      message: actionResult.message,
+      billingStatus: patch.billingStatus,
+      billingAccountState: patch.billingAccountState,
+      updatedAt: patch.billingUpdatedAt,
+      seatEnforcementSummary,
+      seatEnforcementError,
+    });
+  },
+);
+  if (linkedProvider) {
+    return linkedProvider;
+  }
+
+  const tenantProvider = normalizeBillingProviderKey(
+    tenantData?.billingProvider ?? tenantData?.billingGateway,
+  );
+  if (
+    tenantProvider === BILLING_PROVIDER_STRIPE ||
+    tenantProvider === BILLING_PROVIDER_ASAAS
+  ) {
+    return tenantProvider;
+  }
+
+  return BILLING_PROVIDER_DEFAULT;
+}
+
+function resolveTenantLinkedBillingProvider(tenantData) {
+  const data = tenantData && typeof tenantData === 'object' ? tenantData : {};
+
+  const explicitContractProvider = normalizeBillingProviderKey(
+    data.billingContractProvider,
+  );
+  if (
+    explicitContractProvider === BILLING_PROVIDER_STRIPE ||
+    explicitContractProvider === BILLING_PROVIDER_ASAAS
+  ) {
+    return explicitContractProvider;
+  }
+
+  const stripeSubscriptionId = String(data.stripeSubscriptionId ?? '').trim();
+  const asaasSubscriptionId = String(data.asaasSubscriptionId ?? '').trim();
+  const hasStripeLink = Boolean(stripeSubscriptionId);
+  const hasAsaasLink = Boolean(asaasSubscriptionId);
+
+  if (hasStripeLink && !hasAsaasLink) {
+    return BILLING_PROVIDER_STRIPE;
+  }
+  if (hasAsaasLink && !hasStripeLink) {
+    return BILLING_PROVIDER_ASAAS;
+  }
+
+  if (hasStripeLink && hasAsaasLink) {
+    const providerFromTenant = normalizeBillingProviderKey(data.billingProvider);
+    if (
+      providerFromTenant === BILLING_PROVIDER_STRIPE ||
+      providerFromTenant === BILLING_PROVIDER_ASAAS
+    ) {
+      return providerFromTenant;
+    }
+  }
+
+  return '';
+}
+
 function buildStripeRecommendedLookupKey({
   billingPlanKey,
   currency,
@@ -5727,6 +7178,218 @@ async function loadStripeIntegrationRuntime({ firestore, requireWebhookSecret })
   };
 }
 
+async function loadAsaasIntegrationRuntime({ firestore, requireWebhookSecret }) {
+  const config = await readAsaasIntegrationConfig(firestore);
+  const environment = config.activeEnvironment;
+  const apiKey = getAsaasApiKeyForEnvironment(environment);
+
+  if (!apiKey) {
+    return {
+      ok: false,
+      status: 503,
+      error: 'integration_not_ready',
+      message: `API key Asaas ausente para ambiente ${environment}. Configure ASAAS_API_KEY_${environment === 'production' ? 'PRODUCTION' : 'SANDBOX'}.`,
+      environment,
+      webhookSecret: '',
+      enabledEvents: config.webhookEvents,
+      stripeClient: null,
+      asaasApiKey: '',
+      asaasApiBaseUrl: '',
+    };
+  }
+
+  const webhookToken = getAsaasWebhookTokenForEnvironment(environment);
+  if (requireWebhookSecret && !webhookToken) {
+    return {
+      ok: false,
+      status: 503,
+      error: 'integration_not_ready',
+      message: `Webhook token Asaas ausente para ambiente ${environment}. Configure ASAAS_WEBHOOK_TOKEN_${environment === 'production' ? 'PRODUCTION' : 'SANDBOX'}.`,
+      environment,
+      webhookSecret: '',
+      enabledEvents: config.webhookEvents,
+      stripeClient: null,
+      asaasApiKey: '',
+      asaasApiBaseUrl: '',
+    };
+  }
+
+  return {
+    ok: true,
+    status: 200,
+    error: '',
+    message: '',
+    environment,
+    webhookSecret: webhookToken,
+    enabledEvents:
+      config.webhookEvents.length > 0
+        ? config.webhookEvents
+        : ASAAS_DEFAULT_WEBHOOK_EVENTS,
+    stripeClient: null,
+    asaasApiKey: apiKey,
+    asaasApiBaseUrl: getAsaasApiBaseUrlForEnvironment(environment),
+  };
+}
+
+async function loadBillingProviderRuntime({
+  firestore,
+  providerKey,
+  requireWebhookSecret,
+}) {
+  const normalizedProvider = normalizeBillingProviderKey(providerKey);
+  if (normalizedProvider === BILLING_PROVIDER_STRIPE) {
+    return loadStripeIntegrationRuntime({
+      firestore,
+      requireWebhookSecret,
+    });
+  }
+
+  if (normalizedProvider === BILLING_PROVIDER_ASAAS) {
+    return loadAsaasIntegrationRuntime({
+      firestore,
+      requireWebhookSecret,
+    });
+  }
+
+  return {
+    ok: false,
+    status: 400,
+    error: 'provider_not_supported',
+    message: `Provider de billing nao suportado: ${normalizedProvider}.`,
+    environment: '',
+    webhookSecret: '',
+    enabledEvents: [],
+    stripeClient: null,
+    asaasApiKey: '',
+    asaasApiBaseUrl: '',
+  };
+}
+
+async function processBillingWebhookEvent({
+  firestore,
+  providerKey,
+  event,
+  enabledEvents,
+  stripeClient,
+  asaasRuntime,
+}) {
+  const normalizedProvider = normalizeBillingProviderKey(providerKey);
+  if (normalizedProvider === BILLING_PROVIDER_STRIPE) {
+    return processStripeWebhookEvent({
+      firestore,
+      event,
+      enabledEvents,
+      stripeClient,
+    });
+  }
+
+  if (normalizedProvider === BILLING_PROVIDER_ASAAS) {
+    return processAsaasWebhookEvent({
+      firestore,
+      event,
+      enabledEvents,
+      asaasRuntime,
+    });
+  }
+
+  throw new Error(
+    `Webhook nao implementado para provider ${normalizedProvider}.`,
+  );
+}
+
+async function reconcileTenantBillingState({
+  firestore,
+  providerKey,
+  tenantId,
+  stripeClient,
+  asaasRuntime,
+}) {
+  const normalizedProvider = normalizeBillingProviderKey(providerKey);
+  if (normalizedProvider === BILLING_PROVIDER_STRIPE) {
+    return reconcileTenantStripeState({
+      firestore,
+      stripeClient,
+      tenantId,
+    });
+  }
+
+  if (normalizedProvider === BILLING_PROVIDER_ASAAS) {
+    return reconcileTenantAsaasState({
+      firestore,
+      asaasRuntime,
+      tenantId,
+    });
+  }
+
+  throw new Error(
+    `Reconciliacao nao implementada para provider ${normalizedProvider}.`,
+  );
+}
+
+async function applyTenantBillingActionToProvider({
+  providerKey,
+  stripeClient,
+  asaasRuntime,
+  tenantId,
+  tenantData,
+  action,
+  reason,
+  actorUid,
+}) {
+  const normalizedProvider = normalizeBillingProviderKey(providerKey);
+  if (normalizedProvider === BILLING_PROVIDER_STRIPE) {
+    return applyTenantBillingActionToStripe({
+      stripeClient,
+      tenantId,
+      tenantData,
+      action,
+      reason,
+      actorUid,
+    });
+  }
+
+  if (normalizedProvider === BILLING_PROVIDER_ASAAS) {
+    return applyTenantBillingActionToAsaas({
+      asaasRuntime,
+      tenantId,
+      tenantData,
+      action,
+      reason,
+      actorUid,
+    });
+  }
+
+  return {
+    applied: false,
+    action: 'provider_not_implemented',
+    message: `Acao de billing ainda nao implementada para provider ${normalizedProvider}.`,
+  };
+}
+
+async function applyTenantBillingSelfServiceActionToProvider({
+  providerKey,
+  asaasRuntime,
+  tenantData,
+  action,
+}) {
+  const normalizedProvider = normalizeBillingProviderKey(providerKey);
+  if (normalizedProvider === BILLING_PROVIDER_ASAAS) {
+    return applyTenantBillingSelfServiceActionToAsaas({
+      asaasRuntime,
+      tenantData,
+      action,
+    });
+  }
+
+  return {
+    applied: false,
+    action: 'provider_not_supported',
+    message:
+      `Acoes self-service de billing nao suportadas para provider ${normalizedProvider}.`,
+    billingStatus: '',
+  };
+}
+
 async function readStripeIntegrationConfig(firestore) {
   const doc = await firestore.collection('billing_integrations').doc('stripe').get();
   const data = doc.data() || {};
@@ -5752,6 +7415,874 @@ async function readStripeIntegrationConfig(firestore) {
     webhookEvents:
       webhookEvents.length > 0 ? webhookEvents : STRIPE_DEFAULT_WEBHOOK_EVENTS,
   };
+}
+
+async function readCheckoutApiConfig(firestore) {
+  const doc = await firestore.collection('billing_integrations').doc('checkout_api').get();
+  const data = doc.data() || {};
+
+  const activeProvidersRaw = Array.isArray(data.activeProviders)
+    ? data.activeProviders
+    : [];
+  const normalizedActiveProviders = new Set(
+    activeProvidersRaw
+      .map((value) => normalizeBillingProviderKey(value))
+      .filter(
+        (value) =>
+          value === BILLING_PROVIDER_STRIPE || value === BILLING_PROVIDER_ASAAS,
+      ),
+  );
+
+  if (normalizedActiveProviders.size === 0) {
+    normalizedActiveProviders.add(BILLING_PROVIDER_STRIPE);
+  }
+
+  const preferredProviderCandidate = normalizeBillingProviderKey(
+    data.preferredProvider,
+  );
+  const preferredProvider = normalizedActiveProviders.has(preferredProviderCandidate)
+    ? preferredProviderCandidate
+    : normalizedActiveProviders.has(BILLING_PROVIDER_STRIPE)
+      ? BILLING_PROVIDER_STRIPE
+      : [...normalizedActiveProviders][0];
+
+  return {
+    activeProviders: [...normalizedActiveProviders],
+    preferredProvider,
+  };
+}
+
+function resolveCheckoutApiProviderSelection({
+  payload,
+  checkoutApiConfig,
+  tenantData,
+}) {
+  const linkedProvider = resolveTenantLinkedBillingProvider(tenantData);
+  if (linkedProvider) {
+    return {
+      provider: linkedProvider,
+      hasLinkedContract: true,
+      source: 'existing_contract',
+    };
+  }
+
+  const rawProvider = String(payload?.provider ?? '').trim().toLowerCase();
+  const requestedProvider = rawProvider
+    ? normalizeBillingProviderKey(rawProvider)
+    : '';
+
+  if (
+    requestedProvider &&
+    checkoutApiConfig.activeProviders.includes(requestedProvider)
+  ) {
+    return {
+      provider: requestedProvider,
+      hasLinkedContract: false,
+      source: 'payload_provider',
+    };
+  }
+
+  if (checkoutApiConfig.activeProviders.includes(checkoutApiConfig.preferredProvider)) {
+    return {
+      provider: checkoutApiConfig.preferredProvider,
+      hasLinkedContract: false,
+      source: 'preferred_provider',
+    };
+  }
+
+  return {
+    provider: checkoutApiConfig.activeProviders[0] || BILLING_PROVIDER_DEFAULT,
+    hasLinkedContract: false,
+    source: 'first_active_provider',
+  };
+}
+
+function resolveAsaasCallbackUrls({
+  payload,
+  tenantData,
+  tenantId,
+}) {
+  const payloadSuccess = String(payload?.successUrl ?? '').trim();
+  const payloadCancel = String(payload?.cancelUrl ?? '').trim();
+  const payloadExpired = String(payload?.expiredUrl ?? '').trim();
+  const tenantSuccess = String(tenantData?.billingCheckoutSuccessUrl ?? '').trim();
+  const tenantCancel = String(tenantData?.billingCheckoutCancelUrl ?? '').trim();
+  const tenantExpired = String(tenantData?.billingCheckoutExpiredUrl ?? '').trim();
+
+  const fallbackBase =
+    String(process.env.BILLING_CHECKOUT_CALLBACK_BASE_URL ?? '').trim() ||
+    'https://portal.smartsfa.com.br';
+
+  const normalizedFallbackBase = fallbackBase.endsWith('/')
+    ? fallbackBase.slice(0, -1)
+    : fallbackBase;
+
+  const fallbackSuccess =
+    `${normalizedFallbackBase}/billing/checkout/success` +
+    `?tenantId=${encodeURIComponent(tenantId)}`;
+  const fallbackCancel =
+    `${normalizedFallbackBase}/billing/checkout/cancel` +
+    `?tenantId=${encodeURIComponent(tenantId)}`;
+  const fallbackExpired =
+    `${normalizedFallbackBase}/billing/checkout/expired` +
+    `?tenantId=${encodeURIComponent(tenantId)}`;
+
+  const successUrl = payloadSuccess || tenantSuccess || fallbackSuccess;
+  const cancelUrl = payloadCancel || tenantCancel || fallbackCancel;
+  const expiredUrl = payloadExpired || tenantExpired || fallbackExpired;
+
+  if (!isValidHttpAbsoluteUrl(successUrl) || !isValidHttpAbsoluteUrl(cancelUrl)) {
+    return {
+      ok: false,
+      error: 'invalid_callback_url',
+      message:
+        'successUrl e cancelUrl devem ser URLs absolutas http(s).',
+      callback: null,
+    };
+  }
+
+  const callback = {
+    successUrl,
+    cancelUrl,
+  };
+  if (isValidHttpAbsoluteUrl(expiredUrl)) {
+    callback.expiredUrl = expiredUrl;
+  }
+
+  return {
+    ok: true,
+    error: '',
+    message: '',
+    callback,
+  };
+}
+
+function mapStripeIntervalToAsaasCycle(interval, intervalCount) {
+  const normalizedInterval = String(interval ?? '').trim().toLowerCase();
+  const countInput = Number(intervalCount ?? 0);
+  const count = Number.isFinite(countInput) && countInput > 0
+    ? Math.floor(countInput)
+    : 1;
+
+  if (normalizedInterval === 'week') {
+    if (count <= 1) {
+      return 'WEEKLY';
+    }
+    if (count === 2) {
+      return 'BIWEEKLY';
+    }
+    return 'MONTHLY';
+  }
+
+  if (normalizedInterval === 'year') {
+    return 'YEARLY';
+  }
+
+  if (normalizedInterval === 'month') {
+    if (count <= 1) {
+      return 'MONTHLY';
+    }
+    if (count === 2) {
+      return 'BIMONTHLY';
+    }
+    if (count === 3) {
+      return 'QUARTERLY';
+    }
+    if (count === 6) {
+      return 'SEMIANNUALLY';
+    }
+    if (count >= 12) {
+      return 'YEARLY';
+    }
+    return 'MONTHLY';
+  }
+
+  return 'MONTHLY';
+}
+
+function normalizeAsaasBillingTypes(value) {
+  const input = Array.isArray(value)
+    ? value
+    : [value];
+
+  const allowed = new Set(['PIX', 'CREDIT_CARD']);
+  const normalized = [];
+  for (const item of input) {
+    const candidate = String(item ?? '').trim().toUpperCase();
+    if (allowed.has(candidate) && !normalized.includes(candidate)) {
+      normalized.push(candidate);
+    }
+  }
+
+  if (normalized.length === 0) {
+    return [...ASAAS_CHECKOUT_DEFAULT_BILLING_TYPES];
+  }
+  return normalized;
+}
+
+function normalizeAsaasChargeType(value) {
+  const candidate = String(value ?? '').trim().toUpperCase();
+  return candidate === 'DETACHED' || candidate === 'INSTALLMENT' || candidate === 'RECURRENT'
+    ? candidate
+    : ASAAS_CHECKOUT_DEFAULT_CHARGE_TYPE;
+}
+
+function normalizeAsaasMinutesToExpire(value) {
+  const input = Number(value ?? 0);
+  if (!Number.isFinite(input) || input <= 0) {
+    return ASAAS_CHECKOUT_DEFAULT_MINUTES_TO_EXPIRE;
+  }
+  const rounded = Math.floor(input);
+  if (rounded < 10) {
+    return 10;
+  }
+  if (rounded > 1440) {
+    return 1440;
+  }
+  return rounded;
+}
+
+function buildAsaasCheckoutExternalReference({ tenantId, billingPlanKey }) {
+  const now = Date.now();
+  return `smartsfa:${tenantId}:${billingPlanKey}:${now}`.slice(0, 200);
+}
+
+async function resolveAsaasPlanMapping({
+  firestore,
+  tenantData,
+  billingPlanKey,
+}) {
+  const normalizedPlanKey = normalizeBillingPlanKey(billingPlanKey);
+  if (!normalizedPlanKey) {
+    return {
+      ok: false,
+      status: 400,
+      error: 'invalid_plan_key',
+      message: 'billingPlanKey invalido.',
+      mapping: null,
+    };
+  }
+
+  const stripeMapping = await loadStripePlanMapping({
+    firestore,
+    billingPlanKey: normalizedPlanKey,
+  });
+  if (!stripeMapping) {
+    return {
+      ok: false,
+      status: 404,
+      error: 'plan_mapping_not_found',
+      message: 'Plano nao encontrado no catalogo de billing.',
+      mapping: null,
+    };
+  }
+
+  const amountMinorUnits = Number(stripeMapping.stripeUnitAmount ?? 0);
+  if (!Number.isFinite(amountMinorUnits) || amountMinorUnits <= 0) {
+    return {
+      ok: false,
+      status: 409,
+      error: 'invalid_plan_amount',
+      message: 'Plano sem valor valido para checkout.',
+      mapping: null,
+    };
+  }
+
+  const currency = String(stripeMapping.stripeCurrency ?? '').trim().toLowerCase() || 'brl';
+  if (currency !== 'brl') {
+    return {
+      ok: false,
+      status: 409,
+      error: 'unsupported_currency',
+      message: 'Checkout Asaas suporta apenas planos em BRL neste fluxo.',
+      mapping: null,
+    };
+  }
+
+  const tenantName = String(
+    tenantData?.displayName ||
+      tenantData?.nomeFantasia ||
+      tenantData?.razaoSocial ||
+      tenantData?.name ||
+      tenantData?.tenantName ||
+      '',
+  ).trim();
+
+  const fallbackItemName = normalizedPlanKey.slice(0, 30);
+  const itemName = String(
+    stripeMapping.planDisplayName ||
+      stripeMapping.stripeProductName ||
+      stripeMapping.stripePriceNickname ||
+      fallbackItemName,
+  )
+    .trim()
+    .slice(0, 30);
+
+  const itemDescription = String(
+    stripeMapping.planDisplayAmount ||
+      stripeMapping.stripeProductName ||
+      itemName,
+  )
+    .trim()
+    .slice(0, 150);
+
+  const cycle = mapStripeIntervalToAsaasCycle(
+    stripeMapping.stripeRecurringInterval,
+    stripeMapping.stripeRecurringIntervalCount,
+  );
+
+  const customerData = {
+    name: tenantName || `Tenant ${normalizedPlanKey}`,
+  };
+  const tenantEmail = String(tenantData?.email ?? '').trim().toLowerCase();
+  if (tenantEmail) {
+    customerData.email = tenantEmail;
+  }
+
+  const cpfCnpj = String(tenantData?.cnpj ?? tenantData?.cpfCnpj ?? '').trim();
+  if (cpfCnpj) {
+    customerData.cpfCnpj = cpfCnpj.replace(/\D+/g, '').slice(0, 14);
+  }
+
+  return {
+    ok: true,
+    status: 200,
+    error: '',
+    message: '',
+    mapping: {
+      billingPlanKey: normalizedPlanKey,
+      amount: amountMinorUnits / 100,
+      cycle,
+      itemName: itemName || fallbackItemName,
+      itemDescription,
+      customerData,
+    },
+  };
+}
+
+function buildAsaasCheckoutPayload({
+  payload,
+  tenantId,
+  tenantData,
+  resolvedPlan,
+  callback,
+}) {
+  const plan = resolvedPlan.mapping;
+  const billingTypes = normalizeAsaasBillingTypes(payload?.billingTypes);
+  const chargeType = normalizeAsaasChargeType(payload?.chargeType);
+  const minutesToExpire = normalizeAsaasMinutesToExpire(payload?.minutesToExpire);
+  const dueDate = new Date();
+  dueDate.setUTCDate(dueDate.getUTCDate() + 1);
+  const nextDueDate = dueDate.toISOString().slice(0, 10);
+
+  const requestPayload = {
+    billingTypes,
+    chargeTypes: [chargeType],
+    minutesToExpire,
+    externalReference: buildAsaasCheckoutExternalReference({
+      tenantId,
+      billingPlanKey: plan.billingPlanKey,
+    }),
+    callback,
+    items: [
+      {
+        externalReference: plan.billingPlanKey,
+        description: plan.itemDescription,
+        imageBase64: ASAAS_CHECKOUT_PLACEHOLDER_IMAGE_BASE64,
+        name: plan.itemName,
+        quantity: 1,
+        value: plan.amount,
+      },
+    ],
+  };
+
+  const customerData = plan.customerData;
+  if (customerData?.name) {
+    requestPayload.customerData = customerData;
+  }
+
+  if (chargeType === 'RECURRENT') {
+    requestPayload.subscription = {
+      cycle: plan.cycle,
+      nextDueDate,
+    };
+  }
+
+  const walletId = String(
+    payload?.walletId || tenantData?.billingAsaasWalletId || '',
+  ).trim();
+  if (walletId) {
+    requestPayload.splits = [
+      {
+        walletId,
+      },
+    ];
+  }
+
+  return requestPayload;
+}
+
+async function createAsaasCheckoutSession({
+  firestore,
+  tenantId,
+  tenantData,
+  payload,
+  providerSelection,
+}) {
+  const billingPlanKey = normalizeBillingPlanKey(payload?.billingPlanKey);
+  if (!billingPlanKey) {
+    return {
+      ok: false,
+      status: 400,
+      error: 'invalid_payload',
+      message: 'billingPlanKey e obrigatorio.',
+      body: null,
+    };
+  }
+
+  const callbackResolution = resolveAsaasCallbackUrls({
+    payload,
+    tenantData,
+    tenantId,
+  });
+  if (!callbackResolution.ok) {
+    return {
+      ok: false,
+      status: 400,
+      error: callbackResolution.error,
+      message: callbackResolution.message,
+      body: null,
+    };
+  }
+
+  const runtime = await loadAsaasIntegrationRuntime({
+    firestore,
+    requireWebhookSecret: false,
+  });
+  if (!runtime.ok) {
+    return {
+      ok: false,
+      status: runtime.status,
+      error: runtime.error,
+      message: runtime.message,
+      body: null,
+    };
+  }
+
+  const resolvedPlan = await resolveAsaasPlanMapping({
+    firestore,
+    tenantData,
+    billingPlanKey,
+  });
+  if (!resolvedPlan.ok) {
+    return {
+      ok: false,
+      status: resolvedPlan.status,
+      error: resolvedPlan.error,
+      message: resolvedPlan.message,
+      body: null,
+    };
+  }
+
+  const requestPayload = buildAsaasCheckoutPayload({
+    payload,
+    tenantId,
+    tenantData,
+    resolvedPlan,
+    callback: callbackResolution.callback,
+  });
+
+  const checkoutResponse = await fetchAsaasApiJson({
+    apiBaseUrl: runtime.asaasApiBaseUrl,
+    apiKey: runtime.asaasApiKey,
+    path: '/checkouts',
+    method: 'POST',
+    body: requestPayload,
+  });
+
+  const checkoutSessionId = String(checkoutResponse?.id ?? '').trim();
+  const checkoutUrl = String(checkoutResponse?.link ?? '').trim() ||
+    (checkoutSessionId
+      ? `https://asaas.com/checkoutSession/show?id=${encodeURIComponent(checkoutSessionId)}`
+      : '');
+
+  if (!checkoutSessionId || !checkoutUrl) {
+    return {
+      ok: false,
+      status: 502,
+      error: 'provider_invalid_response',
+      message: 'Asaas retornou resposta invalida ao criar checkout.',
+      body: null,
+    };
+  }
+
+  const nowIso = new Date().toISOString();
+  await firestore.collection('tenants').doc(tenantId).set(
+    {
+      billingProvider: BILLING_PROVIDER_ASAAS,
+      billingPlanKey: resolvedPlan.mapping.billingPlanKey,
+      billingUpdatedAt: nowIso,
+      asaasCheckoutId: checkoutSessionId,
+      asaasCheckoutLink: checkoutUrl,
+      asaasCheckoutStatus: String(checkoutResponse?.status ?? '').trim(),
+      asaasCheckoutExternalReference: String(
+        checkoutResponse?.externalReference || requestPayload.externalReference || '',
+      ).trim(),
+      asaasCheckoutLastCreatedAt: nowIso,
+      billingLastCheckoutProvider: BILLING_PROVIDER_ASAAS,
+      billingLastCheckoutCreatedAt: nowIso,
+    },
+    { merge: true },
+  );
+
+  return {
+    ok: true,
+    status: 200,
+    error: '',
+    message: '',
+    body: {
+      tenantId,
+      billingProvider: BILLING_PROVIDER_ASAAS,
+      providerSelectionSource: providerSelection.source,
+      hasLinkedContract: providerSelection.hasLinkedContract,
+      activeEnvironment: runtime.environment,
+      checkoutSessionId,
+      checkoutUrl,
+      asaasCheckoutId: checkoutSessionId,
+      asaasCheckoutUrl: checkoutUrl,
+      asaasCheckoutStatus: String(checkoutResponse?.status ?? '').trim(),
+      billingPlanKey: resolvedPlan.mapping.billingPlanKey,
+    },
+  };
+}
+
+function resolveAsaasPortalFallbackUrl({ tenantData }) {
+  const candidateKeys = [
+    'asaasInvoiceUrl',
+    'asaasLastInvoiceUrl',
+    'asaasPaymentInvoiceUrl',
+    'asaasPaymentBankSlipUrl',
+    'asaasCheckoutLink',
+  ];
+
+  for (const key of candidateKeys) {
+    const value = String(tenantData?.[key] ?? '').trim();
+    if (isValidHttpAbsoluteUrl(value)) {
+      return value;
+    }
+  }
+
+  return '';
+}
+
+async function listAsaasCheckoutPlansForTenant({
+  firestore,
+  tenantData,
+}) {
+  const workspaceType = String(tenantData.workspaceType ?? '')
+    .trim()
+    .toLowerCase();
+  const requiredPrefix = resolveStripePlanPrefixByWorkspaceType(workspaceType);
+
+  const snapshot = await firestore
+    .collection('billing_integrations')
+    .doc('stripe')
+    .collection('plan_mappings')
+    .where('active', '==', true)
+    .where('mappingType', '==', 'base')
+    .limit(200)
+    .get();
+
+  const overageSnapshot = await firestore
+    .collection('billing_integrations')
+    .doc('stripe')
+    .collection('plan_mappings')
+    .where('active', '==', true)
+    .where('mappingType', '==', 'overage')
+    .limit(200)
+    .get();
+
+  const seatAddonByPlanKey = new Map();
+  const linkedSeatAddonByBasePlanKey = new Map();
+  for (const overageDoc of overageSnapshot.docs) {
+    const overageData = overageDoc.data() || {};
+    const overageMapping = buildStripePlanMappingFromDocData(
+      overageData,
+      overageDoc.id,
+    );
+    if (!overageMapping) {
+      continue;
+    }
+    if (overageMapping.mappingType !== 'overage') {
+      continue;
+    }
+    if (overageMapping.overageMetric !== 'extra_usuario') {
+      continue;
+    }
+
+    const overageUnitPriceCentsInput = Number(overageMapping.stripeUnitAmount ?? 0);
+    const overageUnitPriceCents = Number.isFinite(overageUnitPriceCentsInput)
+      ? Math.max(0, Math.floor(overageUnitPriceCentsInput))
+      : 0;
+    const overageDisplayAmount =
+      String(overageMapping.planDisplayAmount ?? '').trim() ||
+      formatPlanAmountLabel({
+        amountMinorUnits: overageUnitPriceCents,
+        currency: String(overageMapping.stripeCurrency ?? '').trim(),
+        recurringInterval: String(overageMapping.stripeRecurringInterval ?? '').trim(),
+        recurringIntervalCount: Number(overageMapping.stripeRecurringIntervalCount ?? 0),
+      });
+
+    const seatAddonInfo = {
+      billingPlanKey: overageMapping.billingPlanKey,
+      unitPriceCents: overageUnitPriceCents,
+      displayAmount: overageDisplayAmount,
+    };
+
+    if (!seatAddonByPlanKey.has(overageMapping.billingPlanKey)) {
+      seatAddonByPlanKey.set(overageMapping.billingPlanKey, seatAddonInfo);
+    }
+
+    if (!overageMapping.linkedBasePlanKey) {
+      continue;
+    }
+    if (!linkedSeatAddonByBasePlanKey.has(overageMapping.linkedBasePlanKey)) {
+      linkedSeatAddonByBasePlanKey.set(
+        overageMapping.linkedBasePlanKey,
+        seatAddonInfo,
+      );
+    }
+  }
+
+  const plans = [];
+  for (const doc of snapshot.docs) {
+    const data = doc.data() || {};
+    const billingPlanKey = normalizeBillingPlanKey(data.billingPlanKey ?? doc.id);
+    if (!billingPlanKey) {
+      continue;
+    }
+
+    if (requiredPrefix && !billingPlanKey.startsWith(`${requiredPrefix}_`)) {
+      continue;
+    }
+
+    const amountMinorUnits = Number(data.stripeUnitAmount ?? 0);
+    if (!Number.isFinite(amountMinorUnits) || amountMinorUnits <= 0) {
+      continue;
+    }
+
+    const planDisplayName =
+      String(data.planDisplayName ?? '').trim() ||
+      String(data.stripeProductName ?? '').trim() ||
+      String(data.stripePriceNickname ?? '').trim() ||
+      billingPlanKey;
+
+    const planDisplayAmount =
+      String(data.planDisplayAmount ?? '').trim() ||
+      formatPlanAmountLabel({
+        amountMinorUnits,
+        currency: String(data.stripeCurrency ?? '').trim(),
+        recurringInterval: String(data.stripeRecurringInterval ?? '').trim(),
+        recurringIntervalCount: Number(data.stripeRecurringIntervalCount ?? 0),
+      });
+
+    const includedSeatsInput = Number(data.includedSeats ?? 0);
+    const includedSeats = Number.isFinite(includedSeatsInput)
+      ? Math.max(0, Math.floor(includedSeatsInput))
+      : 0;
+
+    let seatAddonInfo = null;
+    let seatAddonPlanKey = normalizeBillingPlanKey(data.seatAddonPlanKey);
+    if (seatAddonPlanKey) {
+      seatAddonInfo = seatAddonByPlanKey.get(seatAddonPlanKey) || null;
+    }
+    if (!seatAddonPlanKey) {
+      seatAddonInfo = linkedSeatAddonByBasePlanKey.get(billingPlanKey) || null;
+      seatAddonPlanKey = String(seatAddonInfo?.billingPlanKey ?? '').trim();
+    }
+    if (!seatAddonInfo && seatAddonPlanKey) {
+      seatAddonInfo = seatAddonByPlanKey.get(seatAddonPlanKey) || null;
+    }
+
+    const seatAddonUnitPriceCents = Number.isFinite(
+      Number(seatAddonInfo?.unitPriceCents ?? 0),
+    )
+      ? Math.max(0, Math.floor(Number(seatAddonInfo?.unitPriceCents ?? 0)))
+      : 0;
+    const seatAddonDisplayAmount = String(
+      seatAddonInfo?.displayAmount ?? '',
+    ).trim();
+
+    plans.push({
+      mappingId: doc.id,
+      billingPlanKey,
+      planDisplayName,
+      planDisplayAmount,
+      stripePriceId: String(data.stripePriceId ?? '').trim(),
+      stripeProductId: String(data.stripeProductId ?? '').trim(),
+      stripeProductName: String(data.stripeProductName ?? '').trim(),
+      includedSeats,
+      seatAddonPlanKey,
+      seatAddonUnitPriceCents,
+      seatAddonDisplayAmount,
+      asaasChargeType: ASAAS_CHECKOUT_DEFAULT_CHARGE_TYPE,
+      asaasBillingTypes: [...ASAAS_CHECKOUT_DEFAULT_BILLING_TYPES],
+    });
+  }
+
+  plans.sort((a, b) => {
+    const byName = String(a.planDisplayName ?? '').localeCompare(
+      String(b.planDisplayName ?? ''),
+      'pt-BR',
+    );
+    if (byName !== 0) {
+      return byName;
+    }
+    return String(a.billingPlanKey ?? '').localeCompare(
+      String(b.billingPlanKey ?? ''),
+    );
+  });
+
+  return {
+    workspaceType,
+    requiredPrefix,
+    plans,
+  };
+}
+
+async function proxyBillingRequestToFunction({
+  request,
+  response,
+  targetUrl,
+  method,
+  extraResponseFields,
+}) {
+  const authHeader = String(request.headers?.authorization ?? '').trim();
+  const headers = {
+    Accept: 'application/json',
+  };
+  if (authHeader) {
+    headers.Authorization = authHeader;
+  }
+
+  let requestUrl = targetUrl;
+  let body;
+
+  if (method === 'GET') {
+    const sourceQuery = request.query || {};
+    const searchParams = new URLSearchParams();
+    for (const [key, value] of Object.entries(sourceQuery)) {
+      if (Array.isArray(value)) {
+        for (const item of value) {
+          if (item != null) {
+            searchParams.append(key, String(item));
+          }
+        }
+      } else if (value != null) {
+        searchParams.append(key, String(value));
+      }
+    }
+
+    const queryString = searchParams.toString();
+    if (queryString) {
+      requestUrl = `${targetUrl}?${queryString}`;
+    }
+  } else {
+    headers['Content-Type'] = 'application/json';
+    body = JSON.stringify(
+      request.body && typeof request.body === 'object' ? request.body : {},
+    );
+  }
+
+  let upstreamResponse;
+  try {
+    upstreamResponse = await fetch(requestUrl, {
+      method,
+      headers,
+      body,
+      signal: AbortSignal.timeout(40000),
+    });
+  } catch (error) {
+    response.status(502).json({
+      error: 'provider_proxy_failed',
+      message: error instanceof Error ? error.message : String(error),
+      ...extraResponseFields,
+    });
+    return;
+  }
+
+  const rawText = await upstreamResponse.text();
+  let parsedPayload = null;
+  try {
+    parsedPayload = JSON.parse(rawText);
+  } catch (_) {
+    parsedPayload = null;
+  }
+
+  if (parsedPayload && typeof parsedPayload === 'object' && !Array.isArray(parsedPayload)) {
+    response.status(upstreamResponse.status).json({
+      ...parsedPayload,
+      ...extraResponseFields,
+    });
+    return;
+  }
+
+  response.status(upstreamResponse.status).json({
+    rawBody: rawText,
+    ...extraResponseFields,
+  });
+}
+
+async function readAsaasIntegrationConfig(firestore) {
+  const doc = await firestore.collection('billing_integrations').doc('asaas').get();
+  const data = doc.data() || {};
+
+  const environment =
+    String(data.activeEnvironment ?? '').trim().toLowerCase() === 'production'
+      ? 'production'
+      : 'sandbox';
+
+  const webhookEvents = Array.isArray(data.webhookEvents)
+    ? data.webhookEvents
+      .map((value) => String(value ?? '').trim())
+      .filter((value) => value)
+    : [];
+
+  return {
+    activeEnvironment: environment,
+    webhookEvents:
+      webhookEvents.length > 0 ? webhookEvents : ASAAS_DEFAULT_WEBHOOK_EVENTS,
+  };
+}
+
+function getAsaasWebhookTokenForEnvironment(environment) {
+  if (environment === 'production') {
+    return String(process.env.ASAAS_WEBHOOK_TOKEN_PRODUCTION ?? '').trim();
+  }
+  return String(process.env.ASAAS_WEBHOOK_TOKEN_SANDBOX ?? '').trim();
+}
+
+function getAsaasApiKeyForEnvironment(environment) {
+  if (environment === 'production') {
+    return String(process.env.ASAAS_API_KEY_PRODUCTION ?? '').trim();
+  }
+  return String(process.env.ASAAS_API_KEY_SANDBOX ?? '').trim();
+}
+
+function getAsaasApiBaseUrlForEnvironment(environment) {
+  return environment === 'production'
+    ? ASAAS_PRODUCTION_API_BASE_URL
+    : ASAAS_SANDBOX_API_BASE_URL;
+}
+
+function createAsaasWebhookFallbackEventId(payload) {
+  const serializedPayload = JSON.stringify(payload ?? {});
+  const hash = crypto
+    .createHash('sha256')
+    .update(serializedPayload)
+    .digest('hex')
+    .slice(0, 24);
+  return `asaas_${Date.now()}_${hash}`;
 }
 
 function getStripeSecretForEnvironment(environment) {
@@ -5793,9 +8324,18 @@ function buildStripePlanMappingFromDocData(data, fallbackPlanKey = '') {
 
   return {
     billingPlanKey: normalizeBillingPlanKey(data.billingPlanKey ?? fallbackPlanKey),
+    planDisplayName: String(data.planDisplayName ?? '').trim(),
+    planDisplayAmount: String(data.planDisplayAmount ?? '').trim(),
     stripeProductId: String(data.stripeProductId ?? '').trim(),
+    stripeProductName: String(data.stripeProductName ?? '').trim(),
     stripePriceId: priceId,
+    stripePriceNickname: String(data.stripePriceNickname ?? '').trim(),
     stripeUnitAmount: Number(data.stripeUnitAmount ?? 0),
+    stripeCurrency: String(data.stripeCurrency ?? '').trim().toLowerCase(),
+    stripeRecurringInterval: String(data.stripeRecurringInterval ?? '')
+      .trim()
+      .toLowerCase(),
+    stripeRecurringIntervalCount: Number(data.stripeRecurringIntervalCount ?? 0),
     mappingType: String(data.mappingType ?? 'base').trim().toLowerCase(),
     overageMetric: String(data.overageMetric ?? '').trim().toLowerCase(),
     includedSeats,
@@ -5864,6 +8404,55 @@ async function resolveStripePlanMappingByPriceId({ firestore, stripePriceId }) {
     if (mapping) {
       return mapping;
     }
+  }
+
+  return null;
+}
+
+async function resolveStripeSeatAddonMappingForBasePlan({
+  firestore,
+  baseMapping,
+}) {
+  const normalizedBasePlanKey = normalizeBillingPlanKey(baseMapping?.billingPlanKey);
+  if (!normalizedBasePlanKey) {
+    return null;
+  }
+
+  const seatAddonPlanKey = normalizeBillingPlanKey(baseMapping?.seatAddonPlanKey);
+  if (seatAddonPlanKey) {
+    const directMapping = await loadStripePlanMapping({
+      firestore,
+      billingPlanKey: seatAddonPlanKey,
+    });
+    if (
+      directMapping &&
+      directMapping.mappingType === 'overage' &&
+      directMapping.overageMetric === 'extra_usuario'
+    ) {
+      return directMapping;
+    }
+  }
+
+  const fallbackSnapshot = await firestore
+    .collection('billing_integrations')
+    .doc('stripe')
+    .collection('plan_mappings')
+    .where('linkedBasePlanKey', '==', normalizedBasePlanKey)
+    .limit(20)
+    .get();
+
+  for (const doc of fallbackSnapshot.docs) {
+    const mapping = buildStripePlanMappingFromDocData(doc.data() || {}, doc.id);
+    if (!mapping) {
+      continue;
+    }
+    if (mapping.mappingType !== 'overage') {
+      continue;
+    }
+    if (mapping.overageMetric !== 'extra_usuario') {
+      continue;
+    }
+    return mapping;
   }
 
   return null;
@@ -5990,6 +8579,520 @@ async function processStripeWebhookEvent({
   }
 }
 
+async function processAsaasWebhookEvent({
+  firestore,
+  event,
+  enabledEvents,
+  asaasRuntime,
+}) {
+  const eventType = String(event?.event ?? '').trim();
+  if (!eventType) {
+    throw new Error('Webhook Asaas sem event.');
+  }
+
+  const enabledSet = new Set(
+    (enabledEvents && enabledEvents.length > 0
+      ? enabledEvents
+      : ASAAS_DEFAULT_WEBHOOK_EVENTS
+    )
+      .map((item) => String(item ?? '').trim())
+      .filter((item) => item),
+  );
+
+  if (!enabledSet.has(eventType)) {
+    return {
+      ignored: true,
+      duplicate: false,
+      tenantId: '',
+      billingStatus: '',
+    };
+  }
+
+  const applied = await applyAsaasWebhookEventToTenant({
+    firestore,
+    eventPayload: event,
+    eventType,
+    asaasRuntime,
+  });
+
+  return {
+    ignored: false,
+    duplicate: false,
+    tenantId: applied.tenantId,
+    billingStatus: applied.billingStatus,
+  };
+}
+
+async function applyAsaasWebhookEventToTenant({
+  firestore,
+  eventPayload,
+  eventType,
+  asaasRuntime,
+}) {
+  const tenantId = await resolveTenantIdFromAsaasReferences({
+    firestore,
+    eventPayload,
+  });
+
+  if (!tenantId) {
+    return {
+      tenantId: '',
+      billingStatus: '',
+    };
+  }
+
+  const tenantRef = firestore.collection('tenants').doc(tenantId);
+  const tenantDoc = await tenantRef.get();
+  if (!tenantDoc.exists) {
+    return {
+      tenantId: '',
+      billingStatus: '',
+    };
+  }
+
+  const tenantData = tenantDoc.data() || {};
+  const patch = buildTenantPatchFromAsaasEvent({
+    eventPayload,
+    eventType,
+    currentTenantData: tenantData,
+    webhookEnvironment: String(asaasRuntime?.environment ?? '').trim(),
+  });
+
+  await tenantRef.set(patch, { merge: true });
+
+  try {
+    await enforceTenantSeatAllowanceForTenant({
+      firestore,
+      tenantId,
+    });
+  } catch (error) {
+    console.error('asaas webhook seat enforcement failed', {
+      tenantId,
+      eventType,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+
+  return {
+    tenantId,
+    billingStatus: String(patch.billingStatus ?? '').trim(),
+  };
+}
+
+async function resolveTenantIdFromAsaasReferences({
+  firestore,
+  eventPayload,
+}) {
+  const payment = eventPayload?.payment ?? {};
+  const subscription = eventPayload?.subscription ?? {};
+  const checkout = eventPayload?.checkout ?? {};
+  const invoice = eventPayload?.invoice ?? {};
+
+  const referenceInfos = [
+    extractAsaasReferenceInfo(payment?.externalReference),
+    extractAsaasReferenceInfo(subscription?.externalReference),
+    extractAsaasReferenceInfo(checkout?.externalReference),
+  ];
+
+  for (const info of referenceInfos) {
+    const candidateTenantId = String(info?.tenantId ?? '').trim();
+    if (!candidateTenantId) {
+      continue;
+    }
+    const tenantDoc = await firestore.collection('tenants').doc(candidateTenantId).get();
+    if (tenantDoc.exists) {
+      return candidateTenantId;
+    }
+  }
+
+  const subscriptionId = String(
+    payment?.subscription ?? subscription?.id ?? checkout?.subscription?.id ?? '',
+  ).trim();
+  if (subscriptionId) {
+    const snapshot = await firestore
+      .collection('tenants')
+      .where('asaasSubscriptionId', '==', subscriptionId)
+      .limit(1)
+      .get();
+    if (!snapshot.empty) {
+      return snapshot.docs[0].id;
+    }
+  }
+
+  const customerId = String(
+    payment?.customer ??
+      subscription?.customer ??
+      checkout?.customer ??
+      invoice?.customer ??
+      '',
+  ).trim();
+  if (customerId) {
+    const snapshot = await firestore
+      .collection('tenants')
+      .where('asaasCustomerId', '==', customerId)
+      .limit(1)
+      .get();
+    if (!snapshot.empty) {
+      return snapshot.docs[0].id;
+    }
+  }
+
+  const checkoutId = String(checkout?.id ?? '').trim();
+  if (checkoutId) {
+    const snapshot = await firestore
+      .collection('tenants')
+      .where('asaasCheckoutId', '==', checkoutId)
+      .limit(1)
+      .get();
+    if (!snapshot.empty) {
+      return snapshot.docs[0].id;
+    }
+  }
+
+  const paymentId = String(payment?.id ?? '').trim();
+  if (paymentId) {
+    const snapshot = await firestore
+      .collection('tenants')
+      .where('asaasPaymentId', '==', paymentId)
+      .limit(1)
+      .get();
+    if (!snapshot.empty) {
+      return snapshot.docs[0].id;
+    }
+  }
+
+  const invoicePaymentId = String(invoice?.payment ?? '').trim();
+  if (invoicePaymentId) {
+    const snapshot = await firestore
+      .collection('tenants')
+      .where('asaasPaymentId', '==', invoicePaymentId)
+      .limit(1)
+      .get();
+    if (!snapshot.empty) {
+      return snapshot.docs[0].id;
+    }
+  }
+
+  return '';
+}
+
+function buildTenantPatchFromAsaasEvent({
+  eventPayload,
+  eventType,
+  currentTenantData,
+  webhookEnvironment,
+}) {
+  const payment = eventPayload?.payment ?? {};
+  const subscription = eventPayload?.subscription ?? {};
+  const checkout = eventPayload?.checkout ?? {};
+  const invoice = eventPayload?.invoice ?? {};
+  const nowIso = new Date().toISOString();
+
+  const subscriptionRefInfo = extractAsaasReferenceInfo(
+    subscription?.externalReference,
+  );
+  const paymentRefInfo = extractAsaasReferenceInfo(payment?.externalReference);
+  const checkoutRefInfo = extractAsaasReferenceInfo(checkout?.externalReference);
+
+  const billingPlanKey = normalizeBillingPlanKey(
+    subscriptionRefInfo.billingPlanKey ||
+      paymentRefInfo.billingPlanKey ||
+      checkoutRefInfo.billingPlanKey,
+  );
+
+  const billingStatus = mapAsaasEventToBillingStatus({
+    eventType,
+    eventPayload,
+    currentBillingStatus: currentTenantData?.billingStatus,
+  });
+
+  const patch = {
+    billingProvider: BILLING_PROVIDER_ASAAS,
+    billingUpdatedAt: nowIso,
+    asaasLastEventId: String(eventPayload?.id ?? '').trim(),
+    asaasLastEventType: eventType,
+    asaasWebhookEnvironment: webhookEnvironment,
+  };
+
+  const asaasCustomerId = String(
+    payment?.customer ?? subscription?.customer ?? checkout?.customer ?? '',
+  ).trim();
+  if (asaasCustomerId) {
+    patch.asaasCustomerId = asaasCustomerId;
+  }
+
+  const asaasSubscriptionId = String(
+    payment?.subscription ?? subscription?.id ?? checkout?.subscription?.id ?? '',
+  ).trim();
+  if (asaasSubscriptionId) {
+    patch.asaasSubscriptionId = asaasSubscriptionId;
+    patch.billingContractProvider = BILLING_PROVIDER_ASAAS;
+    patch.billingContractLinkedAt = nowIso;
+  }
+
+  const asaasCheckoutId = String(checkout?.id ?? '').trim();
+  if (asaasCheckoutId) {
+    patch.asaasCheckoutId = asaasCheckoutId;
+  }
+
+  const asaasPaymentId = String(payment?.id ?? '').trim();
+  if (asaasPaymentId) {
+    patch.asaasPaymentId = asaasPaymentId;
+  }
+
+  const billingType = String(payment?.billingType ?? subscription?.billingType ?? '').trim();
+  if (billingType) {
+    patch.asaasBillingType = billingType;
+  }
+
+  const invoiceUrl = String(payment?.invoiceUrl ?? '').trim();
+  if (invoiceUrl) {
+    patch.asaasInvoiceUrl = invoiceUrl;
+  }
+  const bankSlipUrl = String(payment?.bankSlipUrl ?? '').trim();
+  if (bankSlipUrl) {
+    patch.asaasBankSlipUrl = bankSlipUrl;
+  }
+  const invoiceNumber = String(payment?.invoiceNumber ?? invoice?.number ?? '').trim();
+  if (invoiceNumber) {
+    patch.asaasInvoiceNumber = invoiceNumber;
+  }
+  const invoiceStatus = String(invoice?.status ?? '').trim();
+  if (invoiceStatus) {
+    patch.asaasInvoiceStatus = invoiceStatus;
+  }
+
+  const billingCycle = mapAsaasCycleToBillingCycle(subscription?.cycle);
+  if (billingCycle) {
+    patch.billingCycle = billingCycle;
+  }
+
+  const periodEndIso = normalizeAsaasDateToIso(
+    subscription?.nextDueDate || payment?.dueDate,
+  );
+  if (periodEndIso) {
+    patch.billingCurrentPeriodEndAt = periodEndIso;
+  }
+
+  const hasCurrentPeriodStart = String(
+    currentTenantData?.billingCurrentPeriodStartAt ?? '',
+  ).trim();
+  const periodStartIso = normalizeAsaasDateToIso(
+    payment?.dateCreated || subscription?.dateCreated || eventPayload?.dateCreated,
+  );
+  if (periodStartIso && !hasCurrentPeriodStart) {
+    patch.billingCurrentPeriodStartAt = periodStartIso;
+  }
+
+  if (billingPlanKey) {
+    patch.billingPlanKey = billingPlanKey;
+  }
+
+  if (billingStatus) {
+    patch.billingStatus = billingStatus;
+    patch.billingAccountState = mapBillingStatusToAccountState(billingStatus);
+  }
+
+  if (billingStatus === 'past_due') {
+    const currentPastDue = String(currentTenantData?.billingPastDueSinceAt ?? '').trim();
+    patch.billingPastDueSinceAt = currentPastDue || nowIso;
+  }
+
+  if (billingStatus === 'active' || billingStatus === 'trial') {
+    patch.billingPastDueSinceAt = '';
+    patch.billingSuspendedAt = '';
+  }
+
+  if (billingStatus === 'suspended' || billingStatus === 'canceled') {
+    patch.billingSuspendedAt = nowIso;
+  }
+
+  return patch;
+}
+
+function mapAsaasEventToBillingStatus({
+  eventType,
+  eventPayload,
+  currentBillingStatus,
+}) {
+  const type = String(eventType ?? '').trim().toUpperCase();
+  const normalizedCurrent = String(currentBillingStatus ?? '').trim().toLowerCase();
+
+  if (
+    type === 'PAYMENT_RECEIVED' ||
+    type === 'PAYMENT_CONFIRMED' ||
+    type === 'PAYMENT_RESTORED' ||
+    type === 'CHECKOUT_PAID'
+  ) {
+    return 'active';
+  }
+
+  if (
+    type === 'PAYMENT_OVERDUE' ||
+    type === 'PAYMENT_CHARGEBACK_REQUESTED' ||
+    type === 'PAYMENT_CHARGEBACK_DISPUTE'
+  ) {
+    return 'past_due';
+  }
+
+  if (type === 'SUBSCRIPTION_CREATED' || type === 'SUBSCRIPTION_UPDATED') {
+    const subscriptionStatus = mapAsaasSubscriptionStatusToBillingStatus(
+      eventPayload?.subscription?.status,
+    );
+    return subscriptionStatus || 'active';
+  }
+
+  if (type === 'SUBSCRIPTION_INACTIVATED') {
+    return 'suspended';
+  }
+
+  if (type === 'SUBSCRIPTION_DELETED' || type === 'PAYMENT_DELETED') {
+    return 'canceled';
+  }
+
+  if (type === 'CHECKOUT_EXPIRED' || type === 'CHECKOUT_CANCELED') {
+    if (
+      normalizedCurrent === 'active' ||
+      normalizedCurrent === 'trial' ||
+      normalizedCurrent === 'past_due' ||
+      normalizedCurrent === 'grace'
+    ) {
+      return '';
+    }
+    return 'no_plan';
+  }
+
+  return '';
+}
+
+function mapAsaasSubscriptionStatusToBillingStatus(rawStatus) {
+  const normalized = String(rawStatus ?? '').trim().toUpperCase();
+  if (!normalized) {
+    return '';
+  }
+
+  if (normalized === 'ACTIVE') {
+    return 'active';
+  }
+  if (normalized === 'INACTIVE') {
+    return 'suspended';
+  }
+  if (normalized === 'EXPIRED' || normalized === 'CANCELED') {
+    return 'canceled';
+  }
+  return '';
+}
+
+function mapBillingStatusToAccountState(billingStatus) {
+  const normalized = String(billingStatus ?? '').trim().toLowerCase();
+  if (!normalized) {
+    return '';
+  }
+  if (normalized === 'active' || normalized === 'trial') {
+    return 'active';
+  }
+  if (normalized === 'past_due') {
+    return 'past_due';
+  }
+  if (normalized === 'grace') {
+    return 'grace';
+  }
+  if (normalized === 'suspended') {
+    return 'suspended';
+  }
+  return 'inactive';
+}
+
+function mapAsaasCycleToBillingCycle(rawCycle) {
+  const normalized = String(rawCycle ?? '').trim().toUpperCase();
+  if (!normalized) {
+    return '';
+  }
+  if (normalized === 'MONTHLY') {
+    return 'month';
+  }
+  if (normalized === 'YEARLY') {
+    return 'year';
+  }
+  if (normalized === 'WEEKLY') {
+    return 'week';
+  }
+  if (normalized === 'BIWEEKLY') {
+    return 'biweek';
+  }
+  return normalized.toLowerCase();
+}
+
+function normalizeAsaasDateToIso(rawValue) {
+  const text = String(rawValue ?? '').trim();
+  if (!text) {
+    return '';
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) {
+    return new Date(`${text}T00:00:00.000Z`).toISOString();
+  }
+
+  const normalizedText = text.includes(' ') ? text.replace(' ', 'T') : text;
+  const parsedDate = new Date(normalizedText);
+  const time = parsedDate.getTime();
+  if (!Number.isFinite(time)) {
+    return '';
+  }
+  return parsedDate.toISOString();
+}
+
+function extractAsaasReferenceInfo(rawValue) {
+  const text = String(rawValue ?? '').trim();
+  if (!text) {
+    return {
+      tenantId: '',
+      billingPlanKey: '',
+    };
+  }
+
+  let tenantId = '';
+  let billingPlanKey = '';
+
+  if (text.startsWith('{') && text.endsWith('}')) {
+    try {
+      const parsed = JSON.parse(text);
+      tenantId = String(
+        parsed?.tenantId ?? parsed?.tenant_id ?? parsed?.tenant ?? '',
+      ).trim();
+      billingPlanKey = normalizeBillingPlanKey(
+        parsed?.billingPlanKey ?? parsed?.billing_plan_key ?? parsed?.plan ?? '',
+      );
+    } catch (_) {
+      // Ignore invalid JSON and continue trying query-like parsing.
+    }
+  }
+
+  if (!tenantId || !billingPlanKey) {
+    const queryLike = text.includes('?') ? text.split('?').pop() : text;
+    const params = new URLSearchParams(queryLike || '');
+    if (!tenantId) {
+      tenantId = String(
+        params.get('tenantId') || params.get('tenant_id') || params.get('tenant') || '',
+      ).trim();
+    }
+    if (!billingPlanKey) {
+      billingPlanKey = normalizeBillingPlanKey(
+        params.get('billingPlanKey') || params.get('plan') || params.get('billing_plan_key') || '',
+      );
+    }
+  }
+
+  if (!tenantId && !text.includes('=') && !text.includes('&') && text.length <= 120) {
+    tenantId = text;
+  }
+
+  return {
+    tenantId,
+    billingPlanKey,
+  };
+}
+
 async function applyStripeWebhookEventToTenant({
   firestore,
   event,
@@ -6010,13 +9113,22 @@ async function applyStripeWebhookEventToTenant({
     }
 
     const billingPlanKey = normalizeBillingPlanKey(payload?.metadata?.billingPlanKey);
+    const nowIso = new Date().toISOString();
+    const stripeSubscriptionId = String(payload?.subscription ?? '').trim();
     await firestore.collection('tenants').doc(tenantId).set(
       {
         stripeCustomerId: String(payload?.customer ?? '').trim(),
         stripeCheckoutSessionId: String(payload?.id ?? '').trim(),
-        stripeSubscriptionId: String(payload?.subscription ?? '').trim(),
+        stripeSubscriptionId,
+        billingProvider: BILLING_PROVIDER_STRIPE,
+        ...(stripeSubscriptionId
+          ? {
+            billingContractProvider: BILLING_PROVIDER_STRIPE,
+            billingContractLinkedAt: nowIso,
+          }
+          : {}),
         ...(billingPlanKey ? { billingPlanKey } : {}),
-        billingUpdatedAt: new Date().toISOString(),
+        billingUpdatedAt: nowIso,
       },
       { merge: true },
     );
@@ -6126,15 +9238,17 @@ async function applyStripeWebhookEventToTenant({
     if (baseItem && Number.isInteger(baseItem.includedSeats) && baseItem.includedSeats > 0) {
       tenantPatch.billingSeatsIncluded = baseItem.includedSeats;
     }
-    if (baseItem?.seatAddonPlanKey) {
-      tenantPatch.billingSeatAddonPlanKey = baseItem.seatAddonPlanKey;
-    }
-    tenantPatch.billingSeatsAddon = seatAddonQuantity < 0 ? 0 : seatAddonQuantity;
-
     const seatAddonItem = mappedItems.find(
       (item) =>
         item.mappingType === 'overage' && item.overageMetric === 'extra_usuario',
     );
+    if (baseItem?.seatAddonPlanKey) {
+      tenantPatch.billingSeatAddonPlanKey = baseItem.seatAddonPlanKey;
+    } else if (seatAddonItem?.billingPlanKey) {
+      tenantPatch.billingSeatAddonPlanKey = seatAddonItem.billingPlanKey;
+    }
+    tenantPatch.billingSeatsAddon = seatAddonQuantity < 0 ? 0 : seatAddonQuantity;
+
     if (seatAddonItem && Number.isFinite(seatAddonItem.stripeUnitAmount)) {
       tenantPatch.billingSeatAddonUnitPriceCents = Math.max(
         0,
@@ -6198,6 +9312,8 @@ async function applyStripeWebhookEventToTenant({
     const stripeSubscriptionId = String(payload?.subscription ?? '').trim();
     if (stripeSubscriptionId) {
       patch.stripeSubscriptionId = stripeSubscriptionId;
+      patch.billingContractProvider = BILLING_PROVIDER_STRIPE;
+      patch.billingContractLinkedAt = nowIso;
     }
 
     const stripeInvoiceId = String(payload?.id ?? '').trim();
@@ -6281,8 +9397,9 @@ async function reconcileTenantStripePeriodIfMissing({
   }
 
   try {
-    await reconcileTenantStripeState({
+    await reconcileTenantBillingState({
       firestore,
+      providerKey: BILLING_PROVIDER_STRIPE,
       stripeClient,
       tenantId,
     });
@@ -6927,6 +10044,7 @@ function buildTenantPatchFromStripeSubscription({ subscription, billingPlanKey }
   const periodBounds = readStripeSubscriptionPeriodBounds(subscription);
 
   const patch = {
+    billingProvider: BILLING_PROVIDER_STRIPE,
     stripeCustomerId: String(subscription?.customer ?? '').trim(),
     stripeSubscriptionId: String(subscription?.id ?? '').trim(),
     stripePriceId: priceId,
@@ -6934,6 +10052,11 @@ function buildTenantPatchFromStripeSubscription({ subscription, billingPlanKey }
     billingCycle: readStripeSubscriptionCycle(subscription),
     billingUpdatedAt: nowIso,
   };
+
+  if (patch.stripeSubscriptionId) {
+    patch.billingContractProvider = BILLING_PROVIDER_STRIPE;
+    patch.billingContractLinkedAt = nowIso;
+  }
 
   if (periodBounds.startIso) {
     patch.billingCurrentPeriodStartAt = periodBounds.startIso;
@@ -7026,12 +10149,16 @@ async function reconcileTenantStripeState({ firestore, stripeClient, tenantId })
       }
     }
   } else {
+    const nowIso = new Date().toISOString();
     patch = {
+      billingProvider: BILLING_PROVIDER_STRIPE,
+      billingContractProvider: BILLING_PROVIDER_STRIPE,
+      billingContractLinkedAt: nowIso,
       stripeCustomerId,
       stripeSubscriptionId,
       billingStatus: 'canceled',
-      billingSuspendedAt: new Date().toISOString(),
-      billingUpdatedAt: new Date().toISOString(),
+      billingSuspendedAt: nowIso,
+      billingUpdatedAt: nowIso,
     };
   }
 
@@ -7042,6 +10169,510 @@ async function reconcileTenantStripeState({ firestore, stripeClient, tenantId })
     previousBillingStatus,
     currentBillingStatus: String(patch.billingStatus ?? '').trim(),
     updatedAt: String(patch.billingUpdatedAt ?? '').trim(),
+  };
+}
+
+async function reconcileTenantAsaasState({ firestore, asaasRuntime, tenantId }) {
+  const normalizedTenantId = String(tenantId ?? '').trim();
+  if (!normalizedTenantId) {
+    throw new Error('tenantId invalido para reconciliacao Asaas.');
+  }
+
+  const apiKey = String(asaasRuntime?.apiKey ?? '').trim();
+  const apiBaseUrl = String(asaasRuntime?.apiBaseUrl ?? '').trim();
+  if (!apiKey || !apiBaseUrl) {
+    throw new Error('Runtime Asaas indisponivel para reconciliacao.');
+  }
+
+  const tenantRef = firestore.collection('tenants').doc(normalizedTenantId);
+  const tenantDoc = await tenantRef.get();
+  if (!tenantDoc.exists) {
+    throw new Error('Tenant nao encontrado para reconciliacao.');
+  }
+
+  const tenantData = tenantDoc.data() || {};
+  const previousBillingStatus = String(tenantData.billingStatus ?? '').trim();
+  const asaasSubscriptionId = String(tenantData.asaasSubscriptionId ?? '').trim();
+  const asaasPaymentId = String(tenantData.asaasPaymentId ?? '').trim();
+  const asaasCustomerId = String(tenantData.asaasCustomerId ?? '').trim();
+
+  let eventPayload = null;
+  if (asaasSubscriptionId) {
+    const subscription = await fetchAsaasApiJson({
+      apiBaseUrl,
+      apiKey,
+      path: `/subscriptions/${encodeURIComponent(asaasSubscriptionId)}`,
+    });
+    eventPayload = {
+      id: `reconcile_sub_${Date.now()}`,
+      event: 'SUBSCRIPTION_UPDATED',
+      dateCreated: new Date().toISOString(),
+      subscription,
+    };
+  } else if (asaasPaymentId) {
+    const payment = await fetchAsaasApiJson({
+      apiBaseUrl,
+      apiKey,
+      path: `/payments/${encodeURIComponent(asaasPaymentId)}`,
+    });
+    eventPayload = {
+      id: `reconcile_pay_${Date.now()}`,
+      event: 'PAYMENT_UPDATED',
+      dateCreated: new Date().toISOString(),
+      payment,
+    };
+  } else if (asaasCustomerId) {
+    const paymentsList = await fetchAsaasApiJson({
+      apiBaseUrl,
+      apiKey,
+      path: '/payments',
+      query: {
+        customer: asaasCustomerId,
+        limit: '1',
+        offset: '0',
+      },
+    });
+
+    const payment = Array.isArray(paymentsList?.data) ? paymentsList.data[0] : null;
+    if (payment && typeof payment === 'object') {
+      eventPayload = {
+        id: `reconcile_pay_${Date.now()}`,
+        event: 'PAYMENT_UPDATED',
+        dateCreated: new Date().toISOString(),
+        payment,
+      };
+    }
+  }
+
+  if (!eventPayload) {
+    throw new Error(
+      'Tenant sem referencia suficiente no Asaas (asaasSubscriptionId, asaasPaymentId ou asaasCustomerId).',
+    );
+  }
+
+  const patch = buildTenantPatchFromAsaasEvent({
+    eventPayload,
+    eventType: String(eventPayload.event ?? '').trim(),
+    currentTenantData: tenantData,
+    webhookEnvironment: String(asaasRuntime?.environment ?? '').trim(),
+  });
+
+  await tenantRef.set(patch, { merge: true });
+
+  return {
+    asaasSubscriptionId: String(patch.asaasSubscriptionId ?? asaasSubscriptionId).trim(),
+    asaasCustomerId: String(patch.asaasCustomerId ?? asaasCustomerId).trim(),
+    previousBillingStatus,
+    currentBillingStatus: String(patch.billingStatus ?? '').trim(),
+    updatedAt: String(patch.billingUpdatedAt ?? '').trim(),
+  };
+}
+
+async function fetchAsaasApiJson({
+  apiBaseUrl,
+  apiKey,
+  path,
+  query = null,
+  method = 'GET',
+  body = null,
+  timeoutMs = 20000,
+}) {
+  const baseUrl = String(apiBaseUrl ?? '').trim().replace(/\/+$/, '');
+  const normalizedPath = String(path ?? '').trim();
+  if (!baseUrl || !normalizedPath) {
+    throw new Error('URL Asaas invalida para requisicao de reconciliacao.');
+  }
+
+  const requestUrl = new URL(`${baseUrl}${normalizedPath}`);
+  if (query && typeof query === 'object') {
+    for (const [key, value] of Object.entries(query)) {
+      const normalizedKey = String(key ?? '').trim();
+      const normalizedValue = String(value ?? '').trim();
+      if (normalizedKey && normalizedValue) {
+        requestUrl.searchParams.set(normalizedKey, normalizedValue);
+      }
+    }
+  }
+
+  const normalizedMethod = String(method ?? 'GET').trim().toUpperCase() || 'GET';
+  const headers = {
+    accept: 'application/json',
+    access_token: String(apiKey ?? '').trim(),
+    'content-type': 'application/json',
+  };
+
+  const fetchOptions = {
+    method: normalizedMethod,
+    headers,
+    signal: AbortSignal.timeout(
+      Number.isFinite(Number(timeoutMs)) && Number(timeoutMs) > 0
+        ? Number(timeoutMs)
+        : 20000,
+    ),
+  };
+
+  if (normalizedMethod !== 'GET' && body != null) {
+    fetchOptions.body =
+      typeof body === 'string' ? body : JSON.stringify(body);
+  }
+
+  const response = await fetch(requestUrl.toString(), fetchOptions);
+
+  const rawText = await response.text();
+  let payload = {};
+  try {
+    payload = rawText ? JSON.parse(rawText) : {};
+  } catch (_) {
+    payload = {};
+  }
+
+  if (!response.ok) {
+    const apiError = String(payload?.errors?.[0]?.description ?? payload?.errors?.[0]?.code ?? '').trim();
+    const fallbackError = String(payload?.message ?? '').trim();
+    throw new Error(
+      `Asaas API falhou (${response.status}) em ${normalizedMethod} ${normalizedPath}. ${apiError || fallbackError || 'Sem detalhes.'}`,
+    );
+  }
+
+  return payload;
+}
+
+async function applyTenantBillingActionToAsaas({
+  asaasRuntime,
+  tenantId,
+  tenantData,
+  action,
+}) {
+  const asaasSubscriptionId = String(tenantData?.asaasSubscriptionId ?? '').trim();
+  const apiKey = String(asaasRuntime?.apiKey ?? '').trim();
+  const apiBaseUrl = String(asaasRuntime?.apiBaseUrl ?? '').trim();
+
+  if (!apiKey || !apiBaseUrl) {
+    return {
+      applied: false,
+      action: 'integration_not_ready',
+      message: 'Runtime Asaas indisponivel para refletir acao manual.',
+    };
+  }
+
+  if (!asaasSubscriptionId) {
+    return {
+      applied: false,
+      action: 'no_asaas_subscription_reference',
+      message: 'Tenant sem asaasSubscriptionId para acao remota no Asaas.',
+    };
+  }
+
+  return {
+    applied: false,
+    action: `manual_action_${action}_local_only`,
+    message:
+      `Acao manual aplicada no estado local do tenant (${tenantId}). Reflexo remoto no Asaas fica para fluxo financeiro assistido (boleto/NF-e).`,
+  };
+}
+
+async function applyTenantBillingSelfServiceActionToAsaas({
+  asaasRuntime,
+  tenantData,
+  action,
+}) {
+  const asaasSubscriptionId = String(tenantData?.asaasSubscriptionId ?? '').trim();
+  const apiKey = String(asaasRuntime?.apiKey ?? '').trim();
+  const apiBaseUrl = String(asaasRuntime?.apiBaseUrl ?? '').trim();
+
+  if (!apiKey || !apiBaseUrl) {
+    return {
+      applied: false,
+      action: 'integration_not_ready',
+      message: 'Runtime Asaas indisponivel para autoatendimento.',
+      billingStatus: '',
+    };
+  }
+
+  if (!asaasSubscriptionId) {
+    return {
+      applied: false,
+      action: 'no_asaas_subscription_reference',
+      message: 'Tenant sem asaasSubscriptionId para acao remota no Asaas.',
+      billingStatus: '',
+    };
+  }
+
+  const encodedSubscriptionId = encodeURIComponent(asaasSubscriptionId);
+
+  if (action === 'stop_renewal') {
+    const payload = await fetchAsaasApiJson({
+      apiKey,
+      apiBaseUrl,
+      path: `/subscriptions/${encodedSubscriptionId}`,
+      method: 'PUT',
+      body: {
+        status: 'INACTIVE',
+      },
+      timeoutMs: 20000,
+    });
+
+    const billingStatus =
+      mapAsaasSubscriptionStatusToBillingStatus(payload?.status) || 'suspended';
+
+    return {
+      applied: true,
+      action: 'subscription_inactivated',
+      message:
+        'Renovacao da assinatura interrompida no Asaas. Novas cobrancas nao serao geradas.',
+      billingStatus,
+    };
+  }
+
+  if (action === 'cancel_now') {
+    await fetchAsaasApiJson({
+      apiKey,
+      apiBaseUrl,
+      path: `/subscriptions/${encodedSubscriptionId}`,
+      method: 'DELETE',
+      timeoutMs: 20000,
+    });
+
+    return {
+      applied: true,
+      action: 'subscription_deleted',
+      message:
+        'Assinatura cancelada no Asaas. Nao havera novas recorrencias para este plano.',
+      billingStatus: 'canceled',
+    };
+  }
+
+  return {
+    applied: false,
+    action: 'invalid_self_service_action',
+    message: `Acao self-service invalida para Asaas: ${action}.`,
+    billingStatus: '',
+  };
+}
+
+async function applyStripeSeatAddonDeltaToActiveSubscription({
+  firestore,
+  stripeClient,
+  tenantId,
+  tenantData,
+  billingPlanKey,
+  addonSeatsDelta,
+  actorUid,
+}) {
+  const normalizedTenantId = String(tenantId ?? '').trim();
+  const normalizedPlanKey = normalizeBillingPlanKey(
+    billingPlanKey || tenantData?.billingPlanKey,
+  );
+  const delta = readNonNegativeInteger(addonSeatsDelta, 0);
+
+  if (!normalizedTenantId) {
+    return {
+      applied: false,
+      status: 400,
+      error: 'invalid_tenant_id',
+      action: 'invalid_payload',
+      message: 'tenantId invalido para ajuste de seats extras.',
+    };
+  }
+
+  if (delta <= 0 || delta > 10) {
+    return {
+      applied: false,
+      status: 400,
+      error: 'invalid_addon_seats_delta',
+      action: 'invalid_payload',
+      message: 'addonSeatsDelta deve estar entre 1 e 10.',
+    };
+  }
+
+  const stripeSubscriptionId = String(tenantData?.stripeSubscriptionId ?? '').trim();
+  if (!stripeSubscriptionId) {
+    return {
+      applied: false,
+      status: 409,
+      error: 'missing_active_subscription',
+      action: 'no_active_subscription',
+      message:
+        'Nao existe stripeSubscriptionId ativo para ajustar seats extras neste tenant.',
+    };
+  }
+
+  const subscription = await stripeClient.subscriptions.retrieve(
+    stripeSubscriptionId,
+    { expand: ['items.data.price'] },
+  );
+  const subscriptionStatus = String(subscription?.status ?? '').trim().toLowerCase();
+  if (
+    subscriptionStatus === 'canceled' ||
+    subscriptionStatus === 'incomplete_expired'
+  ) {
+    return {
+      applied: false,
+      status: 409,
+      error: 'subscription_not_active',
+      action: 'subscription_not_active',
+      message:
+        'A assinatura Stripe atual nao esta ativa para ajuste de seats extras.',
+    };
+  }
+
+  const lineItems = Array.isArray(subscription?.items?.data)
+    ? subscription.items.data
+    : [];
+
+  const mappedItems = [];
+  for (const item of lineItems) {
+    const priceId = String(item?.price?.id ?? '').trim();
+    if (!priceId) {
+      continue;
+    }
+    const mapping = await resolveStripePlanMappingByPriceId({
+      firestore,
+      stripePriceId: priceId,
+    });
+    if (!mapping) {
+      continue;
+    }
+    mappedItems.push({
+      ...mapping,
+      quantity: readNonNegativeInteger(item?.quantity, 0),
+    });
+  }
+
+  const subscriptionBaseItem =
+    mappedItems.find((item) => item.mappingType === 'base') ?? null;
+  if (
+    normalizedPlanKey &&
+    subscriptionBaseItem?.billingPlanKey &&
+    subscriptionBaseItem.billingPlanKey !== normalizedPlanKey
+  ) {
+    return {
+      applied: false,
+      status: 409,
+      error: 'plan_mismatch_with_active_subscription',
+      action: 'plan_mismatch',
+      message:
+        'O plano selecionado nao corresponde ao plano base da assinatura Stripe ativa.',
+    };
+  }
+
+  let baseMapping = subscriptionBaseItem;
+  if (!baseMapping && normalizedPlanKey) {
+    const loaded = await loadStripePlanMapping({
+      firestore,
+      billingPlanKey: normalizedPlanKey,
+    });
+    if (loaded?.mappingType === 'base') {
+      baseMapping = loaded;
+    }
+  }
+
+  if (!baseMapping || baseMapping.mappingType !== 'base') {
+    return {
+      applied: false,
+      status: 409,
+      error: 'base_plan_mapping_not_found',
+      action: 'base_mapping_not_found',
+      message:
+        'Nao foi possivel identificar o mapeamento base da assinatura para aplicar seats extras.',
+    };
+  }
+
+  const addonMapping = await resolveStripeSeatAddonMappingForBasePlan({
+    firestore,
+    baseMapping,
+  });
+
+  if (
+    !addonMapping ||
+    addonMapping.mappingType !== 'overage' ||
+    addonMapping.overageMetric !== 'extra_usuario' ||
+    !addonMapping.stripePriceId
+  ) {
+    return {
+      applied: false,
+      status: 409,
+      error: 'invalid_seat_addon_mapping',
+      action: 'seat_addon_mapping_invalid',
+      message:
+        'Plano base sem mapeamento overage extra_usuario valido (seatAddonPlanKey ou linkedBasePlanKey).',
+    };
+  }
+
+  const existingAddonItem = lineItems.find(
+    (item) => String(item?.price?.id ?? '').trim() === addonMapping.stripePriceId,
+  );
+  const previousAddonSeats = readNonNegativeInteger(existingAddonItem?.quantity, 0);
+  const currentAddonSeats = previousAddonSeats + delta;
+
+  const seatItemPayload = existingAddonItem
+    ? [{ id: String(existingAddonItem.id ?? '').trim(), quantity: currentAddonSeats }]
+    : [{ price: addonMapping.stripePriceId, quantity: currentAddonSeats }];
+
+  const nowIso = new Date().toISOString();
+  const metadataPatch = {
+    smartsfaTenantId: sanitizeStripeMetadataValue(normalizedTenantId, 120),
+    smartsfaBillingAction: 'seat_addon_increment',
+    smartsfaSeatAddonDelta: String(delta),
+    smartsfaSeatAddonQuantity: String(currentAddonSeats),
+    smartsfaBillingActorUid: sanitizeStripeMetadataValue(actorUid, 120),
+    smartsfaBillingUpdatedAt: sanitizeStripeMetadataValue(nowIso, 60),
+  };
+
+  const updatedSubscription = await stripeClient.subscriptions.update(
+    stripeSubscriptionId,
+    {
+      items: seatItemPayload,
+      proration_behavior: 'always_invoice',
+      payment_behavior: 'allow_incomplete',
+      metadata: {
+        ...(subscription?.metadata || {}),
+        ...metadataPatch,
+      },
+      expand: ['items.data.price', 'latest_invoice'],
+    },
+  );
+
+  await reconcileTenantStripeState({
+    firestore,
+    stripeClient,
+    tenantId: normalizedTenantId,
+  });
+
+  const latestInvoiceObject =
+    updatedSubscription?.latest_invoice &&
+    typeof updatedSubscription.latest_invoice === 'object'
+      ? updatedSubscription.latest_invoice
+      : null;
+  const invoiceId = latestInvoiceObject
+    ? String(latestInvoiceObject.id ?? '').trim()
+    : String(updatedSubscription?.latest_invoice ?? '').trim();
+  const invoiceStatus = latestInvoiceObject
+    ? String(latestInvoiceObject.status ?? '').trim()
+    : '';
+  const invoiceUrl = latestInvoiceObject
+    ? String(
+      latestInvoiceObject.hosted_invoice_url ??
+          latestInvoiceObject.invoice_pdf ??
+          '',
+    ).trim()
+    : '';
+
+  return {
+    applied: true,
+    status: 200,
+    error: '',
+    action: 'seat_addon_quantity_incremented',
+    message: `Foram adicionados ${delta} seats extras na assinatura atual.`,
+    billingPlanKey: baseMapping.billingPlanKey,
+    addedSeats: delta,
+    previousAddonSeats,
+    currentAddonSeats,
+    stripeSubscriptionId,
+    stripeAddonPriceId: addonMapping.stripePriceId,
+    invoiceId,
+    invoiceStatus,
+    invoiceUrl,
   };
 }
 
@@ -7117,14 +10748,82 @@ async function applyTenantBillingActionToStripe({
   }
 
   if (action === 'clear_plan_link') {
-    await stripeClient.subscriptions.cancel(stripeSubscriptionId, {
-      invoice_now: false,
-      prorate: false,
-    });
+    const subscriptionIdsToCancel = new Set();
+    if (stripeSubscriptionId) {
+      subscriptionIdsToCancel.add(stripeSubscriptionId);
+    }
+
+    if (stripeCustomerId) {
+      let hasMore = true;
+      let startingAfter = '';
+      while (hasMore) {
+        const page = await stripeClient.subscriptions.list({
+          customer: stripeCustomerId,
+          status: 'all',
+          limit: 100,
+          ...(startingAfter ? { starting_after: startingAfter } : {}),
+        });
+
+        const data = Array.isArray(page?.data) ? page.data : [];
+        for (const subscription of data) {
+          const candidateId = String(subscription?.id ?? '').trim();
+          const candidateStatus = String(subscription?.status ?? '')
+            .trim()
+            .toLowerCase();
+          if (!candidateId) {
+            continue;
+          }
+          if (
+            candidateStatus === 'canceled' ||
+            candidateStatus === 'incomplete_expired'
+          ) {
+            continue;
+          }
+          subscriptionIdsToCancel.add(candidateId);
+        }
+
+        hasMore = Boolean(page?.has_more);
+        if (hasMore && data.length > 0) {
+          startingAfter = String(data[data.length - 1]?.id ?? '').trim();
+          if (!startingAfter) {
+            hasMore = false;
+          }
+        } else {
+          hasMore = false;
+        }
+      }
+    }
+
+    let canceledCount = 0;
+    let alreadyMissingCount = 0;
+    for (const subscriptionIdToCancel of subscriptionIdsToCancel) {
+      try {
+        await stripeClient.subscriptions.cancel(subscriptionIdToCancel, {
+          invoice_now: false,
+          prorate: false,
+        });
+        canceledCount += 1;
+      } catch (error) {
+        const code = String(error?.code ?? '').trim().toLowerCase();
+        const message = String(error?.message ?? '').trim().toLowerCase();
+        const isMissingSubscription =
+          code === 'resource_missing' ||
+          message.includes('no such subscription');
+        if (isMissingSubscription) {
+          alreadyMissingCount += 1;
+          continue;
+        }
+        throw error;
+      }
+    }
+
     return {
       applied: true,
-      action: 'subscription_canceled_plan_unlinked',
-      message: 'Subscription cancelada no Stripe e plano desvinculado no tenant.',
+      action: 'subscriptions_canceled_plan_unlinked',
+      message:
+        canceledCount > 0 || alreadyMissingCount > 0
+          ? `Foram canceladas ${canceledCount} subscription(s) no Stripe, ${alreadyMissingCount} ja nao existiam e o plano foi desvinculado no tenant.`
+          : 'Nenhuma subscription ativa encontrada no Stripe; plano desvinculado no tenant.',
     };
   }
 

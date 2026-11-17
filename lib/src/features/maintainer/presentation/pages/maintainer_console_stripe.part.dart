@@ -5,7 +5,7 @@ extension _MaintainerConsoleStripePart on _MaintainerConsolePageState {
     return Align(
       alignment: Alignment.centerLeft,
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 1320),
+        constraints: const BoxConstraints(maxWidth: 1680),
         child: Card(
           child: Padding(
             padding: const EdgeInsets.all(20),
@@ -183,7 +183,7 @@ extension _MaintainerConsoleStripePart on _MaintainerConsolePageState {
         final grouped =
             <_StripePlanSection, List<MaintainerStripePlanMapping>>{};
         for (final mapping in mappings) {
-          final section = _stripePlanSectionFromPlanKey(mapping.billingPlanKey);
+          final section = _stripePlanSectionFromMapping(mapping);
           grouped
               .putIfAbsent(section, () => <MaintainerStripePlanMapping>[])
               .add(mapping);
@@ -198,6 +198,7 @@ extension _MaintainerConsoleStripePart on _MaintainerConsolePageState {
               mappings:
                   grouped[_StripePlanSection.individual] ??
                   const <MaintainerStripePlanMapping>[],
+              availableMappings: mappings,
             ),
             const SizedBox(height: 12),
             _buildStripePlanSection(
@@ -206,6 +207,7 @@ extension _MaintainerConsoleStripePart on _MaintainerConsolePageState {
               mappings:
                   grouped[_StripePlanSection.representacoes] ??
                   const <MaintainerStripePlanMapping>[],
+              availableMappings: mappings,
             ),
             const SizedBox(height: 12),
             _buildStripePlanSection(
@@ -214,6 +216,7 @@ extension _MaintainerConsoleStripePart on _MaintainerConsolePageState {
               mappings:
                   grouped[_StripePlanSection.enterprise] ??
                   const <MaintainerStripePlanMapping>[],
+              availableMappings: mappings,
             ),
             if ((grouped[_StripePlanSection.outros] ??
                     const <MaintainerStripePlanMapping>[])
@@ -225,6 +228,7 @@ extension _MaintainerConsoleStripePart on _MaintainerConsolePageState {
                 mappings:
                     grouped[_StripePlanSection.outros] ??
                     const <MaintainerStripePlanMapping>[],
+                availableMappings: mappings,
               ),
             ],
           ],

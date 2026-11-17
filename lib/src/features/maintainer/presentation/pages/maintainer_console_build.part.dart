@@ -95,8 +95,16 @@ extension _MaintainerConsoleBuildPart on _MaintainerConsolePageState {
       return [_buildImpersonationCard(context)];
     }
 
+    if (activeTab == _MaintainerConsoleTab.apiCheckout && canAccessStripeTab) {
+      return [_buildCheckoutApiCard(context, decision)];
+    }
+
     if (activeTab == _MaintainerConsoleTab.stripe && canAccessStripeTab) {
       return [_buildStripeIntegrationCard(context)];
+    }
+
+    if (activeTab == _MaintainerConsoleTab.asaas && canAccessStripeTab) {
+      return [_buildAsaasIntegrationCard(context, decision)];
     }
 
     return const <Widget>[];

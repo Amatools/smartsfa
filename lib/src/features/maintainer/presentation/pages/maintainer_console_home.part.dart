@@ -48,9 +48,21 @@ extension _MaintainerConsoleHomePart on _MaintainerConsolePageState {
           ),
         if (canAccessStripeTab)
           ChoiceChip(
+            label: const Text('API Checkout'),
+            selected: _activeTab == _MaintainerConsoleTab.apiCheckout,
+            onSelected: (_) => _setActiveTab(_MaintainerConsoleTab.apiCheckout),
+          ),
+        if (canAccessStripeTab)
+          ChoiceChip(
             label: const Text('Integracao Stripe'),
             selected: _activeTab == _MaintainerConsoleTab.stripe,
             onSelected: (_) => _setActiveTab(_MaintainerConsoleTab.stripe),
+          ),
+        if (canAccessStripeTab)
+          ChoiceChip(
+            label: const Text('Integracao Asaas'),
+            selected: _activeTab == _MaintainerConsoleTab.asaas,
+            onSelected: (_) => _setActiveTab(_MaintainerConsoleTab.asaas),
           ),
       ],
     );

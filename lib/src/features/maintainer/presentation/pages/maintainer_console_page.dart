@@ -17,7 +17,9 @@ import '../../services/maintainer_overview_service.dart';
 import '../../services/maintainer_user_admin_service.dart';
 
 part 'maintainer_console_user_dialogs.part.dart';
+part 'maintainer_console_checkout_api.part.dart';
 part 'maintainer_console_stripe.part.dart';
+part 'maintainer_console_asaas.part.dart';
 part 'maintainer_console_stripe_config_dialog.part.dart';
 part 'maintainer_console_stripe_plan_mapping_dialog_models.part.dart';
 part 'maintainer_console_stripe_plan_mapping_dialog_ui.part.dart';

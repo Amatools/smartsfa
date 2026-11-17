@@ -472,6 +472,146 @@
 			],
 			"isBackground": false,
 			"group": "build"
+		},
+		{
+			"label": "build web prod app",
+			"type": "shell",
+			"command": "C:/flutter/bin/flutter.bat",
+			"args": [
+				"build",
+				"web",
+				"--release",
+				"--base-href",
+				"/app/",
+				"--dart-define",
+				"APP_ENV=prod",
+				"--output",
+				"public/app"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "firebase deploy seat addons function",
+			"type": "shell",
+			"command": "C:/Users/Aureo.Filho/AppData/Roaming/npm/firebase.cmd",
+			"args": [
+				"deploy",
+				"--project=smart-sfa",
+				"--only",
+				"functions:updateBillingSeatAddons"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "firebase deploy hosting public site",
+			"type": "shell",
+			"command": "C:/Users/Aureo.Filho/AppData/Roaming/npm/firebase.cmd",
+			"args": [
+				"deploy",
+				"--project=smart-sfa",
+				"--only",
+				"hosting"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "deploy billing stripe fallback",
+			"type": "shell",
+			"command": "C:/Users/Aureo.Filho/AppData/Roaming/npm/firebase.cmd",
+			"args": [
+				"deploy",
+				"--project=smart-sfa",
+				"--only",
+				"functions:listStripeCheckoutPlans,functions:createBillingCheckoutSession,functions:updateBillingSeatAddons"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "deploy manage billing state hardening",
+			"type": "shell",
+			"command": "C:/Users/Aureo.Filho/AppData/Roaming/npm/firebase.cmd",
+			"args": [
+				"deploy",
+				"--project=smart-sfa",
+				"--only",
+				"functions:manageTenantBillingState"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "deploy manage billing state missing-sub safe",
+			"type": "shell",
+			"command": "C:/Users/Aureo.Filho/AppData/Roaming/npm/firebase.cmd",
+			"args": [
+				"deploy",
+				"--project=smart-sfa",
+				"--only",
+				"functions:manageTenantBillingState"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "clear billing owner smartsfa",
+			"type": "shell",
+			"command": "node",
+			"args": [
+				"scripts/bootstrap_owner/tmp_clear_billing_owner_smartsfa.mjs"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "deploy billing plan listing addon pricing",
+			"type": "shell",
+			"command": "C:/Users/Aureo.Filho/AppData/Roaming/npm/firebase.cmd",
+			"args": [
+				"deploy",
+				"--project=smart-sfa",
+				"--only",
+				"functions:listStripeCheckoutPlans,functions:listBillingCheckoutPlans"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "git status short",
+			"type": "shell",
+			"command": "git",
+			"args": [
+				"status",
+				"--short"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "git branch and status",
+			"type": "shell",
+			"command": "git",
+			"args": [
+				"status",
+				"-sb"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "git add all except temp script",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"git add -A; git reset -- scripts/bootstrap_owner/tmp_clear_billing_owner_smartsfa.mjs; git status --short"
+			],
+			"isBackground": false,
+			"group": "build"
 		}
 	]
 }

@@ -25,6 +25,29 @@ extension _MaintainerConsoleStripeHelpersPart on _MaintainerConsolePageState {
     return _StripePlanSection.outros;
   }
 
+  _StripePlanSection _stripePlanSectionFromMapping(
+    MaintainerStripePlanMapping mapping,
+  ) {
+    final sectionFromOwnKey = _stripePlanSectionFromPlanKey(
+      mapping.billingPlanKey,
+    );
+    if (sectionFromOwnKey != _StripePlanSection.outros) {
+      return sectionFromOwnKey;
+    }
+
+    final mappingType = mapping.mappingType.trim().toLowerCase();
+    if (mappingType == 'overage') {
+      final linkedSection = _stripePlanSectionFromPlanKey(
+        mapping.linkedBasePlanKey,
+      );
+      if (linkedSection != _StripePlanSection.outros) {
+        return linkedSection;
+      }
+    }
+
+    return _StripePlanSection.outros;
+  }
+
   String _stripePlanSectionLabel(_StripePlanSection section) {
     switch (section) {
       case _StripePlanSection.individual:

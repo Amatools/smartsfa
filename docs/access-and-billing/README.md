@@ -10,7 +10,12 @@ Este diretório concentra os documentos oficiais de autenticação, autorizaçã
 4. account_workspace_deletion_policy.md
 5. stripe_integration_blueprint.md
 6. stripe_firestore_functions_contract.md
-7. stripe_configuracao_comandos.md
+7. billing_unified_provider_contract.md
+8. asaas_internal_billing_engine_plan.md
+9. asaas_internal_billing_execution_backlog.md
+10. stripe_configuracao_comandos.md
+11. asaas_configuracao_comandos.md
+12. asaas_webhooks_configuracao_detalhada.md
 
 ## Papel de cada documento
 
@@ -68,6 +73,31 @@ Contrato técnico da implementação Stripe:
 - contrato dos endpoints/functions (checkout, webhook, reconciliação);
 - regras obrigatórias de segurança, idempotência e auditoria.
 
+### billing_unified_provider_contract.md
+
+Contrato de arquitetura para multi-provider de cobrança:
+
+- define camada única de cobrança para Stripe/Asaas;
+- padroniza `billingProvider` no tenant e dispatch por provider;
+- mantém regras comuns (acesso, auditoria e seat governance) fora do provider.
+
+### asaas_internal_billing_engine_plan.md
+
+Plano de decisao pre-implementacao para Asaas:
+
+- consolida que Stripe segue no fluxo nativo atual;
+- define que Asaas exige motor interno de billing para preco, seats e limites;
+- propõe colecoes, endpoints e fases para evolucao sem quebrar Stripe.
+
+### asaas_internal_billing_execution_backlog.md
+
+Backlog tecnico executavel para implementar o motor interno Asaas:
+
+- epicos e tarefas por dominio;
+- ordem de entrega por sprint;
+- criterios de aceite e gates de regressao Stripe;
+- riscos operacionais e mitigacoes.
+
 ### stripe_configuracao_comandos.md
 
 Guia operacional por comandos com placeholders para configuração segura:
@@ -76,6 +106,23 @@ Guia operacional por comandos com placeholders para configuração segura:
 - deploy das functions de billing;
 - configuração do webhook e eventos;
 - cadastro de planos por seção (individual, representações, enterprise).
+
+### asaas_configuracao_comandos.md
+
+Guia operacional por comandos para a preparacao da integracao Asaas:
+
+- cadastro de segredos Asaas no Secret Manager;
+- configuracao de webhook por ambiente;
+- preenchimento dos metadados no Maintainer e selecao de provider no API Checkout.
+
+### asaas_webhooks_configuracao_detalhada.md
+
+Guia detalhado de Webhook Asaas para operacao segura:
+
+- payload de criacao do webhook (sandbox e producao);
+- lista de eventos obrigatorios e opcionais por contexto;
+- validacao de autenticacao, idempotencia e ordem de entrega;
+- diferenca entre Split de pagamento e pagamento com mais de um metodo.
 
 ## Decisões consolidadas (resumo)
 

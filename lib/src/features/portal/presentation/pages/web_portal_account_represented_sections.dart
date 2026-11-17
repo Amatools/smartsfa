@@ -492,16 +492,22 @@ class _BillingSection extends StatefulWidget {
 }
 
 class _BillingSectionState extends State<_BillingSection> {
+  static const int _maxSeatAddonDeltaPerOperation = 10;
+
   late final WebPortalBillingService _billingService;
+  late final TextEditingController _checkoutAddonSeatsController;
   Future<List<WebPortalAvailableBillingPlan>>? _availablePlansFuture;
   String _selectedCheckoutPlanKey = '';
+  int _checkoutAddonSeats = 0;
   bool _startingCheckout = false;
   bool _openingPortal = false;
+  bool _applyingSelfServiceAction = false;
 
   @override
   void initState() {
     super.initState();
     _billingService = WebPortalBillingService();
+    _checkoutAddonSeatsController = TextEditingController(text: '0');
     _selectedCheckoutPlanKey = _normalizeBillingPlanKey(
       _requestedBillingPlanFromUrl(),
     );
@@ -542,11 +548,22 @@ class _BillingSectionState extends State<_BillingSection> {
     if (oldTenantId != newTenantId) {
       setState(() {
         _selectedCheckoutPlanKey = '';
+        _checkoutAddonSeats = 0;
         _availablePlansFuture = _billingService.listAvailableCheckoutPlans(
           tenantId: widget.activeTenant.tenantId,
         );
       });
+      _checkoutAddonSeatsController.value = const TextEditingValue(
+        text: '0',
+        selection: TextSelection.collapsed(offset: 1),
+      );
     }
+  }
+
+  @override
+  void dispose() {
+    _checkoutAddonSeatsController.dispose();
+    super.dispose();
   }
 
   @override
@@ -579,7 +596,16 @@ class _BillingSectionState extends State<_BillingSection> {
             final stripeCustomerId = (tenantData['stripeCustomerId'] ?? '')
                 .toString()
                 .trim();
+            final asaasSubscriptionId =
+                (tenantData['asaasSubscriptionId'] ?? '').toString().trim();
             final hasStripeCustomerId = stripeCustomerId.isNotEmpty;
+            final hasAsaasSubscriptionId = asaasSubscriptionId.isNotEmpty;
+            final billingProvider = _resolveBillingProviderFromTenantData(
+              tenantData,
+            );
+            final billingProviderLabel = _billingProviderDisplayLabel(
+              billingProvider,
+            );
             final graceUntil = _formatDateOrDash(
               tenantData['billingGraceUntilAt'],
             );
@@ -594,7 +620,9 @@ class _BillingSectionState extends State<_BillingSection> {
               periodStart: periodStart,
               periodEnd: periodEnd,
               rawBillingStatus: rawBillingStatus,
-              stripeCustomerId: stripeCustomerId,
+              billingProvider: billingProvider,
+              hasLinkedBillingContract:
+                  hasStripeCustomerId || hasAsaasSubscriptionId,
             );
             final isOperationalAccessBlocked = _isOperationalAccessBlocked(
               rawStatus: rawBillingStatus,
@@ -634,6 +662,7 @@ class _BillingSectionState extends State<_BillingSection> {
                       title: 'Acesso operacional',
                       value: operationalAccess,
                     ),
+                    _SummaryCard(title: 'Provider', value: billingProviderLabel),
                   ],
                 ),
                 const SizedBox(height: 16),
@@ -722,6 +751,7 @@ class _BillingSectionState extends State<_BillingSection> {
                                 onPressed:
                                     !widget.canManageBillingActions ||
                                         _openingPortal ||
+                                        billingProvider != 'stripe' ||
                                         !hasStripeCustomerId
                                     ? null
                                     : () => _openPortal(),
@@ -729,6 +759,8 @@ class _BillingSectionState extends State<_BillingSection> {
                                 label: Text(
                                   !widget.canManageBillingActions
                                       ? 'Somente owner/admin pode gerir billing'
+                                      : billingProvider != 'stripe'
+                                      ? 'Portal exclusivo Stripe'
                                       : !hasStripeCustomerId
                                       ? 'Portal indisponível (sem assinatura)'
                                       : _openingPortal
@@ -738,10 +770,16 @@ class _BillingSectionState extends State<_BillingSection> {
                               ),
                             ],
                           ),
-                          if (!hasStripeCustomerId) ...[
+                          if (billingProvider == 'stripe' &&
+                              !hasStripeCustomerId) ...[
                             const SizedBox(height: 8),
                             const Text(
                               'O portal Stripe só fica disponível após a primeira assinatura ativa. Para iniciar pagamento, use checkout ao selecionar um plano.',
+                            ),
+                          ] else if (billingProvider == 'asaas') ...[
+                            const SizedBox(height: 8),
+                            const Text(
+                              'Asaas não possui portal de assinatura equivalente ao Stripe. Use as ações de autoatendimento para interromper ou cancelar.',
                             ),
                           ],
                         ] else ...[
@@ -750,7 +788,9 @@ class _BillingSectionState extends State<_BillingSection> {
                             tenantData: tenantData,
                             textTheme: textTheme,
                             workspaceType: workspaceType,
+                            billingProvider: billingProvider,
                             hasStripeCustomerId: hasStripeCustomerId,
+                            hasAsaasSubscriptionId: hasAsaasSubscriptionId,
                             rawBillingStatus: rawBillingStatus,
                             rawGraceUntilAt: tenantData['billingGraceUntilAt'],
                             canManageBillingActions:
@@ -773,7 +813,9 @@ class _BillingSectionState extends State<_BillingSection> {
     required Map<String, dynamic> tenantData,
     required TextTheme textTheme,
     required String workspaceType,
+    required String billingProvider,
     required bool hasStripeCustomerId,
+    required bool hasAsaasSubscriptionId,
     required String rawBillingStatus,
     required Object? rawGraceUntilAt,
     required bool canManageBillingActions,
@@ -799,6 +841,22 @@ class _BillingSectionState extends State<_BillingSection> {
             hasActiveCurrentPlan &&
             selectedPlanKey.isNotEmpty &&
             selectedPlanKey == currentPlanKey;
+        final isStripeProvider = billingProvider == 'stripe';
+        final isAsaasProvider = billingProvider == 'asaas';
+        final currentAddonSeats = _readNonNegativeInt(
+          tenantData['billingSeatsAddon'],
+          fallback: _readNonNegativeInt(tenantData['billingSeatAddons']),
+        );
+        final selectedPlan = _findPlanByKey(plans, selectedPlanKey);
+        final selectedPlanSupportsSeatAddon =
+          selectedPlan != null &&
+          _normalizeBillingPlanKey(selectedPlan.seatAddonPlanKey).isNotEmpty;
+        final selectedAddonSeats = _checkoutAddonSeats;
+        final canApplySeatAddonsToCurrentPlan =
+          isStripeProvider && selectedIsCurrent && selectedPlanSupportsSeatAddon;
+        final canSubmitSeatAddonDelta =
+          selectedAddonSeats > 0 &&
+          selectedAddonSeats <= _maxSeatAddonDeltaPerOperation;
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -876,6 +934,18 @@ class _BillingSectionState extends State<_BillingSection> {
                             workspaceType: workspaceType,
                             planTier: planTier,
                           );
+                          final planSupportsSeatAddon =
+                              _normalizeBillingPlanKey(plan.seatAddonPlanKey).isNotEmpty;
+                          final showSeatAddonCard =
+                              isStripeProvider &&
+                              isCurrent &&
+                              planSupportsSeatAddon;
+                          var seatAddonUnitPriceCents = plan.seatAddonUnitPriceCents;
+                          if (isCurrent && seatAddonUnitPriceCents <= 0) {
+                            seatAddonUnitPriceCents = _readNonNegativeInt(
+                              tenantData['billingSeatAddonUnitPriceCents'],
+                            );
+                          }
 
                           return SizedBox(
                             width: cardWidth,
@@ -888,8 +958,22 @@ class _BillingSectionState extends State<_BillingSection> {
                               onTap: () {
                                 setState(() {
                                   _selectedCheckoutPlanKey = normalizedPlanKey;
+                                  _setCheckoutAddonSeatsDelta(0);
                                 });
                               },
+                              seatAddonCard: showSeatAddonCard
+                                  ? _buildStripeSeatAddonSideCard(
+                                      billingPlanKey: normalizedPlanKey,
+                                      includedSeats: plan.includedSeats,
+                                      currentAddonSeats: currentAddonSeats,
+                                      addonSeats: _checkoutAddonSeats,
+                                      addonUnitPriceCents: seatAddonUnitPriceCents,
+                                      addonDisplayAmount: plan.seatAddonDisplayAmount,
+                                      canManageBillingActions:
+                                          canManageBillingActions &&
+                                          !_startingCheckout,
+                                    )
+                                  : null,
                             ),
                           );
                         })
@@ -907,44 +991,134 @@ class _BillingSectionState extends State<_BillingSection> {
                       !canManageBillingActions ||
                           _startingCheckout ||
                           selectedPlanKey.isEmpty ||
-                          selectedIsCurrent
+                          (canApplySeatAddonsToCurrentPlan
+                              ? !canSubmitSeatAddonDelta
+                              : selectedIsCurrent)
                       ? null
-                      : () => _startCheckout(billingPlanKey: selectedPlanKey),
+                      : () {
+                          if (canApplySeatAddonsToCurrentPlan) {
+                            _addSeatAddonsToCurrentPlan(
+                              billingPlanKey: selectedPlanKey,
+                              addonSeatsDelta: selectedAddonSeats,
+                            );
+                            return;
+                          }
+
+                          _startCheckout(
+                            billingPlanKey: selectedPlanKey,
+                            addonSeats: selectedAddonSeats,
+                          );
+                        },
                   icon: const Icon(Icons.shopping_cart_checkout),
                   label: Text(
                     !canManageBillingActions
                         ? 'Somente owner/admin pode contratar ou alterar plano'
                         : _startingCheckout
-                        ? 'Abrindo checkout...'
+                        ? canApplySeatAddonsToCurrentPlan
+                              ? 'Aplicando seats extras...'
+                              : 'Abrindo checkout...'
+                        : canApplySeatAddonsToCurrentPlan
+                        ? canSubmitSeatAddonDelta
+                              ? 'Adicionar +$selectedAddonSeats seats e cobrar agora'
+                              : 'Defina de 1 a 10 seats extras'
                         : selectedIsCurrent
                         ? 'Plano já ativo'
                         : 'Contratar e ativar plano selecionado',
                   ),
                 ),
-                OutlinedButton.icon(
-                  onPressed:
-                      !canManageBillingActions ||
-                          _openingPortal ||
-                          !hasStripeCustomerId
-                      ? null
-                      : () => _openPortal(),
-                  icon: const Icon(Icons.receipt_long_outlined),
-                  label: Text(
-                    !canManageBillingActions
-                        ? 'Somente owner/admin pode gerir billing'
-                        : !hasStripeCustomerId
-                        ? 'Portal indisponível (sem assinatura)'
-                        : _openingPortal
-                        ? 'Abrindo portal...'
-                        : 'Abrir portal Stripe',
+                if (isStripeProvider)
+                  OutlinedButton.icon(
+                    onPressed:
+                        !canManageBillingActions ||
+                            _openingPortal ||
+                            !hasStripeCustomerId
+                        ? null
+                        : () => _openPortal(),
+                    icon: const Icon(Icons.receipt_long_outlined),
+                    label: Text(
+                      !canManageBillingActions
+                          ? 'Somente owner/admin pode gerir billing'
+                          : !hasStripeCustomerId
+                          ? 'Portal indisponível (sem assinatura)'
+                          : _openingPortal
+                          ? 'Abrindo portal...'
+                          : 'Abrir portal Stripe',
+                    ),
+                  )
+                else if (isAsaasProvider)
+                  OutlinedButton.icon(
+                    onPressed: null,
+                    icon: Icon(Icons.receipt_long_outlined),
+                    label: Text('Asaas sem portal de assinatura'),
                   ),
-                ),
               ],
             ),
-            if (canManageBillingActions && !hasStripeCustomerId) ...[
+            if (isStripeProvider &&
+                canManageBillingActions &&
+                !hasStripeCustomerId) ...[
               const SizedBox(height: 8),
               const Text(
                 'O portal Stripe só abre após a criação da primeira assinatura. Para o primeiro pagamento, selecione um plano e clique em contratar e ativar.',
+              ),
+            ],
+            if (isAsaasProvider) ...[
+              const SizedBox(height: 12),
+              Text(
+                'Autoatendimento Asaas',
+                style: textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                hasAsaasSubscriptionId
+                    ? 'Use as ações abaixo para interromper a recorrência ou cancelar o plano atual.'
+                    : 'Ações indisponíveis até existir uma assinatura Asaas vinculada ao tenant.',
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed:
+                        !canManageBillingActions ||
+                            _applyingSelfServiceAction ||
+                            !hasAsaasSubscriptionId
+                        ? null
+                        : () => _runAsaasSelfServiceAction(
+                          action: 'stop_renewal',
+                          confirmTitle: 'Interromper renovação automática?',
+                          confirmMessage:
+                              'Esta ação muda a assinatura para INACTIVE no Asaas e impede novas cobranças recorrentes.',
+                        ),
+                    icon: const Icon(Icons.pause_circle_outline),
+                    label: Text(
+                      _applyingSelfServiceAction
+                          ? 'Aplicando ação...'
+                          : 'Interromper renovação',
+                    ),
+                  ),
+                  FilledButton.icon(
+                    onPressed:
+                        !canManageBillingActions ||
+                            _applyingSelfServiceAction ||
+                            !hasAsaasSubscriptionId
+                        ? null
+                        : () => _runAsaasSelfServiceAction(
+                          action: 'cancel_now',
+                          confirmTitle: 'Cancelar plano agora?',
+                          confirmMessage:
+                              'Esta ação remove a assinatura no Asaas. Ela é irreversível pelo portal e exige nova contratação para retomar.',
+                        ),
+                    icon: const Icon(Icons.cancel_outlined),
+                    label: Text(
+                      _applyingSelfServiceAction
+                          ? 'Aplicando ação...'
+                          : 'Cancelar plano',
+                    ),
+                  ),
+                ],
               ),
             ],
           ],
@@ -1037,7 +1211,7 @@ class _BillingSectionState extends State<_BillingSection> {
     if (planFeatures.contains(_featureAdvancedPricing)) {
       labels.add('Libera tabelas de preço avançadas');
     }
-    labels.add('Checkout e gestão no portal Stripe');
+    labels.add('Checkout e gestão de cobrança no portal');
     return labels;
   }
 
@@ -1086,10 +1260,10 @@ class _BillingSectionState extends State<_BillingSection> {
     required String periodStart,
     required String periodEnd,
     required String rawBillingStatus,
-    required String stripeCustomerId,
+    required String billingProvider,
+    required bool hasLinkedBillingContract,
   }) {
     final status = rawBillingStatus.trim().toLowerCase();
-    final hasStripeLink = stripeCustomerId.trim().isNotEmpty;
     final hasStart = periodStart != '-';
     final hasEnd = periodEnd != '-';
 
@@ -1103,8 +1277,8 @@ class _BillingSectionState extends State<_BillingSection> {
       return 'Até $periodEnd (início pendente)';
     }
 
-    if (status == 'active' && hasStripeLink) {
-      return 'Aguardando sincronização do ciclo no Stripe';
+    if (status == 'active' && hasLinkedBillingContract) {
+      return 'Aguardando sincronização do ciclo no ${_billingProviderDisplayLabel(billingProvider)}';
     }
 
     return 'Não definido';
@@ -1320,7 +1494,154 @@ class _BillingSectionState extends State<_BillingSection> {
     return fallback < 0 ? 0 : fallback;
   }
 
-  Future<void> _startCheckout({required String billingPlanKey}) async {
+  void _setCheckoutAddonSeatsDelta(int value) {
+    final clamped = value.clamp(0, _maxSeatAddonDeltaPerOperation).toInt();
+    _checkoutAddonSeats = clamped;
+    final textValue = '$clamped';
+    if (_checkoutAddonSeatsController.text != textValue) {
+      _checkoutAddonSeatsController.value = TextEditingValue(
+        text: textValue,
+        selection: TextSelection.collapsed(offset: textValue.length),
+      );
+    }
+  }
+
+  Widget _buildStripeSeatAddonSideCard({
+    required String billingPlanKey,
+    required int includedSeats,
+    required int currentAddonSeats,
+    required int addonSeats,
+    required int addonUnitPriceCents,
+    required String addonDisplayAmount,
+    required bool canManageBillingActions,
+  }) {
+    final totalAddonCents = addonUnitPriceCents * addonSeats;
+    final perUserAmountLabel = addonUnitPriceCents > 0
+        ? '${WebPortalDashboardFormatService.formatCurrencyBr(addonUnitPriceCents / 100)} por usuario/mes'
+        : (addonDisplayAmount.trim().isEmpty
+              ? 'Valor por usuario sob consulta'
+              : '${addonDisplayAmount.trim()} por usuario');
+    final totalAmountLabel = addonUnitPriceCents > 0
+        ? WebPortalDashboardFormatService.formatCurrencyBr(totalAddonCents / 100)
+        : '--';
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFDCE3F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Usuarios Adicionais',
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            perUserAmountLabel,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 8),
+          Text('Seats inclusos: $includedSeats'),
+          Text('Seats extras atuais: $currentAddonSeats'),
+          const SizedBox(height: 10),
+          Text(
+            'Adicionar agora',
+            style: Theme.of(context).textTheme.labelLarge,
+          ),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              OutlinedButton(
+                onPressed: !canManageBillingActions || addonSeats <= 0
+                    ? null
+                    : () {
+                        setState(() {
+                          _selectedCheckoutPlanKey = billingPlanKey;
+                          _setCheckoutAddonSeatsDelta(addonSeats - 1);
+                        });
+                      },
+                child: const Text('-'),
+              ),
+              SizedBox(
+                width: 88,
+                child: TextField(
+                  controller: _checkoutAddonSeatsController,
+                  enabled: canManageBillingActions,
+                  keyboardType: TextInputType.number,
+                  textAlign: TextAlign.center,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    LengthLimitingTextInputFormatter(2),
+                  ],
+                  decoration: const InputDecoration(
+                    labelText: 'Qtd',
+                    isDense: true,
+                    border: OutlineInputBorder(),
+                  ),
+                  onChanged: (raw) {
+                    final parsed = int.tryParse(raw.trim()) ?? 0;
+                    final clamped = parsed.clamp(
+                      0,
+                      _maxSeatAddonDeltaPerOperation,
+                    );
+                    if (_checkoutAddonSeats != clamped) {
+                      setState(() {
+                        _selectedCheckoutPlanKey = billingPlanKey;
+                        _setCheckoutAddonSeatsDelta(clamped);
+                      });
+                    }
+                    if ('$clamped' != _checkoutAddonSeatsController.text) {
+                      _checkoutAddonSeatsController.value = TextEditingValue(
+                        text: '$clamped',
+                        selection: TextSelection.collapsed(
+                          offset: '$clamped'.length,
+                        ),
+                      );
+                    }
+                  },
+                ),
+              ),
+              OutlinedButton(
+                onPressed: !canManageBillingActions ||
+                        addonSeats >= _maxSeatAddonDeltaPerOperation
+                    ? null
+                    : () {
+                        setState(() {
+                          _selectedCheckoutPlanKey = billingPlanKey;
+                          _setCheckoutAddonSeatsDelta(addonSeats + 1);
+                        });
+                      },
+                child: const Text('+'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            addonUnitPriceCents > 0
+                ? 'Total para adicionar agora: $totalAmountLabel'
+                : 'Defina a quantidade e clique para adicionar seats extras.',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _startCheckout({
+    required String billingPlanKey,
+    int addonSeats = 0,
+  }) async {
     if (_startingCheckout) {
       return;
     }
@@ -1347,6 +1668,7 @@ class _BillingSectionState extends State<_BillingSection> {
         billingPlanKey: normalizedPlanKey,
         successUrl: successUrl,
         cancelUrl: cancelUrl,
+        addonSeats: addonSeats,
       );
 
       final opened = openUrlInCurrentTab(result.checkoutUrl);
@@ -1362,7 +1684,7 @@ class _BillingSectionState extends State<_BillingSection> {
         SnackBar(
           content: Text(
             opened
-                ? 'Checkout Stripe aberto em nova aba.'
+                ? 'Checkout aberto em nova aba.'
                 : 'Link do checkout copiado para a área de transferência.',
           ),
         ),
@@ -1372,6 +1694,85 @@ class _BillingSectionState extends State<_BillingSection> {
         return;
       }
       _showBillingActionInfo(context, 'Falha ao abrir checkout: $error');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _startingCheckout = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _addSeatAddonsToCurrentPlan({
+    required String billingPlanKey,
+    required int addonSeatsDelta,
+  }) async {
+    if (_startingCheckout) {
+      return;
+    }
+
+    final normalizedPlanKey = _normalizeBillingPlanKey(billingPlanKey);
+    if (normalizedPlanKey.isEmpty) {
+      _showBillingActionInfo(
+        context,
+        'Selecione um plano valido antes de adicionar seats extras.',
+      );
+      return;
+    }
+
+    if (addonSeatsDelta <= 0 || addonSeatsDelta > _maxSeatAddonDeltaPerOperation) {
+      _showBillingActionInfo(
+        context,
+        'Informe de 1 a $_maxSeatAddonDeltaPerOperation seats extras por operacao.',
+      );
+      return;
+    }
+
+    setState(() {
+      _startingCheckout = true;
+    });
+
+    try {
+      final result = await _billingService.updateSeatAddons(
+        tenantId: widget.activeTenant.tenantId,
+        billingPlanKey: normalizedPlanKey,
+        addonSeatsDelta: addonSeatsDelta,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      var invoiceInfo = '';
+      if (result.invoiceUrl.trim().isNotEmpty) {
+        final openedInvoice = openUrlInCurrentTab(result.invoiceUrl);
+        if (!openedInvoice) {
+          await Clipboard.setData(ClipboardData(text: result.invoiceUrl));
+          if (!mounted) {
+            return;
+          }
+          invoiceInfo = ' Link da fatura copiado para a area de transferencia.';
+        } else {
+          invoiceInfo = ' Fatura aberta em nova aba.';
+        }
+      }
+
+      _showBillingActionInfo(
+        context,
+        '${result.message} Seats extras: ${result.previousAddonSeats} -> ${result.currentAddonSeats}.$invoiceInfo',
+      );
+
+      setState(() {
+        _setCheckoutAddonSeatsDelta(0);
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      _showBillingActionInfo(
+        context,
+        'Falha ao adicionar seats extras: $error',
+      );
     } finally {
       if (mounted) {
         setState(() {
@@ -1411,7 +1812,7 @@ class _BillingSectionState extends State<_BillingSection> {
         SnackBar(
           content: Text(
             opened
-                ? 'Portal Stripe aberto em nova aba.'
+                ? 'Página de billing aberta em nova aba.'
                 : 'Link do portal copiado para a área de transferência.',
           ),
         ),
@@ -1420,7 +1821,7 @@ class _BillingSectionState extends State<_BillingSection> {
       if (!mounted) {
         return;
       }
-      _showBillingActionInfo(context, 'Falha ao abrir portal Stripe: $error');
+      _showBillingActionInfo(context, 'Falha ao abrir página de billing: $error');
     } finally {
       if (mounted) {
         setState(() {
@@ -1474,6 +1875,22 @@ class _BillingSectionState extends State<_BillingSection> {
     return plans.first.billingPlanKey;
   }
 
+  WebPortalAvailableBillingPlan? _findPlanByKey(
+    List<WebPortalAvailableBillingPlan> plans,
+    String billingPlanKey,
+  ) {
+    final normalized = _normalizeBillingPlanKey(billingPlanKey);
+    if (normalized.isEmpty) {
+      return null;
+    }
+    for (final plan in plans) {
+      if (_normalizeBillingPlanKey(plan.billingPlanKey) == normalized) {
+        return plan;
+      }
+    }
+    return null;
+  }
+
   String _defaultPlanForWorkspaceType(String workspaceType) {
     final normalized = workspaceType.trim().toLowerCase();
     if (normalized == 'rep_workspace') {
@@ -1492,6 +1909,128 @@ class _BillingSectionState extends State<_BillingSection> {
     return raw.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '_');
   }
 
+  String _resolveBillingProviderFromTenantData(Map<String, dynamic> tenantData) {
+    String normalize(Object? value) {
+      final normalized = (value ?? '').toString().trim().toLowerCase();
+      if (normalized == 'stripe' || normalized == 'asaas') {
+        return normalized;
+      }
+      return '';
+    }
+
+    final explicitContractProvider = normalize(
+      tenantData['billingContractProvider'],
+    );
+    if (explicitContractProvider.isNotEmpty) {
+      return explicitContractProvider;
+    }
+
+    final hasStripeLink = (tenantData['stripeSubscriptionId'] ?? '')
+        .toString()
+        .trim()
+        .isNotEmpty;
+    final hasAsaasLink = (tenantData['asaasSubscriptionId'] ?? '')
+        .toString()
+        .trim()
+        .isNotEmpty;
+
+    if (hasStripeLink && !hasAsaasLink) {
+      return 'stripe';
+    }
+    if (hasAsaasLink && !hasStripeLink) {
+      return 'asaas';
+    }
+
+    final tenantProvider = normalize(tenantData['billingProvider']);
+    if (tenantProvider.isNotEmpty) {
+      return tenantProvider;
+    }
+
+    final gatewayProvider = normalize(tenantData['billingGateway']);
+    if (gatewayProvider.isNotEmpty) {
+      return gatewayProvider;
+    }
+
+    return 'stripe';
+  }
+
+  static String _billingProviderDisplayLabel(String providerKey) {
+    final normalized = providerKey.trim().toLowerCase();
+    if (normalized == 'asaas') {
+      return 'Asaas';
+    }
+    if (normalized == 'stripe') {
+      return 'Stripe';
+    }
+    return normalized.isEmpty ? 'Não definido' : providerKey;
+  }
+
+  Future<void> _runAsaasSelfServiceAction({
+    required String action,
+    required String confirmTitle,
+    required String confirmMessage,
+  }) async {
+    if (_applyingSelfServiceAction) {
+      return;
+    }
+
+    final shouldContinue = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text(confirmTitle),
+          content: Text(confirmMessage),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Voltar'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Confirmar'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldContinue != true) {
+      return;
+    }
+
+    setState(() {
+      _applyingSelfServiceAction = true;
+    });
+
+    try {
+      final result = await _billingService.manageBillingSelfService(
+        tenantId: widget.activeTenant.tenantId,
+        action: action,
+        reason: 'portal_owner_$action',
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      _showBillingActionInfo(context, result.message);
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      _showBillingActionInfo(
+        context,
+        'Falha ao aplicar ação de autoatendimento: $error',
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _applyingSelfServiceAction = false;
+        });
+      }
+    }
+  }
+
   static void _showBillingActionInfo(BuildContext context, String message) {
     ScaffoldMessenger.of(context)
         .showSnackBar(SnackBar(content: Text(message)));
@@ -1506,6 +2045,7 @@ class _BillingPlanCard extends StatelessWidget {
     required this.isUpgrade,
     required this.features,
     required this.onTap,
+    this.seatAddonCard,
   });
 
   final WebPortalAvailableBillingPlan plan;
@@ -1514,6 +2054,7 @@ class _BillingPlanCard extends StatelessWidget {
   final bool isUpgrade;
   final List<String> features;
   final VoidCallback onTap;
+  final Widget? seatAddonCard;
 
   @override
   Widget build(BuildContext context) {
@@ -1555,76 +2096,126 @@ class _BillingPlanCard extends StatelessWidget {
             ),
           ],
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final mainContent = Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (isCurrent)
-                  _BillingPlanTag(
-                    label: 'Plano ativo',
-                    background: const Color(0xFFE8F0FE),
-                    foreground: const Color(0xFF0B57D0),
-                  ),
-                if (!isCurrent && isUpgrade)
-                  _BillingPlanTag(
-                    label: 'Upgrade',
-                    background: const Color(0xFFE7F6ED),
-                    foreground: const Color(0xFF0D7A3E),
-                  ),
-                if (isSelected)
-                  _BillingPlanTag(
-                    label: 'Selecionado',
-                    background: colors.primaryContainer,
-                    foreground: colors.onPrimaryContainer,
-                  ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Text(
-              plan.planDisplayName,
-              style: Theme.of(context).textTheme.titleMedium
-                  ?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              plan.planDisplayAmount.trim().isEmpty
-                  ? 'Valor sob consulta'
-                  : plan.planDisplayAmount,
-              style: Theme.of(context).textTheme.titleSmall
-                  ?.copyWith(color: accentColor, fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 10),
-            for (final item in features.take(3))
-              Padding(
-                padding: const EdgeInsets.only(bottom: 6),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
                   children: [
-                    Icon(
-                      Icons.check_circle_outline,
-                      size: 16,
-                      color: accentColor,
-                    ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        item,
-                        style: Theme.of(context).textTheme.bodySmall,
+                    if (isCurrent)
+                      _BillingPlanTag(
+                        label: 'Plano ativo',
+                        background: const Color(0xFFE8F0FE),
+                        foreground: const Color(0xFF0B57D0),
                       ),
-                    ),
+                    if (!isCurrent && isUpgrade)
+                      _BillingPlanTag(
+                        label: 'Upgrade',
+                        background: const Color(0xFFE7F6ED),
+                        foreground: const Color(0xFF0D7A3E),
+                      ),
+                    if (isSelected)
+                      _BillingPlanTag(
+                        label: 'Selecionado',
+                        background: colors.primaryContainer,
+                        foreground: colors.onPrimaryContainer,
+                      ),
                   ],
                 ),
-              ),
-            const SizedBox(height: 8),
-            Text(
-              plan.billingPlanKey,
-              style: Theme.of(context).textTheme.labelSmall
-                  ?.copyWith(color: colors.onSurfaceVariant),
-            ),
-          ],
+                const SizedBox(height: 10),
+                Text(
+                  plan.planDisplayName,
+                  style: Theme.of(context).textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  plan.planDisplayAmount.trim().isEmpty
+                      ? 'Valor sob consulta'
+                      : plan.planDisplayAmount,
+                  style: Theme.of(context).textTheme.titleSmall
+                      ?.copyWith(color: accentColor, fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    _BillingPlanTag(
+                      label: 'Seats inclusos: ${plan.includedSeats}',
+                      background: const Color(0xFFEFF3FA),
+                      foreground: const Color(0xFF24426A),
+                    ),
+                    if (plan.seatAddonPlanKey.trim().isNotEmpty)
+                      _BillingPlanTag(
+                        label: 'Permite seats extras',
+                        background: const Color(0xFFEAF8EF),
+                        foreground: const Color(0xFF155A36),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                for (final item in features.take(3))
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          Icons.check_circle_outline,
+                          size: 16,
+                          color: accentColor,
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            item,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                const SizedBox(height: 8),
+                Text(
+                  plan.billingPlanKey,
+                  style: Theme.of(context).textTheme.labelSmall
+                      ?.copyWith(color: colors.onSurfaceVariant),
+                ),
+              ],
+            );
+
+            if (seatAddonCard == null) {
+              return mainContent;
+            }
+
+            final placeAtRight = constraints.maxWidth >= 640;
+            if (placeAtRight) {
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: mainContent),
+                  const SizedBox(width: 12),
+                  SizedBox(
+                    width: 260,
+                    child: seatAddonCard,
+                  ),
+                ],
+              );
+            }
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                mainContent,
+                const SizedBox(height: 12),
+                seatAddonCard!,
+              ],
+            );
+          },
         ),
       ),
     );

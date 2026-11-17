@@ -1063,6 +1063,39 @@ service cloud.firestore {
         && (!('updatedAt' in data) || data.updatedAt is string);
     }
 
+    function validCheckoutApiProvider(value) {
+      return value in ['stripe', 'asaas'];
+    }
+
+    function validCheckoutApiIntegrationDoc(data) {
+      return data.activeProviders is list
+        && data.activeProviders.size() > 0
+        && data.activeProviders.size() <= 2
+        && data.activeProviders.hasOnly(['stripe', 'asaas'])
+        && data.preferredProvider is string
+        && validCheckoutApiProvider(data.preferredProvider)
+        && data.activeProviders.hasAny([data.preferredProvider])
+        && (!('updatedBy' in data) || data.updatedBy is string)
+        && (!('updatedAt' in data) || data.updatedAt is string);
+    }
+
+    function validAsaasEnvironment(value) {
+      return value in ['sandbox', 'production'];
+    }
+
+    function validAsaasIntegrationDoc(data) {
+      return data.activeEnvironment is string
+        && validAsaasEnvironment(data.activeEnvironment)
+        && (!('accountId' in data) || data.accountId is string)
+        && (!('walletIdSandbox' in data) || data.walletIdSandbox is string)
+        && (!('walletIdProduction' in data) || data.walletIdProduction is string)
+        && (!('accountIdSandbox' in data) || data.accountIdSandbox is string)
+        && (!('accountIdProduction' in data) || data.accountIdProduction is string)
+        && (!('webhookEndpoint' in data) || data.webhookEndpoint is string)
+        && (!('updatedBy' in data) || data.updatedBy is string)
+        && (!('updatedAt' in data) || data.updatedAt is string);
+    }
+
     function validStripePlanMappingDoc(mappingId, data) {
       return data.billingPlanKey is string
         && data.billingPlanKey != ''
@@ -1504,12 +1537,18 @@ service cloud.firestore {
     match /billing_integrations/{integrationId} {
       allow read: if signedIn()
         && isPlatformAdmin()
-        && integrationId == 'stripe';
+        && integrationId in ['stripe', 'checkout_api', 'asaas'];
 
       allow create, update: if signedIn()
         && isPlatformAdmin()
-        && integrationId == 'stripe'
-        && validStripeIntegrationDoc(request.resource.data);
+        && (
+          (integrationId == 'stripe'
+            && validStripeIntegrationDoc(request.resource.data))
+          || (integrationId == 'checkout_api'
+            && validCheckoutApiIntegrationDoc(request.resource.data))
+          || (integrationId == 'asaas'
+            && validAsaasIntegrationDoc(request.resource.data))
+        );
 
       allow delete: if false;
 

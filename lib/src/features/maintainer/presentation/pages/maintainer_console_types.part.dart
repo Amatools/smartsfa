@@ -7,7 +7,9 @@ enum _MaintainerConsoleTab {
   users,
   audit,
   impersonation,
+  apiCheckout,
   stripe,
+  asaas,
 }
 
 class _MaintainerBillingWorkspaceRow {
