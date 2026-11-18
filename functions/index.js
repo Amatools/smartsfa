@@ -107,6 +107,12 @@ const {
   reconcileTenantStripePeriodIfMissing,
 } = require('./src/billing/stripe_period_reconcile_helpers');
 const {
+  reconcileTenantStripeState,
+} = require('./src/billing/stripe_reconcile_helpers');
+const {
+  applyTenantBillingActionToStripe,
+} = require('./src/billing/stripe_actions_helpers');
+const {
   parseDateToUnixMs,
   readMembershipOrderingMs,
   readTenantSeatAllowance,
@@ -6892,8 +6898,25 @@ async function reconcileTenantBillingState({
     tenantId,
     stripeClient,
     asaasRuntime,
-    reconcileTenantStripeState,
+    reconcileTenantStripeState: reconcileTenantStripeStateWrapper,
     reconcileTenantAsaasState,
+  });
+}
+
+async function reconcileTenantStripeStateWrapper({
+  firestore,
+  stripeClient,
+  tenantId,
+}) {
+  return reconcileTenantStripeState({
+    firestore,
+    stripeClient,
+    tenantId,
+    billingProviderStripe: BILLING_PROVIDER_STRIPE,
+    readStripeSubscriptionPriceId,
+    resolveStripePlanMappingByPriceId,
+    buildTenantPatchFromStripeSubscription,
+    readStripeSubscriptionPeriodFromInvoices,
   });
 }
 
@@ -6907,6 +6930,12 @@ async function applyTenantBillingActionToProvider({
   reason,
   actorUid,
 }) {
+  const applyTenantBillingActionToStripeWithDeps = (input) =>
+    applyTenantBillingActionToStripe({
+      ...input,
+      sanitizeStripeMetadataValue,
+    });
+
   return dispatchApplyTenantBillingActionToProvider({
     providerKey,
     stripeClient,
@@ -6916,7 +6945,7 @@ async function applyTenantBillingActionToProvider({
     action,
     reason,
     actorUid,
-    applyTenantBillingActionToStripe,
+    applyTenantBillingActionToStripe: applyTenantBillingActionToStripeWithDeps,
     applyTenantBillingActionToAsaas,
   });
 }
@@ -7347,95 +7376,6 @@ async function enforceTenantSeatAllowanceForTenant({
   };
 }
 
-async function reconcileTenantStripeState({ firestore, stripeClient, tenantId }) {
-  const tenantRef = firestore.collection('tenants').doc(tenantId);
-  const tenantDoc = await tenantRef.get();
-  if (!tenantDoc.exists) {
-    throw new Error('Tenant nao encontrado para reconciliacao.');
-  }
-
-  const tenantData = tenantDoc.data() || {};
-  const previousBillingStatus = String(tenantData.billingStatus ?? '').trim();
-  const stripeCustomerId = String(tenantData.stripeCustomerId ?? '').trim();
-  let stripeSubscriptionId = String(tenantData.stripeSubscriptionId ?? '').trim();
-
-  if (!stripeCustomerId && !stripeSubscriptionId) {
-    throw new Error('Tenant sem stripeCustomerId/stripeSubscriptionId para reconciliar.');
-  }
-
-  let subscription = null;
-  if (stripeSubscriptionId) {
-    try {
-      subscription = await stripeClient.subscriptions.retrieve(stripeSubscriptionId, {
-        expand: ['items.data.price'],
-      });
-    } catch (_) {
-      subscription = null;
-    }
-  }
-
-  if (!subscription && stripeCustomerId) {
-    const list = await stripeClient.subscriptions.list({
-      customer: stripeCustomerId,
-      status: 'all',
-      limit: 1,
-      expand: ['data.items.data.price'],
-    });
-    if (Array.isArray(list.data) && list.data.length > 0) {
-      subscription = list.data[0];
-      stripeSubscriptionId = String(subscription.id ?? '').trim();
-    }
-  }
-
-  let patch;
-  if (subscription) {
-    const priceId = readStripeSubscriptionPriceId(subscription);
-    const priceMapping = await resolveStripePlanMappingByPriceId({
-      firestore,
-      stripePriceId: priceId,
-    });
-    const mappedPlanKey = priceMapping?.billingPlanKey ?? '';
-    patch = buildTenantPatchFromStripeSubscription({
-      subscription,
-      billingPlanKey: mappedPlanKey || tenantData.billingPlanKey,
-    });
-
-    if (!patch.billingCurrentPeriodStartAt || !patch.billingCurrentPeriodEndAt) {
-      const invoicePeriodBounds = await readStripeSubscriptionPeriodFromInvoices({
-        stripeClient,
-        subscriptionId: stripeSubscriptionId,
-      });
-      if (invoicePeriodBounds.startIso && !patch.billingCurrentPeriodStartAt) {
-        patch.billingCurrentPeriodStartAt = invoicePeriodBounds.startIso;
-      }
-      if (invoicePeriodBounds.endIso && !patch.billingCurrentPeriodEndAt) {
-        patch.billingCurrentPeriodEndAt = invoicePeriodBounds.endIso;
-      }
-    }
-  } else {
-    const nowIso = new Date().toISOString();
-    patch = {
-      billingProvider: BILLING_PROVIDER_STRIPE,
-      billingContractProvider: BILLING_PROVIDER_STRIPE,
-      billingContractLinkedAt: nowIso,
-      stripeCustomerId,
-      stripeSubscriptionId,
-      billingStatus: 'canceled',
-      billingSuspendedAt: nowIso,
-      billingUpdatedAt: nowIso,
-    };
-  }
-
-  await tenantRef.set(patch, { merge: true });
-
-  return {
-    stripeSubscriptionId: String(patch.stripeSubscriptionId ?? '').trim(),
-    previousBillingStatus,
-    currentBillingStatus: String(patch.billingStatus ?? '').trim(),
-    updatedAt: String(patch.billingUpdatedAt ?? '').trim(),
-  };
-}
-
 async function reconcileTenantAsaasState({ firestore, asaasRuntime, tenantId }) {
   return reconcileTenantAsaasStateHelper({
     firestore,
@@ -7629,7 +7569,7 @@ async function applyStripeSeatAddonDeltaToActiveSubscription({
     },
   );
 
-  await reconcileTenantStripeState({
+  await reconcileTenantStripeStateWrapper({
     firestore,
     stripeClient,
     tenantId: normalizedTenantId,
@@ -7669,167 +7609,6 @@ async function applyStripeSeatAddonDeltaToActiveSubscription({
     invoiceId,
     invoiceStatus,
     invoiceUrl,
-  };
-}
-
-async function applyTenantBillingActionToStripe({
-  stripeClient,
-  tenantId,
-  tenantData,
-  action,
-  reason,
-  actorUid,
-}) {
-  const stripeCustomerId = String(tenantData?.stripeCustomerId ?? '').trim();
-  const stripeSubscriptionId = String(tenantData?.stripeSubscriptionId ?? '').trim();
-  if (!stripeCustomerId && !stripeSubscriptionId) {
-    return {
-      applied: false,
-      action: 'no_stripe_reference',
-      message: 'Tenant sem stripeCustomerId/stripeSubscriptionId.',
-    };
-  }
-
-  const nowIso = new Date().toISOString();
-  const metadataBase = {
-    smartsfaTenantId: sanitizeStripeMetadataValue(tenantId, 120),
-    smartsfaBillingAction: sanitizeStripeMetadataValue(action, 60),
-    smartsfaBillingReason: sanitizeStripeMetadataValue(reason || 'manual', 120),
-    smartsfaBillingActorUid: sanitizeStripeMetadataValue(actorUid, 120),
-    smartsfaBillingUpdatedAt: sanitizeStripeMetadataValue(nowIso, 60),
-  };
-
-  if (action === 'grant_7_days' || action === 'grant_30_days') {
-    metadataBase.smartsfaGraceDays = action === 'grant_30_days' ? '30' : '7';
-  }
-
-  if (stripeCustomerId) {
-    await stripeClient.customers.update(stripeCustomerId, {
-      metadata: metadataBase,
-    });
-  }
-
-  if (!stripeSubscriptionId) {
-    return {
-      applied: true,
-      action: 'customer_metadata_updated',
-      message: 'Subscription ausente; apenas metadata do customer foi atualizada.',
-    };
-  }
-
-  if (action === 'suspend_billing') {
-    await stripeClient.subscriptions.update(stripeSubscriptionId, {
-      pause_collection: {
-        behavior: 'void',
-      },
-      metadata: metadataBase,
-    });
-    return {
-      applied: true,
-      action: 'subscription_paused_collection_void',
-      message: 'Cobranca pausada no Stripe (pause_collection=void).',
-    };
-  }
-
-  if (action === 'normalize_billing') {
-    await stripeClient.subscriptions.update(stripeSubscriptionId, {
-      pause_collection: null,
-      metadata: metadataBase,
-    });
-    return {
-      applied: true,
-      action: 'subscription_resumed_collection',
-      message: 'Cobranca normalizada no Stripe (pause_collection removido).',
-    };
-  }
-
-  if (action === 'clear_plan_link') {
-    const subscriptionIdsToCancel = new Set();
-    if (stripeSubscriptionId) {
-      subscriptionIdsToCancel.add(stripeSubscriptionId);
-    }
-
-    if (stripeCustomerId) {
-      let hasMore = true;
-      let startingAfter = '';
-      while (hasMore) {
-        const page = await stripeClient.subscriptions.list({
-          customer: stripeCustomerId,
-          status: 'all',
-          limit: 100,
-          ...(startingAfter ? { starting_after: startingAfter } : {}),
-        });
-
-        const data = Array.isArray(page?.data) ? page.data : [];
-        for (const subscription of data) {
-          const candidateId = String(subscription?.id ?? '').trim();
-          const candidateStatus = String(subscription?.status ?? '')
-            .trim()
-            .toLowerCase();
-          if (!candidateId) {
-            continue;
-          }
-          if (
-            candidateStatus === 'canceled' ||
-            candidateStatus === 'incomplete_expired'
-          ) {
-            continue;
-          }
-          subscriptionIdsToCancel.add(candidateId);
-        }
-
-        hasMore = Boolean(page?.has_more);
-        if (hasMore && data.length > 0) {
-          startingAfter = String(data[data.length - 1]?.id ?? '').trim();
-          if (!startingAfter) {
-            hasMore = false;
-          }
-        } else {
-          hasMore = false;
-        }
-      }
-    }
-
-    let canceledCount = 0;
-    let alreadyMissingCount = 0;
-    for (const subscriptionIdToCancel of subscriptionIdsToCancel) {
-      try {
-        await stripeClient.subscriptions.cancel(subscriptionIdToCancel, {
-          invoice_now: false,
-          prorate: false,
-        });
-        canceledCount += 1;
-      } catch (error) {
-        const code = String(error?.code ?? '').trim().toLowerCase();
-        const message = String(error?.message ?? '').trim().toLowerCase();
-        const isMissingSubscription =
-          code === 'resource_missing' ||
-          message.includes('no such subscription');
-        if (isMissingSubscription) {
-          alreadyMissingCount += 1;
-          continue;
-        }
-        throw error;
-      }
-    }
-
-    return {
-      applied: true,
-      action: 'subscriptions_canceled_plan_unlinked',
-      message:
-        canceledCount > 0 || alreadyMissingCount > 0
-          ? `Foram canceladas ${canceledCount} subscription(s) no Stripe, ${alreadyMissingCount} ja nao existiam e o plano foi desvinculado no tenant.`
-          : 'Nenhuma subscription ativa encontrada no Stripe; plano desvinculado no tenant.',
-    };
-  }
-
-  await stripeClient.subscriptions.update(stripeSubscriptionId, {
-    metadata: metadataBase,
-  });
-  return {
-    applied: true,
-    action: 'subscription_metadata_updated',
-    message: 'Metadata da subscription atualizada no Stripe.',
   };
 }
 
