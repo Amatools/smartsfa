@@ -173,6 +173,12 @@ const {
   executeSyncSankhyaCatalogModuleAction,
 } = require('./src/billing/sankhya_catalog_sync_management_helpers');
 const {
+  executeValidateEnterpriseOwnerAccess,
+} = require('./src/billing/sankhya_access_validation_helpers');
+const {
+  executeFetchSankhyaOperationTypesAction,
+} = require('./src/billing/sankhya_operation_types_management_helpers');
+const {
   parseDateToUnixMs,
   readMembershipOrderingMs,
   readTenantSeatAllowance,
@@ -1752,105 +1758,13 @@ exports.consumeImpersonationSession = onRequest(
 );
 
 async function validateEnterpriseOwnerAccess({ firestore, request, tenantId }) {
-  const authHeader = String(request.headers?.authorization ?? '').trim();
-  if (!authHeader.toLowerCase().startsWith('bearer ')) {
-    return {
-      allowed: false,
-      status: 401,
-      error: 'missing_firebase_auth',
-      message: 'Envie Authorization: Bearer <Firebase ID token>.',
-    };
-  }
-
-  const idToken = authHeader.substring(7).trim();
-  if (!idToken) {
-    return {
-      allowed: false,
-      status: 401,
-      error: 'invalid_firebase_auth',
-      message: 'Token Firebase invalido ou ausente.',
-    };
-  }
-
-  let decodedToken;
-  try {
-    decodedToken = await admin.auth().verifyIdToken(idToken);
-  } catch (_) {
-    return {
-      allowed: false,
-      status: 401,
-      error: 'firebase_auth_failed',
-      message: 'Falha ao validar autenticacao Firebase para sync ERP.',
-    };
-  }
-
-  const uid = String(decodedToken?.uid ?? '').trim();
-  if (!uid) {
-    return {
-      allowed: false,
-      status: 401,
-      error: 'missing_uid',
-      message: 'Usuario autenticado sem UID valido.',
-    };
-  }
-
-  const tenantDoc = await firestore.collection('tenants').doc(tenantId).get();
-  if (!tenantDoc.exists) {
-    return {
-      allowed: false,
-      status: 404,
-      error: 'tenant_not_found',
-      message: 'Tenant nao encontrado para o sync ERP.',
-    };
-  }
-
-  const tenantData = tenantDoc.data() || {};
-  const workspaceType = String(tenantData.workspaceType ?? '').trim();
-  if (workspaceType !== 'brand_owner_workspace') {
-    return {
-      allowed: false,
-      status: 403,
-      error: 'workspace_not_allowed',
-      message:
-        'Sincronizacao ERP permitida apenas para contas enterprise (brand_owner_workspace).',
-    };
-  }
-
-  const membership = await loadTenantMembershipByTenantAndUser({
+  return executeValidateEnterpriseOwnerAccess({
     firestore,
+    request,
     tenantId,
-    uid,
+    verifyIdToken: (idToken) => admin.auth().verifyIdToken(idToken),
+    loadTenantMembershipByTenantAndUser,
   });
-
-  if (!membership) {
-    return {
-      allowed: false,
-      status: 403,
-      error: 'membership_not_found',
-      message: 'Usuario sem membership ativa neste tenant.',
-    };
-  }
-
-  const role = String(membership.role ?? '').trim().toLowerCase();
-  const state = String(membership.state ?? 'active').trim().toLowerCase();
-  const ativo = membership.ativo !== false;
-
-  if (role !== 'owner' || !ativo || state !== 'active') {
-    return {
-      allowed: false,
-      status: 403,
-      error: 'owner_required',
-      message:
-        'Somente owner ativo do tenant enterprise pode configurar e executar sync ERP.',
-    };
-  }
-
-  return {
-    allowed: true,
-    status: 200,
-    error: '',
-    message: '',
-  };
 }
 
 exports.fetchSankhyaOperationTypes = onRequest(
@@ -1861,76 +1775,16 @@ exports.fetchSankhyaOperationTypes = onRequest(
       return;
     }
 
-    const environment = String(request.body?.environment ?? '')
-      .trim()
-      .toLowerCase();
-    const clientId = String(request.body?.clientId ?? '').trim();
-    const clientSecret = String(request.body?.clientSecret ?? '').trim();
-    const xToken = String(request.body?.xToken ?? '').trim();
+    const result = await executeFetchSankhyaOperationTypesAction({
+      requestBody: request.body,
+      authenticateInSankhya,
+      readBearerToken,
+      buildSankhyaOperationTypesSql,
+      executeSankhyaDbExplorerQuery,
+      mapSankhyaOperationTypeRow,
+    });
 
-    if (!['homolog', 'prod'].includes(environment)) {
-      response.status(400).json({
-        error: 'invalid_environment',
-        message: 'Use homolog ou prod.',
-      });
-      return;
-    }
-    if (!clientId || !clientSecret || !xToken) {
-      response.status(400).json({
-        error: 'missing_credentials',
-        message: 'Client Id, Client Secret e X-Token sao obrigatorios.',
-      });
-      return;
-    }
-
-    const baseUrl =
-      environment === 'prod'
-        ? 'https://api.sankhya.com.br'
-        : 'https://api.sandbox.sankhya.com.br';
-
-    try {
-      const authPayload = await authenticateInSankhya({
-        baseUrl,
-        clientId,
-        clientSecret,
-        xToken,
-      });
-
-      const bearerToken = readBearerToken(authPayload);
-      if (!bearerToken) {
-        response.status(502).json({
-          error: 'missing_bearer',
-          message:
-            'Autenticacao retornou sem access_token. Verifique credenciais e permissao do app Sankhya.',
-        });
-        return;
-      }
-
-      const sql = buildSankhyaOperationTypesSql();
-      const queryResult = await executeSankhyaDbExplorerQuery({
-        baseUrl,
-        bearerToken,
-        xToken,
-        sql,
-      });
-
-      const operationTypes = queryResult.rows
-        .map((row) => mapSankhyaOperationTypeRow(row))
-        .filter((item) => item && item.code);
-
-      response.status(200).json({
-        ok: true,
-        environment,
-        endpoint: queryResult.endpointPath,
-        rowCount: operationTypes.length,
-        operationTypes,
-      });
-    } catch (error) {
-      response.status(502).json({
-        error: 'sankhya_operation_types_failed',
-        message: error instanceof Error ? error.message : String(error),
-      });
-    }
+    response.status(result.status).json(result.body);
   },
 );
 
