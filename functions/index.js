@@ -209,6 +209,17 @@ const {
   fetchSankhyaProductsFiscalData,
 } = require('./src/billing/sankhya_products_fiscal_query_helpers');
 const {
+  mapSankhyaProductToFirestore,
+  resolveInternalProductCode,
+  nextTenantErpProductInternalSequence,
+  buildProductDocId,
+} = require('./src/billing/sankhya_products_model_helpers');
+const {
+  executeSankhyaDbExplorerQuery: executeSankhyaDbExplorerQueryAction,
+  extractSankhyaXmlError,
+  normalizeDbExplorerRows,
+} = require('./src/billing/sankhya_dbexplorer_query_helpers');
+const {
   parseDateToUnixMs,
   readMembershipOrderingMs,
   readTenantSeatAllowance,
@@ -2012,8 +2023,24 @@ async function syncSankhyaProductsModule({
         normalizeOrigemMercadoriaCst,
         toNumberOrNull,
       }),
-    resolveInternalProductCode,
-    mapSankhyaProductToFirestore,
+    resolveInternalProductCode: (input) =>
+      resolveInternalProductCode({
+        ...input,
+        nextTenantErpProductInternalSequence: (seqInput) =>
+          nextTenantErpProductInternalSequence({
+            ...seqInput,
+            readInt,
+            admin,
+          }),
+      }),
+    mapSankhyaProductToFirestore: (input) =>
+      mapSankhyaProductToFirestore({
+        ...input,
+        normalizeOrigemMercadoriaCst,
+        toNumberOrNull,
+        normalizeDigits,
+        buildProductDocId,
+      }),
     updateTenantSyncState,
     readInt,
   });
@@ -2050,110 +2077,6 @@ async function syncSankhyaPriceTablesModule({
     updateTenantSyncState,
     loggerError: console.error,
   });
-}
-
-function mapSankhyaProductToFirestore({
-  tenantId,
-  nowIso,
-  syncBatchId,
-  internalCode,
-  source,
-  productFiscal,
-  existingData,
-  nextSyncVersion,
-  ncmToGroupId,
-}) {
-  const code = toCodeString(source.codigoProduto);
-  const name = String(source.nome ?? '').trim();
-  const groupName = String(source.nomeGrupoProduto ?? '').trim();
-  const volume = String(source.volume ?? '').trim();
-  const brand = String(source.marca ?? '').trim();
-  const ncmRaw = String(source.ncm ?? '').trim();
-  const cestRaw = String(source.cest ?? '').trim();
-  const eanRaw = String(source.referencia ?? '').trim();
-  const origemMercadoriaCst = normalizeOrigemMercadoriaCst(
-    productFiscal?.origemMercadoriaCst ?? existingData.origemMercadoriaCst,
-  );
-  const aliquotaIpiBase = toNumberOrNull(
-    productFiscal?.aliquotaIpiBase ?? existingData.aliquotaIpiBase,
-  );
-  const ncmDigits = normalizeDigits(ncmRaw);
-  const grupoTributarioId =
-    (ncmDigits ? ncmToGroupId?.get(ncmDigits) : null) ??
-    existingData.grupoTributarioId ??
-    null;
-
-  return {
-    id: buildProductDocId(tenantId, code),
-    tenantId,
-    representedCompanyId: existingData.representedCompanyId ?? null,
-    codigoInterno: internalCode,
-    descricao: name || `Produto ${code}`,
-    descricaoResumida: name || null,
-    descricaoLonga: String(source.complemento ?? '').trim() || null,
-    codigoFabricante: code,
-    ean: eanRaw || null,
-    marca: brand || null,
-    categoria: groupName || null,
-    unidade: volume || null,
-    ncm: ncmRaw || null,
-    cest: cestRaw || null,
-    grupoTributarioId,
-    origemMercadoriaCst,
-    aliquotaIpiBase,
-    pesoKg: toNumberOrNull(source.pesoBruto),
-    larguraMm: toNumberOrNull(source.largura),
-    alturaMm: toNumberOrNull(source.altura),
-    comprimentoMm: toNumberOrNull(source.espessura),
-    origemCadastro: 'erp',
-    status: source.ativo === false ? 'inativo' : 'ativo',
-    erpProductId: code,
-    erpSyncId: syncBatchId,
-    updatedAt: nowIso,
-    createdAt: existingData.createdAt || nowIso,
-    deletedAt: null,
-    syncVersion: nextSyncVersion,
-  };
-}
-
-async function resolveInternalProductCode({
-  firestore,
-  tenantId,
-  erpProductCode,
-  existingData,
-}) {
-  const currentInternalCode = String(existingData.codigoInterno ?? '').trim();
-  if (currentInternalCode && currentInternalCode !== erpProductCode) {
-    return currentInternalCode;
-  }
-
-  const sequence = await nextTenantErpProductInternalSequence({
-    firestore,
-    tenantId,
-  });
-  return `ERP-${String(sequence).padStart(6, '0')}`;
-}
-
-async function nextTenantErpProductInternalSequence({ firestore, tenantId }) {
-  const tenantRef = firestore.collection('tenants').doc(tenantId);
-  return firestore.runTransaction(async (transaction) => {
-    const tenantSnapshot = await transaction.get(tenantRef);
-    const current = readInt(tenantSnapshot.data()?.erpInternalProductSequence);
-    const next = current + 1;
-    transaction.set(
-      tenantRef,
-      {
-        erpInternalProductSequence: next,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      },
-      { merge: true },
-    );
-    return next;
-  });
-}
-
-function buildProductDocId(tenantId, productCode) {
-  return `erp_prod_${tenantId}_${toCodeString(productCode)}`;
 }
 
 function toCodeString(value) {
@@ -2221,146 +2144,17 @@ async function executeSankhyaDbExplorerQuery({
   xToken,
   sql,
 }) {
-  const payloadVariants = [
-    {
-      name: 'serviceName_requestBody_sql',
-      payload: {
-        serviceName: 'DbExplorerSP.executeQuery',
-        requestBody: { sql },
-      },
-    },
-    {
-      name: 'requestBody_sql',
-      payload: {
-        requestBody: { sql },
-      },
-    },
-    {
-      name: 'requestBody_query',
-      payload: {
-        requestBody: { query: sql },
-      },
-    },
-  ];
-
-  const failures = [];
-  for (const endpointPath of SANKHYA_DBEXPLORER_ENDPOINT_PATHS) {
-    for (const payloadVariant of payloadVariants) {
-      const response = await fetch(`${baseUrl}${endpointPath}`, {
-        method: 'POST',
-        headers: {
-          Accept: 'application/json',
-          Authorization: `Bearer ${bearerToken}`,
-          'content-type': 'application/json',
-          'x-token': xToken,
-        },
-        body: JSON.stringify(payloadVariant.payload),
-        signal: AbortSignal.timeout(30000),
-      });
-
-      const bodyText = await response.text();
-      const parsed = tryParseJson(bodyText);
-      const xmlError = extractSankhyaXmlError(bodyText);
-      if (response.ok) {
-        if (xmlError) {
-          failures.push({
-            endpointPath,
-            payloadVariant: payloadVariant.name,
-            status: response.status,
-            bodyPreview: xmlError,
-          });
-          continue;
-        }
-        return {
-          endpointPath,
-          payloadVariant: payloadVariant.name,
-          rows: normalizeDbExplorerRows(parsed),
-        };
-      }
-
-      failures.push({
-        endpointPath,
-        payloadVariant: payloadVariant.name,
-        status: response.status,
-        bodyPreview: bodyText.slice(0, 220),
-      });
-    }
-  }
-
-  const details = failures
-    .map(
-      (item) =>
-        `${item.endpointPath} [${item.payloadVariant}] -> HTTP ${item.status}: ${item.bodyPreview}`,
-    )
-    .join(' | ')
-    .slice(0, 1800);
-
-  throw new Error(`DbExplorer executeQuery falhou. Tentativas: ${details}`);
-}
-
-function extractSankhyaXmlError(bodyText) {
-  if (!bodyText || !bodyText.includes('<serviceResponse')) {
-    return null;
-  }
-
-  const statusMatch = bodyText.match(/status="(\d+)"/i);
-  if (!statusMatch || statusMatch[1] !== '0') {
-    return null;
-  }
-
-  const cdataMatch = bodyText.match(/<statusMessage><!\[CDATA\[(.*?)\]\]><\/statusMessage>/is);
-  const encoded = String(cdataMatch?.[1] ?? '').trim();
-  if (!encoded) {
-    return 'Sankhya XML status=0 (sem mensagem detalhada).';
-  }
-
-  try {
-    const decoded = Buffer.from(encoded, 'base64').toString('latin1').trim();
-    return decoded || `Sankhya XML status=0: ${encoded}`;
-  } catch {
-    return `Sankhya XML status=0: ${encoded}`;
-  }
-}
-
-function normalizeDbExplorerRows(payload) {
-  if (!payload || typeof payload !== 'object') {
-    return [];
-  }
-
-  const root = payload.responseBody && typeof payload.responseBody === 'object'
-    ? payload.responseBody
-    : payload;
-  const rawRows = Array.isArray(root.rows) ? root.rows : [];
-  if (rawRows.length === 0) {
-    return [];
-  }
-
-  if (
-    rawRows.every(
-      (row) => row && typeof row === 'object' && !Array.isArray(row),
-    )
-  ) {
-    return rawRows;
-  }
-
-  const fields = Array.isArray(root.fieldsMetadata) ? root.fieldsMetadata : [];
-  if (fields.length === 0) {
-    return [];
-  }
-
-  return rawRows
-    .filter((row) => Array.isArray(row))
-    .map((row) => {
-      const mapped = {};
-      for (let index = 0; index < fields.length; index++) {
-        const fieldName = String(fields[index]?.name ?? '').trim();
-        if (!fieldName) {
-          continue;
-        }
-        mapped[fieldName] = row[index] ?? null;
-      }
-      return mapped;
-    });
+  return executeSankhyaDbExplorerQueryAction({
+    baseUrl,
+    bearerToken,
+    xToken,
+    sql,
+    endpointPaths: SANKHYA_DBEXPLORER_ENDPOINT_PATHS,
+    fetchImpl: fetch,
+    tryParseJson,
+    extractSankhyaXmlError,
+    normalizeDbExplorerRows,
+  });
 }
 
 function readRowValueByAliases(row, aliases) {
