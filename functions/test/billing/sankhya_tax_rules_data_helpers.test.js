@@ -13,12 +13,88 @@ const {
   toIsoDateOrNull,
 } = require('../../src/billing/sankhya_tax_rules_data_helpers');
 
+function normalizeSqlStructure(sql) {
+  return String(sql)
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toUpperCase();
+}
+
 test('buildSankhyaTaxRulesSql keeps expected source table and status projection', () => {
   const sql = buildSankhyaTaxRulesSql();
 
   assert.match(sql, /FROM TGFICM ICM/);
   assert.match(sql, /'active' AS STATUS/);
   assert.match(sql, /ORDER BY\s*\n\s*UFORIGEM,/);
+});
+
+test('buildSankhyaTaxRulesSql keeps critical fiscal structure snapshot', () => {
+  const sql = buildSankhyaTaxRulesSql();
+  const normalized = normalizeSqlStructure(sql);
+
+  const requiredTokens = [
+    'SELECT DISTINCT',
+    "\'ACTIVE\' AS STATUS",
+    'FROM TGFICM ICM',
+    'LEFT JOIN TSIUFS UFO',
+    'LEFT JOIN TSIUFS UFD',
+    'LEFT JOIN TGFPRO PRO1',
+    'LEFT JOIN TGFPRO PRO2',
+    'LEFT JOIN TGFPRO PRO_GI1',
+    'LEFT JOIN TGFPRO PRO_GI2',
+    'LEFT JOIN TGFPRO PRO_GK1',
+    'LEFT JOIN TGFPRO PRO_GK2',
+    'LEFT JOIN TGFNCM NCM1',
+    'LEFT JOIN TGFNCM NCM2',
+    'END AS ALIQUOTADESTINO',
+    'END AS ALIQUOTACREDITO',
+    'END AS ALIQUOTADIFAL',
+    'END AS MVA',
+    'TO_CHAR(ICM.CODTAB) AS CODTAB',
+    'TO_CHAR(ICM.SEQUENCIA) AS SEQUENCIA',
+    'TO_CHAR(ICM.IDALIQ) AS IDALIQ',
+    'ORDER BY UFORIGEM, UFDESTINO, PRIORIDADE DESC, NCM, CEST',
+  ];
+
+  for (const token of requiredTokens) {
+    assert.ok(
+      normalized.includes(token),
+      `Token fiscal obrigatorio ausente: ${token}`,
+    );
+  }
+
+  const forbiddenBrokenTokens = [
+    'ANDTO_CHAR',
+    'ASCODTAB',
+    'CODRESTRIGFPRO',
+  ];
+  for (const broken of forbiddenBrokenTokens) {
+    assert.ok(
+      !normalized.includes(broken),
+      `Token corrompido detectado na SQL: ${broken}`,
+    );
+  }
+
+  const orderedMilestones = [
+    'FROM TGFICM ICM',
+    'LEFT JOIN TSIUFS UFO',
+    'LEFT JOIN TSIUFS UFD',
+    'LEFT JOIN TGFPRO PRO1',
+    'LEFT JOIN TGFNCM NCM1',
+    'WHERE ICM.DTINICIOVIGENCIA IS NULL',
+    'ORDER BY UFORIGEM, UFDESTINO, PRIORIDADE DESC, NCM, CEST',
+  ];
+
+  let previousIndex = -1;
+  for (const milestone of orderedMilestones) {
+    const currentIndex = normalized.indexOf(milestone);
+    assert.ok(currentIndex >= 0, `Marco SQL ausente: ${milestone}`);
+    assert.ok(
+      currentIndex > previousIndex,
+      `Ordem estrutural invalida: ${milestone}`,
+    );
+    previousIndex = currentIndex;
+  }
 });
 
 test('mapSankhyaTaxRuleRow maps normalized payload', () => {
