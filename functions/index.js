@@ -156,6 +156,7 @@ const {
 const {
   executeReconcileStripeTenantAction,
   executeReconcileAsaasTenantAction,
+  executeReconcileAllStripeTenantsAction,
 } = require('./src/billing/tenant_reconcile_management_helpers');
 const {
   parseDateToUnixMs,
@@ -1194,70 +1195,18 @@ exports.reconcileAllStripeTenants = onRequest(
       return;
     }
 
-    const platformAccess = await assertPlatformAdminActor({
+    const result = await executeReconcileAllStripeTenantsAction({
       firestore,
-      uid: authContext.uid,
-    });
-    if (!platformAccess.allowed) {
-      response.status(platformAccess.status).json({
-        error: platformAccess.error,
-        message: platformAccess.message,
-      });
-      return;
-    }
-
-    const integrationReady = await loadStripeIntegrationRuntime({
-      firestore,
-      requireWebhookSecret: false,
-    });
-    if (!integrationReady.ok) {
-      response.status(integrationReady.status).json({
-        error: integrationReady.error,
-        message: integrationReady.message,
-      });
-      return;
-    }
-
-    const tenantDocs = await firestore.collection('tenants').limit(limit).get();
-    const candidates = tenantDocs.docs.filter((doc) => {
-      const data = doc.data() || {};
-      return (
-        String(data.stripeCustomerId ?? '').trim() ||
-        String(data.stripeSubscriptionId ?? '').trim()
-      );
-    });
-
-    let totalUpdated = 0;
-    let totalFailed = 0;
-    const failures = [];
-    for (const doc of candidates) {
-      const tenantId = doc.id;
-      try {
-        if (!dryRun) {
-          await reconcileTenantBillingState({
-            firestore,
-            providerKey: BILLING_PROVIDER_STRIPE,
-            stripeClient: integrationReady.stripeClient,
-            tenantId,
-          });
-        }
-        totalUpdated += 1;
-      } catch (error) {
-        totalFailed += 1;
-        failures.push({
-          tenantId,
-          message: error instanceof Error ? error.message : String(error),
-        });
-      }
-    }
-
-    response.status(200).json({
-      totalProcessed: candidates.length,
-      totalUpdated,
-      totalFailed,
       dryRun,
-      failures,
+      limit,
+      authContext,
+      assertPlatformAdminActor,
+      loadStripeIntegrationRuntime,
+      reconcileTenantBillingState,
+      billingProviderStripe: BILLING_PROVIDER_STRIPE,
     });
+
+    response.status(result.status).json(result.body);
   },
 );
 

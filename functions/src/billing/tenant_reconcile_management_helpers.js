@@ -178,7 +178,91 @@ async function executeReconcileAsaasTenantAction({
   }
 }
 
+async function executeReconcileAllStripeTenantsAction({
+  firestore,
+  dryRun,
+  limit,
+  authContext,
+  assertPlatformAdminActor,
+  loadStripeIntegrationRuntime,
+  reconcileTenantBillingState,
+  billingProviderStripe,
+}) {
+  const platformAccess = await assertPlatformAdminActor({
+    firestore,
+    uid: authContext.uid,
+  });
+  if (!platformAccess.allowed) {
+    return {
+      status: platformAccess.status,
+      body: {
+        error: platformAccess.error,
+        message: platformAccess.message,
+      },
+    };
+  }
+
+  const integrationReady = await loadStripeIntegrationRuntime({
+    firestore,
+    requireWebhookSecret: false,
+  });
+  if (!integrationReady.ok) {
+    return {
+      status: integrationReady.status,
+      body: {
+        error: integrationReady.error,
+        message: integrationReady.message,
+      },
+    };
+  }
+
+  const tenantDocs = await firestore.collection('tenants').limit(limit).get();
+  const candidates = tenantDocs.docs.filter((doc) => {
+    const data = doc.data() || {};
+    return (
+      String(data.stripeCustomerId ?? '').trim() ||
+      String(data.stripeSubscriptionId ?? '').trim()
+    );
+  });
+
+  let totalUpdated = 0;
+  let totalFailed = 0;
+  const failures = [];
+  for (const doc of candidates) {
+    const tenantId = doc.id;
+    try {
+      if (!dryRun) {
+        await reconcileTenantBillingState({
+          firestore,
+          providerKey: billingProviderStripe,
+          stripeClient: integrationReady.stripeClient,
+          tenantId,
+        });
+      }
+      totalUpdated += 1;
+    } catch (error) {
+      totalFailed += 1;
+      failures.push({
+        tenantId,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  return {
+    status: 200,
+    body: {
+      totalProcessed: candidates.length,
+      totalUpdated,
+      totalFailed,
+      dryRun,
+      failures,
+    },
+  };
+}
+
 module.exports = {
   executeReconcileStripeTenantAction,
   executeReconcileAsaasTenantAction,
+  executeReconcileAllStripeTenantsAction,
 };
