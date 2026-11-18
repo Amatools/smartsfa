@@ -145,6 +145,9 @@ const {
   executeCreateBillingPortalSessionAction,
 } = require('./src/billing/portal_session_management_helpers');
 const {
+  executeCreateStripePortalSessionAction,
+} = require('./src/billing/stripe_portal_session_management_helpers');
+const {
   parseDateToUnixMs,
   readMembershipOrderingMs,
   readTenantSeatAllowance,
@@ -923,69 +926,18 @@ exports.createStripePortalSession = onRequest(
       return;
     }
 
-    const actorPermission = await assertTenantBillingActorPermission({
+    const result = await executeCreateStripePortalSessionAction({
       firestore,
-      uid: authContext.uid,
       tenantId,
-    });
-    if (!actorPermission.allowed) {
-      response.status(actorPermission.status).json({
-        error: actorPermission.error,
-        message: actorPermission.message,
-      });
-      return;
-    }
-
-    const checkoutApiConfig = await readCheckoutApiConfig(firestore);
-    if (!checkoutApiConfig.activeProviders.includes(BILLING_PROVIDER_STRIPE)) {
-      response.status(409).json({
-        error: 'provider_disabled',
-        message:
-          'Stripe esta desativado na API Checkout. Habilite Stripe ou use provider Asaas conforme configuracao.',
-      });
-      return;
-    }
-
-    const integrationReady = await loadStripeIntegrationRuntime({
-      firestore,
-      requireWebhookSecret: false,
-    });
-    if (!integrationReady.ok) {
-      response.status(integrationReady.status).json({
-        error: integrationReady.error,
-        message: integrationReady.message,
-      });
-      return;
-    }
-
-    const tenantDoc = await firestore.collection('tenants').doc(tenantId).get();
-    if (!tenantDoc.exists) {
-      response.status(404).json({
-        error: 'tenant_not_found',
-        message: 'Tenant nao encontrado.',
-      });
-      return;
-    }
-
-    const tenantData = tenantDoc.data() || {};
-    const stripeCustomerId = String(tenantData.stripeCustomerId ?? '').trim();
-    if (!stripeCustomerId) {
-      response.status(404).json({
-        error: 'stripe_customer_missing',
-        message: 'Tenant ainda nao possui stripeCustomerId.',
-      });
-      return;
-    }
-
-    const portalSession = await integrationReady.stripeClient.billingPortal.sessions.create({
-      customer: stripeCustomerId,
-      return_url: returnUrl,
+      returnUrl,
+      authContext,
+      assertTenantBillingActorPermission,
+      readCheckoutApiConfig,
+      loadStripeIntegrationRuntime,
+      billingProviderStripe: BILLING_PROVIDER_STRIPE,
     });
 
-    response.status(200).json({
-      portalUrl: String(portalSession.url ?? '').trim(),
-      activeEnvironment: integrationReady.environment,
-    });
+    response.status(result.status).json(result.body);
   },
 );
 
