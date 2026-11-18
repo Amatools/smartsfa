@@ -136,6 +136,9 @@ const {
   executeUpdateBillingSeatAddonsAction,
 } = require('./src/billing/seat_addon_management_helpers');
 const {
+  executeListBillingCheckoutPlansAction,
+} = require('./src/billing/checkout_plan_listing_management_helpers');
+const {
   parseDateToUnixMs,
   readMembershipOrderingMs,
   readTenantSeatAllowance,
@@ -2709,92 +2712,28 @@ exports.listBillingCheckoutPlans = onRequest(
       return;
     }
 
-    const actorPermission = await assertTenantBillingActorPermission({
+    const result = await executeListBillingCheckoutPlansAction({
       firestore,
-      uid: authContext.uid,
-      tenantId,
-    });
-    if (!actorPermission.allowed) {
-      response.status(actorPermission.status).json({
-        error: actorPermission.error,
-        message: actorPermission.message,
-      });
-      return;
-    }
-
-    const tenantDoc = await firestore.collection('tenants').doc(tenantId).get();
-    if (!tenantDoc.exists) {
-      response.status(404).json({
-        error: 'tenant_not_found',
-        message: 'Tenant nao encontrado.',
-      });
-      return;
-    }
-
-    const tenantData = tenantDoc.data() || {};
-
-    const checkoutApiConfig = await readCheckoutApiConfig(firestore);
-    const providerSelection = resolveCheckoutApiProviderSelection({
+      request,
+      response,
       payload,
-      checkoutApiConfig,
-      tenantData,
-    });
-    const billingProvider = providerSelection.provider;
-
-    if (
-      !providerSelection.hasLinkedContract &&
-      !checkoutApiConfig.activeProviders.includes(billingProvider)
-    ) {
-      response.status(409).json({
-        error: 'provider_disabled',
-        message: `Provider ${billingProvider} nao esta ativo na API Checkout.`,
-      });
-      return;
-    }
-
-    if (billingProvider === BILLING_PROVIDER_STRIPE) {
-      await proxyBillingRequestToFunction({
-        request,
-        response,
-        targetUrl: STRIPE_LIST_PLANS_FUNCTION_URL,
-        method: request.method,
-        extraResponseFields: {
-          billingProvider,
-          providerSelectionSource: providerSelection.source,
-          hasLinkedContract: providerSelection.hasLinkedContract,
-        },
-      });
-      return;
-    }
-
-    if (billingProvider === BILLING_PROVIDER_ASAAS) {
-      const listed = await listAsaasCheckoutPlansForTenant({
-        firestore,
-        tenantData,
-      });
-
-      response.status(200).json({
-        tenantId,
-        billingProvider,
-        providerSelectionSource: providerSelection.source,
-        hasLinkedContract: providerSelection.hasLinkedContract,
-        workspaceType: listed.workspaceType,
-        requiredPrefix: listed.requiredPrefix,
-        plans: listed.plans,
-      });
-      return;
-    }
-
-    response.status(200).json({
       tenantId,
-      billingProvider,
-      providerSelectionSource: providerSelection.source,
-      hasLinkedContract: providerSelection.hasLinkedContract,
-      workspaceType: '',
-      requiredPrefix: '',
-      plans: [],
-      message: `Provider de billing nao suportado: ${billingProvider}.`,
+      authContext,
+      assertTenantBillingActorPermission,
+      readCheckoutApiConfig,
+      resolveCheckoutApiProviderSelection,
+      proxyBillingRequestToFunction,
+      stripeListPlansFunctionUrl: STRIPE_LIST_PLANS_FUNCTION_URL,
+      listAsaasCheckoutPlansForTenant,
+      billingProviderStripe: BILLING_PROVIDER_STRIPE,
+      billingProviderAsaas: BILLING_PROVIDER_ASAAS,
     });
+
+    if (result.handledByProxy) {
+      return;
+    }
+
+    response.status(result.status).json(result.body);
   },
 );
 
