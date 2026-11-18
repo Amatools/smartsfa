@@ -139,6 +139,9 @@ const {
   executeListBillingCheckoutPlansAction,
 } = require('./src/billing/checkout_plan_listing_management_helpers');
 const {
+  executeCreateBillingCheckoutSessionAction,
+} = require('./src/billing/checkout_session_management_helpers');
+const {
   parseDateToUnixMs,
   readMembershipOrderingMs,
   readTenantSeatAllowance,
@@ -2369,108 +2372,28 @@ exports.createBillingCheckoutSession = onRequest(
       return;
     }
 
-    const actorPermission = await assertTenantBillingActorPermission({
+    const result = await executeCreateBillingCheckoutSessionAction({
       firestore,
-      uid: authContext.uid,
-      tenantId,
-    });
-    if (!actorPermission.allowed) {
-      response.status(actorPermission.status).json({
-        error: actorPermission.error,
-        message: actorPermission.message,
-      });
-      return;
-    }
-
-    const tenantDoc = await firestore.collection('tenants').doc(tenantId).get();
-    if (!tenantDoc.exists) {
-      response.status(404).json({
-        error: 'tenant_not_found',
-        message: 'Tenant nao encontrado.',
-      });
-      return;
-    }
-
-    const tenantData = tenantDoc.data() || {};
-
-    const checkoutApiConfig = await readCheckoutApiConfig(firestore);
-    const providerSelection = resolveCheckoutApiProviderSelection({
+      request,
+      response,
       payload,
-      checkoutApiConfig,
-      tenantData,
+      tenantId,
+      authContext,
+      assertTenantBillingActorPermission,
+      readCheckoutApiConfig,
+      resolveCheckoutApiProviderSelection,
+      proxyBillingRequestToFunction,
+      stripeCheckoutFunctionUrl: STRIPE_CHECKOUT_FUNCTION_URL,
+      createAsaasCheckoutSession,
+      billingProviderStripe: BILLING_PROVIDER_STRIPE,
+      billingProviderAsaas: BILLING_PROVIDER_ASAAS,
     });
-    const billingProvider = providerSelection.provider;
 
-    if (
-      !providerSelection.hasLinkedContract &&
-      !checkoutApiConfig.activeProviders.includes(billingProvider)
-    ) {
-      response.status(409).json({
-        error: 'provider_disabled',
-        message: `Provider ${billingProvider} nao esta ativo na API Checkout.`,
-      });
+    if (result.handledByProxy) {
       return;
     }
 
-    if (billingProvider === BILLING_PROVIDER_STRIPE) {
-      await proxyBillingRequestToFunction({
-        request,
-        response,
-        targetUrl: STRIPE_CHECKOUT_FUNCTION_URL,
-        method: 'POST',
-        extraResponseFields: {
-          billingProvider,
-          providerSelectionSource: providerSelection.source,
-          hasLinkedContract: providerSelection.hasLinkedContract,
-        },
-      });
-      return;
-    }
-
-    if (billingProvider === BILLING_PROVIDER_ASAAS) {
-      try {
-        const checkoutResult = await createAsaasCheckoutSession({
-          firestore,
-          tenantId,
-          tenantData,
-          payload,
-          providerSelection,
-        });
-
-        if (!checkoutResult.ok) {
-          response.status(checkoutResult.status).json({
-            error: checkoutResult.error,
-            message: checkoutResult.message,
-            billingProvider,
-            providerSelectionSource: providerSelection.source,
-            hasLinkedContract: providerSelection.hasLinkedContract,
-          });
-          return;
-        }
-
-        response.status(checkoutResult.status).json(checkoutResult.body);
-        return;
-      } catch (error) {
-        response.status(502).json({
-          error: 'provider_checkout_failed',
-          message: error instanceof Error ? error.message : String(error),
-          billingProvider,
-          providerSelectionSource: providerSelection.source,
-          hasLinkedContract: providerSelection.hasLinkedContract,
-        });
-        return;
-      }
-    }
-
-    response.status(400).json({
-      error: 'provider_not_supported',
-      message: `Provider de billing nao suportado: ${billingProvider}.`,
-      billingProvider,
-      providerSelectionSource: providerSelection.source,
-      hasLinkedContract: providerSelection.hasLinkedContract,
-      activeProviders: checkoutApiConfig.activeProviders,
-      preferredProvider: checkoutApiConfig.preferredProvider,
-    });
+    response.status(result.status).json(result.body);
   },
 );
 
