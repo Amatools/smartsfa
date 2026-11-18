@@ -59,11 +59,9 @@ const {
   reconcileTenantBillingState: dispatchReconcileTenantBillingState,
 } = require('./src/billing/provider_dispatch');
 const {
-  buildAsaasCheckoutExternalReference,
+  buildAsaasCheckoutPayload,
   mapStripeIntervalToAsaasCycle,
-  normalizeAsaasBillingTypes,
-  normalizeAsaasChargeType,
-  normalizeAsaasMinutesToExpire,
+  resolveAsaasPortalFallbackUrl,
 } = require('./src/billing/asaas_checkout_helpers');
 const {
   buildTenantPatchFromAsaasEvent,
@@ -116,11 +114,6 @@ const BILLING_RUNTIME_SECRETS = [
   ...STRIPE_RUNTIME_SECRETS,
   ...ASAAS_RUNTIME_SECRETS,
 ];
-const ASAAS_CHECKOUT_DEFAULT_BILLING_TYPES = ['PIX', 'CREDIT_CARD'];
-const ASAAS_CHECKOUT_DEFAULT_CHARGE_TYPE = 'RECURRENT';
-const ASAAS_CHECKOUT_DEFAULT_MINUTES_TO_EXPIRE = 60;
-const ASAAS_CHECKOUT_PLACEHOLDER_IMAGE_BASE64 =
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO6QX5wAAAAASUVORK5CYII=';
 const CLOUD_FUNCTIONS_BASE_URL = 'https://us-central1-smart-sfa.cloudfunctions.net';
 const STRIPE_CHECKOUT_FUNCTION_URL =
   `${CLOUD_FUNCTIONS_BASE_URL}/createStripeCheckoutSession`;
@@ -7090,68 +7083,6 @@ async function resolveAsaasPlanMapping({
   };
 }
 
-function buildAsaasCheckoutPayload({
-  payload,
-  tenantId,
-  tenantData,
-  resolvedPlan,
-  callback,
-}) {
-  const plan = resolvedPlan.mapping;
-  const billingTypes = normalizeAsaasBillingTypes(payload?.billingTypes);
-  const chargeType = normalizeAsaasChargeType(payload?.chargeType);
-  const minutesToExpire = normalizeAsaasMinutesToExpire(payload?.minutesToExpire);
-  const dueDate = new Date();
-  dueDate.setUTCDate(dueDate.getUTCDate() + 1);
-  const nextDueDate = dueDate.toISOString().slice(0, 10);
-
-  const requestPayload = {
-    billingTypes,
-    chargeTypes: [chargeType],
-    minutesToExpire,
-    externalReference: buildAsaasCheckoutExternalReference({
-      tenantId,
-      billingPlanKey: plan.billingPlanKey,
-    }),
-    callback,
-    items: [
-      {
-        externalReference: plan.billingPlanKey,
-        description: plan.itemDescription,
-        imageBase64: ASAAS_CHECKOUT_PLACEHOLDER_IMAGE_BASE64,
-        name: plan.itemName,
-        quantity: 1,
-        value: plan.amount,
-      },
-    ],
-  };
-
-  const customerData = plan.customerData;
-  if (customerData?.name) {
-    requestPayload.customerData = customerData;
-  }
-
-  if (chargeType === 'RECURRENT') {
-    requestPayload.subscription = {
-      cycle: plan.cycle,
-      nextDueDate,
-    };
-  }
-
-  const walletId = String(
-    payload?.walletId || tenantData?.billingAsaasWalletId || '',
-  ).trim();
-  if (walletId) {
-    requestPayload.splits = [
-      {
-        walletId,
-      },
-    ];
-  }
-
-  return requestPayload;
-}
-
 async function createAsaasCheckoutSession({
   firestore,
   tenantId,
@@ -7284,25 +7215,6 @@ async function createAsaasCheckoutSession({
       billingPlanKey: resolvedPlan.mapping.billingPlanKey,
     },
   };
-}
-
-function resolveAsaasPortalFallbackUrl({ tenantData }) {
-  const candidateKeys = [
-    'asaasInvoiceUrl',
-    'asaasLastInvoiceUrl',
-    'asaasPaymentInvoiceUrl',
-    'asaasPaymentBankSlipUrl',
-    'asaasCheckoutLink',
-  ];
-
-  for (const key of candidateKeys) {
-    const value = String(tenantData?.[key] ?? '').trim();
-    if (isValidHttpAbsoluteUrl(value)) {
-      return value;
-    }
-  }
-
-  return '';
 }
 
 async function listAsaasCheckoutPlansForTenant({

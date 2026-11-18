@@ -1,6 +1,10 @@
 const ASAAS_CHECKOUT_DEFAULT_BILLING_TYPES = ['PIX', 'CREDIT_CARD'];
 const ASAAS_CHECKOUT_DEFAULT_CHARGE_TYPE = 'RECURRENT';
 const ASAAS_CHECKOUT_DEFAULT_MINUTES_TO_EXPIRE = 60;
+const ASAAS_CHECKOUT_PLACEHOLDER_IMAGE_BASE64 =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO6QX5wAAAAASUVORK5CYII=';
+
+const { isValidHttpAbsoluteUrl } = require('./shared_helpers');
 
 function mapStripeIntervalToAsaasCycle(interval, intervalCount) {
   const normalizedInterval = String(interval ?? '').trim().toLowerCase();
@@ -92,10 +96,93 @@ function buildAsaasCheckoutExternalReference({ tenantId, billingPlanKey }) {
   return `smartsfa:${tenantId}:${billingPlanKey}:${now}`.slice(0, 200);
 }
 
+function buildAsaasCheckoutPayload({
+  payload,
+  tenantId,
+  tenantData,
+  resolvedPlan,
+  callback,
+}) {
+  const plan = resolvedPlan.mapping;
+  const billingTypes = normalizeAsaasBillingTypes(payload?.billingTypes);
+  const chargeType = normalizeAsaasChargeType(payload?.chargeType);
+  const minutesToExpire = normalizeAsaasMinutesToExpire(payload?.minutesToExpire);
+  const dueDate = new Date();
+  dueDate.setUTCDate(dueDate.getUTCDate() + 1);
+  const nextDueDate = dueDate.toISOString().slice(0, 10);
+
+  const requestPayload = {
+    billingTypes,
+    chargeTypes: [chargeType],
+    minutesToExpire,
+    externalReference: buildAsaasCheckoutExternalReference({
+      tenantId,
+      billingPlanKey: plan.billingPlanKey,
+    }),
+    callback,
+    items: [
+      {
+        externalReference: plan.billingPlanKey,
+        description: plan.itemDescription,
+        imageBase64: ASAAS_CHECKOUT_PLACEHOLDER_IMAGE_BASE64,
+        name: plan.itemName,
+        quantity: 1,
+        value: plan.amount,
+      },
+    ],
+  };
+
+  const customerData = plan.customerData;
+  if (customerData?.name) {
+    requestPayload.customerData = customerData;
+  }
+
+  if (chargeType === 'RECURRENT') {
+    requestPayload.subscription = {
+      cycle: plan.cycle,
+      nextDueDate,
+    };
+  }
+
+  const walletId = String(
+    payload?.walletId || tenantData?.billingAsaasWalletId || '',
+  ).trim();
+  if (walletId) {
+    requestPayload.splits = [
+      {
+        walletId,
+      },
+    ];
+  }
+
+  return requestPayload;
+}
+
+function resolveAsaasPortalFallbackUrl({ tenantData }) {
+  const candidateKeys = [
+    'asaasInvoiceUrl',
+    'asaasLastInvoiceUrl',
+    'asaasPaymentInvoiceUrl',
+    'asaasPaymentBankSlipUrl',
+    'asaasCheckoutLink',
+  ];
+
+  for (const key of candidateKeys) {
+    const value = String(tenantData?.[key] ?? '').trim();
+    if (isValidHttpAbsoluteUrl(value)) {
+      return value;
+    }
+  }
+
+  return '';
+}
+
 module.exports = {
   buildAsaasCheckoutExternalReference,
+  buildAsaasCheckoutPayload,
   mapStripeIntervalToAsaasCycle,
   normalizeAsaasBillingTypes,
   normalizeAsaasChargeType,
   normalizeAsaasMinutesToExpire,
+  resolveAsaasPortalFallbackUrl,
 };
