@@ -154,6 +154,10 @@ const {
   executeListStripeCheckoutPlansAction,
 } = require('./src/billing/stripe_checkout_plan_listing_management_helpers');
 const {
+  executeReconcileStripeTenantAction,
+  executeReconcileAsaasTenantAction,
+} = require('./src/billing/tenant_reconcile_management_helpers');
+const {
   parseDateToUnixMs,
   readMembershipOrderingMs,
   readTenantSeatAllowance,
@@ -1096,70 +1100,19 @@ exports.reconcileStripeTenant = onRequest(
       return;
     }
 
-    const platformAccess = await assertPlatformAdminActor({
+    const result = await executeReconcileStripeTenantAction({
       firestore,
-      uid: authContext.uid,
+      tenantId,
+      reason,
+      authContext,
+      assertPlatformAdminActor,
+      loadStripeIntegrationRuntime,
+      reconcileTenantBillingState,
+      timestampFromDate: (date) => admin.firestore.Timestamp.fromDate(date),
+      billingProviderStripe: BILLING_PROVIDER_STRIPE,
     });
-    if (!platformAccess.allowed) {
-      response.status(platformAccess.status).json({
-        error: platformAccess.error,
-        message: platformAccess.message,
-      });
-      return;
-    }
 
-    const integrationReady = await loadStripeIntegrationRuntime({
-      firestore,
-      requireWebhookSecret: false,
-    });
-    if (!integrationReady.ok) {
-      response.status(integrationReady.status).json({
-        error: integrationReady.error,
-        message: integrationReady.message,
-      });
-      return;
-    }
-
-    try {
-      const result = await reconcileTenantBillingState({
-        firestore,
-        providerKey: BILLING_PROVIDER_STRIPE,
-        stripeClient: integrationReady.stripeClient,
-        tenantId,
-      });
-
-      await firestore.collection('platform_admin_audit').add({
-        action: 'billing_state_updated',
-        actorUid: authContext.uid,
-        actorEmail: authContext.email,
-        actorLabel: authContext.email || authContext.uid,
-        targetUid: authContext.uid,
-        targetEmail: authContext.email,
-        targetDisplayName: authContext.email || authContext.uid,
-        details: {
-          tenantId,
-          reason,
-          previousBillingStatus: result.previousBillingStatus,
-          currentBillingStatus: result.currentBillingStatus,
-          source: 'billing_reconcile_tenant',
-          billingProvider: BILLING_PROVIDER_STRIPE,
-        },
-        createdAt: admin.firestore.Timestamp.fromDate(new Date()),
-      });
-
-      response.status(200).json({
-        tenantId,
-        stripeSubscriptionId: result.stripeSubscriptionId,
-        previousBillingStatus: result.previousBillingStatus,
-        currentBillingStatus: result.currentBillingStatus,
-        updatedAt: result.updatedAt,
-      });
-    } catch (error) {
-      response.status(500).json({
-        error: 'reconcile_tenant_failed',
-        message: error instanceof Error ? error.message : String(error),
-      });
-    }
+    response.status(result.status).json(result.body);
   },
 );
 
@@ -1196,76 +1149,19 @@ exports.reconcileAsaasTenant = onRequest(
       return;
     }
 
-    const platformAccess = await assertPlatformAdminActor({
+    const result = await executeReconcileAsaasTenantAction({
       firestore,
-      uid: authContext.uid,
+      tenantId,
+      reason,
+      authContext,
+      assertPlatformAdminActor,
+      loadBillingProviderRuntime,
+      reconcileTenantBillingState,
+      timestampFromDate: (date) => admin.firestore.Timestamp.fromDate(date),
+      billingProviderAsaas: BILLING_PROVIDER_ASAAS,
     });
-    if (!platformAccess.allowed) {
-      response.status(platformAccess.status).json({
-        error: platformAccess.error,
-        message: platformAccess.message,
-      });
-      return;
-    }
 
-    const integrationReady = await loadBillingProviderRuntime({
-      firestore,
-      providerKey: BILLING_PROVIDER_ASAAS,
-      requireWebhookSecret: false,
-    });
-    if (!integrationReady.ok) {
-      response.status(integrationReady.status).json({
-        error: integrationReady.error,
-        message: integrationReady.message,
-      });
-      return;
-    }
-
-    try {
-      const result = await reconcileTenantBillingState({
-        firestore,
-        providerKey: BILLING_PROVIDER_ASAAS,
-        asaasRuntime: {
-          environment: integrationReady.environment,
-          apiKey: integrationReady.asaasApiKey,
-          apiBaseUrl: integrationReady.asaasApiBaseUrl,
-        },
-        tenantId,
-      });
-
-      await firestore.collection('platform_admin_audit').add({
-        action: 'billing_state_updated',
-        actorUid: authContext.uid,
-        actorEmail: authContext.email,
-        actorLabel: authContext.email || authContext.uid,
-        targetUid: authContext.uid,
-        targetEmail: authContext.email,
-        targetDisplayName: authContext.email || authContext.uid,
-        details: {
-          tenantId,
-          reason,
-          previousBillingStatus: result.previousBillingStatus,
-          currentBillingStatus: result.currentBillingStatus,
-          source: 'billing_reconcile_tenant_asaas',
-          billingProvider: BILLING_PROVIDER_ASAAS,
-        },
-        createdAt: admin.firestore.Timestamp.fromDate(new Date()),
-      });
-
-      response.status(200).json({
-        tenantId,
-        asaasSubscriptionId: result.asaasSubscriptionId,
-        asaasCustomerId: result.asaasCustomerId,
-        previousBillingStatus: result.previousBillingStatus,
-        currentBillingStatus: result.currentBillingStatus,
-        updatedAt: result.updatedAt,
-      });
-    } catch (error) {
-      response.status(500).json({
-        error: 'reconcile_tenant_failed',
-        message: error instanceof Error ? error.message : String(error),
-      });
-    }
+    response.status(result.status).json(result.body);
   },
 );
 
