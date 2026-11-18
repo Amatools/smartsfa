@@ -81,6 +81,9 @@ const {
   listAsaasCheckoutPlansForTenant,
 } = require('./src/billing/asaas_checkout_plan_listing_helpers');
 const {
+  createAsaasCheckoutSession: createAsaasCheckoutSessionHelper,
+} = require('./src/billing/asaas_checkout_session_helpers');
+const {
   applyTenantBillingActionToAsaas,
   applyTenantBillingSelfServiceActionToAsaas,
   fetchAsaasApiJson,
@@ -112,6 +115,10 @@ const {
 const {
   applyTenantBillingActionToStripe,
 } = require('./src/billing/stripe_actions_helpers');
+const {
+  applyStripeSeatAddonDeltaToActiveSubscription:
+    applyStripeSeatAddonDeltaToActiveSubscriptionHelper,
+} = require('./src/billing/stripe_seat_addon_helpers');
 const {
   parseDateToUnixMs,
   readMembershipOrderingMs,
@@ -6972,131 +6979,20 @@ async function createAsaasCheckoutSession({
   payload,
   providerSelection,
 }) {
-  const billingPlanKey = normalizeBillingPlanKey(payload?.billingPlanKey);
-  if (!billingPlanKey) {
-    return {
-      ok: false,
-      status: 400,
-      error: 'invalid_payload',
-      message: 'billingPlanKey e obrigatorio.',
-      body: null,
-    };
-  }
-
-  const callbackResolution = resolveAsaasCallbackUrls({
-    payload,
-    tenantData,
-    tenantId,
-  });
-  if (!callbackResolution.ok) {
-    return {
-      ok: false,
-      status: 400,
-      error: callbackResolution.error,
-      message: callbackResolution.message,
-      body: null,
-    };
-  }
-
-  const runtime = await loadAsaasIntegrationRuntime({
+  return createAsaasCheckoutSessionHelper({
     firestore,
-    requireWebhookSecret: false,
-  });
-  if (!runtime.ok) {
-    return {
-      ok: false,
-      status: runtime.status,
-      error: runtime.error,
-      message: runtime.message,
-      body: null,
-    };
-  }
-
-  const resolvedPlan = await resolveAsaasPlanMapping({
-    firestore,
-    tenantData,
-    billingPlanKey,
-  });
-  if (!resolvedPlan.ok) {
-    return {
-      ok: false,
-      status: resolvedPlan.status,
-      error: resolvedPlan.error,
-      message: resolvedPlan.message,
-      body: null,
-    };
-  }
-
-  const requestPayload = buildAsaasCheckoutPayload({
-    payload,
     tenantId,
     tenantData,
-    resolvedPlan,
-    callback: callbackResolution.callback,
+    payload,
+    providerSelection,
+    billingProviderAsaas: BILLING_PROVIDER_ASAAS,
+    normalizeBillingPlanKey,
+    resolveAsaasCallbackUrls,
+    loadAsaasIntegrationRuntime,
+    resolveAsaasPlanMapping,
+    buildAsaasCheckoutPayload,
+    fetchAsaasApiJson,
   });
-
-  const checkoutResponse = await fetchAsaasApiJson({
-    apiBaseUrl: runtime.asaasApiBaseUrl,
-    apiKey: runtime.asaasApiKey,
-    path: '/checkouts',
-    method: 'POST',
-    body: requestPayload,
-  });
-
-  const checkoutSessionId = String(checkoutResponse?.id ?? '').trim();
-  const checkoutUrl = String(checkoutResponse?.link ?? '').trim() ||
-    (checkoutSessionId
-      ? `https://asaas.com/checkoutSession/show?id=${encodeURIComponent(checkoutSessionId)}`
-      : '');
-
-  if (!checkoutSessionId || !checkoutUrl) {
-    return {
-      ok: false,
-      status: 502,
-      error: 'provider_invalid_response',
-      message: 'Asaas retornou resposta invalida ao criar checkout.',
-      body: null,
-    };
-  }
-
-  const nowIso = new Date().toISOString();
-  await firestore.collection('tenants').doc(tenantId).set(
-    {
-      billingProvider: BILLING_PROVIDER_ASAAS,
-      billingPlanKey: resolvedPlan.mapping.billingPlanKey,
-      billingUpdatedAt: nowIso,
-      asaasCheckoutId: checkoutSessionId,
-      asaasCheckoutLink: checkoutUrl,
-      asaasCheckoutStatus: String(checkoutResponse?.status ?? '').trim(),
-      asaasCheckoutExternalReference: String(
-        checkoutResponse?.externalReference || requestPayload.externalReference || '',
-      ).trim(),
-      asaasCheckoutLastCreatedAt: nowIso,
-      billingLastCheckoutProvider: BILLING_PROVIDER_ASAAS,
-      billingLastCheckoutCreatedAt: nowIso,
-    },
-    { merge: true },
-  );
-
-  return {
-    ok: true,
-    status: 200,
-    error: '',
-    message: '',
-    body: {
-      tenantId,
-      billingProvider: BILLING_PROVIDER_ASAAS,
-      providerSelectionSource: providerSelection.source,
-      hasLinkedContract: providerSelection.hasLinkedContract,
-      activeEnvironment: runtime.environment,
-      checkoutSessionId,
-      checkoutUrl,
-      asaasCheckoutId: checkoutSessionId,
-      asaasCheckoutUrl: checkoutUrl,
-      asaasCheckoutStatus: String(checkoutResponse?.status ?? '').trim(),
-      billingPlanKey: resolvedPlan.mapping.billingPlanKey,
-    },
-  };
 }
 
 async function enforceTenantSeatAllowanceForTenant({
@@ -7395,221 +7291,22 @@ async function applyStripeSeatAddonDeltaToActiveSubscription({
   addonSeatsDelta,
   actorUid,
 }) {
-  const normalizedTenantId = String(tenantId ?? '').trim();
-  const normalizedPlanKey = normalizeBillingPlanKey(
-    billingPlanKey || tenantData?.billingPlanKey,
-  );
-  const delta = readNonNegativeInteger(addonSeatsDelta, 0);
-
-  if (!normalizedTenantId) {
-    return {
-      applied: false,
-      status: 400,
-      error: 'invalid_tenant_id',
-      action: 'invalid_payload',
-      message: 'tenantId invalido para ajuste de seats extras.',
-    };
-  }
-
-  if (delta <= 0 || delta > 10) {
-    return {
-      applied: false,
-      status: 400,
-      error: 'invalid_addon_seats_delta',
-      action: 'invalid_payload',
-      message: 'addonSeatsDelta deve estar entre 1 e 10.',
-    };
-  }
-
-  const stripeSubscriptionId = String(tenantData?.stripeSubscriptionId ?? '').trim();
-  if (!stripeSubscriptionId) {
-    return {
-      applied: false,
-      status: 409,
-      error: 'missing_active_subscription',
-      action: 'no_active_subscription',
-      message:
-        'Nao existe stripeSubscriptionId ativo para ajustar seats extras neste tenant.',
-    };
-  }
-
-  const subscription = await stripeClient.subscriptions.retrieve(
-    stripeSubscriptionId,
-    { expand: ['items.data.price'] },
-  );
-  const subscriptionStatus = String(subscription?.status ?? '').trim().toLowerCase();
-  if (
-    subscriptionStatus === 'canceled' ||
-    subscriptionStatus === 'incomplete_expired'
-  ) {
-    return {
-      applied: false,
-      status: 409,
-      error: 'subscription_not_active',
-      action: 'subscription_not_active',
-      message:
-        'A assinatura Stripe atual nao esta ativa para ajuste de seats extras.',
-    };
-  }
-
-  const lineItems = Array.isArray(subscription?.items?.data)
-    ? subscription.items.data
-    : [];
-
-  const mappedItems = [];
-  for (const item of lineItems) {
-    const priceId = String(item?.price?.id ?? '').trim();
-    if (!priceId) {
-      continue;
-    }
-    const mapping = await resolveStripePlanMappingByPriceId({
-      firestore,
-      stripePriceId: priceId,
-    });
-    if (!mapping) {
-      continue;
-    }
-    mappedItems.push({
-      ...mapping,
-      quantity: readNonNegativeInteger(item?.quantity, 0),
-    });
-  }
-
-  const subscriptionBaseItem =
-    mappedItems.find((item) => item.mappingType === 'base') ?? null;
-  if (
-    normalizedPlanKey &&
-    subscriptionBaseItem?.billingPlanKey &&
-    subscriptionBaseItem.billingPlanKey !== normalizedPlanKey
-  ) {
-    return {
-      applied: false,
-      status: 409,
-      error: 'plan_mismatch_with_active_subscription',
-      action: 'plan_mismatch',
-      message:
-        'O plano selecionado nao corresponde ao plano base da assinatura Stripe ativa.',
-    };
-  }
-
-  let baseMapping = subscriptionBaseItem;
-  if (!baseMapping && normalizedPlanKey) {
-    const loaded = await loadStripePlanMapping({
-      firestore,
-      billingPlanKey: normalizedPlanKey,
-    });
-    if (loaded?.mappingType === 'base') {
-      baseMapping = loaded;
-    }
-  }
-
-  if (!baseMapping || baseMapping.mappingType !== 'base') {
-    return {
-      applied: false,
-      status: 409,
-      error: 'base_plan_mapping_not_found',
-      action: 'base_mapping_not_found',
-      message:
-        'Nao foi possivel identificar o mapeamento base da assinatura para aplicar seats extras.',
-    };
-  }
-
-  const addonMapping = await resolveStripeSeatAddonMappingForBasePlan({
-    firestore,
-    baseMapping,
-  });
-
-  if (
-    !addonMapping ||
-    addonMapping.mappingType !== 'overage' ||
-    addonMapping.overageMetric !== 'extra_usuario' ||
-    !addonMapping.stripePriceId
-  ) {
-    return {
-      applied: false,
-      status: 409,
-      error: 'invalid_seat_addon_mapping',
-      action: 'seat_addon_mapping_invalid',
-      message:
-        'Plano base sem mapeamento overage extra_usuario valido (seatAddonPlanKey ou linkedBasePlanKey).',
-    };
-  }
-
-  const existingAddonItem = lineItems.find(
-    (item) => String(item?.price?.id ?? '').trim() === addonMapping.stripePriceId,
-  );
-  const previousAddonSeats = readNonNegativeInteger(existingAddonItem?.quantity, 0);
-  const currentAddonSeats = previousAddonSeats + delta;
-
-  const seatItemPayload = existingAddonItem
-    ? [{ id: String(existingAddonItem.id ?? '').trim(), quantity: currentAddonSeats }]
-    : [{ price: addonMapping.stripePriceId, quantity: currentAddonSeats }];
-
-  const nowIso = new Date().toISOString();
-  const metadataPatch = {
-    smartsfaTenantId: sanitizeStripeMetadataValue(normalizedTenantId, 120),
-    smartsfaBillingAction: 'seat_addon_increment',
-    smartsfaSeatAddonDelta: String(delta),
-    smartsfaSeatAddonQuantity: String(currentAddonSeats),
-    smartsfaBillingActorUid: sanitizeStripeMetadataValue(actorUid, 120),
-    smartsfaBillingUpdatedAt: sanitizeStripeMetadataValue(nowIso, 60),
-  };
-
-  const updatedSubscription = await stripeClient.subscriptions.update(
-    stripeSubscriptionId,
-    {
-      items: seatItemPayload,
-      proration_behavior: 'always_invoice',
-      payment_behavior: 'allow_incomplete',
-      metadata: {
-        ...(subscription?.metadata || {}),
-        ...metadataPatch,
-      },
-      expand: ['items.data.price', 'latest_invoice'],
-    },
-  );
-
-  await reconcileTenantStripeStateWrapper({
+  return applyStripeSeatAddonDeltaToActiveSubscriptionHelper({
     firestore,
     stripeClient,
-    tenantId: normalizedTenantId,
+    tenantId,
+    tenantData,
+    billingPlanKey,
+    addonSeatsDelta,
+    actorUid,
+    normalizeBillingPlanKey,
+    readNonNegativeInteger,
+    resolveStripePlanMappingByPriceId,
+    loadStripePlanMapping,
+    resolveStripeSeatAddonMappingForBasePlan,
+    sanitizeStripeMetadataValue,
+    reconcileTenantStripeState: reconcileTenantStripeStateWrapper,
   });
-
-  const latestInvoiceObject =
-    updatedSubscription?.latest_invoice &&
-    typeof updatedSubscription.latest_invoice === 'object'
-      ? updatedSubscription.latest_invoice
-      : null;
-  const invoiceId = latestInvoiceObject
-    ? String(latestInvoiceObject.id ?? '').trim()
-    : String(updatedSubscription?.latest_invoice ?? '').trim();
-  const invoiceStatus = latestInvoiceObject
-    ? String(latestInvoiceObject.status ?? '').trim()
-    : '';
-  const invoiceUrl = latestInvoiceObject
-    ? String(
-      latestInvoiceObject.hosted_invoice_url ??
-          latestInvoiceObject.invoice_pdf ??
-          '',
-    ).trim()
-    : '';
-
-  return {
-    applied: true,
-    status: 200,
-    error: '',
-    action: 'seat_addon_quantity_incremented',
-    message: `Foram adicionados ${delta} seats extras na assinatura atual.`,
-    billingPlanKey: baseMapping.billingPlanKey,
-    addedSeats: delta,
-    previousAddonSeats,
-    currentAddonSeats,
-    stripeSubscriptionId,
-    stripeAddonPriceId: addonMapping.stripePriceId,
-    invoiceId,
-    invoiceStatus,
-    invoiceUrl,
-  };
 }
 
 exports.auditTenantOwnershipIntegrityDaily = onSchedule(
