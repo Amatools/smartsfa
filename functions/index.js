@@ -148,6 +148,9 @@ const {
   executeCreateStripePortalSessionAction,
 } = require('./src/billing/stripe_portal_session_management_helpers');
 const {
+  executeCreateStripeCheckoutSessionAction,
+} = require('./src/billing/stripe_checkout_session_management_helpers');
+const {
   parseDateToUnixMs,
   readMembershipOrderingMs,
   readTenantSeatAllowance,
@@ -706,181 +709,23 @@ exports.createStripeCheckoutSession = onRequest(
       return;
     }
 
-    const actorPermission = await assertTenantBillingActorPermission({
+    const result = await executeCreateStripeCheckoutSessionAction({
       firestore,
-      uid: authContext.uid,
+      payload: request.body,
       tenantId,
-    });
-    if (!actorPermission.allowed) {
-      response.status(actorPermission.status).json({
-        error: actorPermission.error,
-        message: actorPermission.message,
-      });
-      return;
-    }
-
-    const checkoutApiConfig = await readCheckoutApiConfig(firestore);
-    if (!checkoutApiConfig.activeProviders.includes(BILLING_PROVIDER_STRIPE)) {
-      response.status(409).json({
-        error: 'provider_disabled',
-        message:
-          'Stripe esta desativado na API Checkout. Habilite Stripe ou use provider Asaas conforme configuracao.',
-      });
-      return;
-    }
-
-    const integrationReady = await loadStripeIntegrationRuntime({
-      firestore,
-      requireWebhookSecret: false,
-    });
-    if (!integrationReady.ok) {
-      response.status(integrationReady.status).json({
-        error: integrationReady.error,
-        message: integrationReady.message,
-      });
-      return;
-    }
-
-    const tenantRef = firestore.collection('tenants').doc(tenantId);
-    const tenantDoc = await tenantRef.get();
-    if (!tenantDoc.exists) {
-      response.status(404).json({
-        error: 'tenant_not_found',
-        message: 'Tenant nao encontrado.',
-      });
-      return;
-    }
-
-    const mapping = await loadStripePlanMapping({
-      firestore,
       billingPlanKey,
-    });
-    if (!mapping) {
-      response.status(404).json({
-        error: 'plan_mapping_not_found',
-        message: 'Nao existe mapeamento ativo para billingPlanKey informado.',
-      });
-      return;
-    }
-    if (mapping.mappingType !== 'base') {
-      response.status(400).json({
-        error: 'invalid_plan_mapping_type',
-        message: 'billingPlanKey informado nao aponta para mapeamento base ativo.',
-      });
-      return;
-    }
-
-    const tenantData = tenantDoc.data() || {};
-    const addonSeatsInput = Number(
-      request.body?.addonSeats ?? tenantData.billingSeatsAddon ?? 0,
-    );
-    const addonSeats = Number.isFinite(addonSeatsInput)
-      ? Math.max(0, Math.floor(addonSeatsInput))
-      : 0;
-
-    let addonMapping = null;
-    if (addonSeats > 0) {
-      addonMapping = await resolveStripeSeatAddonMappingForBasePlan({
-        firestore,
-        baseMapping: mapping,
-      });
-
-      if (!addonMapping) {
-        response.status(400).json({
-          error: 'invalid_seat_addon_mapping',
-          message:
-            'Plano base sem mapeamento overage/extra_usuario valido (seatAddonPlanKey ou linkedBasePlanKey).',
-        });
-        return;
-      }
-    }
-
-    const existingCustomerId = String(tenantData.stripeCustomerId ?? '').trim();
-    const stripeClient = integrationReady.stripeClient;
-    let stripeCustomerId = existingCustomerId;
-    if (!stripeCustomerId) {
-      const ownerEmail = String(authContext.email ?? '').trim();
-      const customer = await stripeClient.customers.create({
-        email: ownerEmail || undefined,
-        name: String(
-          tenantData.razaoSocial ?? tenantData.nomeFantasia ?? tenantId,
-        ).trim(),
-        metadata: {
-          tenantId,
-          billingPlanKey,
-          source: 'smartsfa',
-        },
-      });
-      stripeCustomerId = String(customer.id ?? '').trim();
-    }
-
-    const lineItems = [
-      {
-        price: mapping.stripePriceId,
-        quantity: 1,
-      },
-    ];
-    if (addonMapping && addonSeats > 0) {
-      lineItems.push({
-        price: addonMapping.stripePriceId,
-        quantity: addonSeats,
-      });
-    }
-
-    const session = await stripeClient.checkout.sessions.create({
-      mode: 'subscription',
-      customer: stripeCustomerId,
-      client_reference_id: tenantId,
-      success_url: successUrl,
-      cancel_url: cancelUrl,
-      line_items: lineItems,
-      metadata: {
-        tenantId,
-        billingPlanKey,
-        initiatedByUid: authContext.uid,
-        source: 'smartsfa_web_portal',
-        billingSeatsAddon: String(addonSeats),
-      },
-      subscription_data: {
-        metadata: {
-          tenantId,
-          billingPlanKey,
-          initiatedByUid: authContext.uid,
-          billingSeatsAddon: String(addonSeats),
-        },
-      },
-      allow_promotion_codes: true,
+      successUrl,
+      cancelUrl,
+      authContext,
+      assertTenantBillingActorPermission,
+      readCheckoutApiConfig,
+      loadStripeIntegrationRuntime,
+      loadStripePlanMapping,
+      resolveStripeSeatAddonMappingForBasePlan,
+      billingProviderStripe: BILLING_PROVIDER_STRIPE,
     });
 
-    const tenantPatch = {
-      stripeCustomerId,
-      stripeCheckoutSessionId: String(session.id ?? '').trim(),
-      billingProvider: BILLING_PROVIDER_STRIPE,
-      billingPlanKey,
-      billingUpdatedAt: new Date().toISOString(),
-      billingSeatsAddon: addonSeats,
-    };
-    if (Number.isInteger(mapping.includedSeats) && mapping.includedSeats > 0) {
-      tenantPatch.billingSeatsIncluded = mapping.includedSeats;
-    }
-    if (addonMapping?.billingPlanKey) {
-      tenantPatch.billingSeatAddonPlanKey = addonMapping.billingPlanKey;
-    } else if (mapping.seatAddonPlanKey) {
-      tenantPatch.billingSeatAddonPlanKey = mapping.seatAddonPlanKey;
-    }
-    if (addonMapping && Number.isInteger(addonMapping.stripeUnitAmount)) {
-      tenantPatch.billingSeatAddonUnitPriceCents = addonMapping.stripeUnitAmount;
-    }
-
-    await tenantRef.set(tenantPatch, { merge: true });
-
-    response.status(200).json({
-      checkoutUrl: String(session.url ?? '').trim(),
-      checkoutSessionId: String(session.id ?? '').trim(),
-      stripeCustomerId,
-      activeEnvironment: integrationReady.environment,
-      billingSeatsAddon: addonSeats,
-    });
+    response.status(result.status).json(result.body);
   },
 );
 
