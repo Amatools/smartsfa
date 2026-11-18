@@ -133,6 +133,9 @@ const {
   executeManageTenantBillingStateAction,
 } = require('./src/billing/tenant_billing_state_management_helpers');
 const {
+  executeUpdateBillingSeatAddonsAction,
+} = require('./src/billing/seat_addon_management_helpers');
+const {
   parseDateToUnixMs,
   readMembershipOrderingMs,
   readTenantSeatAllowance,
@@ -2648,143 +2651,23 @@ exports.updateBillingSeatAddons = onRequest(
       return;
     }
 
-    const actorPermission = await assertTenantBillingActorPermission({
+    const result = await executeUpdateBillingSeatAddonsAction({
       firestore,
-      uid: authContext.uid,
-      tenantId,
-    });
-    if (!actorPermission.allowed) {
-      response.status(actorPermission.status).json({
-        error: actorPermission.error,
-        message: actorPermission.message,
-      });
-      return;
-    }
-
-    const tenantRef = firestore.collection('tenants').doc(tenantId);
-    const tenantDoc = await tenantRef.get();
-    if (!tenantDoc.exists) {
-      response.status(404).json({
-        error: 'tenant_not_found',
-        message: 'Tenant nao encontrado.',
-      });
-      return;
-    }
-
-    const tenantData = tenantDoc.data() || {};
-    const checkoutApiConfig = await readCheckoutApiConfig(firestore);
-    const providerSelection = resolveCheckoutApiProviderSelection({
       payload,
-      checkoutApiConfig,
-      tenantData,
-    });
-    const billingProvider = providerSelection.provider;
-
-    if (
-      !providerSelection.hasLinkedContract &&
-      !checkoutApiConfig.activeProviders.includes(billingProvider)
-    ) {
-      response.status(409).json({
-        error: 'provider_disabled',
-        message: `Provider ${billingProvider} nao esta ativo na API Checkout.`,
-      });
-      return;
-    }
-
-    if (billingProvider !== BILLING_PROVIDER_STRIPE) {
-      response.status(409).json({
-        error: 'seat_addon_update_not_supported_for_provider',
-        message:
-          'Ajuste self-service de seats extras esta disponivel apenas para Stripe neste fluxo.',
-        billingProvider,
-        providerSelectionSource: providerSelection.source,
-        hasLinkedContract: providerSelection.hasLinkedContract,
-      });
-      return;
-    }
-
-    const runtime = await loadBillingProviderRuntime({
-      firestore,
-      providerKey: billingProvider,
-      requireWebhookSecret: false,
-    });
-    if (!runtime.ok) {
-      response.status(runtime.status).json({
-        error: runtime.error,
-        message: runtime.message,
-        billingProvider,
-      });
-      return;
-    }
-
-    let updateResult;
-    try {
-      updateResult = await applyStripeSeatAddonDeltaToActiveSubscription({
-        firestore,
-        stripeClient: runtime.stripeClient,
-        tenantId,
-        tenantData,
-        billingPlanKey,
-        addonSeatsDelta,
-        actorUid: authContext.uid,
-      });
-    } catch (error) {
-      response.status(502).json({
-        error: 'seat_addon_update_failed',
-        message: error instanceof Error ? error.message : String(error),
-        billingProvider,
-      });
-      return;
-    }
-
-    if (!updateResult.applied) {
-      response.status(updateResult.status || 409).json({
-        error: updateResult.error,
-        message: updateResult.message,
-        billingProvider,
-        action: updateResult.action,
-        providerSelectionSource: providerSelection.source,
-        hasLinkedContract: providerSelection.hasLinkedContract,
-      });
-      return;
-    }
-
-    let seatEnforcementSummary = null;
-    let seatEnforcementError = '';
-    try {
-      seatEnforcementSummary = await enforceTenantSeatAllowanceForTenant({
-        firestore,
-        tenantId,
-        nowDate: new Date(),
-      });
-    } catch (error) {
-      seatEnforcementError =
-        error instanceof Error ? error.message : String(error);
-      console.error('updateBillingSeatAddons seat enforcement failed', {
-        tenantId,
-        addonSeatsDelta,
-        error: seatEnforcementError,
-      });
-    }
-
-    response.status(200).json({
       tenantId,
-      billingProvider,
-      billingPlanKey: updateResult.billingPlanKey,
-      addedSeats: updateResult.addedSeats,
-      previousAddonSeats: updateResult.previousAddonSeats,
-      currentAddonSeats: updateResult.currentAddonSeats,
-      stripeSubscriptionId: updateResult.stripeSubscriptionId,
-      stripeAddonPriceId: updateResult.stripeAddonPriceId,
-      invoiceId: updateResult.invoiceId,
-      invoiceStatus: updateResult.invoiceStatus,
-      invoiceUrl: updateResult.invoiceUrl,
-      message: updateResult.message,
-      seatEnforcementSummary,
-      seatEnforcementError,
-      providerSelectionSource: providerSelection.source,
-      hasLinkedContract: providerSelection.hasLinkedContract,
+      billingPlanKey,
+      addonSeatsDelta,
+      authContext,
+      assertTenantBillingActorPermission,
+      readCheckoutApiConfig,
+      resolveCheckoutApiProviderSelection,
+      loadBillingProviderRuntime,
+      applyStripeSeatAddonDeltaToActiveSubscription,
+      enforceTenantSeatAllowanceForTenant,
+      billingProviderStripe: BILLING_PROVIDER_STRIPE,
     });
+
+    response.status(result.status).json(result.body);
   },
 );
 
