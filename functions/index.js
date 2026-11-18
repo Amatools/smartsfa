@@ -66,6 +66,12 @@ const {
   buildTenantPatchFromAsaasEvent,
 } = require('./src/billing/asaas_tenant_patch_helpers');
 const {
+  applyAsaasWebhookEventToTenant: applyAsaasWebhookEventToTenantHelper,
+} = require('./src/billing/asaas_webhook_application_helpers');
+const {
+  processAsaasWebhookEvent,
+} = require('./src/billing/asaas_webhook_processor_helpers');
+const {
   resolveAsaasPlanMapping,
 } = require('./src/billing/asaas_plan_mapping_helpers');
 const {
@@ -6914,7 +6920,24 @@ async function processBillingWebhookEvent({
     stripeClient,
     asaasRuntime,
     processStripeWebhookEvent,
-    processAsaasWebhookEvent,
+    processAsaasWebhookEvent: (input) => processAsaasWebhookEvent({
+      ...input,
+      defaultEnabledEvents: ASAAS_DEFAULT_WEBHOOK_EVENTS,
+      applyAsaasWebhookEventToTenant: ({
+        firestore,
+        eventPayload,
+        eventType,
+        asaasRuntime,
+      }) => applyAsaasWebhookEventToTenantHelper({
+        firestore,
+        eventPayload,
+        eventType,
+        asaasRuntime,
+        resolveTenantIdFromAsaasReferences,
+        buildTenantPatchFromAsaasEvent,
+        enforceTenantSeatAllowanceForTenant,
+      }),
+    }),
   });
 }
 
@@ -7303,106 +7326,6 @@ async function processStripeWebhookEvent({
     );
     throw error;
   }
-}
-
-async function processAsaasWebhookEvent({
-  firestore,
-  event,
-  enabledEvents,
-  asaasRuntime,
-}) {
-  const eventType = String(event?.event ?? '').trim();
-  if (!eventType) {
-    throw new Error('Webhook Asaas sem event.');
-  }
-
-  const enabledSet = new Set(
-    (enabledEvents && enabledEvents.length > 0
-      ? enabledEvents
-      : ASAAS_DEFAULT_WEBHOOK_EVENTS
-    )
-      .map((item) => String(item ?? '').trim())
-      .filter((item) => item),
-  );
-
-  if (!enabledSet.has(eventType)) {
-    return {
-      ignored: true,
-      duplicate: false,
-      tenantId: '',
-      billingStatus: '',
-    };
-  }
-
-  const applied = await applyAsaasWebhookEventToTenant({
-    firestore,
-    eventPayload: event,
-    eventType,
-    asaasRuntime,
-  });
-
-  return {
-    ignored: false,
-    duplicate: false,
-    tenantId: applied.tenantId,
-    billingStatus: applied.billingStatus,
-  };
-}
-
-async function applyAsaasWebhookEventToTenant({
-  firestore,
-  eventPayload,
-  eventType,
-  asaasRuntime,
-}) {
-  const tenantId = await resolveTenantIdFromAsaasReferences({
-    firestore,
-    eventPayload,
-  });
-
-  if (!tenantId) {
-    return {
-      tenantId: '',
-      billingStatus: '',
-    };
-  }
-
-  const tenantRef = firestore.collection('tenants').doc(tenantId);
-  const tenantDoc = await tenantRef.get();
-  if (!tenantDoc.exists) {
-    return {
-      tenantId: '',
-      billingStatus: '',
-    };
-  }
-
-  const tenantData = tenantDoc.data() || {};
-  const patch = buildTenantPatchFromAsaasEvent({
-    eventPayload,
-    eventType,
-    currentTenantData: tenantData,
-    webhookEnvironment: String(asaasRuntime?.environment ?? '').trim(),
-  });
-
-  await tenantRef.set(patch, { merge: true });
-
-  try {
-    await enforceTenantSeatAllowanceForTenant({
-      firestore,
-      tenantId,
-    });
-  } catch (error) {
-    console.error('asaas webhook seat enforcement failed', {
-      tenantId,
-      eventType,
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
-
-  return {
-    tenantId,
-    billingStatus: String(patch.billingStatus ?? '').trim(),
-  };
 }
 
 async function applyStripeWebhookEventToTenant({
