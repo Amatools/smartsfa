@@ -1,6 +1,12 @@
 {
   "name": "smartsfa-functions",
   "private": true,
+  "scripts": {
+    "check": "node --check index.js",
+    "test": "node --test test",
+    "test:smoke": "node --test test/billing",
+    "validate:fast": "npm run check && npm run test:smoke"
+  },
   "engines": {
     "node": "22"
   },

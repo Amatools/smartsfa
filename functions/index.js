@@ -2,7 +2,6 @@ const { onRequest } = require('firebase-functions/v2/https');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const admin = require('firebase-admin');
 const crypto = require('node:crypto');
-const Stripe = require('stripe');
 const {
   formatPlanAmountLabel,
   isValidHttpAbsoluteUrl,
@@ -14,10 +13,8 @@ const {
   sanitizeStripeMetadataValue,
 } = require('./src/billing/shared_helpers');
 const {
-  normalizeBillingProviderKey,
   resolveCheckoutApiProviderSelection,
   resolveTenantBillingProviderKey,
-  resolveTenantLinkedBillingProvider,
 } = require('./src/billing/provider_resolution');
 const {
   buildStripePlanMappingFromDocData,
@@ -40,6 +37,34 @@ const {
   resolveTenantIdFromAsaasReferences,
   resolveTenantIdFromStripeReferences,
 } = require('./src/billing/webhook_tenant_resolution');
+const {
+  createAsaasWebhookFallbackEventId,
+} = require('./src/billing/runtime_secrets');
+const {
+  ASAAS_DEFAULT_WEBHOOK_EVENTS,
+  STRIPE_DEFAULT_WEBHOOK_EVENTS,
+  loadBillingProviderRuntime,
+  loadStripeIntegrationRuntime,
+  readAsaasIntegrationConfig,
+} = require('./src/billing/integration_runtime');
+const {
+  readCheckoutApiConfig,
+  resolveAsaasCallbackUrls,
+} = require('./src/billing/checkout_config');
+const {
+  applyTenantBillingActionToProvider: dispatchApplyTenantBillingActionToProvider,
+  applyTenantBillingSelfServiceActionToProvider:
+    dispatchApplyTenantBillingSelfServiceActionToProvider,
+  processBillingWebhookEvent: dispatchProcessBillingWebhookEvent,
+  reconcileTenantBillingState: dispatchReconcileTenantBillingState,
+} = require('./src/billing/provider_dispatch');
+const {
+  buildAsaasCheckoutExternalReference,
+  mapStripeIntervalToAsaasCycle,
+  normalizeAsaasBillingTypes,
+  normalizeAsaasChargeType,
+  normalizeAsaasMinutesToExpire,
+} = require('./src/billing/asaas_checkout_helpers');
 
 const SANKHYA_PRODUCTION_URL = 'https://api.sankhya.com.br/authenticate';
 const SANKHYA_SANDBOX_URL =
@@ -58,51 +83,7 @@ const DEFAULT_STORAGE_BUCKET = 'smart-sfa.firebasestorage.app';
 const IMPERSONATION_DEFAULT_DURATION_MINUTES = 15;
 const IMPERSONATION_MIN_DURATION_MINUTES = 5;
 const IMPERSONATION_MAX_DURATION_MINUTES = 30;
-const STRIPE_DEFAULT_WEBHOOK_EVENTS = [
-  'checkout.session.completed',
-  'customer.subscription.created',
-  'customer.subscription.updated',
-  'customer.subscription.deleted',
-  'invoice.finalized',
-  'invoice.paid',
-  'invoice.payment_failed',
-];
-const ASAAS_DEFAULT_WEBHOOK_EVENTS = [
-  'CHECKOUT_CREATED',
-  'CHECKOUT_PAID',
-  'CHECKOUT_CANCELED',
-  'CHECKOUT_EXPIRED',
-  'SUBSCRIPTION_CREATED',
-  'SUBSCRIPTION_UPDATED',
-  'SUBSCRIPTION_INACTIVATED',
-  'SUBSCRIPTION_DELETED',
-  'PAYMENT_CREATED',
-  'PAYMENT_UPDATED',
-  'PAYMENT_CONFIRMED',
-  'PAYMENT_RECEIVED',
-  'PAYMENT_OVERDUE',
-  'PAYMENT_DELETED',
-  'PAYMENT_RESTORED',
-  'PAYMENT_CREDIT_CARD_CAPTURE_REFUSED',
-  'PAYMENT_REFUNDED',
-  'PAYMENT_PARTIALLY_REFUNDED',
-  'PAYMENT_REFUND_IN_PROGRESS',
-  'PAYMENT_REFUND_DENIED',
-  'PAYMENT_RECEIVED_IN_CASH_UNDONE',
-  'PAYMENT_CHARGEBACK_REQUESTED',
-  'PAYMENT_CHARGEBACK_DISPUTE',
-  'PAYMENT_AWAITING_CHARGEBACK_REVERSAL',
-  'INVOICE_CREATED',
-  'INVOICE_UPDATED',
-  'INVOICE_SYNCHRONIZED',
-  'INVOICE_AUTHORIZED',
-  'INVOICE_PROCESSING_CANCELLATION',
-  'INVOICE_CANCELED',
-  'INVOICE_CANCELLATION_DENIED',
-  'INVOICE_ERROR',
-];
 const STRIPE_SYNC_BATCH_LIMIT = 120;
-const STRIPE_CLIENT_CACHE = new Map();
 const STRIPE_RUNTIME_SECRETS = [
   'STRIPE_SK_TEST',
   'STRIPE_SK_LIVE',
@@ -120,8 +101,6 @@ const BILLING_RUNTIME_SECRETS = [
   ...STRIPE_RUNTIME_SECRETS,
   ...ASAAS_RUNTIME_SECRETS,
 ];
-const ASAAS_SANDBOX_API_BASE_URL = 'https://sandbox.asaas.com/api/v3';
-const ASAAS_PRODUCTION_API_BASE_URL = 'https://api.asaas.com/v3';
 const ASAAS_CHECKOUT_DEFAULT_BILLING_TYPES = ['PIX', 'CREDIT_CARD'];
 const ASAAS_CHECKOUT_DEFAULT_CHARGE_TYPE = 'RECURRENT';
 const ASAAS_CHECKOUT_DEFAULT_MINUTES_TO_EXPIRE = 60;
@@ -6912,136 +6891,6 @@ async function assertTenantBillingActorPermission({ firestore, uid, tenantId }) 
   };
 }
 
-async function loadStripeIntegrationRuntime({ firestore, requireWebhookSecret }) {
-  const config = await readStripeIntegrationConfig(firestore);
-  const environment = config.activeEnvironment;
-  const secretKey = getStripeSecretForEnvironment(environment);
-  if (!secretKey) {
-    return {
-      ok: false,
-      status: 503,
-      error: 'integration_not_ready',
-      message: `Secret Stripe ausente para ambiente ${environment}. Configure STRIPE_SK_${environment.toUpperCase()}.`,
-      environment,
-      webhookSecret: '',
-      enabledEvents: config.webhookEvents,
-      stripeClient: null,
-    };
-  }
-
-  const webhookSecret = getStripeWebhookSecretForEnvironment(environment);
-  if (requireWebhookSecret && !webhookSecret) {
-    return {
-      ok: false,
-      status: 503,
-      error: 'integration_not_ready',
-      message: `Webhook secret ausente para ambiente ${environment}. Configure STRIPE_WHSEC_${environment.toUpperCase()}.`,
-      environment,
-      webhookSecret: '',
-      enabledEvents: config.webhookEvents,
-      stripeClient: null,
-    };
-  }
-
-  return {
-    ok: true,
-    status: 200,
-    error: '',
-    message: '',
-    environment,
-    webhookSecret,
-    enabledEvents: config.webhookEvents,
-    stripeClient: getStripeClient(secretKey),
-  };
-}
-
-async function loadAsaasIntegrationRuntime({ firestore, requireWebhookSecret }) {
-  const config = await readAsaasIntegrationConfig(firestore);
-  const environment = config.activeEnvironment;
-  const apiKey = getAsaasApiKeyForEnvironment(environment);
-
-  if (!apiKey) {
-    return {
-      ok: false,
-      status: 503,
-      error: 'integration_not_ready',
-      message: `API key Asaas ausente para ambiente ${environment}. Configure ASAAS_API_KEY_${environment === 'production' ? 'PRODUCTION' : 'SANDBOX'}.`,
-      environment,
-      webhookSecret: '',
-      enabledEvents: config.webhookEvents,
-      stripeClient: null,
-      asaasApiKey: '',
-      asaasApiBaseUrl: '',
-    };
-  }
-
-  const webhookToken = getAsaasWebhookTokenForEnvironment(environment);
-  if (requireWebhookSecret && !webhookToken) {
-    return {
-      ok: false,
-      status: 503,
-      error: 'integration_not_ready',
-      message: `Webhook token Asaas ausente para ambiente ${environment}. Configure ASAAS_WEBHOOK_TOKEN_${environment === 'production' ? 'PRODUCTION' : 'SANDBOX'}.`,
-      environment,
-      webhookSecret: '',
-      enabledEvents: config.webhookEvents,
-      stripeClient: null,
-      asaasApiKey: '',
-      asaasApiBaseUrl: '',
-    };
-  }
-
-  return {
-    ok: true,
-    status: 200,
-    error: '',
-    message: '',
-    environment,
-    webhookSecret: webhookToken,
-    enabledEvents:
-      config.webhookEvents.length > 0
-        ? config.webhookEvents
-        : ASAAS_DEFAULT_WEBHOOK_EVENTS,
-    stripeClient: null,
-    asaasApiKey: apiKey,
-    asaasApiBaseUrl: getAsaasApiBaseUrlForEnvironment(environment),
-  };
-}
-
-async function loadBillingProviderRuntime({
-  firestore,
-  providerKey,
-  requireWebhookSecret,
-}) {
-  const normalizedProvider = normalizeBillingProviderKey(providerKey);
-  if (normalizedProvider === BILLING_PROVIDER_STRIPE) {
-    return loadStripeIntegrationRuntime({
-      firestore,
-      requireWebhookSecret,
-    });
-  }
-
-  if (normalizedProvider === BILLING_PROVIDER_ASAAS) {
-    return loadAsaasIntegrationRuntime({
-      firestore,
-      requireWebhookSecret,
-    });
-  }
-
-  return {
-    ok: false,
-    status: 400,
-    error: 'provider_not_supported',
-    message: `Provider de billing nao suportado: ${normalizedProvider}.`,
-    environment: '',
-    webhookSecret: '',
-    enabledEvents: [],
-    stripeClient: null,
-    asaasApiKey: '',
-    asaasApiBaseUrl: '',
-  };
-}
-
 async function processBillingWebhookEvent({
   firestore,
   providerKey,
@@ -7050,28 +6899,16 @@ async function processBillingWebhookEvent({
   stripeClient,
   asaasRuntime,
 }) {
-  const normalizedProvider = normalizeBillingProviderKey(providerKey);
-  if (normalizedProvider === BILLING_PROVIDER_STRIPE) {
-    return processStripeWebhookEvent({
-      firestore,
-      event,
-      enabledEvents,
-      stripeClient,
-    });
-  }
-
-  if (normalizedProvider === BILLING_PROVIDER_ASAAS) {
-    return processAsaasWebhookEvent({
-      firestore,
-      event,
-      enabledEvents,
-      asaasRuntime,
-    });
-  }
-
-  throw new Error(
-    `Webhook nao implementado para provider ${normalizedProvider}.`,
-  );
+  return dispatchProcessBillingWebhookEvent({
+    firestore,
+    providerKey,
+    event,
+    enabledEvents,
+    stripeClient,
+    asaasRuntime,
+    processStripeWebhookEvent,
+    processAsaasWebhookEvent,
+  });
 }
 
 async function reconcileTenantBillingState({
@@ -7081,26 +6918,15 @@ async function reconcileTenantBillingState({
   stripeClient,
   asaasRuntime,
 }) {
-  const normalizedProvider = normalizeBillingProviderKey(providerKey);
-  if (normalizedProvider === BILLING_PROVIDER_STRIPE) {
-    return reconcileTenantStripeState({
-      firestore,
-      stripeClient,
-      tenantId,
-    });
-  }
-
-  if (normalizedProvider === BILLING_PROVIDER_ASAAS) {
-    return reconcileTenantAsaasState({
-      firestore,
-      asaasRuntime,
-      tenantId,
-    });
-  }
-
-  throw new Error(
-    `Reconciliacao nao implementada para provider ${normalizedProvider}.`,
-  );
+  return dispatchReconcileTenantBillingState({
+    firestore,
+    providerKey,
+    tenantId,
+    stripeClient,
+    asaasRuntime,
+    reconcileTenantStripeState,
+    reconcileTenantAsaasState,
+  });
 }
 
 async function applyTenantBillingActionToProvider({
@@ -7113,34 +6939,18 @@ async function applyTenantBillingActionToProvider({
   reason,
   actorUid,
 }) {
-  const normalizedProvider = normalizeBillingProviderKey(providerKey);
-  if (normalizedProvider === BILLING_PROVIDER_STRIPE) {
-    return applyTenantBillingActionToStripe({
-      stripeClient,
-      tenantId,
-      tenantData,
-      action,
-      reason,
-      actorUid,
-    });
-  }
-
-  if (normalizedProvider === BILLING_PROVIDER_ASAAS) {
-    return applyTenantBillingActionToAsaas({
-      asaasRuntime,
-      tenantId,
-      tenantData,
-      action,
-      reason,
-      actorUid,
-    });
-  }
-
-  return {
-    applied: false,
-    action: 'provider_not_implemented',
-    message: `Acao de billing ainda nao implementada para provider ${normalizedProvider}.`,
-  };
+  return dispatchApplyTenantBillingActionToProvider({
+    providerKey,
+    stripeClient,
+    asaasRuntime,
+    tenantId,
+    tenantData,
+    action,
+    reason,
+    actorUid,
+    applyTenantBillingActionToStripe,
+    applyTenantBillingActionToAsaas,
+  });
 }
 
 async function applyTenantBillingSelfServiceActionToProvider({
@@ -7149,234 +6959,13 @@ async function applyTenantBillingSelfServiceActionToProvider({
   tenantData,
   action,
 }) {
-  const normalizedProvider = normalizeBillingProviderKey(providerKey);
-  if (normalizedProvider === BILLING_PROVIDER_ASAAS) {
-    return applyTenantBillingSelfServiceActionToAsaas({
-      asaasRuntime,
-      tenantData,
-      action,
-    });
-  }
-
-  return {
-    applied: false,
-    action: 'provider_not_supported',
-    message:
-      `Acoes self-service de billing nao suportadas para provider ${normalizedProvider}.`,
-    billingStatus: '',
-  };
-}
-
-async function readStripeIntegrationConfig(firestore) {
-  const doc = await firestore.collection('billing_integrations').doc('stripe').get();
-  const data = doc.data() || {};
-  const envFromDoc = String(data.activeEnvironment ?? '').trim().toLowerCase();
-  const envFromProcess = String(process.env.STRIPE_ACTIVE_ENVIRONMENT ?? '')
-    .trim()
-    .toLowerCase();
-
-  const activeEnvironment = ['test', 'live'].includes(envFromDoc)
-    ? envFromDoc
-    : ['test', 'live'].includes(envFromProcess)
-      ? envFromProcess
-      : 'test';
-
-  const webhookEvents = Array.isArray(data.webhookEvents)
-    ? data.webhookEvents
-      .map((value) => String(value ?? '').trim())
-      .filter((value) => value)
-    : [];
-
-  return {
-    activeEnvironment,
-    webhookEvents:
-      webhookEvents.length > 0 ? webhookEvents : STRIPE_DEFAULT_WEBHOOK_EVENTS,
-  };
-}
-
-async function readCheckoutApiConfig(firestore) {
-  const doc = await firestore.collection('billing_integrations').doc('checkout_api').get();
-  const data = doc.data() || {};
-
-  const activeProvidersRaw = Array.isArray(data.activeProviders)
-    ? data.activeProviders
-    : [];
-  const normalizedActiveProviders = new Set(
-    activeProvidersRaw
-      .map((value) => normalizeBillingProviderKey(value))
-      .filter(
-        (value) =>
-          value === BILLING_PROVIDER_STRIPE || value === BILLING_PROVIDER_ASAAS,
-      ),
-  );
-
-  if (normalizedActiveProviders.size === 0) {
-    normalizedActiveProviders.add(BILLING_PROVIDER_STRIPE);
-  }
-
-  const preferredProviderCandidate = normalizeBillingProviderKey(
-    data.preferredProvider,
-  );
-  const preferredProvider = normalizedActiveProviders.has(preferredProviderCandidate)
-    ? preferredProviderCandidate
-    : normalizedActiveProviders.has(BILLING_PROVIDER_STRIPE)
-      ? BILLING_PROVIDER_STRIPE
-      : [...normalizedActiveProviders][0];
-
-  return {
-    activeProviders: [...normalizedActiveProviders],
-    preferredProvider,
-  };
-}
-
-function resolveAsaasCallbackUrls({
-  payload,
-  tenantData,
-  tenantId,
-}) {
-  const payloadSuccess = String(payload?.successUrl ?? '').trim();
-  const payloadCancel = String(payload?.cancelUrl ?? '').trim();
-  const payloadExpired = String(payload?.expiredUrl ?? '').trim();
-  const tenantSuccess = String(tenantData?.billingCheckoutSuccessUrl ?? '').trim();
-  const tenantCancel = String(tenantData?.billingCheckoutCancelUrl ?? '').trim();
-  const tenantExpired = String(tenantData?.billingCheckoutExpiredUrl ?? '').trim();
-
-  const fallbackBase =
-    String(process.env.BILLING_CHECKOUT_CALLBACK_BASE_URL ?? '').trim() ||
-    'https://portal.smartsfa.com.br';
-
-  const normalizedFallbackBase = fallbackBase.endsWith('/')
-    ? fallbackBase.slice(0, -1)
-    : fallbackBase;
-
-  const fallbackSuccess =
-    `${normalizedFallbackBase}/billing/checkout/success` +
-    `?tenantId=${encodeURIComponent(tenantId)}`;
-  const fallbackCancel =
-    `${normalizedFallbackBase}/billing/checkout/cancel` +
-    `?tenantId=${encodeURIComponent(tenantId)}`;
-  const fallbackExpired =
-    `${normalizedFallbackBase}/billing/checkout/expired` +
-    `?tenantId=${encodeURIComponent(tenantId)}`;
-
-  const successUrl = payloadSuccess || tenantSuccess || fallbackSuccess;
-  const cancelUrl = payloadCancel || tenantCancel || fallbackCancel;
-  const expiredUrl = payloadExpired || tenantExpired || fallbackExpired;
-
-  if (!isValidHttpAbsoluteUrl(successUrl) || !isValidHttpAbsoluteUrl(cancelUrl)) {
-    return {
-      ok: false,
-      error: 'invalid_callback_url',
-      message:
-        'successUrl e cancelUrl devem ser URLs absolutas http(s).',
-      callback: null,
-    };
-  }
-
-  const callback = {
-    successUrl,
-    cancelUrl,
-  };
-  if (isValidHttpAbsoluteUrl(expiredUrl)) {
-    callback.expiredUrl = expiredUrl;
-  }
-
-  return {
-    ok: true,
-    error: '',
-    message: '',
-    callback,
-  };
-}
-
-function mapStripeIntervalToAsaasCycle(interval, intervalCount) {
-  const normalizedInterval = String(interval ?? '').trim().toLowerCase();
-  const countInput = Number(intervalCount ?? 0);
-  const count = Number.isFinite(countInput) && countInput > 0
-    ? Math.floor(countInput)
-    : 1;
-
-  if (normalizedInterval === 'week') {
-    if (count <= 1) {
-      return 'WEEKLY';
-    }
-    if (count === 2) {
-      return 'BIWEEKLY';
-    }
-    return 'MONTHLY';
-  }
-
-  if (normalizedInterval === 'year') {
-    return 'YEARLY';
-  }
-
-  if (normalizedInterval === 'month') {
-    if (count <= 1) {
-      return 'MONTHLY';
-    }
-    if (count === 2) {
-      return 'BIMONTHLY';
-    }
-    if (count === 3) {
-      return 'QUARTERLY';
-    }
-    if (count === 6) {
-      return 'SEMIANNUALLY';
-    }
-    if (count >= 12) {
-      return 'YEARLY';
-    }
-    return 'MONTHLY';
-  }
-
-  return 'MONTHLY';
-}
-
-function normalizeAsaasBillingTypes(value) {
-  const input = Array.isArray(value)
-    ? value
-    : [value];
-
-  const allowed = new Set(['PIX', 'CREDIT_CARD']);
-  const normalized = [];
-  for (const item of input) {
-    const candidate = String(item ?? '').trim().toUpperCase();
-    if (allowed.has(candidate) && !normalized.includes(candidate)) {
-      normalized.push(candidate);
-    }
-  }
-
-  if (normalized.length === 0) {
-    return [...ASAAS_CHECKOUT_DEFAULT_BILLING_TYPES];
-  }
-  return normalized;
-}
-
-function normalizeAsaasChargeType(value) {
-  const candidate = String(value ?? '').trim().toUpperCase();
-  return candidate === 'DETACHED' || candidate === 'INSTALLMENT' || candidate === 'RECURRENT'
-    ? candidate
-    : ASAAS_CHECKOUT_DEFAULT_CHARGE_TYPE;
-}
-
-function normalizeAsaasMinutesToExpire(value) {
-  const input = Number(value ?? 0);
-  if (!Number.isFinite(input) || input <= 0) {
-    return ASAAS_CHECKOUT_DEFAULT_MINUTES_TO_EXPIRE;
-  }
-  const rounded = Math.floor(input);
-  if (rounded < 10) {
-    return 10;
-  }
-  if (rounded > 1440) {
-    return 1440;
-  }
-  return rounded;
-}
-
-function buildAsaasCheckoutExternalReference({ tenantId, billingPlanKey }) {
-  const now = Date.now();
-  return `smartsfa:${tenantId}:${billingPlanKey}:${now}`.slice(0, 200);
+  return dispatchApplyTenantBillingSelfServiceActionToProvider({
+    providerKey,
+    asaasRuntime,
+    tenantData,
+    action,
+    applyTenantBillingSelfServiceActionToAsaas,
+  });
 }
 
 async function resolveAsaasPlanMapping({
@@ -7963,84 +7552,6 @@ async function proxyBillingRequestToFunction({
     rawBody: rawText,
     ...extraResponseFields,
   });
-}
-
-async function readAsaasIntegrationConfig(firestore) {
-  const doc = await firestore.collection('billing_integrations').doc('asaas').get();
-  const data = doc.data() || {};
-
-  const environment =
-    String(data.activeEnvironment ?? '').trim().toLowerCase() === 'production'
-      ? 'production'
-      : 'sandbox';
-
-  const webhookEvents = Array.isArray(data.webhookEvents)
-    ? data.webhookEvents
-      .map((value) => String(value ?? '').trim())
-      .filter((value) => value)
-    : [];
-
-  return {
-    activeEnvironment: environment,
-    webhookEvents:
-      webhookEvents.length > 0 ? webhookEvents : ASAAS_DEFAULT_WEBHOOK_EVENTS,
-  };
-}
-
-function getAsaasWebhookTokenForEnvironment(environment) {
-  if (environment === 'production') {
-    return String(process.env.ASAAS_WEBHOOK_TOKEN_PRODUCTION ?? '').trim();
-  }
-  return String(process.env.ASAAS_WEBHOOK_TOKEN_SANDBOX ?? '').trim();
-}
-
-function getAsaasApiKeyForEnvironment(environment) {
-  if (environment === 'production') {
-    return String(process.env.ASAAS_API_KEY_PRODUCTION ?? '').trim();
-  }
-  return String(process.env.ASAAS_API_KEY_SANDBOX ?? '').trim();
-}
-
-function getAsaasApiBaseUrlForEnvironment(environment) {
-  return environment === 'production'
-    ? ASAAS_PRODUCTION_API_BASE_URL
-    : ASAAS_SANDBOX_API_BASE_URL;
-}
-
-function createAsaasWebhookFallbackEventId(payload) {
-  const serializedPayload = JSON.stringify(payload ?? {});
-  const hash = crypto
-    .createHash('sha256')
-    .update(serializedPayload)
-    .digest('hex')
-    .slice(0, 24);
-  return `asaas_${Date.now()}_${hash}`;
-}
-
-function getStripeSecretForEnvironment(environment) {
-  if (environment === 'live') {
-    return String(process.env.STRIPE_SK_LIVE ?? '').trim();
-  }
-  return String(process.env.STRIPE_SK_TEST ?? '').trim();
-}
-
-function getStripeWebhookSecretForEnvironment(environment) {
-  if (environment === 'live') {
-    return String(process.env.STRIPE_WHSEC_LIVE ?? '').trim();
-  }
-  return String(process.env.STRIPE_WHSEC_TEST ?? '').trim();
-}
-
-function getStripeClient(secretKey) {
-  const normalizedSecret = String(secretKey ?? '').trim();
-  if (!normalizedSecret) {
-    throw new Error('Missing Stripe secret key.');
-  }
-
-  if (!STRIPE_CLIENT_CACHE.has(normalizedSecret)) {
-    STRIPE_CLIENT_CACHE.set(normalizedSecret, new Stripe(normalizedSecret));
-  }
-  return STRIPE_CLIENT_CACHE.get(normalizedSecret);
 }
 
 async function processStripeWebhookEvent({
