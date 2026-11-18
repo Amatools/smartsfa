@@ -189,6 +189,12 @@ const {
   executeSyncSankhyaClientesModuleAction,
 } = require('./src/billing/sankhya_clientes_sync_management_helpers');
 const {
+  buildClienteDocId,
+  buildSankhyaClientesSql,
+  mapSankhyaClienteRow,
+  lookupCepAddress,
+} = require('./src/billing/sankhya_clientes_data_helpers');
+const {
   executeSyncSankhyaTaxRulesModuleAction,
 } = require('./src/billing/sankhya_tax_rules_sync_management_helpers');
 const {
@@ -208,6 +214,11 @@ const {
 const {
   executeSyncSankhyaProductImagesModuleAction,
 } = require('./src/billing/sankhya_product_images_sync_management_helpers');
+const {
+  buildSankhyaProductImageChunksSql,
+  detectImageFormat,
+  buildFirebaseDownloadUrl,
+} = require('./src/billing/sankhya_product_images_data_helpers');
 const {
   executeSyncSankhyaPriceTablesModuleAction,
 } = require('./src/billing/sankhya_price_tables_module_sync_management_helpers');
@@ -2210,199 +2221,6 @@ async function syncSankhyaTaxRulesModule({
   });
 }
 
-function buildClienteDocId(tenantId, codigoParceiro) {
-  return `erp_cliente_${tenantId}_${toCodeString(codigoParceiro)}`;
-}
-
-// Mantido em paridade com `defaultTaxRegime` de lib/src/core/models/domain_types.dart.
-// TGFPAR nao possui coluna de regime tributario do parceiro; usado apenas
-// como fallback quando o documento ainda nao tem valor definido manualmente.
-const SANKHYA_DEFAULT_TAX_REGIME = 'simples_nacional';
-
-// Sync de clientes/parceiros Sankhya (TGFPAR) para a colecao `clientes`. UF e
-// resolvida via TGFPAR.CODCID -> TSICID.UF (codigo numerico) -> TSIUFS.UF
-// (sigla), mesmo join ja usado em tax_rules. CLASSIFICMS ("Classificacao
-// ICMS" no cadastro de parceiros do Sankhya) tem 6 opcoes na tela (Revendedor,
-// Produtor Rural, Consumidor Final Nao Contribuinte, Usar a da TOP, Isento de
-// ICMS, Consumidor Final Contribuinte). Letras confirmadas empiricamente
-// 2026-10-27 alterando o mesmo cliente de teste (191, CODPARC com IE valida)
-// entre as 6 opcoes na tela do Sankhya e conferindo `erpClassificmsRaw` apos
-// cada resync: R=Revendedor (contribuinte), P=Produtor Rural (contribuinte),
-// T=Usar a da TOP (sem classificacao fixa, cai no fallback por IE), C=
-// Consumidor Final NAO Contribuinte (a letra sugere o contrario, mas foi
-// confirmado pela tela do Sankhya para o cliente 1887, IE nula), X=
-// Consumidor Final Contribuinte (a letra 'C' ja estava ocupada por outra
-// opcao, entao o Sankhya usa 'X' aqui). I=Isento de ICMS (nao contribuinte,
-// validado com o cliente 1231, IE nula). 'N' nunca foi observado neste tenant
-// (nao ha clientes produtor/consumidor final nao-PJ com essa letra), mas
-// mantido no set nao_contribuinte por seguranca caso apareca futuramente -
-// nao deve ser confundido com 'C', que e a letra realmente usada para o caso
-// "Nao Contribuinte" nesta instalacao. Qualquer codigo nao mapeado
-// (null/T/desconhecido) cai no fallback por Inscricao Estadual valida.
-// taxRegime nao tem coluna correspondente em TGFPAR e permanece com o valor
-// existente/manual.
-const SANKHYA_CLASSIFICMS_CONTRIBUINTE_CODES = new Set(['R', 'P', 'X']);
-const SANKHYA_CLASSIFICMS_NAO_CONTRIBUINTE_CODES = new Set(['C', 'I', 'N']);
-
-function buildSankhyaClientesSql({ codigosFiltro } = {}) {
-  const safeCodes = normalizeSankhyaNumericCodeList(codigosFiltro ?? []);
-  const filtroCodigo =
-    safeCodes.length > 0 ? `\n  AND PAR.CODPARC IN (${safeCodes.join(', ')})` : '';
-
-  return `
-SELECT
-    TO_CHAR(PAR.CODPARC) AS CODPARC,
-    PAR.NOMEPARC,
-    PAR.RAZAOSOCIAL,
-    PAR.CGC_CPF,
-    PAR.TIPPESSOA,
-    PAR.ATIVO,
-    PAR.IDENTINSCESTAD,
-    PAR.INSCMUN,
-    PAR.CLASSIFICMS,
-    PAR.CEP,
-    PAR.NUMEND,
-    PAR.COMPLEMENTO,
-    PAR.TELEFONE,
-    PAR.EMAIL,
-    CID.NOMECID,
-    UFS.UF AS SIGLA_UF
-FROM TGFPAR PAR
-LEFT JOIN TSICID CID ON CID.CODCID = PAR.CODCID
-LEFT JOIN TSIUFS UFS ON UFS.CODUF = CID.UF
-WHERE PAR.CLIENTE = 'S'${filtroCodigo}
-`;
-}
-
-function mapSankhyaClienteRow({
-  tenantId,
-  row,
-  nowIso,
-  syncBatchId,
-  syncVersion,
-  existingData,
-}) {
-  const existing = existingData || {};
-  const codigo = toCodeString(readRowValueByAliases(row, ['CODPARC']));
-  if (!codigo || isZeroCode(codigo)) {
-    return null;
-  }
-
-  const razaoSocial = String(
-    readRowValueByAliases(row, ['RAZAOSOCIAL']) ?? '',
-  ).trim();
-  const nomeFantasia = String(
-    readRowValueByAliases(row, ['NOMEPARC']) ?? '',
-  ).trim();
-  const documento = normalizeDigits(readRowValueByAliases(row, ['CGC_CPF']));
-  const tipPessoaRaw = String(readRowValueByAliases(row, ['TIPPESSOA']) ?? '')
-    .trim()
-    .toUpperCase();
-  const ativoRaw = String(readRowValueByAliases(row, ['ATIVO']) ?? '')
-    .trim()
-    .toUpperCase();
-  const inscricaoEstadualRaw = String(
-    readRowValueByAliases(row, ['IDENTINSCESTAD']) ?? '',
-  ).trim();
-  const classificmsRaw =
-    nullableString(readRowValueByAliases(row, ['CLASSIFICMS']))?.toUpperCase() ??
-    null;
-  const inscricaoEstadualUpper = inscricaoEstadualRaw.toUpperCase();
-  const hasValidIe =
-    inscricaoEstadualUpper.length > 0 && inscricaoEstadualUpper !== 'ISENTO';
-
-  let taxProfile;
-  if (SANKHYA_CLASSIFICMS_CONTRIBUINTE_CODES.has(classificmsRaw)) {
-    taxProfile = 'contribuinte';
-  } else if (SANKHYA_CLASSIFICMS_NAO_CONTRIBUINTE_CODES.has(classificmsRaw)) {
-    taxProfile = 'nao_contribuinte';
-  } else {
-    taxProfile = hasValidIe ? 'contribuinte' : 'nao_contribuinte';
-  }
-
-  let salePurposeFromClassificms = null;
-  if (classificmsRaw === 'R') {
-    salePurposeFromClassificms = 'revenda';
-  } else if (
-    classificmsRaw === 'C' ||
-    classificmsRaw === 'N' ||
-    classificmsRaw === 'X'
-  ) {
-    salePurposeFromClassificms = 'uso_consumo';
-  }
-
-  return {
-    id: buildClienteDocId(tenantId, codigo),
-    tenantId,
-    representedCompanyId: existing.representedCompanyId ?? null,
-    ownerId: existing.ownerId ?? null,
-    gerenteId: existing.gerenteId ?? null,
-    representanteId: existing.representanteId ?? null,
-    vendedorId: existing.vendedorId ?? null,
-    nome: razaoSocial || nomeFantasia || `Cliente ${codigo}`,
-    nomeFantasia: nullableString(nomeFantasia),
-    documento: nullableString(documento),
-    tipoPessoa: tipPessoaRaw === 'F' ? 'pf' : 'pj',
-    cep: nullableString(normalizeDigits(readRowValueByAliases(row, ['CEP']))),
-    numero: nullableString(readRowValueByAliases(row, ['NUMEND'])),
-    complemento: nullableString(readRowValueByAliases(row, ['COMPLEMENTO'])),
-    cidade: nullableString(readRowValueByAliases(row, ['NOMECID'])),
-    estado: nullableString(
-      String(readRowValueByAliases(row, ['SIGLA_UF']) ?? '')
-        .trim()
-        .toUpperCase(),
-    ),
-    logradouro: existing.logradouro ?? null,
-    bairro: existing.bairro ?? null,
-    telefone: nullableString(readRowValueByAliases(row, ['TELEFONE'])),
-    email: nullableString(readRowValueByAliases(row, ['EMAIL'])),
-    inscricaoEstadual: nullableString(inscricaoEstadualRaw),
-    inscricaoMunicipal: nullableString(
-      readRowValueByAliases(row, ['INSCMUN']),
-    ),
-    taxProfile,
-    taxRegime: existing.taxRegime || SANKHYA_DEFAULT_TAX_REGIME,
-    isZfmSuframa: existing.isZfmSuframa ?? false,
-    salePurpose: salePurposeFromClassificms || existing.salePurpose || 'revenda',
-    origemCadastro: 'erp',
-    // Sankhya e a fonte da verdade quando a integracao esta ativa: um cliente
-    // ativo no ERP e gravado direto como 'aprovado' (nao 'sincronizado'), sem
-    // exigir aprovacao manual no app - do contrario ele nunca aparece no
-    // seletor de cliente da tela de pedido, que so lista status 'aprovado'.
-    status: ativoRaw === 'S' ? 'aprovado' : 'inativo',
-    erpClassificmsRaw: classificmsRaw,
-    erpSyncId: syncBatchId,
-    createdAt: existing.createdAt || nowIso,
-    updatedAt: nowIso,
-    deletedAt: null,
-    syncVersion,
-  };
-}
-
-// Mesma API publica (BrasilAPI) ja usada no app Flutter para preencher
-// logradouro/bairro a partir do CEP (ver cliente_pre_cadastro_page.dart). Nao
-// e relevante para o calculo fiscal, so para completar o cadastro de
-// endereco; falhas sao toleradas silenciosamente (o campo so fica vazio).
-async function lookupCepAddress(cep) {
-  try {
-    const response = await fetch(`https://brasilapi.com.br/api/cep/v2/${cep}`);
-    if (!response.ok) {
-      return null;
-    }
-    const data = await response.json();
-    return {
-      logradouro: nullableString(data?.street),
-      bairro: nullableString(data?.neighborhood),
-    };
-  } catch (error) {
-    console.error(
-      '[lookupCepAddress] failed',
-      JSON.stringify({ cep, message: error?.message }),
-    );
-    return null;
-  }
-}
-
 async function syncSankhyaClientesModule({
   firestore,
   tenantId,
@@ -2423,7 +2241,11 @@ async function syncSankhyaClientesModule({
     buildClienteDocId,
     readRowValueByAliases,
     mapSankhyaClienteRow,
-    lookupCepAddress,
+    lookupCepAddress: async (cep) =>
+      lookupCepAddress(cep, {
+        fetchImpl: fetch,
+        loggerError: console.error,
+      }),
     updateTenantSyncState,
     loggerError: console.error,
   });
@@ -2492,7 +2314,11 @@ async function syncSankhyaProductImagesModule({
     toCodeString,
     isZeroCode,
     temporaryImportLimit: TEMPORARY_IMPORT_LIMIT,
-    buildSankhyaProductImageChunksSql,
+    buildSankhyaProductImageChunksSql: (productCodes) =>
+      buildSankhyaProductImageChunksSql(productCodes, {
+        chunkSize: SANKHYA_IMAGE_CHUNK_BYTES,
+        normalizeCodeList: normalizeSankhyaNumericCodeList,
+      }),
     executeSankhyaDbExplorerQuery,
     readRowValueByAliases,
     readInt,
@@ -2505,58 +2331,6 @@ async function syncSankhyaProductImagesModule({
     crypto,
     updateTenantSyncState,
   });
-}
-
-function buildSankhyaProductImageChunksSql(productCodes) {
-  const safeCodes = normalizeSankhyaNumericCodeList(productCodes);
-  if (safeCodes.length === 0) {
-    return '';
-  }
-
-  const chunkSize = SANKHYA_IMAGE_CHUNK_BYTES;
-  const codesInClause = safeCodes.join(', ');
-  return `
-SELECT
-    TO_CHAR(P.CODPROD) AS CodigoProduto,
-    LEVEL AS ChunkIndex,
-    RAWTOHEX(
-      DBMS_LOB.SUBSTR(
-        P.IMAGEM,
-        ${chunkSize},
-        ((LEVEL - 1) * ${chunkSize}) + 1
-      )
-    ) AS ChunkHex
-FROM TGFPRO P
-WHERE P.CODPROD IN (${codesInClause})
-  AND P.ATIVO = 'S'
-  AND P.IMAGEM IS NOT NULL
-CONNECT BY PRIOR P.CODPROD = P.CODPROD
-   AND PRIOR SYS_GUID() IS NOT NULL
-   AND LEVEL <= CEIL(DBMS_LOB.GETLENGTH(P.IMAGEM) / ${chunkSize})
-ORDER BY P.CODPROD, LEVEL
-`.trim();
-}
-
-function detectImageFormat(buffer) {
-  if (!buffer || buffer.length < 4) {
-    return 'jpg';
-  }
-
-  if (
-    buffer[0] === 0x89 &&
-    buffer[1] === 0x50 &&
-    buffer[2] === 0x4e &&
-    buffer[3] === 0x47
-  ) {
-    return 'png';
-  }
-
-  return 'jpg';
-}
-
-function buildFirebaseDownloadUrl({ bucketName, storagePath, token }) {
-  const encodedPath = encodeURIComponent(storagePath);
-  return `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodedPath}?alt=media&token=${token}`;
 }
 
 async function verifyFirebaseAuthFromRequest(request) {
