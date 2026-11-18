@@ -163,6 +163,10 @@ const {
   executeCreateStripeCatalogPlanAction,
 } = require('./src/billing/stripe_catalog_management_helpers');
 const {
+  executeExpireTenantGraceDailyAction,
+  executeEnforceTenantSeatAllowanceHourlyAction,
+} = require('./src/billing/tenant_billing_maintenance_helpers');
+const {
   parseDateToUnixMs,
   readMembershipOrderingMs,
   readTenantSeatAllowance,
@@ -1290,144 +1294,22 @@ exports.manageTenantBillingState = onRequest(
 exports.expireTenantGraceDaily = onSchedule(
   { region: 'us-central1', timeoutSeconds: 540, schedule: '23 2 * * *' },
   async () => {
-    const firestore = admin.firestore();
-    const nowDate = new Date();
-    const nowMs = nowDate.getTime();
-    const nowIso = nowDate.toISOString();
-
-    const graceSnapshot = await firestore
-      .collection('tenants')
-      .where('billingStatus', '==', 'grace')
-      .get();
-
-    let processed = 0;
-    let convertedNoPlan = 0;
-    let skippedMissingGraceUntil = 0;
-    let skippedNotExpiredYet = 0;
-    let skippedHasStripeSubscription = 0;
-
-    for (const tenantDoc of graceSnapshot.docs) {
-      processed += 1;
-      const tenantData = tenantDoc.data() || {};
-
-      const graceUntilIso = String(tenantData.billingGraceUntilAt ?? '').trim();
-      if (!graceUntilIso) {
-        skippedMissingGraceUntil += 1;
-        continue;
-      }
-
-      const graceUntilDate = new Date(graceUntilIso);
-      const graceUntilMs = graceUntilDate.getTime();
-      if (!Number.isFinite(graceUntilMs)) {
-        skippedMissingGraceUntil += 1;
-        continue;
-      }
-
-      if (graceUntilMs > nowMs) {
-        skippedNotExpiredYet += 1;
-        continue;
-      }
-
-      const stripeSubscriptionId = String(
-        tenantData.stripeSubscriptionId ?? '',
-      ).trim();
-      if (stripeSubscriptionId) {
-        skippedHasStripeSubscription += 1;
-        continue;
-      }
-
-      await tenantDoc.ref.set(
-        {
-          billingStatus: 'no_plan',
-          billingAccountState: 'inactive',
-          billingPlanKey: '',
-          billingCycle: '',
-          stripePriceId: '',
-          stripeCheckoutSessionId: '',
-          billingCurrentPeriodStartAt: '',
-          billingCurrentPeriodEndAt: '',
-          billingGraceUntilAt: '',
-          billingPastDueSinceAt: '',
-          billingSuspendedAt: nowIso,
-          billingDelinquencyStage: 'none',
-          billingUpdatedAt: nowIso,
-          billingLastAutoAction: 'grace_expired_blocked',
-          billingLastAutoAt: nowIso,
-        },
-        { merge: true },
-      );
-
-      convertedNoPlan += 1;
-    }
-
-    return {
-      processed,
-      convertedNoPlan,
-      skippedMissingGraceUntil,
-      skippedNotExpiredYet,
-      skippedHasStripeSubscription,
-      updatedAt: nowIso,
-    };
+    return executeExpireTenantGraceDailyAction({
+      firestore: admin.firestore(),
+      nowDate: new Date(),
+    });
   },
 );
 
 exports.enforceTenantSeatAllowanceHourly = onSchedule(
   { region: 'us-central1', timeoutSeconds: 540, schedule: '11 * * * *' },
   async () => {
-    const firestore = admin.firestore();
-    const nowDate = new Date();
-    const nowIso = nowDate.toISOString();
-
-    const tenantsSnapshot = await firestore.collection('tenants').get();
-    let processed = 0;
-    let skipped = 0;
-    let overLimitGrace = 0;
-    let deactivated = 0;
-    const failures = [];
-
-    for (const tenantDoc of tenantsSnapshot.docs) {
-      processed += 1;
-      try {
-        const summary = await enforceTenantSeatAllowanceForTenant({
-          firestore,
-          tenantId: tenantDoc.id,
-          tenantDoc,
-          nowDate,
-        });
-        if (summary.state === 'skipped') {
-          skipped += 1;
-        }
-        if (summary.state === 'over_limit_grace') {
-          overLimitGrace += 1;
-        }
-        if (summary.deactivatedCount > 0) {
-          deactivated += summary.deactivatedCount;
-        }
-      } catch (error) {
-        failures.push({
-          tenantId: tenantDoc.id,
-          message: error instanceof Error ? error.message : String(error),
-        });
-      }
-    }
-
-    console.info('enforceTenantSeatAllowanceHourly', {
-      processed,
-      skipped,
-      overLimitGrace,
-      deactivated,
-      failures: failures.length,
-      updatedAt: nowIso,
+    return executeEnforceTenantSeatAllowanceHourlyAction({
+      firestore: admin.firestore(),
+      nowDate: new Date(),
+      enforceTenantSeatAllowanceForTenant,
+      loggerInfo: console.info,
     });
-
-    return {
-      processed,
-      skipped,
-      overLimitGrace,
-      deactivated,
-      failures,
-      updatedAt: nowIso,
-    };
   },
 );
 
