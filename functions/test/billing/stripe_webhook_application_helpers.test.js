@@ -5,18 +5,32 @@ const {
   applyStripeWebhookEventToTenant,
 } = require('../../src/billing/stripe_webhook_application_helpers');
 
-function createTenantsFirestore() {
+function createTenantsFirestore({ initialTenants = {} } = {}) {
   const writes = [];
+  const docs = new Map(
+    Object.entries(initialTenants).map(([id, data]) => [id, { ...data }]),
+  );
+
   return {
     writes,
+    docs,
     collection(name) {
       assert.equal(name, 'tenants');
       return {
         doc(id) {
           return {
+            async get() {
+              const data = docs.get(id);
+              return {
+                exists: data !== undefined,
+                data: () => (data ? { ...data } : undefined),
+              };
+            },
             id,
             async set(patch, options) {
               writes.push({ id, patch: { ...patch }, options: { ...options } });
+              const current = docs.get(id) || {};
+              docs.set(id, { ...current, ...patch });
             },
           };
         },
@@ -241,4 +255,78 @@ test('applyStripeWebhookEventToTenant handles invoice payment failure and unknow
     billingProviderStripe: 'stripe',
   });
   assert.equal(unknown, '');
+});
+
+test('applyStripeWebhookEventToTenant ignores stale subscription events after manual clear_plan_link', async () => {
+  const firestore = createTenantsFirestore({
+    initialTenants: {
+      tenant_unlinked: {
+        billingStatus: 'no_plan',
+        billingLastManualAction: 'clear_plan_link',
+        billingProvider: '',
+        stripeCustomerId: '',
+        stripeSubscriptionId: '',
+      },
+    },
+  });
+
+  let reconcileCalled = false;
+  let enforcementCalled = false;
+
+  const tenantId = await applyStripeWebhookEventToTenant({
+    firestore,
+    event: {
+      type: 'customer.subscription.deleted',
+      data: {
+        object: {
+          id: 'sub_old_1',
+          customer: 'cus_old_1',
+          metadata: {
+            tenantId: 'tenant_unlinked',
+            billingPlanKey: 'legacy',
+          },
+        },
+      },
+    },
+    stripeClient: {
+      subscriptions: {
+        retrieve: async () => ({
+          id: 'sub_old_1',
+          customer: 'cus_old_1',
+          status: 'canceled',
+          metadata: {
+            tenantId: 'tenant_unlinked',
+            billingPlanKey: 'legacy',
+          },
+          items: { data: [] },
+        }),
+      },
+    },
+    normalizeBillingPlanKey: normalizePlanKey,
+    resolveTenantIdFromStripeReferences: async () => 'tenant_unlinked',
+    readStripeSubscriptionLineItems: () => [],
+    resolveStripePlanMappingByPriceId: async () => null,
+    buildTenantPatchFromStripeSubscription: () => ({
+      billingStatus: 'canceled',
+      billingCurrentPeriodStartAt: '2026-01-01T00:00:00.000Z',
+      billingCurrentPeriodEndAt: '2026-02-01T00:00:00.000Z',
+    }),
+    reconcileTenantStripePeriodIfMissing: async () => {
+      reconcileCalled = true;
+    },
+    reconcileTenantBillingState: async () => {},
+    enforceTenantSeatAllowanceForTenant: async () => {
+      enforcementCalled = true;
+    },
+    billingProviderStripe: 'stripe',
+  });
+
+  assert.equal(tenantId, 'tenant_unlinked');
+  assert.equal(firestore.writes.length, 0);
+  assert.equal(reconcileCalled, false);
+  assert.equal(enforcementCalled, false);
+  assert.equal(
+    firestore.docs.get('tenant_unlinked')?.billingStatus,
+    'no_plan',
+  );
 });

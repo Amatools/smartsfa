@@ -95,8 +95,31 @@ function buildSeatAddonOperationRequestHash({
   return crypto.createHash('sha256').update(serialized).digest('hex');
 }
 
+function buildQuoteOperationRequestHash({
+  tenantId,
+  payload,
+  billingProvider,
+  providerSelectionSource,
+  hasLinkedContract,
+}) {
+  const projection = {
+    tenantId: normalizeOperationId(tenantId, 96),
+    billingProvider: normalizeToken(billingProvider, 48).toLowerCase(),
+    providerSelectionSource: normalizeToken(providerSelectionSource, 96).toLowerCase(),
+    hasLinkedContract: Boolean(hasLinkedContract),
+    billingPlanKey: normalizeToken(payload?.billingPlanKey, 128).toLowerCase(),
+    addonSeats: normalizeNonNegativeInteger(payload?.addonSeats),
+    quoteTtlMinutes: normalizeNonNegativeInteger(payload?.quoteTtlMinutes),
+    requestedProvider: normalizeToken(payload?.provider, 48).toLowerCase(),
+  };
+
+  const serialized = stableSerialize(projection);
+  return crypto.createHash('sha256').update(serialized).digest('hex');
+}
+
 module.exports = {
   buildSeatAddonOperationRequestHash,
   buildCheckoutOperationRequestHash,
+  buildQuoteOperationRequestHash,
   readCheckoutOperationIdFromPayload,
 };

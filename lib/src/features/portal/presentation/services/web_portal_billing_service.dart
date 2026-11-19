@@ -129,13 +129,18 @@ class WebPortalAvailableBillingPlan {
 }
 
 class WebPortalBillingService {
-  WebPortalBillingService({http.Client? httpClient})
-    : _httpClient = httpClient ?? http.Client();
+  WebPortalBillingService({
+    http.Client? httpClient,
+    this.idTokenProvider,
+  }) : _httpClient = httpClient ?? http.Client();
 
   final http.Client _httpClient;
+  final Future<String?> Function()? idTokenProvider;
 
   static const String _defaultCreateCheckoutSessionUrl =
       'https://us-central1-smart-sfa.cloudfunctions.net/createBillingCheckoutSession';
+  static const String _defaultCreateBillingQuoteUrl =
+      'https://us-central1-smart-sfa.cloudfunctions.net/createBillingQuote';
   static const String _defaultCreatePortalSessionUrl =
       'https://us-central1-smart-sfa.cloudfunctions.net/createBillingPortalSession';
   static const String _defaultListCheckoutPlansUrl =
@@ -157,6 +162,11 @@ class WebPortalBillingService {
 
   static const String _billingCreateCheckoutSessionUrlOverride =
       String.fromEnvironment('BILLING_CHECKOUT_SESSION_URL', defaultValue: '');
+
+  static const String _billingCreateQuoteUrlOverride = String.fromEnvironment(
+    'BILLING_QUOTE_URL',
+    defaultValue: '',
+  );
 
   static const String _createCheckoutSessionUrlOverride =
       String.fromEnvironment('STRIPE_CHECKOUT_SESSION_URL', defaultValue: '');
@@ -198,6 +208,12 @@ class WebPortalBillingService {
     ),
     functionName: 'createBillingCheckoutSession',
     defaultUrl: _defaultCreateCheckoutSessionUrl,
+  );
+
+  static String get createBillingQuoteUrl => _resolveUrl(
+    explicitOverride: _billingCreateQuoteUrlOverride,
+    functionName: 'createBillingQuote',
+    defaultUrl: _defaultCreateBillingQuoteUrl,
   );
 
   static String get createPortalSessionUrl => _resolveUrl(
@@ -260,8 +276,22 @@ class WebPortalBillingService {
     required String successUrl,
     required String cancelUrl,
     int addonSeats = 0,
+    bool generateQuoteBeforeCheckout = false,
   }) async {
     final idToken = await _requireIdToken();
+    final normalizedTenantId = tenantId.trim();
+    final normalizedBillingPlanKey = billingPlanKey.trim();
+    final normalizedAddonSeats = addonSeats < 0 ? 0 : addonSeats;
+
+    var quoteId = '';
+    if (generateQuoteBeforeCheckout) {
+      quoteId = await _createQuoteForCheckoutWhenSupported(
+        idToken: idToken,
+        tenantId: normalizedTenantId,
+        billingPlanKey: normalizedBillingPlanKey,
+        addonSeats: normalizedAddonSeats,
+      );
+    }
 
     final response = await _httpClient
         .post(
@@ -272,11 +302,12 @@ class WebPortalBillingService {
             'Authorization': 'Bearer $idToken',
           },
           body: jsonEncode(<String, Object?>{
-            'tenantId': tenantId.trim(),
-            'billingPlanKey': billingPlanKey.trim(),
+            'tenantId': normalizedTenantId,
+            'billingPlanKey': normalizedBillingPlanKey,
             'successUrl': successUrl.trim(),
             'cancelUrl': cancelUrl.trim(),
-            'addonSeats': addonSeats < 0 ? 0 : addonSeats,
+            'addonSeats': normalizedAddonSeats,
+            if (quoteId.isNotEmpty) 'quoteId': quoteId,
           }),
         )
         .timeout(const Duration(seconds: 40));
@@ -303,6 +334,51 @@ class WebPortalBillingService {
       checkoutSessionId: checkoutSessionId,
       stripeCustomerId: _readString(payload['stripeCustomerId']),
       activeEnvironment: _readString(payload['activeEnvironment']),
+    );
+  }
+
+  Future<String> _createQuoteForCheckoutWhenSupported({
+    required String idToken,
+    required String tenantId,
+    required String billingPlanKey,
+    required int addonSeats,
+  }) async {
+    final response = await _httpClient
+        .post(
+          Uri.parse(createBillingQuoteUrl),
+          headers: <String, String>{
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $idToken',
+          },
+          body: jsonEncode(<String, Object?>{
+            'tenantId': tenantId,
+            'billingPlanKey': billingPlanKey,
+            'addonSeats': addonSeats,
+          }),
+        )
+        .timeout(const Duration(seconds: 35));
+
+    final payload = _decodeMap(response.body);
+    if (response.statusCode == 200) {
+      final quoteId = _readString(payload['quoteId']);
+      if (quoteId.isEmpty) {
+        throw StateError('Resposta inválida ao gerar quote de billing.');
+      }
+      return quoteId;
+    }
+
+    final errorCode = _readString(payload['error']);
+    if (errorCode == 'provider_quote_not_supported') {
+      return '';
+    }
+
+    throw StateError(
+      _readErrorMessage(
+        payload,
+        fallback:
+            'Falha ao gerar quote de billing antes do checkout (HTTP ${response.statusCode}).',
+      ),
     );
   }
 
@@ -489,8 +565,11 @@ class WebPortalBillingService {
   }
 
   Future<String> _requireIdToken() async {
-    final user = FirebaseAuth.instance.currentUser;
-    final idToken = await user?.getIdToken();
+    final injectedToken = idTokenProvider;
+    final idToken =
+        injectedToken != null
+        ? await injectedToken()
+        : await FirebaseAuth.instance.currentUser?.getIdToken();
     final normalized = (idToken ?? '').trim();
     if (normalized.isEmpty) {
       throw StateError('Sessão inválida. Faça login novamente.');

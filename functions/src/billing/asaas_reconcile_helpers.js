@@ -91,6 +91,32 @@ async function reconcileTenantAsaasState({
 
   await tenantRef.set(patch, { merge: true });
 
+  try {
+    const nowIso = new Date().toISOString();
+    await firestore.collection('billing_provider_refs').doc(normalizedTenantId).set(
+      {
+        tenantId: normalizedTenantId,
+        billingProvider: 'asaas',
+        asaasCustomerId: String(
+          patch.asaasCustomerId ?? asaasCustomerId ?? '',
+        ).trim(),
+        asaasSubscriptionId: String(
+          patch.asaasSubscriptionId ?? asaasSubscriptionId ?? '',
+        ).trim(),
+        asaasPaymentId: String(patch.asaasPaymentId ?? asaasPaymentId ?? '').trim(),
+        lastReconciledAt: nowIso,
+        lastReconciledSource: 'asaas_reconcile',
+        updatedAt: nowIso,
+      },
+      { merge: true },
+    );
+  } catch (error) {
+    console.error('asaas reconcile provider refs persistence failed', {
+      tenantId: normalizedTenantId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+
   return {
     asaasSubscriptionId: String(patch.asaasSubscriptionId ?? asaasSubscriptionId).trim(),
     asaasCustomerId: String(patch.asaasCustomerId ?? asaasCustomerId).trim(),

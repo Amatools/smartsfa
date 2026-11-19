@@ -711,6 +711,70 @@
 			],
 			"isBackground": false,
 			"group": "build"
+		},
+		{
+			"label": "firebase deploy asaas quote bundle",
+			"type": "shell",
+			"command": "C:/Users/Aureo.Filho/AppData/Roaming/npm/firebase.cmd",
+			"args": [
+				"deploy",
+				"--project=smart-sfa",
+				"--only",
+				"functions:createBillingCheckoutSession,functions:createBillingQuote,functions:handleAsaasWebhook,functions:reconcileAsaasTenant,functions:expireBillingQuotesHourly,functions:expireLegacyOpenBillingQuotesDaily,functions:updateBillingSeatAddons"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "smoke check prod billing hosting",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"$targets=@('https://us-central1-smart-sfa.cloudfunctions.net/createBillingQuote','https://us-central1-smart-sfa.cloudfunctions.net/createBillingCheckoutSession','https://smart-sfa.web.app/app/'); foreach($u in $targets){ try { $r=Invoke-WebRequest -Uri $u -Method Get -UseBasicParsing -ErrorAction Stop; Write-Output ($u + ' => HTTP ' + $r.StatusCode) } catch { if ($_.Exception.Response) { Write-Output ($u + ' => HTTP ' + [int]$_.Exception.Response.StatusCode) } else { Write-Output ($u + ' => ERROR ' + $_.Exception.Message) } } }"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "firebase deploy stripe webhook fix",
+			"type": "shell",
+			"command": "C:/Users/Aureo.Filho/AppData/Roaming/npm/firebase.cmd",
+			"args": [
+				"deploy",
+				"--project=smart-sfa",
+				"--only",
+				"functions:handleStripeWebhook"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "firebase deploy seat enforcement backend consistency",
+			"type": "shell",
+			"command": "C:/Users/Aureo.Filho/AppData/Roaming/npm/firebase.cmd",
+			"args": [
+				"deploy",
+				"--project=smart-sfa",
+				"--only",
+				"functions:manageTenantBillingState,functions:handleStripeWebhook,functions:handleAsaasWebhook,functions:enforceTenantSeatAllowanceHourly"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "firebase deploy access loss no-plan enforcement",
+			"type": "shell",
+			"command": "C:/Users/Aureo.Filho/AppData/Roaming/npm/firebase.cmd",
+			"args": [
+				"deploy",
+				"--project=smart-sfa",
+				"--only",
+				"functions:manageTenantBillingState,functions:manageTenantBillingSelfService,functions:updateBillingSeatAddons,functions:handleStripeWebhook,functions:handleAsaasWebhook,functions:enforceTenantSeatAllowanceHourly"
+			],
+			"isBackground": false,
+			"group": "build"
 		}
 	]
 }

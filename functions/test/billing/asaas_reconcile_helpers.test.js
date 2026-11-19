@@ -6,29 +6,45 @@ const {
 } = require('../../src/billing/asaas_reconcile_helpers');
 
 function createTenantFirestore(tenantById) {
-  const writes = [];
+  const tenantWrites = [];
+  const providerRefWrites = [];
   const firestore = {
     collection(name) {
-      assert.equal(name, 'tenants');
-      return {
-        doc(id) {
-          return {
-            async get() {
-              const data = tenantById[id];
-              return {
-                exists: data !== undefined,
-                data: () => (data ? { ...data } : undefined),
-              };
-            },
-            async set(patch, options) {
-              writes.push({ id, patch, options });
-            },
-          };
-        },
-      };
+      if (name === 'tenants') {
+        return {
+          doc(id) {
+            return {
+              async get() {
+                const data = tenantById[id];
+                return {
+                  exists: data !== undefined,
+                  data: () => (data ? { ...data } : undefined),
+                };
+              },
+              async set(patch, options) {
+                tenantWrites.push({ id, patch, options });
+              },
+            };
+          },
+        };
+      }
+
+      if (name === 'billing_provider_refs') {
+        return {
+          doc(id) {
+            return {
+              async set(patch, options) {
+                providerRefWrites.push({ id, patch, options });
+              },
+            };
+          },
+        };
+      }
+
+      throw new Error(`Unexpected collection ${name}`);
     },
   };
-  return { firestore, writes };
+  return { firestore, tenantWrites, providerRefWrites };
 }
 
 test('reconcileTenantAsaasState validates tenant id and runtime', async () => {
@@ -60,7 +76,7 @@ test('reconcileTenantAsaasState validates tenant id and runtime', async () => {
 });
 
 test('reconcileTenantAsaasState reconciles from subscription id when available', async () => {
-  const { firestore, writes } = createTenantFirestore({
+  const { firestore, tenantWrites, providerRefWrites } = createTenantFirestore({
     tenant_1: {
       billingStatus: 'past_due',
       asaasSubscriptionId: 'sub_1',
@@ -95,14 +111,25 @@ test('reconcileTenantAsaasState reconciles from subscription id when available',
 
   assert.equal(fetchCalls.length, 1);
   assert.equal(fetchCalls[0].path, '/subscriptions/sub_1');
-  assert.equal(writes.length, 1);
-  assert.deepEqual(writes[0].options, { merge: true });
+  assert.equal(tenantWrites.length, 1);
+  assert.deepEqual(tenantWrites[0].options, { merge: true });
+  assert.equal(providerRefWrites.length, 1);
+  assert.equal(providerRefWrites[0].id, 'tenant_1');
+  assert.deepEqual(providerRefWrites[0].options, { merge: true });
+  assert.equal(providerRefWrites[0].patch.billingProvider, 'asaas');
+  assert.equal(providerRefWrites[0].patch.asaasSubscriptionId, 'sub_1');
+  assert.equal(providerRefWrites[0].patch.asaasCustomerId, 'cus_1');
+  assert.equal(providerRefWrites[0].patch.lastReconciledSource, 'asaas_reconcile');
   assert.equal(result.previousBillingStatus, 'past_due');
   assert.equal(result.currentBillingStatus, 'active');
 });
 
 test('reconcileTenantAsaasState falls back to customer last payment and throws without references', async () => {
-  const { firestore: customerFirestore, writes } = createTenantFirestore({
+  const {
+    firestore: customerFirestore,
+    tenantWrites,
+    providerRefWrites,
+  } = createTenantFirestore({
     tenant_customer: {
       billingStatus: 'trial',
       asaasCustomerId: 'cus_2',
@@ -135,7 +162,12 @@ test('reconcileTenantAsaasState falls back to customer last payment and throws w
   assert.equal(fetchCalls[0].path, '/payments');
   assert.equal(fetchCalls[0].query.customer, 'cus_2');
   assert.equal(result.currentBillingStatus, 'past_due');
-  assert.equal(writes.length, 1);
+  assert.equal(tenantWrites.length, 1);
+  assert.equal(providerRefWrites.length, 1);
+  assert.equal(providerRefWrites[0].id, 'tenant_customer');
+  assert.equal(providerRefWrites[0].patch.billingProvider, 'asaas');
+  assert.equal(providerRefWrites[0].patch.asaasCustomerId, 'cus_2');
+  assert.equal(providerRefWrites[0].patch.lastReconciledSource, 'asaas_reconcile');
 
   const { firestore: missingRefFirestore } = createTenantFirestore({
     tenant_missing: {

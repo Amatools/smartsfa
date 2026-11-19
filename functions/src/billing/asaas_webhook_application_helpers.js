@@ -38,6 +38,42 @@ async function applyAsaasWebhookEventToTenant({
 
   await tenantRef.set(patch, { merge: true });
 
+  try {
+    const nowIso = new Date().toISOString();
+    await firestore.collection('billing_provider_refs').doc(tenantId).set(
+      {
+        tenantId,
+        billingProvider: 'asaas',
+        asaasCustomerId: String(
+          patch.asaasCustomerId ?? eventPayload?.payment?.customer ?? '',
+        ).trim(),
+        asaasSubscriptionId: String(
+          patch.asaasSubscriptionId ??
+            eventPayload?.subscription?.id ??
+            eventPayload?.payment?.subscription ??
+            '',
+        ).trim(),
+        asaasCheckoutId: String(
+          patch.asaasCheckoutId ?? eventPayload?.checkout?.id ?? '',
+        ).trim(),
+        lastWebhookEventId: String(eventPayload?.id ?? '').trim(),
+        lastWebhookEventType: String(eventType ?? '').trim(),
+        lastWebhookEventAt: String(
+          eventPayload?.dateCreated ?? patch.billingUpdatedAt ?? nowIso,
+        ).trim(),
+        lastWebhookEnvironment: String(asaasRuntime?.environment ?? '').trim(),
+        updatedAt: nowIso,
+      },
+      { merge: true },
+    );
+  } catch (error) {
+    console.error('asaas webhook provider refs persistence failed', {
+      tenantId,
+      eventType,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+
   if (typeof enforceTenantSeatAllowanceForTenant === 'function') {
     try {
       await enforceTenantSeatAllowanceForTenant({

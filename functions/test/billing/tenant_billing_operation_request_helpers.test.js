@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const {
   buildSeatAddonOperationRequestHash,
   buildCheckoutOperationRequestHash,
+  buildQuoteOperationRequestHash,
   readCheckoutOperationIdFromPayload,
 } = require('../../src/billing/tenant_billing_operation_request_helpers');
 
@@ -86,6 +87,42 @@ test('buildSeatAddonOperationRequestHash is stable and reacts to delta changes',
   const changedHash = buildSeatAddonOperationRequestHash({
     ...base,
     addonSeatsDelta: 4,
+  });
+  assert.notEqual(hashA, changedHash);
+});
+
+test('buildQuoteOperationRequestHash is stable and reacts to addon seats changes', () => {
+  const base = {
+    tenantId: 'tenant_1',
+    payload: {
+      billingPlanKey: 'enterprise_plus',
+      addonSeats: 2,
+      quoteTtlMinutes: 30,
+      provider: 'asaas',
+    },
+    billingProvider: 'asaas',
+    providerSelectionSource: 'payload_provider',
+    hasLinkedContract: false,
+  };
+
+  const hashA = buildQuoteOperationRequestHash(base);
+  const hashB = buildQuoteOperationRequestHash({
+    ...base,
+    payload: {
+      provider: 'asaas',
+      quoteTtlMinutes: 30,
+      addonSeats: 2,
+      billingPlanKey: 'enterprise_plus',
+    },
+  });
+  assert.equal(hashA, hashB);
+
+  const changedHash = buildQuoteOperationRequestHash({
+    ...base,
+    payload: {
+      ...base.payload,
+      addonSeats: 5,
+    },
   });
   assert.notEqual(hashA, changedHash);
 });

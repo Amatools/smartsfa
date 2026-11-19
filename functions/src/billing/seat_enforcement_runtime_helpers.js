@@ -43,21 +43,156 @@ async function enforceTenantSeatAllowanceForTenant({
   }
 
   const tenantData = tenantSnapshot.data() || {};
+  const nowMs = nowDate.getTime();
+  const nowIso = nowDate.toISOString();
+
   if (!shouldEnforceTenantSeatAllowance(tenantData)) {
+    const membershipsSnapshot = await firestore
+      .collection('tenant_memberships')
+      .where('tenantId', '==', normalizedTenantId)
+      .where('ativo', '==', true)
+      .get();
+
+    const activeMemberships = membershipsSnapshot.docs
+      .map((doc) => {
+        const data = doc.data() || {};
+        const state = String(data.state || 'active').trim().toLowerCase();
+        const uid = String(data.uid || '').trim();
+        const role = String(data.role || '').trim().toLowerCase();
+        return {
+          doc,
+          data,
+          id: doc.id,
+          uid,
+          role,
+          state,
+          orderingMs: readMembershipOrderingMs(doc, nowMs),
+        };
+      })
+      .filter((item) => item.uid && item.state === 'active');
+
+    activeMemberships.sort((a, b) => {
+      if (a.orderingMs !== b.orderingMs) {
+        return a.orderingMs - b.orderingMs;
+      }
+      return a.uid.localeCompare(b.uid);
+    });
+
+    const ownerUid = String(tenantData.ownerUid || '').trim();
+    const protectedMembershipIds = new Set(
+      activeMemberships
+        .filter((item) => {
+          if (ownerUid && item.uid === ownerUid) {
+            return true;
+          }
+          return item.role === 'owner';
+        })
+        .map((item) => item.id),
+    );
+
+    // Keep one active member for billing recovery if owner metadata is inconsistent.
+    if (!protectedMembershipIds.size && activeMemberships.length > 0) {
+      protectedMembershipIds.add(activeMemberships[0].id);
+    }
+
+    let irregularCount = 0;
+    let deactivatedCount = 0;
+
+    for (const membership of activeMemberships) {
+      const currentState = String(membership.data.seatAccessState || '')
+        .trim()
+        .toLowerCase();
+      const hasGraceTrail =
+        String(membership.data.seatGraceUntilAt || '').trim().length > 0 ||
+        String(membership.data.seatGraceStartedAt || '').trim().length > 0 ||
+        String(membership.data.seatGraceReason || '').trim().length > 0 ||
+        String(membership.data.seatGraceExpiredAt || '').trim().length > 0;
+
+      if (protectedMembershipIds.has(membership.id)) {
+        irregularCount += 1;
+        if (currentState !== 'irregular_billing_inactive' || hasGraceTrail) {
+          await membership.doc.ref.set(
+            {
+              seatAccessState: 'irregular_billing_inactive',
+              seatGraceStartedAt: '',
+              seatGraceUntilAt: '',
+              seatGraceReason: 'billing_inactive_no_plan',
+              seatGraceExpiredAt: '',
+              seatStatusUpdatedAt: nowIso,
+              updatedAt: nowIso,
+            },
+            { merge: true },
+          );
+        }
+        continue;
+      }
+
+      deactivatedCount += 1;
+      await membership.doc.ref.set(
+        {
+          ativo: false,
+          state: 'inactive',
+          revokedByUid: seatEnforcementActorUid,
+          revokedReason: 'billing_inactive_no_plan',
+          revokedAt: nowIso,
+          seatAccessState: 'billing_inactive_deactivated',
+          seatGraceStartedAt: '',
+          seatGraceUntilAt: '',
+          seatGraceReason: 'billing_inactive_no_plan',
+          seatGraceExpiredAt: nowIso,
+          seatStatusUpdatedAt: nowIso,
+          updatedAt: nowIso,
+        },
+        { merge: true },
+      );
+
+      await writeTenantMembershipAuditEvent({
+        firestore,
+        tenantId: normalizedTenantId,
+        membershipId: membership.id,
+        action: 'membership_deactivated',
+        actorUid: seatEnforcementActorUid,
+        details: {
+          reason: 'billing_inactive_no_plan',
+          billingStatus: String(tenantData.billingStatus || '').trim(),
+          billingPlanKey: String(tenantData.billingPlanKey || '').trim(),
+        },
+        createdAtIso: nowIso,
+      });
+    }
+
+    await tenantSnapshot.ref.set(
+      {
+        seatEnforcementState: 'billing_inactive_enforced',
+        seatEnforcementReason: 'billing_not_enforceable',
+        seatEnforcementGraceDays: seatGraceDays,
+        seatEnforcementLimitConfigured: 0,
+        seatEnforcementIncludedSeats: 0,
+        seatEnforcementAddonSeats: 0,
+        seatEnforcementActiveMembers: irregularCount,
+        seatEnforcementIrregularCount: irregularCount,
+        seatEnforcementOverLimitBy: 0,
+        seatEnforcementProtectedOwnerCount: irregularCount,
+        seatEnforcementGraceCount: 0,
+        seatEnforcementDeactivatedCount: deactivatedCount,
+        seatEnforcementUpdatedAt: nowIso,
+      },
+      { merge: true },
+    );
+
     return {
       tenantId: normalizedTenantId,
-      state: 'skipped',
+      state: 'billing_inactive_enforced',
       reason: 'billing_not_enforceable',
-      activeMembers: 0,
+      activeMembers: irregularCount,
       configuredLimit: 0,
       overLimitBy: 0,
       graceCount: 0,
-      deactivatedCount: 0,
+      deactivatedCount,
+      irregularCount,
     };
   }
 
-  const nowMs = nowDate.getTime();
-  const nowIso = nowDate.toISOString();
   const graceUntilIso = new Date(
     nowMs + seatGraceDays * 24 * 60 * 60 * 1000,
   ).toISOString();
@@ -113,10 +248,15 @@ async function enforceTenantSeatAllowanceForTenant({
     seatConfig.configuredLimit - protectedOwnerMemberships.length,
     0,
   );
-  const keptNonOwnerMemberships = nonOwnerMemberships.slice(0, availableNonOwnerSlots);
+  const keptNonOwnerMemberships = nonOwnerMemberships.slice(
+    0,
+    availableNonOwnerSlots,
+  );
 
   const keptMembershipIds = new Set(
-    [...protectedOwnerMemberships, ...keptNonOwnerMemberships].map((item) => item.id),
+    [...protectedOwnerMemberships, ...keptNonOwnerMemberships].map(
+      (item) => item.id,
+    ),
   );
 
   let graceCount = 0;

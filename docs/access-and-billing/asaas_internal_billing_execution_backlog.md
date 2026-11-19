@@ -49,6 +49,47 @@ Uma tarefa so e concluida quando:
 5. Testes de idempotencia/retry sem efeito duplicado entregues.
 6. Testes de webhook duplicado/fora de ordem entregues.
 
+## Status Atual (checkpoint 2026-11-19)
+
+Estado geral: **em andamento** (backlog ainda nao finalizado).
+
+### Epicos por status
+
+1. **E0 - Fundacao de dominio e contratos: PARCIAL**
+   - Entregue: contratos/helpers internos e base de operacao idempotente (`tenant_billing_operations`, status de operacao, lock/journal/orquestracao no backend).
+   - Pendente: consolidar colecoes finais de dominio (principalmente `billing_quotes`, `tenant_billing_contracts`, `tenant_billing_seat_changes`, `billing_provider_refs`) com regras e indices fechados por DoD.
+2. **E1 - Quote Engine Asaas: CONCLUIDO (MVP)**
+   - Entregue: endpoint `createBillingQuote` com calculo server-side (base + seats extras), persistencia em `billing_quotes` (`status=open`, `expiresAt`, `checksum`) e idempotencia por `operationId` via `tenant_billing_operations`.
+   - Entregue adicional: expiracao operacional por job agendado (`expireBillingQuotesHourly`) para transicao `open` -> `expired` quando TTL e ultrapassado.
+   - Entregue adicional: saneamento legado por job diario (`expireLegacyOpenBillingQuotesDaily`) para encerrar quotes `open` sem `expiresAt` valido.
+   - Entregue adicional: consumo frontend no portal para gerar quote antes do checkout e enviar `quoteId` no fluxo Asaas (com fallback seguro para Stripe).
+3. **E2 - Checkout Asaas orientado por quote: PARCIAL**
+   - Entregue: checkout Asaas funcional no backend, mapeamento por catalogo interno, `quoteId` obrigatorio com validacao de quote aberta/nao expirada, transicao de quote para `used` em sucesso e persistencia de referencia em `billing_provider_refs`.
+   - Entregue adicional: webhook/reconcile Asaas atualizando metadados operacionais em `billing_provider_refs` (`lastWebhookEvent*`, `lastReconciledAt`).
+   - Entregue adicional: auditoria funcional dedicada ao fluxo de quote (tentativa/sucesso/erro/replay) em `tenant_billing_audit`.
+   - Pendente: consolidar observabilidade operacional agregada do fluxo (dashboards/alertas), acoplada ao E5.
+4. **E3 - Governanca de seats e limites: PARCIAL**
+   - Entregue: fluxo de seat addon para Asaas com atualizacao de assinatura e persistencia de estado; idempotencia operacional na camada de mutacao.
+   - Pendente: endpoints dedicados de preview/change com teto por plano (`maxSelfServiceExtraSeats`) no contrato final.
+5. **E4 - Painel admin (catalogo e operacao): PARCIAL AVANCADO**
+   - Entregue: CRUD de catalogo interno Asaas no maintainer, incluindo base/overage, vinculo de base em aditivo e campos de seats.
+   - Pendente: visao operacional completa orientada a `tenant_billing_contracts` e historico formal de quotes/seat changes.
+6. **E5 - Reconciliacao, observabilidade e operacao: PARCIAL**
+   - Entregue: processamento de webhook Asaas e reconciliacao de tenant com testes automatizados.
+   - Pendente: monitoramento/dashboards operacionais e fechamento completo da matriz de dunning com playbook.
+7. **E6 - Proration: PENDENTE (fora do MVP)**
+
+### Evidencias tecnicas do checkpoint
+
+1. Backend Asaas ativo para checkout/listagem/mapeamento/seats/reconcile/webhook.
+2. Suite focada Asaas/billing em verde no checkpoint (29 testes passando).
+3. `flutter analyze` em verde no checkpoint.
+
+### Para considerar backlog como finalizado
+
+1. Fechar E3 com limite por plano e endpoints dedicados de alteracao.
+2. Fechar lacunas operacionais de E5 (observabilidade e dunning hardening).
+
 ## Epicos
 
 ## E0 - Fundacao de dominio e contratos

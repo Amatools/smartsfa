@@ -1,3 +1,46 @@
+function isTenantManuallyUnlinkedFromStripe({
+  tenantData,
+  billingProviderStripe,
+}) {
+  const billingStatus = String(tenantData?.billingStatus ?? '')
+    .trim()
+    .toLowerCase();
+  const lastManualAction = String(tenantData?.billingLastManualAction ?? '')
+    .trim()
+    .toLowerCase();
+  const billingProvider = String(tenantData?.billingProvider ?? '')
+    .trim()
+    .toLowerCase();
+  const stripeCustomerId = String(tenantData?.stripeCustomerId ?? '').trim();
+  const stripeSubscriptionId = String(
+    tenantData?.stripeSubscriptionId ?? '',
+  ).trim();
+
+  return (
+    billingStatus === 'no_plan' &&
+    lastManualAction === 'clear_plan_link' &&
+    !stripeCustomerId &&
+    !stripeSubscriptionId &&
+    billingProvider !== billingProviderStripe
+  );
+}
+
+async function shouldSkipStripeWebhookPatchAfterManualUnlink({
+  firestore,
+  tenantId,
+  billingProviderStripe,
+}) {
+  const tenantSnapshot = await firestore.collection('tenants').doc(tenantId).get();
+  if (!tenantSnapshot.exists) {
+    return false;
+  }
+
+  return isTenantManuallyUnlinkedFromStripe({
+    tenantData: tenantSnapshot.data() || {},
+    billingProviderStripe,
+  });
+}
+
 async function applyStripeWebhookEventToTenant({
   firestore,
   event,
@@ -102,6 +145,15 @@ async function applyStripeWebhookEventToTenant({
     });
     if (!tenantId) {
       throw new Error(`${type} sem tenantId resolvido.`);
+    }
+
+    const skipPatch = await shouldSkipStripeWebhookPatchAfterManualUnlink({
+      firestore,
+      tenantId,
+      billingProviderStripe,
+    });
+    if (skipPatch) {
+      return tenantId;
     }
 
     const fallbackPlanKey = normalizeBillingPlanKey(
@@ -215,6 +267,15 @@ async function applyStripeWebhookEventToTenant({
     });
     if (!tenantId) {
       return '';
+    }
+
+    const skipPatch = await shouldSkipStripeWebhookPatchAfterManualUnlink({
+      firestore,
+      tenantId,
+      billingProviderStripe,
+    });
+    if (skipPatch) {
+      return tenantId;
     }
 
     const nowIso = new Date().toISOString();

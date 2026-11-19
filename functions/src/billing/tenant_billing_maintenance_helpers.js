@@ -140,7 +140,137 @@ async function executeEnforceTenantSeatAllowanceHourlyAction({
   };
 }
 
+async function executeExpireBillingQuotesHourlyAction({
+  firestore,
+  nowDate,
+}) {
+  const nowMs = nowDate.getTime();
+  const nowIso = nowDate.toISOString();
+
+  const quoteSnapshot = await firestore
+    .collection('billing_quotes')
+    .where('status', '==', 'open')
+    .get();
+
+  let processed = 0;
+  let expired = 0;
+  let skippedMissingExpiresAt = 0;
+  let skippedInvalidExpiresAt = 0;
+  let skippedNotExpiredYet = 0;
+
+  for (const quoteDoc of quoteSnapshot.docs) {
+    processed += 1;
+    const quoteData = quoteDoc.data() || {};
+
+    const expiresAtIso = String(quoteData.expiresAt ?? '').trim();
+    if (!expiresAtIso) {
+      skippedMissingExpiresAt += 1;
+      continue;
+    }
+
+    const expiresAtDate = new Date(expiresAtIso);
+    const expiresAtMs = expiresAtDate.getTime();
+    if (!Number.isFinite(expiresAtMs)) {
+      skippedInvalidExpiresAt += 1;
+      continue;
+    }
+
+    if (expiresAtMs > nowMs) {
+      skippedNotExpiredYet += 1;
+      continue;
+    }
+
+    await quoteDoc.ref.set(
+      {
+        status: 'expired',
+        expiredAt: nowIso,
+        updatedAt: nowIso,
+        expirationReason: 'ttl_elapsed',
+      },
+      { merge: true },
+    );
+
+    expired += 1;
+  }
+
+  return {
+    processed,
+    expired,
+    skippedMissingExpiresAt,
+    skippedInvalidExpiresAt,
+    skippedNotExpiredYet,
+    updatedAt: nowIso,
+  };
+}
+
+async function executeExpireLegacyOpenBillingQuotesDailyAction({
+  firestore,
+  nowDate,
+}) {
+  const nowIso = nowDate.toISOString();
+
+  const quoteSnapshot = await firestore
+    .collection('billing_quotes')
+    .where('status', '==', 'open')
+    .get();
+
+  let processed = 0;
+  let expiredLegacyMissingExpiresAt = 0;
+  let expiredLegacyInvalidExpiresAt = 0;
+  let skippedHasValidExpiresAt = 0;
+
+  for (const quoteDoc of quoteSnapshot.docs) {
+    processed += 1;
+    const quoteData = quoteDoc.data() || {};
+
+    const expiresAtIso = String(quoteData.expiresAt ?? '').trim();
+    if (!expiresAtIso) {
+      await quoteDoc.ref.set(
+        {
+          status: 'expired',
+          expiredAt: nowIso,
+          updatedAt: nowIso,
+          expirationReason: 'legacy_missing_expires_at',
+          sanitationAction: 'expire_legacy_open_quotes_daily',
+        },
+        { merge: true },
+      );
+      expiredLegacyMissingExpiresAt += 1;
+      continue;
+    }
+
+    const expiresAtDate = new Date(expiresAtIso);
+    const expiresAtMs = expiresAtDate.getTime();
+    if (!Number.isFinite(expiresAtMs)) {
+      await quoteDoc.ref.set(
+        {
+          status: 'expired',
+          expiredAt: nowIso,
+          updatedAt: nowIso,
+          expirationReason: 'legacy_invalid_expires_at',
+          sanitationAction: 'expire_legacy_open_quotes_daily',
+        },
+        { merge: true },
+      );
+      expiredLegacyInvalidExpiresAt += 1;
+      continue;
+    }
+
+    skippedHasValidExpiresAt += 1;
+  }
+
+  return {
+    processed,
+    expiredLegacyMissingExpiresAt,
+    expiredLegacyInvalidExpiresAt,
+    skippedHasValidExpiresAt,
+    updatedAt: nowIso,
+  };
+}
+
 module.exports = {
   executeExpireTenantGraceDailyAction,
   executeEnforceTenantSeatAllowanceHourlyAction,
+  executeExpireBillingQuotesHourlyAction,
+  executeExpireLegacyOpenBillingQuotesDailyAction,
 };

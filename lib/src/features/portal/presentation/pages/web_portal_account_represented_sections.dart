@@ -1007,6 +1007,7 @@ class _BillingSectionState extends State<_BillingSection> {
                           _startCheckout(
                             billingPlanKey: selectedPlanKey,
                             addonSeats: selectedAddonSeats,
+                            billingProvider: billingProvider,
                           );
                         },
                   icon: const Icon(Icons.shopping_cart_checkout),
@@ -1372,6 +1373,17 @@ class _BillingSectionState extends State<_BillingSection> {
       return const SizedBox.shrink();
     }
 
+    final billingStatus = (tenantData['billingStatus'] ?? '')
+        .toString()
+        .trim()
+        .toLowerCase();
+    final billingPlanKey = (tenantData['billingPlanKey'] ?? '').toString().trim();
+    final hasActiveBillingPlan =
+        billingPlanKey.isNotEmpty &&
+        billingStatus != 'no_plan' &&
+        billingStatus != 'canceled' &&
+        billingStatus != 'suspended';
+
     final includedSeats = _readNonNegativeInt(
       tenantData['billingSeatsIncluded'],
       fallback: 0,
@@ -1380,7 +1392,9 @@ class _BillingSectionState extends State<_BillingSection> {
       tenantData['billingSeatsAddon'],
       fallback: _readNonNegativeInt(tenantData['billingSeatAddons']),
     );
-    final configuredLimit = (includedSeats + addonSeats).clamp(0, 999999);
+    final configuredLimit = hasActiveBillingPlan
+        ? (includedSeats + addonSeats).clamp(0, 999999)
+        : 0;
 
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
       stream: FirebaseFirestore.instance
@@ -1394,6 +1408,7 @@ class _BillingSectionState extends State<_BillingSection> {
         var activeCount = 0;
         var graceCount = 0;
         var regularCount = 0;
+        var irregularCount = 0;
         final graceLabels = <String>[];
 
         for (final doc in docs) {
@@ -1404,12 +1419,18 @@ class _BillingSectionState extends State<_BillingSection> {
           }
           activeCount += 1;
 
+          if (!hasActiveBillingPlan) {
+            irregularCount += 1;
+            continue;
+          }
+
           final seatState = (data['seatAccessState'] ?? '')
               .toString()
               .trim()
               .toLowerCase();
           if (seatState == 'over_limit_grace') {
             graceCount += 1;
+            irregularCount += 1;
             final uid = (data['uid'] ?? '').toString().trim();
             final role = (data['role'] ?? '').toString().trim();
             final until = _formatDateOrDash(data['seatGraceUntilAt']);
@@ -1418,6 +1439,8 @@ class _BillingSectionState extends State<_BillingSection> {
             graceLabels.add('$roleLabel • $uidLabel • até $until');
           } else if (seatState.isEmpty || seatState == 'regular') {
             regularCount += 1;
+          } else {
+            irregularCount += 1;
           }
         }
 
@@ -1426,7 +1449,7 @@ class _BillingSectionState extends State<_BillingSection> {
             : 0;
         final usageSummary = configuredLimit > 0
             ? '$activeCount / $configuredLimit ativos'
-            : '$activeCount ativos';
+          : 'Sem plano ativo';
 
         return Container(
           width: double.infinity,
@@ -1451,11 +1474,19 @@ class _BillingSectionState extends State<_BillingSection> {
                 runSpacing: 8,
                 children: [
                   Text('Uso: $usageSummary'),
+                  Text('Membros ativos: $activeCount'),
                   Text('Regulares: $regularCount'),
+                  Text('Irregulares: $irregularCount'),
                   Text('Em grace: $graceCount'),
                   Text('Excesso: $overLimitBy'),
                 ],
               ),
+              if (!hasActiveBillingPlan && activeCount > 0) ...[
+                const SizedBox(height: 6),
+                const Text(
+                  'Sem plano ativo: membros ativos ficam em estado irregular até a regularização da assinatura.',
+                ),
+              ],
               if (graceLabels.isNotEmpty) ...[
                 const SizedBox(height: 8),
                 Text(
@@ -1641,6 +1672,7 @@ class _BillingSectionState extends State<_BillingSection> {
   Future<void> _startCheckout({
     required String billingPlanKey,
     int addonSeats = 0,
+    required String billingProvider,
   }) async {
     if (_startingCheckout) {
       return;
@@ -1663,12 +1695,14 @@ class _BillingSectionState extends State<_BillingSection> {
     });
 
     try {
+      final requiresAsaasQuote = billingProvider.trim().toLowerCase() == 'asaas';
       final result = await _billingService.createCheckoutSession(
         tenantId: widget.activeTenant.tenantId,
         billingPlanKey: normalizedPlanKey,
         successUrl: successUrl,
         cancelUrl: cancelUrl,
         addonSeats: addonSeats,
+        generateQuoteBeforeCheckout: requiresAsaasQuote,
       );
 
       final opened = openUrlInCurrentTab(result.checkoutUrl);

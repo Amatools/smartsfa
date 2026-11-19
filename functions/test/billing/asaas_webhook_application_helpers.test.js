@@ -8,30 +8,51 @@ const {
 function createTenantsFirestore(tenantsById) {
   const docs = new Map(Object.entries(tenantsById));
   const writes = [];
+  const providerRefWrites = [];
 
   const firestore = {
     writes,
+    providerRefWrites,
     collection(name) {
-      assert.equal(name, 'tenants');
-      return {
-        doc(id) {
-          return {
-            id,
-            async get() {
-              const data = docs.get(id);
-              return {
-                exists: data !== undefined,
-                data: () => (data ? { ...data } : undefined),
-              };
-            },
-            async set(patch, options) {
-              writes.push({ id, patch: { ...patch }, options: { ...options } });
-              const current = docs.get(id) || {};
-              docs.set(id, { ...current, ...patch });
-            },
-          };
-        },
-      };
+      if (name === 'tenants') {
+        return {
+          doc(id) {
+            return {
+              id,
+              async get() {
+                const data = docs.get(id);
+                return {
+                  exists: data !== undefined,
+                  data: () => (data ? { ...data } : undefined),
+                };
+              },
+              async set(patch, options) {
+                writes.push({ id, patch: { ...patch }, options: { ...options } });
+                const current = docs.get(id) || {};
+                docs.set(id, { ...current, ...patch });
+              },
+            };
+          },
+        };
+      }
+
+      if (name === 'billing_provider_refs') {
+        return {
+          doc(id) {
+            return {
+              async set(patch, options) {
+                providerRefWrites.push({
+                  id,
+                  patch: { ...patch },
+                  options: { ...options },
+                });
+              },
+            };
+          },
+        };
+      }
+
+      throw new Error(`Unexpected collection ${name}`);
     },
   };
 
@@ -57,6 +78,7 @@ test('applyAsaasWebhookEventToTenant returns empty when resolver finds no tenant
     billingStatus: '',
   });
   assert.equal(firestore.writes.length, 0);
+  assert.equal(firestore.providerRefWrites.length, 0);
 });
 
 test('applyAsaasWebhookEventToTenant applies patch and returns billing status', async () => {
@@ -96,6 +118,15 @@ test('applyAsaasWebhookEventToTenant applies patch and returns billing status', 
   assert.equal(firestore.writes[0].id, 'tenant_1');
   assert.equal(firestore.writes[0].options.merge, true);
   assert.equal(firestore.writes[0].patch.billingStatus, 'past_due');
+  assert.equal(firestore.providerRefWrites.length, 1);
+  assert.equal(firestore.providerRefWrites[0].id, 'tenant_1');
+  assert.equal(firestore.providerRefWrites[0].options.merge, true);
+  assert.equal(firestore.providerRefWrites[0].patch.billingProvider, 'asaas');
+  assert.equal(firestore.providerRefWrites[0].patch.lastWebhookEventId, 'evt_2');
+  assert.equal(
+    firestore.providerRefWrites[0].patch.lastWebhookEventType,
+    'PAYMENT_OVERDUE',
+  );
 });
 
 test('applyAsaasWebhookEventToTenant tolerates seat enforcement failures', async () => {
@@ -125,4 +156,5 @@ test('applyAsaasWebhookEventToTenant tolerates seat enforcement failures', async
     billingStatus: 'active',
   });
   assert.equal(firestore.writes.length, 1);
+  assert.equal(firestore.providerRefWrites.length, 1);
 });

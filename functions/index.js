@@ -90,6 +90,9 @@ const {
   createAsaasCheckoutSession: createAsaasCheckoutSessionHelper,
 } = require('./src/billing/asaas_checkout_session_helpers');
 const {
+  createAsaasBillingQuote: createAsaasBillingQuoteHelper,
+} = require('./src/billing/asaas_quote_helpers');
+const {
   applyTenantBillingActionToAsaas,
   applyTenantBillingSelfServiceActionToAsaas,
   fetchAsaasApiJson,
@@ -148,6 +151,9 @@ const {
   executeCreateBillingCheckoutSessionAction,
 } = require('./src/billing/checkout_session_management_helpers');
 const {
+  executeCreateBillingQuoteAction,
+} = require('./src/billing/quote_management_helpers');
+const {
   executeCreateBillingPortalSessionAction,
 } = require('./src/billing/portal_session_management_helpers');
 const {
@@ -171,6 +177,8 @@ const {
 const {
   executeExpireTenantGraceDailyAction,
   executeEnforceTenantSeatAllowanceHourlyAction,
+  executeExpireBillingQuotesHourlyAction,
+  executeExpireLegacyOpenBillingQuotesDailyAction,
 } = require('./src/billing/tenant_billing_maintenance_helpers');
 const {
   executeSyncSankhyaPriceTablesNightlyAction,
@@ -1359,6 +1367,26 @@ exports.enforceTenantSeatAllowanceHourly = onSchedule(
   },
 );
 
+exports.expireBillingQuotesHourly = onSchedule(
+  { region: 'us-central1', timeoutSeconds: 540, schedule: '37 * * * *' },
+  async () => {
+    return executeExpireBillingQuotesHourlyAction({
+      firestore: admin.firestore(),
+      nowDate: new Date(),
+    });
+  },
+);
+
+exports.expireLegacyOpenBillingQuotesDaily = onSchedule(
+  { region: 'us-central1', timeoutSeconds: 540, schedule: '43 4 * * *' },
+  async () => {
+    return executeExpireLegacyOpenBillingQuotesDailyAction({
+      firestore: admin.firestore(),
+      nowDate: new Date(),
+    });
+  },
+);
+
 exports.listStripeCatalog = onRequest(
   {
     cors: true,
@@ -1540,6 +1568,57 @@ exports.createBillingCheckoutSession = onRequest(
     if (result.handledByProxy) {
       return;
     }
+
+    response.status(result.status).json(result.body);
+  },
+);
+
+exports.createBillingQuote = onRequest(
+  {
+    cors: true,
+    region: 'us-central1',
+    timeoutSeconds: 45,
+  },
+  async (request, response) => {
+    if (request.method !== 'POST') {
+      response.status(405).json({ error: 'method_not_allowed' });
+      return;
+    }
+
+    const payload = request.body && typeof request.body === 'object'
+      ? request.body
+      : {};
+    const tenantId = String(payload?.tenantId ?? '').trim();
+    if (!tenantId) {
+      response.status(400).json({
+        error: 'invalid_payload',
+        message: 'tenantId e obrigatorio.',
+      });
+      return;
+    }
+
+    const firestore = admin.firestore();
+    const authContext = await verifyFirebaseAuthFromRequest(request);
+    if (!authContext.ok) {
+      response.status(authContext.status).json({
+        error: authContext.error,
+        message: authContext.message,
+      });
+      return;
+    }
+
+    const result = await executeCreateBillingQuoteAction({
+      firestore,
+      payload,
+      tenantId,
+      authContext,
+      assertTenantBillingActorPermission,
+      readCheckoutApiConfig,
+      resolveCheckoutApiProviderSelection,
+      createAsaasBillingQuote,
+      billingProviderStripe: BILLING_PROVIDER_STRIPE,
+      billingProviderAsaas: BILLING_PROVIDER_ASAAS,
+    });
 
     response.status(result.status).json(result.body);
   },
@@ -2293,6 +2372,27 @@ async function createAsaasCheckoutSession({
     resolveAsaasPlanMapping,
     buildAsaasCheckoutPayload,
     fetchAsaasApiJson,
+  });
+}
+
+async function createAsaasBillingQuote({
+  firestore,
+  tenantId,
+  tenantData,
+  payload,
+  providerSelection,
+}) {
+  return createAsaasBillingQuoteHelper({
+    firestore,
+    tenantId,
+    tenantData,
+    payload,
+    providerSelection,
+    billingProviderAsaas: BILLING_PROVIDER_ASAAS,
+    normalizeBillingPlanKey,
+    readNonNegativeInteger,
+    loadAsaasInternalPlanMapping,
+    resolveAsaasSeatAddonMappingForBasePlan,
   });
 }
 

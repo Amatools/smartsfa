@@ -112,13 +112,38 @@ test('enforceTenantSeatAllowanceForTenant returns skipped for missing tenant id'
   assert.equal(result.reason, 'missing_tenant_id');
 });
 
-test('enforceTenantSeatAllowanceForTenant skips when billing is not enforceable', async () => {
+test('enforceTenantSeatAllowanceForTenant deactivates non-owner members when billing is not enforceable', async () => {
+  const auditCalls = [];
   const { firestore, tenantWrites, membershipWrites } = createSeatEnforcementFirestore({
     tenantId: 'tenant_skip',
     tenantData: {
       billingStatus: 'no_plan',
     },
-    memberships: [],
+    memberships: [
+      {
+        id: 'm_owner',
+        data: {
+          tenantId: 'tenant_skip',
+          uid: 'uid_owner',
+          role: 'owner',
+          state: 'active',
+          ativo: true,
+          seatAccessState: 'regular',
+        },
+      },
+      {
+        id: 'm_viewer',
+        data: {
+          tenantId: 'tenant_skip',
+          uid: 'uid_viewer',
+          role: 'viewer',
+          state: 'active',
+          ativo: true,
+          seatAccessState: 'over_limit_grace',
+          seatGraceUntilAt: '2026-11-30T00:00:00.000Z',
+        },
+      },
+    ],
   });
 
   const result = await enforceTenantSeatAllowanceForTenant({
@@ -128,15 +153,36 @@ test('enforceTenantSeatAllowanceForTenant skips when billing is not enforceable'
     readTenantSeatAllowance: () => ({ configuredLimit: 1, includedSeats: 1, addonSeats: 0 }),
     readMembershipOrderingMs: () => 0,
     parseDateToUnixMs,
-    writeTenantMembershipAuditEvent: async () => {},
+    writeTenantMembershipAuditEvent: async (payload) => {
+      auditCalls.push(payload);
+    },
     seatGraceDays: 3,
     seatEnforcementActorUid: 'system',
   });
 
-  assert.equal(result.state, 'skipped');
+  assert.equal(result.state, 'billing_inactive_enforced');
   assert.equal(result.reason, 'billing_not_enforceable');
-  assert.equal(tenantWrites.length, 0);
-  assert.equal(membershipWrites.length, 0);
+  assert.equal(result.activeMembers, 1);
+  assert.equal(result.irregularCount, 1);
+  assert.equal(result.deactivatedCount, 1);
+  assert.equal(tenantWrites.length, 1);
+  assert.equal(tenantWrites[0].patch.seatEnforcementState, 'billing_inactive_enforced');
+  assert.equal(tenantWrites[0].patch.seatEnforcementIrregularCount, 1);
+  assert.equal(tenantWrites[0].patch.seatEnforcementDeactivatedCount, 1);
+  assert.equal(membershipWrites.length, 2);
+  assert.equal(auditCalls.length, 1);
+  assert.equal(auditCalls[0].action, 'membership_deactivated');
+
+  const ownerPatch = membershipWrites.find((item) => item.id === 'm_owner')?.patch;
+  assert.ok(ownerPatch);
+  assert.equal(ownerPatch.seatAccessState, 'irregular_billing_inactive');
+
+  const viewerPatch = membershipWrites.find((item) => item.id === 'm_viewer')?.patch;
+  assert.ok(viewerPatch);
+  assert.equal(viewerPatch.ativo, false);
+  assert.equal(viewerPatch.state, 'inactive');
+  assert.equal(viewerPatch.seatAccessState, 'billing_inactive_deactivated');
+  assert.equal(viewerPatch.seatGraceUntilAt, '');
 });
 
 test('enforceTenantSeatAllowanceForTenant puts overflow member in grace period', async () => {
