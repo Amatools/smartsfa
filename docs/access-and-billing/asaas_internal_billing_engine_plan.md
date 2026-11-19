@@ -58,6 +58,41 @@ Isso evita quebrar Stripe e permite evoluir Asaas com controle total do dominio 
 4. Separacao entre cobranca e entitlement:
    - o que foi contratado/pago;
    - o que esta liberado para uso no tenant.
+5. Idempotencia obrigatoria para operacoes mutaveis:
+   - criar quote;
+   - abrir checkout;
+   - alterar plano;
+   - alterar seats.
+6. Mecanismo de consistencia para evitar aplicacao duplicada em cenarios de retry/travamento.
+
+## Robustez Operacional (Owner unico, mas tolerante a falhas)
+
+Premissa: apenas owner altera plano/seats em self-service.
+
+Mesmo assim, ainda existem cenarios reais de concorrencia/inconsistencia:
+
+1. double click no frontend;
+2. retry automatico do cliente/proxy;
+3. timeout apos efeito parcial no backend;
+4. duas abas/sessoes do mesmo owner;
+5. webhook atrasado/duplicado/fora de ordem;
+6. reconciliacao rodando em paralelo com alteracao manual.
+
+Decisao: tratar mutacoes como operacoes idempotentes com controle de versao.
+
+Controles minimos obrigatorios:
+
+1. `operationId` (ou `idempotencyKey`) em toda mutacao.
+2. Journal de operacoes por tenant para deduplicacao e replay de resposta.
+3. Atualizacao do contrato com compare-and-set por versao (`contractVersion`).
+4. Lock curto por tenant durante aplicacao de mutacao critica (lease com expiracao).
+5. Processamento de webhook com dedupe por `provider + eventId` e tolerancia a reordenação.
+6. Estado intermediario de reconciliacao para operacao ambigua (`pending_reconcile`).
+
+Regra de ouro:
+
+- nenhuma operacao mutavel deve depender de "executar uma vez" por sorte;
+- operacoes devem ser seguras para reexecucao sem efeito financeiro duplicado.
 
 ## Colecoes Propostas (Firestore)
 
@@ -98,6 +133,9 @@ Campos recomendados:
 - `effectiveFrom`
 - `currentPeriodStartAt`
 - `currentPeriodEndAt`
+- `contractVersion`
+- `lastAppliedOperationId`
+- `updatedAt`
 
 ### tenant_billing_seat_changes
 
@@ -113,6 +151,9 @@ Campos recomendados:
 - `requestedByUid`
 - `approvedByUid`
 - `createdAt`
+- `operationId`
+- `billingImpactType` (`next_cycle` | `immediate_invoice` | `credit_next_cycle`)
+- `billingImpactAmountCents`
 
 ### billing_quotes
 
@@ -130,6 +171,9 @@ Campos recomendados:
 - `expiresAt`
 - `status` (`open` | `used` | `expired` | `canceled`)
 - `checksum`
+- `operationId`
+- `usedAt`
+- `usedByCheckoutId`
 
 ### billing_provider_refs
 
@@ -144,6 +188,24 @@ Campos recomendados:
 - `asaasSubscriptionId`
 - `asaasCheckoutId`
 - `lastWebhookEventId`
+- `lastWebhookEventAt`
+- `lastReconciledAt`
+
+### tenant_billing_operations
+
+Journal de operacoes mutaveis para idempotencia e rastreabilidade.
+
+Campos recomendados:
+
+- `tenantId`
+- `operationId`
+- `operationType` (`create_quote` | `open_checkout` | `change_seats` | `change_plan` | `cancel`)
+- `requestHash`
+- `status` (`received` | `applied` | `failed` | `pending_reconcile`)
+- `responseSnapshot`
+- `errorCode`
+- `createdAt`
+- `updatedAt`
 
 ## Endpoints Alvo (Asaas)
 
@@ -180,6 +242,33 @@ Fase evolutiva:
 
 1. Proration calculado pelo motor interno.
 2. Ajuste por cobranca avulsa ou credito no proximo ciclo.
+
+Regras de desenho para futura fase de proration:
+
+1. Formula versionada e auditavel (mesmo input, mesmo output).
+2. Simulacao obrigatoria antes de efetivar mudanca.
+3. Registro do calculo aplicado no journal da operacao.
+4. Idempotencia do ajuste financeiro para evitar cobranca em duplicidade.
+
+## Dunning, Falhas e Recuperacao
+
+1. Definir ciclo de inadimplencia canonico:
+   - `active` -> `past_due` -> `suspended` -> `canceled`.
+2. Definir quando entitlement cai para cada transicao de estado.
+3. Definir retentativas de cobranca e janelas de tolerancia (grace).
+4. Definir tratamento para webhook ausente:
+   - reconciliacao ativa corrige estado canonico.
+5. Definir tratamento para timeout de mutacao:
+   - resposta ao cliente deve refletir `pending_reconcile` quando necessario.
+6. Definir estrategia de compensacao em erro parcial:
+   - estorno/credito/log de incidente conforme tipo de efeito financeiro.
+
+## Ordem de Eventos e Webhooks
+
+1. Nao assumir ordem de chegada do provider.
+2. Persistir todos os eventos relevantes antes de aplicar efeitos.
+3. Ignorar evento duplicado pelo mesmo `provider + eventId`.
+4. Em conflito de ordem, reconciliar por snapshot atual do provider + contrato interno.
 
 ## Painel Admin (escopo minimo)
 
@@ -224,3 +313,8 @@ Fase evolutiva:
 3. Regras de suporte para excecoes aprovadas.
 4. Plano de regressao Stripe definido.
 5. Plano de rollout por tenant/provider definido.
+6. Contrato de idempotencia aprovado (`operationId`, dedupe, replay de resposta).
+7. Estrategia de controle de versao/lock por tenant aprovada.
+8. Matriz de estados de dunning e impacto em entitlement aprovada.
+9. Estrategia de webhook fora de ordem/duplicado aprovada.
+10. Playbook de erro parcial e `pending_reconcile` aprovado.

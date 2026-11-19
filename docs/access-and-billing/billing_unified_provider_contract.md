@@ -67,13 +67,31 @@ Observacao:
 - regras de acesso ao tenant, trilha de auditoria e seat governance
   continuam fora do provider (camada comum)
 
+## Garantias de Robustez (Camada Comum)
+
+As garantias abaixo sao obrigatorias para Stripe e Asaas, independentemente do adapter:
+
+1. Idempotencia de mutacoes por `operationId` (ou `idempotencyKey`).
+2. Journal de mutacoes por tenant para dedupe e replay de resposta.
+3. Controle de concorrencia por versao de contrato (`contractVersion`).
+4. Lock curto por tenant (lease com expiracao) para mutacoes criticas.
+5. Suporte a estado intermediario `pending_reconcile` para erro parcial.
+6. Dedupe de webhook por `provider + eventId`.
+7. Tolerancia a webhook fora de ordem com reconcile por snapshot atual.
+
+Esses controles existem mesmo quando apenas owner altera plano/seats,
+porque retries, timeout, double-click e multiplas sessoes podem gerar
+efeito duplicado sem essas protecoes.
+
 ## Fluxo de Dispatch
 
 1. Resolver provider do tenant (ou hint explicito)
 2. Carregar runtime do provider
-3. Executar operacao no contrato comum
-4. Persistir estado canonico em `tenants/{tenantId}`
-5. Executar regras comuns (seat governance, auditoria)
+3. Verificar idempotencia (`operationId`) e lock/versionamento
+4. Executar operacao no contrato comum
+5. Persistir estado canonico em `tenants/{tenantId}`
+6. Registrar journal/auditoria da mutacao
+7. Executar regras comuns (seat governance, reconciliacao)
 
 ## Endpoints Atuais e Compatibilidade
 
@@ -98,6 +116,28 @@ Quando iniciar Asaas:
 4. Persistir ids de referencia Asaas em campos proprios
    (sem sobrescrever ids Stripe existentes).
 5. Manter idempotencia de webhook por provider + eventId.
+6. Em mutacoes ambiguas (timeout apos efeito parcial), retornar/registrar
+   `pending_reconcile` e convergir por reconciliacao ativa.
+
+## Contratos de Dados Minimos (Billing Engine)
+
+Colecoes minimas esperadas na camada comum:
+
+1. `tenant_billing_contracts`
+   - `contractVersion`
+   - `lastAppliedOperationId`
+2. `tenant_billing_operations`
+   - `operationId`
+   - `operationType`
+   - `requestHash`
+   - `status` (`received` | `applied` | `failed` | `pending_reconcile`)
+3. `billing_provider_refs`
+   - `lastWebhookEventId`
+   - `lastWebhookEventAt`
+   - `lastReconciledAt`
+
+Objetivo: garantir rastreabilidade e convergencia de estado,
+sem depender de ordem perfeita de eventos do provider.
 
 ## Regras de Melhor Pratica
 
@@ -111,8 +151,11 @@ Quando iniciar Asaas:
 
 Adicionar endpoints agnosticos para novos clientes internos:
 
+- `createBillingQuote`
 - `createBillingCheckoutSession`
 - `createBillingPortalSession`
+- `previewTenantSeatPackChange`
+- `changeTenantSeatPack`
 - `handleBillingWebhook`
 - `reconcileTenantBilling`
 

@@ -54,9 +54,6 @@ class _StripePlanMappingDialogState {
        includedSeatsController = TextEditingController(
          text: initialIncludedSeats > 0 ? initialIncludedSeats.toString() : '',
        ),
-       seatAddonPlanKeyController = TextEditingController(
-         text: initialSeatAddonPlanKey,
-       ),
        linkedBasePlanKeyController = TextEditingController(
          text: _resolveInitialLinkedBasePlanKey(
            initialMappingType: initialMappingType,
@@ -88,6 +85,7 @@ class _StripePlanMappingDialogState {
        stripeCurrency = initialCurrency.trim().toLowerCase(),
        stripeRecurringInterval = initialRecurringInterval.trim().toLowerCase(),
        stripeRecurringIntervalCount = initialRecurringIntervalCount,
+       initialSeatAddonPlanKey = initialSeatAddonPlanKey.trim().toLowerCase(),
        basePlanOptions = _normalizeBasePlanOptions(
          options: initialBasePlanOptions,
          initialLinkedBasePlanKey: initialLinkedBasePlanKey,
@@ -101,11 +99,11 @@ class _StripePlanMappingDialogState {
   final TextEditingController priceIdController;
   final TextEditingController overageMetricController;
   final TextEditingController includedSeatsController;
-  final TextEditingController seatAddonPlanKeyController;
   final TextEditingController linkedBasePlanKeyController;
   final TextEditingController createAmountController;
   final TextEditingController createIntervalCountController;
   final TextEditingController createLookupKeyController;
+  final String initialSeatAddonPlanKey;
 
   _StripePlanSection selectedSection;
   String mappingType;
@@ -135,7 +133,6 @@ class _StripePlanMappingDialogState {
     priceIdController,
     overageMetricController,
     includedSeatsController,
-    seatAddonPlanKeyController,
     linkedBasePlanKeyController,
     createAmountController,
     createIntervalCountController,

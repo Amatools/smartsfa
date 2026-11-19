@@ -41,10 +41,10 @@ function createPlanMappingsFirestore(planMappingsByDocId) {
       assert.equal(name, 'billing_integrations');
       return {
         doc(id) {
-          assert.equal(id, 'stripe');
+          assert.equal(id, 'asaas');
           return {
             collection(child) {
-              assert.equal(child, 'plan_mappings');
+              assert.equal(child, 'internal_plan_catalog');
               return buildQuery([]);
             },
           };
@@ -60,13 +60,10 @@ test('listAsaasCheckoutPlansForTenant filters by workspace prefix and links seat
       active: true,
       mappingType: 'base',
       billingPlanKey: 'enterprise_plus',
-      stripePriceId: 'price_ent_plus',
-      stripeProductId: 'prod_ent_plus',
-      stripeProductName: 'Enterprise Plus',
-      stripeUnitAmount: 2590,
-      stripeCurrency: 'brl',
-      stripeRecurringInterval: 'month',
-      stripeRecurringIntervalCount: 1,
+      amountCents: 2590,
+      currency: 'brl',
+      interval: 'month',
+      intervalCount: 1,
       includedSeats: 3,
       planDisplayName: 'Enterprise Plus',
       planDisplayAmount: 'R$ 25,90 / mes',
@@ -75,9 +72,10 @@ test('listAsaasCheckoutPlansForTenant filters by workspace prefix and links seat
       active: true,
       mappingType: 'base',
       billingPlanKey: 'individual_starter',
-      stripePriceId: 'price_individual',
-      stripeUnitAmount: 990,
-      stripeCurrency: 'brl',
+      amountCents: 990,
+      currency: 'brl',
+      interval: 'month',
+      intervalCount: 1,
     },
     enterprise_plus_extra_usuario: {
       active: true,
@@ -85,11 +83,10 @@ test('listAsaasCheckoutPlansForTenant filters by workspace prefix and links seat
       overageMetric: 'extra_usuario',
       billingPlanKey: 'enterprise_plus_extra_usuario',
       linkedBasePlanKey: 'enterprise_plus',
-      stripePriceId: 'price_ent_overage',
-      stripeUnitAmount: 500,
-      stripeCurrency: 'brl',
-      stripeRecurringInterval: 'month',
-      stripeRecurringIntervalCount: 1,
+      amountCents: 500,
+      currency: 'brl',
+      interval: 'month',
+      intervalCount: 1,
       planDisplayAmount: 'R$ 5,00 / usuario',
     },
   });
@@ -120,18 +117,20 @@ test('listAsaasCheckoutPlansForTenant sorts plans by display name', async () => 
       active: true,
       mappingType: 'base',
       billingPlanKey: 'enterprise_zeta',
-      stripePriceId: 'price_zeta',
-      stripeUnitAmount: 3000,
-      stripeCurrency: 'brl',
+      amountCents: 3000,
+      currency: 'brl',
+      interval: 'month',
+      intervalCount: 1,
       planDisplayName: 'Zeta Plan',
     },
     enterprise_alpha: {
       active: true,
       mappingType: 'base',
       billingPlanKey: 'enterprise_alpha',
-      stripePriceId: 'price_alpha',
-      stripeUnitAmount: 2000,
-      stripeCurrency: 'brl',
+      amountCents: 2000,
+      currency: 'brl',
+      interval: 'month',
+      intervalCount: 1,
       planDisplayName: 'Alpha Plan',
     },
   });

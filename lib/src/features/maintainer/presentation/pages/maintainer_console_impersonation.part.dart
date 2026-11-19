@@ -3,7 +3,7 @@ part of 'maintainer_console_page.dart';
 extension _MaintainerConsoleImpersonationPart on _MaintainerConsolePageState {
   Widget _buildImpersonationMembershipsStream(BuildContext context) {
     return StreamBuilder<List<MaintainerUserTenantMembership>>(
-      stream: _userAdminService.watchTenantMemberships(limit: 3000),
+      stream: _impersonationMembershipsStream,
       builder: (context, membershipsSnapshot) {
         if (membershipsSnapshot.connectionState == ConnectionState.waiting) {
           return const LinearProgressIndicator(minHeight: 2);
@@ -48,7 +48,7 @@ extension _MaintainerConsoleImpersonationPart on _MaintainerConsolePageState {
     required Map<String, List<MaintainerUserTenantMembership>> membershipsByUid,
   }) {
     return StreamBuilder<Map<String, String>>(
-      stream: _userAdminService.watchTenantNamesById(limit: 3000),
+      stream: _impersonationTenantNamesStream,
       builder: (context, tenantNamesSnapshot) {
         if (tenantNamesSnapshot.connectionState == ConnectionState.waiting) {
           return const LinearProgressIndicator(minHeight: 2);
@@ -77,7 +77,7 @@ extension _MaintainerConsoleImpersonationPart on _MaintainerConsolePageState {
     required Map<String, String> tenantNamesById,
   }) {
     return StreamBuilder<List<MaintainerUserAccount>>(
-      stream: _userAdminService.watchUsers(limit: 500),
+      stream: _impersonationUsersStream,
       builder: (context, usersSnapshot) {
         if (usersSnapshot.connectionState == ConnectionState.waiting) {
           return const LinearProgressIndicator(minHeight: 2);

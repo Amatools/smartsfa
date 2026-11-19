@@ -204,3 +204,216 @@ test('executeCreateBillingCheckoutSessionAction maps asaas exceptions to provide
   assert.equal(result.body.error, 'provider_checkout_failed');
   assert.match(result.body.message, /checkout failed/);
 });
+
+test('executeCreateBillingCheckoutSessionAction uses operation journal and returns checkout snapshot for Asaas', async () => {
+  const { firestore } = createFirestore({
+    tenantExists: true,
+    tenantData: {},
+  });
+
+  const journalCalls = [];
+
+  const result = await executeCreateBillingCheckoutSessionAction({
+    firestore,
+    request: { method: 'POST' },
+    response: {},
+    payload: {
+      billingPlanKey: 'enterprise',
+      operationId: 'op_1234567890abcdef',
+    },
+    tenantId: 'tenant_6',
+    authContext: { uid: 'uid_6', email: 'u6@example.com' },
+    assertTenantBillingActorPermission: async () => ({ allowed: true }),
+    readCheckoutApiConfig: async () => ({ activeProviders: ['asaas'] }),
+    resolveCheckoutApiProviderSelection: () => ({
+      provider: 'asaas',
+      source: 'payload_provider',
+      hasLinkedContract: false,
+    }),
+    proxyBillingRequestToFunction: async () => {},
+    stripeCheckoutFunctionUrl: 'https://example.test/checkout',
+    createAsaasCheckoutSession: async () => ({
+      ok: true,
+      status: 200,
+      body: {
+        checkoutUrl: 'https://asaas.example/checkout/ok',
+      },
+    }),
+    billingProviderStripe: 'stripe',
+    billingProviderAsaas: 'asaas',
+    readCheckoutOperationIdFromPayload: () => 'op_1234567890abcdef',
+    buildCheckoutOperationRequestHash: () => 'hash_op_1',
+    executeTenantBillingOperationWithJournal: async (input) => {
+      journalCalls.push(input);
+      const executionResult = await input.executeOperation();
+      return {
+        ok: true,
+        executed: true,
+        duplicate: false,
+        retryable: false,
+        reason: 'completed',
+        responseSnapshot: executionResult.responseSnapshot,
+      };
+    },
+  });
+
+  assert.equal(journalCalls.length, 1);
+  assert.equal(journalCalls[0].operationType, 'open_checkout');
+  assert.equal(journalCalls[0].operationId, 'op_1234567890abcdef');
+  assert.equal(journalCalls[0].requestHash, 'hash_op_1');
+
+  assert.equal(result.handledByProxy, false);
+  assert.equal(result.status, 200);
+  assert.equal(result.body.checkoutUrl, 'https://asaas.example/checkout/ok');
+});
+
+test('executeCreateBillingCheckoutSessionAction replays duplicate snapshot from operation journal', async () => {
+  const { firestore } = createFirestore({
+    tenantExists: true,
+    tenantData: {},
+  });
+
+  const result = await executeCreateBillingCheckoutSessionAction({
+    firestore,
+    request: { method: 'POST' },
+    response: {},
+    payload: {
+      billingPlanKey: 'enterprise',
+      operationId: 'op_1234567890abcdef',
+    },
+    tenantId: 'tenant_7',
+    authContext: { uid: 'uid_7', email: 'u7@example.com' },
+    assertTenantBillingActorPermission: async () => ({ allowed: true }),
+    readCheckoutApiConfig: async () => ({ activeProviders: ['asaas'] }),
+    resolveCheckoutApiProviderSelection: () => ({
+      provider: 'asaas',
+      source: 'payload_provider',
+      hasLinkedContract: false,
+    }),
+    proxyBillingRequestToFunction: async () => {},
+    stripeCheckoutFunctionUrl: 'https://example.test/checkout',
+    createAsaasCheckoutSession: async () => ({
+      ok: true,
+      status: 200,
+      body: {
+        checkoutUrl: 'https://asaas.example/checkout/should_not_run',
+      },
+    }),
+    billingProviderStripe: 'stripe',
+    billingProviderAsaas: 'asaas',
+    readCheckoutOperationIdFromPayload: () => 'op_1234567890abcdef',
+    buildCheckoutOperationRequestHash: () => 'hash_op_2',
+    executeTenantBillingOperationWithJournal: async () => ({
+      ok: true,
+      executed: false,
+      duplicate: true,
+      retryable: false,
+      reason: 'already_applied',
+      operation: {
+        responseSnapshot: {
+          handledByProxy: false,
+          status: 200,
+          body: {
+            checkoutUrl: 'https://asaas.example/checkout/replayed',
+          },
+        },
+      },
+    }),
+  });
+
+  assert.equal(result.handledByProxy, false);
+  assert.equal(result.status, 200);
+  assert.equal(result.body.checkoutUrl, 'https://asaas.example/checkout/replayed');
+});
+
+test('executeCreateBillingCheckoutSessionAction maps operation lock_active to operation_in_progress', async () => {
+  const { firestore } = createFirestore({
+    tenantExists: true,
+    tenantData: {},
+  });
+
+  const result = await executeCreateBillingCheckoutSessionAction({
+    firestore,
+    request: { method: 'POST' },
+    response: {},
+    payload: {
+      billingPlanKey: 'enterprise',
+      operationId: 'op_1234567890abcdef',
+    },
+    tenantId: 'tenant_8',
+    authContext: { uid: 'uid_8', email: 'u8@example.com' },
+    assertTenantBillingActorPermission: async () => ({ allowed: true }),
+    readCheckoutApiConfig: async () => ({ activeProviders: ['asaas'] }),
+    resolveCheckoutApiProviderSelection: () => ({
+      provider: 'asaas',
+      source: 'payload_provider',
+      hasLinkedContract: false,
+    }),
+    proxyBillingRequestToFunction: async () => {},
+    stripeCheckoutFunctionUrl: 'https://example.test/checkout',
+    createAsaasCheckoutSession: async () => ({ ok: true, status: 200, body: {} }),
+    billingProviderStripe: 'stripe',
+    billingProviderAsaas: 'asaas',
+    readCheckoutOperationIdFromPayload: () => 'op_1234567890abcdef',
+    buildCheckoutOperationRequestHash: () => 'hash_op_3',
+    executeTenantBillingOperationWithJournal: async () => ({
+      ok: false,
+      executed: false,
+      duplicate: false,
+      retryable: true,
+      reason: 'lock_active',
+    }),
+  });
+
+  assert.equal(result.status, 409);
+  assert.equal(result.body.error, 'operation_in_progress');
+});
+
+test('executeCreateBillingCheckoutSessionAction preserves provider error body when operation execution fails', async () => {
+  const { firestore } = createFirestore({
+    tenantExists: true,
+    tenantData: {},
+  });
+
+  const result = await executeCreateBillingCheckoutSessionAction({
+    firestore,
+    request: { method: 'POST' },
+    response: {},
+    payload: {
+      billingPlanKey: 'enterprise',
+      operationId: 'op_1234567890abcdef',
+    },
+    tenantId: 'tenant_9',
+    authContext: { uid: 'uid_9', email: 'u9@example.com' },
+    assertTenantBillingActorPermission: async () => ({ allowed: true }),
+    readCheckoutApiConfig: async () => ({ activeProviders: ['asaas'] }),
+    resolveCheckoutApiProviderSelection: () => ({
+      provider: 'asaas',
+      source: 'payload_provider',
+      hasLinkedContract: false,
+    }),
+    proxyBillingRequestToFunction: async () => {},
+    stripeCheckoutFunctionUrl: 'https://example.test/checkout',
+    createAsaasCheckoutSession: async () => ({ ok: true, status: 200, body: {} }),
+    billingProviderStripe: 'stripe',
+    billingProviderAsaas: 'asaas',
+    readCheckoutOperationIdFromPayload: () => 'op_1234567890abcdef',
+    buildCheckoutOperationRequestHash: () => 'hash_op_4',
+    executeTenantBillingOperationWithJournal: async () => ({
+      ok: false,
+      executed: true,
+      duplicate: false,
+      retryable: false,
+      reason: 'execution_failed',
+      errorStatus: 422,
+      errorBody: {
+        error: 'invalid_payload',
+        message: 'checkout invalido',
+      },
+    }),
+  });
+
+  assert.equal(result.status, 422);
+  assert.equal(result.body.error, 'invalid_payload');
+  assert.equal(result.body.message, 'checkout invalido');
+});

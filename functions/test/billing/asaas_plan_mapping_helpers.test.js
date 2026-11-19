@@ -70,10 +70,14 @@ function createPlanMappingsFirestore(planMappingsByDocId) {
       assert.equal(name, 'billing_integrations');
       return {
         doc(id) {
-          assert.equal(id, 'stripe');
+          assert.ok(id === 'asaas' || id === 'stripe');
           return {
             collection(child) {
-              assert.equal(child, 'plan_mappings');
+              if (id === 'asaas') {
+                assert.equal(child, 'internal_plan_catalog');
+              } else {
+                assert.equal(child, 'plan_mappings');
+              }
               return {
                 doc: buildDocRef,
                 where(field, op, value) {
@@ -118,9 +122,8 @@ test('resolveAsaasPlanMapping rejects invalid amount and unsupported currency', 
   const invalidAmountFirestore = createPlanMappingsFirestore({
     enterprise: {
       billingPlanKey: 'enterprise',
-      stripePriceId: 'price_1',
-      stripeUnitAmount: 0,
-      stripeCurrency: 'brl',
+      amountCents: 0,
+      currency: 'brl',
       active: true,
     },
   });
@@ -136,9 +139,8 @@ test('resolveAsaasPlanMapping rejects invalid amount and unsupported currency', 
   const unsupportedCurrencyFirestore = createPlanMappingsFirestore({
     enterprise: {
       billingPlanKey: 'enterprise',
-      stripePriceId: 'price_1',
-      stripeUnitAmount: 1990,
-      stripeCurrency: 'usd',
+      amountCents: 1990,
+      currency: 'usd',
       active: true,
     },
   });
@@ -156,14 +158,12 @@ test('resolveAsaasPlanMapping returns normalized plan payload', async () => {
   const firestore = createPlanMappingsFirestore({
     enterprise: {
       billingPlanKey: 'enterprise',
-      stripePriceId: 'price_1',
-      stripeUnitAmount: 2590,
-      stripeCurrency: 'brl',
-      stripeRecurringInterval: 'month',
-      stripeRecurringIntervalCount: 1,
+      amountCents: 2590,
+      currency: 'brl',
+      interval: 'month',
+      intervalCount: 1,
       planDisplayName: 'Plano Enterprise Plus',
       planDisplayAmount: 'R$ 25,90 / mes',
-      stripeProductName: 'Enterprise Product',
       active: true,
     },
   });

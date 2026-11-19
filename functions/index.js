@@ -75,8 +75,14 @@ const {
   processAsaasWebhookEvent,
 } = require('./src/billing/asaas_webhook_processor_helpers');
 const {
+  loadAsaasInternalPlanMapping,
   resolveAsaasPlanMapping,
+  resolveAsaasSeatAddonMappingForBasePlan,
 } = require('./src/billing/asaas_plan_mapping_helpers');
+const {
+  applyAsaasSeatAddonDeltaToActiveSubscription:
+    applyAsaasSeatAddonDeltaToActiveSubscriptionHelper,
+} = require('./src/billing/asaas_seat_addon_helpers');
 const {
   listAsaasCheckoutPlansForTenant,
 } = require('./src/billing/asaas_checkout_plan_listing_helpers');
@@ -249,6 +255,25 @@ const {
   normalizeDbExplorerRows,
 } = require('./src/billing/sankhya_dbexplorer_query_helpers');
 const {
+  authenticateInSankhya,
+  readBearerToken,
+  toCodeString,
+  isZeroCode,
+  toNumberOrNull,
+  readInt,
+  tryParseJson,
+  readRowValueByAliases,
+  normalizeOrigemMercadoriaCst,
+  normalizeSankhyaNumericCodeList,
+  createSankhyaDbExplorerQueryExecutor,
+} = require('./src/billing/sankhya_runtime_helpers');
+const {
+  applyTaxGroupsToExistingProducts,
+} = require('./src/billing/sankhya_tax_group_product_link_helpers');
+const {
+  createBillingProviderOrchestration,
+} = require('./src/billing/billing_provider_orchestration_helpers');
+const {
   verifyFirebaseAuthFromRequest: verifyFirebaseAuthFromRequestHelper,
   normalizeLaunchOrigin,
   resolveRequestIp,
@@ -306,17 +331,75 @@ const BILLING_RUNTIME_SECRETS = [
   ...ASAAS_RUNTIME_SECRETS,
 ];
 const CLOUD_FUNCTIONS_BASE_URL = 'https://us-central1-smart-sfa.cloudfunctions.net';
+const buildCloudFunctionUrl = (functionName) =>
+  `${CLOUD_FUNCTIONS_BASE_URL}/${functionName}`;
 const STRIPE_CHECKOUT_FUNCTION_URL =
-  `${CLOUD_FUNCTIONS_BASE_URL}/createStripeCheckoutSession`;
+  buildCloudFunctionUrl('createStripeCheckoutSession');
 const STRIPE_PORTAL_FUNCTION_URL =
-  `${CLOUD_FUNCTIONS_BASE_URL}/createStripePortalSession`;
+  buildCloudFunctionUrl('createStripePortalSession');
 const STRIPE_LIST_PLANS_FUNCTION_URL =
-  `${CLOUD_FUNCTIONS_BASE_URL}/listStripeCheckoutPlans`;
+  buildCloudFunctionUrl('listStripeCheckoutPlans');
 const BILLING_PROVIDER_STRIPE = 'stripe';
 const BILLING_PROVIDER_ASAAS = 'asaas';
 const BILLING_PROVIDER_DEFAULT = BILLING_PROVIDER_STRIPE;
 const TENANT_SEAT_OVER_LIMIT_GRACE_DAYS = 3;
 const TENANT_SEAT_ENFORCEMENT_ACTOR_UID = 'system_seat_enforcement';
+
+const executeSankhyaDbExplorerQuery = createSankhyaDbExplorerQueryExecutor({
+  executeSankhyaDbExplorerQueryAction,
+  endpointPaths: SANKHYA_DBEXPLORER_ENDPOINT_PATHS,
+  fetchImpl: fetch,
+  extractSankhyaXmlError,
+  normalizeDbExplorerRows,
+});
+
+const {
+  processBillingWebhookEvent,
+  reconcileTenantBillingState,
+  applyTenantBillingActionToProvider,
+  applyTenantBillingSelfServiceActionToProvider,
+  applyStripeSeatAddonDeltaToActiveSubscription,
+  applyAsaasSeatAddonDeltaToActiveSubscription,
+} = createBillingProviderOrchestration({
+  dispatchProcessBillingWebhookEvent,
+  processStripeWebhookEventHelper,
+  processAsaasWebhookEvent,
+  applyStripeWebhookEventToTenantHelper,
+  applyAsaasWebhookEventToTenantHelper,
+  dispatchReconcileTenantBillingState,
+  reconcileTenantStripeState,
+  reconcileTenantAsaasStateHelper,
+  dispatchApplyTenantBillingActionToProvider,
+  applyTenantBillingActionToStripe,
+  applyTenantBillingActionToAsaas,
+  dispatchApplyTenantBillingSelfServiceActionToProvider,
+  applyTenantBillingSelfServiceActionToAsaas,
+  applyStripeSeatAddonDeltaToActiveSubscriptionHelper,
+  applyAsaasSeatAddonDeltaToActiveSubscriptionHelper,
+  constants: {
+    STRIPE_DEFAULT_WEBHOOK_EVENTS,
+    ASAAS_DEFAULT_WEBHOOK_EVENTS,
+    BILLING_PROVIDER_STRIPE,
+    normalizeBillingPlanKey,
+  },
+  resolveTenantIdFromStripeReferences,
+  readStripeSubscriptionLineItems,
+  resolveStripePlanMappingByPriceId,
+  buildTenantPatchFromStripeSubscription,
+  reconcileTenantStripePeriodIfMissing,
+  buildTenantPatchFromAsaasEvent,
+  resolveTenantIdFromAsaasReferences,
+  enforceTenantSeatAllowanceForTenant,
+  readStripeSubscriptionPriceId,
+  readStripeSubscriptionPeriodFromInvoices,
+  fetchAsaasApiJson,
+  sanitizeStripeMetadataValue,
+  readNonNegativeInteger,
+  loadStripePlanMapping,
+  resolveStripeSeatAddonMappingForBasePlan,
+  loadAsaasInternalPlanMapping,
+  resolveAsaasSeatAddonMappingForBasePlan,
+});
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -1581,8 +1664,10 @@ exports.updateBillingSeatAddons = onRequest(
       resolveCheckoutApiProviderSelection,
       loadBillingProviderRuntime,
       applyStripeSeatAddonDeltaToActiveSubscription,
+      applyAsaasSeatAddonDeltaToActiveSubscription,
       enforceTenantSeatAllowanceForTenant,
       billingProviderStripe: BILLING_PROVIDER_STRIPE,
+      billingProviderAsaas: BILLING_PROVIDER_ASAAS,
     });
 
     response.status(result.status).json(result.body);
@@ -1886,43 +1971,6 @@ exports.syncSankhyaPriceTablesNightly = onSchedule(
   },
 );
 
-async function authenticateInSankhya({
-  baseUrl,
-  clientId,
-  clientSecret,
-  xToken,
-}) {
-  const formBody = new URLSearchParams({
-    client_id: clientId,
-    client_secret: clientSecret,
-    grant_type: 'client_credentials',
-  });
-
-  const authResponse = await fetch(`${baseUrl}/authenticate`, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/x-www-form-urlencoded',
-      'x-token': xToken,
-    },
-    body: formBody,
-    signal: AbortSignal.timeout(15000),
-  });
-
-  const authBodyText = await authResponse.text();
-  if (authResponse.status !== 200) {
-    throw new Error(
-      `Falha na autenticacao Sankhya (HTTP ${authResponse.status}): ${authBodyText.slice(0, 300)}`,
-    );
-  }
-
-  const jsonPayload = tryParseJson(authBodyText);
-  if (jsonPayload && typeof jsonPayload === 'object') {
-    return jsonPayload;
-  }
-
-  return Object.fromEntries(new URLSearchParams(authBodyText));
-}
-
 async function updateTenantSyncState({ firestore, tenantId, patch }) {
   const ref = firestore.collection('tenant_sync_state').doc(tenantId);
   await ref.set(
@@ -1933,28 +1981,6 @@ async function updateTenantSyncState({ firestore, tenantId, patch }) {
     },
     { merge: true },
   );
-}
-
-function readBearerToken(payload) {
-  if (!payload || typeof payload !== 'object') {
-    return '';
-  }
-
-  const candidates = [
-    payload.access_token,
-    payload.accessToken,
-    payload.token,
-    payload.bearerToken,
-  ];
-
-  for (const candidate of candidates) {
-    const value = String(candidate ?? '').trim();
-    if (value) {
-      return value;
-    }
-  }
-
-  return '';
 }
 
 async function buildTenantNcmGroupIndex({ firestore, tenantId }) {
@@ -2067,141 +2093,6 @@ async function syncSankhyaPriceTablesModule({
   });
 }
 
-function toCodeString(value) {
-  if (value === null || value === undefined) {
-    return '';
-  }
-
-  if (typeof value === 'number') {
-    if (!Number.isFinite(value)) {
-      return '';
-    }
-    return String(Math.trunc(value));
-  }
-
-  return String(value).trim();
-}
-
-function isZeroCode(codeValue) {
-  const normalized = String(codeValue ?? '').trim();
-  if (!normalized) {
-    return true;
-  }
-
-  const numeric = Number(normalized.replace(',', '.'));
-  if (Number.isFinite(numeric) && numeric === 0) {
-    return true;
-  }
-
-  return /^0+$/.test(normalized);
-}
-
-function toNumberOrNull(value) {
-  if (value === null || value === undefined || value === '') {
-    return null;
-  }
-
-  const numeric = Number(String(value).replace(',', '.'));
-  return Number.isFinite(numeric) ? numeric : null;
-}
-
-function readInt(value) {
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return Math.trunc(value);
-  }
-
-  if (typeof value === 'string') {
-    const parsed = Number.parseInt(value.trim(), 10);
-    return Number.isFinite(parsed) ? parsed : 0;
-  }
-
-  return 0;
-}
-
-function tryParseJson(text) {
-  try {
-    return JSON.parse(text);
-  } catch (_) {
-    return null;
-  }
-}
-
-async function executeSankhyaDbExplorerQuery({
-  baseUrl,
-  bearerToken,
-  xToken,
-  sql,
-}) {
-  return executeSankhyaDbExplorerQueryAction({
-    baseUrl,
-    bearerToken,
-    xToken,
-    sql,
-    endpointPaths: SANKHYA_DBEXPLORER_ENDPOINT_PATHS,
-    fetchImpl: fetch,
-    tryParseJson,
-    extractSankhyaXmlError,
-    normalizeDbExplorerRows,
-  });
-}
-
-function readRowValueByAliases(row, aliases) {
-  if (!row || typeof row !== 'object') {
-    return undefined;
-  }
-
-  for (const alias of aliases) {
-    if (Object.prototype.hasOwnProperty.call(row, alias)) {
-      return row[alias];
-    }
-  }
-
-  const loweredMap = new Map(
-    Object.entries(row).map(([key, value]) => [key.toLowerCase(), value]),
-  );
-  for (const alias of aliases) {
-    const value = loweredMap.get(String(alias).toLowerCase());
-    if (value !== undefined) {
-      return value;
-    }
-  }
-
-  return undefined;
-}
-
-function normalizeOrigemMercadoriaCst(value) {
-  const normalized = String(value ?? '').trim();
-  if (!normalized) {
-    return null;
-  }
-  const parsed = Number.parseInt(normalized, 10);
-  if (!Number.isFinite(parsed) || parsed < 0 || parsed > 8) {
-    return null;
-  }
-  return String(parsed);
-}
-
-function normalizeSankhyaNumericCodeList(values) {
-  const normalized = [];
-  const seen = new Set();
-  for (const value of values) {
-    const token = String(value ?? '').trim();
-    if (!/^\d+$/.test(token)) {
-      continue;
-    }
-    if (isZeroCode(token)) {
-      continue;
-    }
-    const clean = String(Number.parseInt(token, 10));
-    if (!clean || seen.has(clean)) {
-      continue;
-    }
-    seen.add(clean);
-    normalized.push(clean);
-  }
-  return normalized;
-}
-
 async function syncSankhyaTaxRulesModule({
   firestore,
   tenantId,
@@ -2224,7 +2115,11 @@ async function syncSankhyaTaxRulesModule({
     sanitizeKeyToken,
     buildAutoGroupName,
     buildAutoGroupDescription,
-    applyTaxGroupsToExistingProducts,
+    applyTaxGroupsToExistingProducts: (input) =>
+      applyTaxGroupsToExistingProducts({
+        ...input,
+        normalizeDigits,
+      }),
     updateTenantSyncState,
     loggerError: console.error,
   });
@@ -2258,50 +2153,6 @@ async function syncSankhyaClientesModule({
     updateTenantSyncState,
     loggerError: console.error,
   });
-}
-
-
-async function applyTaxGroupsToExistingProducts({
-  firestore,
-  tenantId,
-  ncmToGroupId,
-}) {
-  const snapshot = await firestore
-    .collection('produtos')
-    .where('tenantId', '==', tenantId)
-    .select('ncm', 'grupoTributarioId', 'deletedAt')
-    .get();
-
-  const writer = firestore.bulkWriter();
-  writer.onWriteError((error) => error.failedAttempts < 3);
-  let linkedCount = 0;
-
-  try {
-    for (const doc of snapshot.docs) {
-      const data = doc.data() || {};
-      if (data.deletedAt) {
-        continue;
-      }
-      const ncmDigits = normalizeDigits(data.ncm);
-      if (!ncmDigits) {
-        continue;
-      }
-      const groupId = ncmToGroupId.get(ncmDigits);
-      if (!groupId || data.grupoTributarioId === groupId) {
-        continue;
-      }
-      writer.set(
-        doc.ref,
-        { grupoTributarioId: groupId },
-        { merge: true },
-      );
-      linkedCount += 1;
-    }
-  } finally {
-    await writer.close();
-  }
-
-  return linkedCount;
 }
 
 async function syncSankhyaProductImagesModule({
@@ -2422,144 +2273,6 @@ exports.manageTenantBillingSelfService = onRequest(
   },
 );
 
-async function processBillingWebhookEvent({
-  firestore,
-  providerKey,
-  event,
-  enabledEvents,
-  stripeClient,
-  asaasRuntime,
-}) {
-  return dispatchProcessBillingWebhookEvent({
-    firestore,
-    providerKey,
-    event,
-    enabledEvents,
-    stripeClient,
-    asaasRuntime,
-    processStripeWebhookEvent: (input) => processStripeWebhookEventHelper({
-      ...input,
-      defaultEnabledEvents: STRIPE_DEFAULT_WEBHOOK_EVENTS,
-      applyStripeWebhookEventToTenant: ({
-        firestore,
-        event,
-        stripeClient,
-      }) => applyStripeWebhookEventToTenantHelper({
-        firestore,
-        event,
-        stripeClient,
-        normalizeBillingPlanKey,
-        resolveTenantIdFromStripeReferences,
-        readStripeSubscriptionLineItems,
-        resolveStripePlanMappingByPriceId,
-        buildTenantPatchFromStripeSubscription,
-        reconcileTenantStripePeriodIfMissing,
-        reconcileTenantBillingState,
-        enforceTenantSeatAllowanceForTenant,
-        billingProviderStripe: BILLING_PROVIDER_STRIPE,
-      }),
-    }),
-    processAsaasWebhookEvent: (input) => processAsaasWebhookEvent({
-      ...input,
-      defaultEnabledEvents: ASAAS_DEFAULT_WEBHOOK_EVENTS,
-      applyAsaasWebhookEventToTenant: ({
-        firestore,
-        eventPayload,
-        eventType,
-        asaasRuntime,
-      }) => applyAsaasWebhookEventToTenantHelper({
-        firestore,
-        eventPayload,
-        eventType,
-        asaasRuntime,
-        resolveTenantIdFromAsaasReferences,
-        buildTenantPatchFromAsaasEvent,
-        enforceTenantSeatAllowanceForTenant,
-      }),
-    }),
-  });
-}
-
-async function reconcileTenantBillingState({
-  firestore,
-  providerKey,
-  tenantId,
-  stripeClient,
-  asaasRuntime,
-}) {
-  return dispatchReconcileTenantBillingState({
-    firestore,
-    providerKey,
-    tenantId,
-    stripeClient,
-    asaasRuntime,
-    reconcileTenantStripeState: reconcileTenantStripeStateWrapper,
-    reconcileTenantAsaasState,
-  });
-}
-
-async function reconcileTenantStripeStateWrapper({
-  firestore,
-  stripeClient,
-  tenantId,
-}) {
-  return reconcileTenantStripeState({
-    firestore,
-    stripeClient,
-    tenantId,
-    billingProviderStripe: BILLING_PROVIDER_STRIPE,
-    readStripeSubscriptionPriceId,
-    resolveStripePlanMappingByPriceId,
-    buildTenantPatchFromStripeSubscription,
-    readStripeSubscriptionPeriodFromInvoices,
-  });
-}
-
-async function applyTenantBillingActionToProvider({
-  providerKey,
-  stripeClient,
-  asaasRuntime,
-  tenantId,
-  tenantData,
-  action,
-  reason,
-  actorUid,
-}) {
-  const applyTenantBillingActionToStripeWithDeps = (input) =>
-    applyTenantBillingActionToStripe({
-      ...input,
-      sanitizeStripeMetadataValue,
-    });
-
-  return dispatchApplyTenantBillingActionToProvider({
-    providerKey,
-    stripeClient,
-    asaasRuntime,
-    tenantId,
-    tenantData,
-    action,
-    reason,
-    actorUid,
-    applyTenantBillingActionToStripe: applyTenantBillingActionToStripeWithDeps,
-    applyTenantBillingActionToAsaas,
-  });
-}
-
-async function applyTenantBillingSelfServiceActionToProvider({
-  providerKey,
-  asaasRuntime,
-  tenantData,
-  action,
-}) {
-  return dispatchApplyTenantBillingSelfServiceActionToProvider({
-    providerKey,
-    asaasRuntime,
-    tenantData,
-    action,
-    applyTenantBillingSelfServiceActionToAsaas,
-  });
-}
-
 async function createAsaasCheckoutSession({
   firestore,
   tenantId,
@@ -2601,43 +2314,6 @@ async function enforceTenantSeatAllowanceForTenant({
     writeTenantMembershipAuditEvent,
     seatGraceDays: TENANT_SEAT_OVER_LIMIT_GRACE_DAYS,
     seatEnforcementActorUid: TENANT_SEAT_ENFORCEMENT_ACTOR_UID,
-  });
-}
-
-async function reconcileTenantAsaasState({ firestore, asaasRuntime, tenantId }) {
-  return reconcileTenantAsaasStateHelper({
-    firestore,
-    asaasRuntime,
-    tenantId,
-    fetchAsaasApiJson,
-    buildTenantPatchFromAsaasEvent,
-  });
-}
-
-async function applyStripeSeatAddonDeltaToActiveSubscription({
-  firestore,
-  stripeClient,
-  tenantId,
-  tenantData,
-  billingPlanKey,
-  addonSeatsDelta,
-  actorUid,
-}) {
-  return applyStripeSeatAddonDeltaToActiveSubscriptionHelper({
-    firestore,
-    stripeClient,
-    tenantId,
-    tenantData,
-    billingPlanKey,
-    addonSeatsDelta,
-    actorUid,
-    normalizeBillingPlanKey,
-    readNonNegativeInteger,
-    resolveStripePlanMappingByPriceId,
-    loadStripePlanMapping,
-    resolveStripeSeatAddonMappingForBasePlan,
-    sanitizeStripeMetadataValue,
-    reconcileTenantStripeState: reconcileTenantStripeStateWrapper,
   });
 }
 

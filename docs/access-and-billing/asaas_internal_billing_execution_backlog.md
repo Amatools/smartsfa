@@ -23,6 +23,9 @@ Traduzir o plano arquitetural em backlog tecnico executavel, sem quebrar o fluxo
 2. Status canonicos em `tenants/{tenantId}` permanecem a fonte de verdade.
 3. Auditoria obrigatoria para alteracao de plano, seats e valor.
 4. Regressao Stripe bloqueia rollout.
+5. Operacoes mutaveis devem ser idempotentes por `operationId`.
+6. Mutacoes criticas devem usar controle de concorrencia por tenant (`contractVersion` + lock curto).
+7. Webhooks devem suportar duplicacao e chegada fora de ordem.
 
 ## Definition of Ready (DoR)
 
@@ -31,6 +34,9 @@ Uma tarefa so pode iniciar quando:
 1. Endpoint, colecao e payload esperados estao definidos.
 2. Regras de permissao (owner/admin/suporte) estao documentadas.
 3. Criterio de aceite e regressao estao definidos.
+4. Estrategia de idempotencia e dedupe aprovada (`operationId`, replay de resposta).
+5. Estrategia de lock/versionamento por tenant aprovada.
+6. Estrategia de `pending_reconcile` para erro parcial aprovada.
 
 ## Definition of Done (DoD)
 
@@ -40,6 +46,8 @@ Uma tarefa so e concluida quando:
 2. `flutter analyze` e check de sintaxe backend sem erros.
 3. Auditoria persistida quando aplicavel.
 4. Documentacao de contrato atualizada em `docs/access-and-billing`.
+5. Testes de idempotencia/retry sem efeito duplicado entregues.
+6. Testes de webhook duplicado/fora de ordem entregues.
 
 ## Epicos
 
@@ -56,14 +64,18 @@ Criar a base de dados e contratos para suportar preco/seats no dominio interno.
 3. Criar colecao `tenant_billing_seat_changes`.
 4. Criar colecao `billing_quotes`.
 5. Criar colecao `billing_provider_refs`.
-6. Definir indices necessarios no Firestore.
-7. Definir padrao de versionamento de plano (`version`) e imutabilidade de quote.
+6. Criar colecao `tenant_billing_operations` (journal de mutacoes/idempotencia).
+7. Definir indices necessarios no Firestore.
+8. Definir padrao de versionamento de plano (`version`) e imutabilidade de quote.
+9. Definir contrato de `contractVersion` e `lastAppliedOperationId` em `tenant_billing_contracts`.
+10. Definir modelo de lock curto por tenant (lease com expiracao).
 
 ### Criterios de aceite
 
 1. Schema validado por fixtures de exemplo (base, pro, enterprise).
 2. Regras de seguranca inicial para leitura/escrita por papel implementadas.
 3. Nao ha impacto em endpoints Stripe existentes.
+4. Estruturas de idempotencia/versionamento presentes no modelo de dados.
 
 ## E1 - Quote Engine Asaas (MVP sem proration)
 
@@ -78,12 +90,14 @@ Calcular valor final no backend para Asaas e congelar cotacao antes do checkout.
 3. Persistir quote com `expiresAt`, `checksum` e `status=open`.
 4. Implementar validacao de idempotencia de quote.
 5. Implementar expiracao de quote (job ou validacao em runtime).
+6. Registrar operacao no `tenant_billing_operations` com replay de resposta por `operationId`.
 
 ### Criterios de aceite
 
 1. Frontend nao consegue forcar valor diferente do quote.
 2. Quote expirada nao abre checkout.
 3. Mudanca de plano/seats apos quote invalida quote antiga.
+4. Reenvio da mesma solicitacao com mesmo `operationId` nao cria quote duplicada.
 
 ## E2 - Checkout Asaas orientado por quote
 
@@ -97,12 +111,14 @@ Usar quote valida para criar checkout Asaas com valor calculado internamente.
 2. Rejeitar criacao de checkout sem quote valida.
 3. Persistir referencia de checkout/assinatura em `billing_provider_refs`.
 4. Registrar auditoria de tentativa e sucesso/erro.
+5. Tratar timeout/erro parcial com transicao para `pending_reconcile` quando necessario.
 
 ### Criterios de aceite
 
 1. Todo checkout Asaas aponta para quote usada (`status=used`).
 2. Nao existe caminho de checkout Asaas por valor livre.
 3. Stripe continua com comportamento atual (nao regressivo).
+4. Reenvio com mesmo `operationId` nao gera checkout duplicado.
 
 ## E3 - Governanca de seats e limites
 
@@ -117,12 +133,15 @@ Controlar alteracao de seats com teto self-service por plano.
 3. Validar teto `maxSelfServiceExtraSeats`.
 4. Persistir trilha em `tenant_billing_seat_changes`.
 5. Atualizar entitlement de seats no tenant apos alteracao valida.
+6. Aplicar compare-and-set por `contractVersion` em mutacoes de contrato.
+7. Aplicar lock curto por tenant durante mudancas criticas.
 
 ### Criterios de aceite
 
 1. Alteracao dentro do teto funciona para owner/admin autorizado.
 2. Alteracao acima do teto retorna bloqueio orientando suporte.
 3. Trilha de auditoria contem antes/depois, ator e razao.
+4. Mudanca repetida com mesmo `operationId` nao duplica efeito financeiro.
 
 ## E4 - Painel admin (catalogo e operacao)
 
@@ -158,12 +177,16 @@ Garantir consistencia entre dominio interno e eventos do provider.
    - entitlement vs contrato.
 3. Criar dashboard operacional minimo para falhas de quote/checkout.
 4. Definir playbook de suporte para falhas comuns.
+5. Definir e implementar matriz de dunning (`active` -> `past_due` -> `suspended` -> `canceled`).
+6. Implementar dedupe de webhook por `provider + eventId`.
+7. Implementar tratamento de webhook fora de ordem com reconcile por snapshot atual.
 
 ### Criterios de aceite
 
 1. Divergencia critica gera alerta operacional.
 2. Reprocessamento e idempotencia funcionam sem duplicar efeitos.
 3. Nao regressao comprovada para webhooks/fluxos Stripe.
+4. Eventos duplicados/fora de ordem nao causam regressao de estado.
 
 ## E6 - Proration (fase evolutiva)
 
@@ -238,6 +261,7 @@ Entrega:
 
 1. E5 completo.
 2. Suite de regressao Stripe + Asaas publicada.
+3. Suite de robustez (retry, timeout parcial, webhook fora de ordem) publicada.
 
 Gate:
 
@@ -268,6 +292,14 @@ Entrega:
 5. Bloqueio acima do teto.
 6. `stop_renewal` e `cancel_now` preservados.
 
+## Robustez Asaas (MVP)
+
+1. Reenvio da mesma operacao (`operationId`) retorna mesmo resultado sem duplicidade.
+2. Timeout apos efeito parcial gera `pending_reconcile` e converge por reconciliacao.
+3. Webhook duplicado nao reaplica mutacao.
+4. Webhook fora de ordem nao degrada estado canonico.
+5. Duas chamadas quase simultaneas para mesmo tenant respeitam lock/versionamento.
+
 ## Rollout e seguranca
 
 1. Feature flag por provider e por tenant para partes novas.
@@ -287,6 +319,86 @@ Entrega:
    - Mitigacao: override com permissao elevada e log obrigatorio.
 4. Risco: crescimento de complexidade com proration precoce.
    - Mitigacao: proration fora do MVP, com fase dedicada.
+5. Risco: efeitos financeiros duplicados por retry/travamento.
+   - Mitigacao: `operationId` obrigatorio + journal de operacoes + compare-and-set por versao.
+6. Risco: estado incorreto por webhook duplicado/fora de ordem.
+   - Mitigacao: dedupe por `provider+eventId` + reconcile por snapshot atual.
+
+## Checklist de Execucao Imediata (E0 -> E2)
+
+Objetivo: iniciar implementacao com menor risco operacional e com validacao objetiva por etapa.
+
+### Etapa 1 - E0 Fundacao (dados + contratos)
+
+Entregaveis minimos:
+
+1. Colecoes e schemas publicados:
+   - `billing_plan_catalog`
+   - `tenant_billing_contracts`
+   - `tenant_billing_seat_changes`
+   - `billing_quotes`
+   - `billing_provider_refs`
+   - `tenant_billing_operations`
+2. Campos de robustez no contrato:
+   - `contractVersion`
+   - `lastAppliedOperationId`
+3. Indices necessarios criados.
+4. Regras de seguranca iniciais aplicadas.
+
+Checklist de teste (E0):
+
+1. Criar/ler docs de exemplo por tenant sem quebrar regras existentes de Stripe.
+2. Validar que usuario sem permissao nao escreve em colecoes de engine.
+3. Validar que schema minimo obrigatorio existe em fixtures de seed.
+
+Gate para proxima etapa:
+
+1. E0 completo e revisado.
+
+### Etapa 2 - E1 Quote Engine Asaas
+
+Entregaveis minimos:
+
+1. Endpoint `createBillingQuote` implementado.
+2. Calculo de total (base + seats extras) somente server-side.
+3. Quote persistida com:
+   - `status=open`
+   - `expiresAt`
+   - `checksum`
+   - `operationId`
+4. Dedupe/replay por `operationId` em `tenant_billing_operations`.
+
+Checklist de teste (E1):
+
+1. Mesmo payload + mesmo `operationId` retorna mesmo resultado sem duplicar quote.
+2. Mesmo payload + `operationId` diferente cria nova quote valida.
+3. Quote expirada retorna bloqueio funcional esperado.
+4. Alterar plano/seats invalida quote anterior.
+
+Gate para proxima etapa:
+
+1. Suite E1 verde incluindo idempotencia.
+
+### Etapa 3 - E2 Checkout Asaas orientado por quote
+
+Entregaveis minimos:
+
+1. `createBillingCheckoutSession` exige quote valida.
+2. Checkout sem quote valida e rejeitado.
+3. Quote usada e marcada como `used` com vinculo de checkout.
+4. `billing_provider_refs` atualizado.
+5. Erro parcial/timeout grava `pending_reconcile` quando aplicavel.
+
+Checklist de teste (E2):
+
+1. Reenvio com mesmo `operationId` nao cria checkout duplicado.
+2. Reenvio apos timeout parcial converge para estado unico por reconcile.
+3. Fluxo Stripe legado segue inalterado (regressao obrigatoria).
+4. Auditoria/journal registram tentativa, sucesso e falha.
+
+Gate para proxima etapa:
+
+1. Suite E2 verde + regressao Stripe verde.
 
 ## Decisao de inicio
 

@@ -1096,6 +1096,37 @@ service cloud.firestore {
         && (!('updatedAt' in data) || data.updatedAt is string);
     }
 
+    function validAsaasInternalPlanInterval(value) {
+      return value in ['day', 'week', 'month', 'year'];
+    }
+
+    function validAsaasInternalPlanDoc(planId, data) {
+      return planId is string
+        && planId != ''
+        && data.billingPlanKey is string
+        && data.billingPlanKey != ''
+        && (!('mappingType' in data)
+          || (data.mappingType is string
+            && data.mappingType in ['base', 'overage']))
+        && (!('overageMetric' in data) || data.overageMetric is string)
+        && (!('planDisplayName' in data) || data.planDisplayName is string)
+        && (!('planDisplayAmount' in data) || data.planDisplayAmount is string)
+        && data.amountCents is int
+        && data.amountCents >= 0
+        && data.currency is string
+        && data.currency != ''
+        && data.interval is string
+        && validAsaasInternalPlanInterval(data.interval)
+        && data.intervalCount is int
+        && data.intervalCount > 0
+        && (!('includedSeats' in data) || (data.includedSeats is int && data.includedSeats >= 0))
+        && (!('seatAddonPlanKey' in data) || data.seatAddonPlanKey is string)
+        && (!('linkedBasePlanKey' in data) || data.linkedBasePlanKey is string)
+        && data.active is bool
+        && (!('updatedBy' in data) || data.updatedBy is string)
+        && (!('updatedAt' in data) || data.updatedAt is string);
+    }
+
     function validStripePlanMappingDoc(mappingId, data) {
       return data.billingPlanKey is string
         && data.billingPlanKey != ''
@@ -1560,6 +1591,17 @@ service cloud.firestore {
           && validStripePlanMappingDoc(mappingId, request.resource.data);
 
         allow delete: if signedIn() && isPlatformAdmin();
+      }
+
+      match /internal_plan_catalog/{planId} {
+        allow read: if signedIn() && isPlatformAdmin();
+
+        allow create, update: if signedIn()
+          && isPlatformAdmin()
+          && integrationId == 'asaas'
+          && validAsaasInternalPlanDoc(planId, request.resource.data);
+
+        allow delete: if signedIn() && isPlatformAdmin() && integrationId == 'asaas';
       }
     }
 

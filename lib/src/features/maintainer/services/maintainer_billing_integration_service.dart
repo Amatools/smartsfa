@@ -457,6 +457,87 @@ class MaintainerAsaasIntegrationConfig {
   }
 }
 
+class MaintainerAsaasInternalPlan {
+  const MaintainerAsaasInternalPlan({
+    required this.planId,
+    required this.billingPlanKey,
+    required this.planDisplayName,
+    required this.planDisplayAmount,
+    required this.amountCents,
+    required this.currency,
+    required this.interval,
+    required this.intervalCount,
+    required this.mappingType,
+    required this.overageMetric,
+    required this.includedSeats,
+    required this.seatAddonPlanKey,
+    required this.linkedBasePlanKey,
+    required this.active,
+    required this.updatedAt,
+    required this.updatedBy,
+  });
+
+  final String planId;
+  final String billingPlanKey;
+  final String planDisplayName;
+  final String planDisplayAmount;
+  final int amountCents;
+  final String currency;
+  final String interval;
+  final int intervalCount;
+  final String mappingType;
+  final String overageMetric;
+  final int includedSeats;
+  final String seatAddonPlanKey;
+  final String linkedBasePlanKey;
+  final bool active;
+  final DateTime? updatedAt;
+  final String updatedBy;
+
+  factory MaintainerAsaasInternalPlan.fromDoc(
+    DocumentSnapshot<Map<String, dynamic>> doc,
+  ) {
+    final data = doc.data() ?? const <String, dynamic>{};
+    final billingPlanKey = _readString(data['billingPlanKey']);
+    final planDisplayName = _readString(data['planDisplayName']);
+    final amountCents = _readInt(data['amountCents']) ?? 0;
+    final currency = _readString(data['currency'], fallback: 'brl');
+    final interval = _readString(data['interval'], fallback: 'month');
+    final intervalCount = _readInt(data['intervalCount']) ?? 1;
+
+    final explicitAmount = _readString(data['planDisplayAmount']);
+    final computedAmount = _formatPlanAmountLabel(
+      amountMinorUnits: amountCents,
+      currency: currency,
+      recurringInterval: interval,
+      recurringIntervalCount: intervalCount,
+    );
+
+    return MaintainerAsaasInternalPlan(
+      planId: doc.id,
+      billingPlanKey: billingPlanKey,
+      planDisplayName: planDisplayName.isEmpty
+          ? billingPlanKey
+          : planDisplayName,
+      planDisplayAmount: explicitAmount.isEmpty
+          ? computedAmount
+          : explicitAmount,
+      amountCents: amountCents,
+      currency: currency,
+      interval: interval,
+      intervalCount: intervalCount,
+      mappingType: _readString(data['mappingType'], fallback: 'base'),
+      overageMetric: _readString(data['overageMetric']),
+      includedSeats: _readInt(data['includedSeats']) ?? 0,
+      seatAddonPlanKey: _readString(data['seatAddonPlanKey']),
+      linkedBasePlanKey: _readString(data['linkedBasePlanKey']),
+      active: data['active'] != false,
+      updatedAt: _readDateTime(data['updatedAt']),
+      updatedBy: _readString(data['updatedBy']),
+    );
+  }
+}
+
 class MaintainerBillingIntegrationService {
   MaintainerBillingIntegrationService(
     this._firestore, {
@@ -517,6 +598,9 @@ class MaintainerBillingIntegrationService {
 
   DocumentReference<Map<String, dynamic>> get _asaasConfigRef =>
       _firestore.collection('billing_integrations').doc('asaas');
+
+  CollectionReference<Map<String, dynamic>> get _asaasInternalPlansRef =>
+      _asaasConfigRef.collection('internal_plan_catalog');
 
   CollectionReference<Map<String, dynamic>> get _stripePlanMappingsRef =>
       _stripeConfigRef.collection('plan_mappings');
@@ -624,6 +708,149 @@ class MaintainerBillingIntegrationService {
       });
       return mappings;
     });
+  }
+
+  Stream<List<MaintainerAsaasInternalPlan>> watchAsaasInternalPlans() {
+    return _asaasInternalPlansRef.orderBy('billingPlanKey').snapshots().map((
+      snapshot,
+    ) {
+      final plans = snapshot.docs
+          .map(MaintainerAsaasInternalPlan.fromDoc)
+          .toList(growable: false);
+      plans.sort((a, b) {
+        final keyOrder = a.billingPlanKey.compareTo(b.billingPlanKey);
+        if (keyOrder != 0) {
+          return keyOrder;
+        }
+        return a.planId.compareTo(b.planId);
+      });
+      return plans;
+    });
+  }
+
+  Future<void> upsertAsaasInternalPlan({
+    required String billingPlanKey,
+    required String planDisplayName,
+    required String planDisplayAmount,
+    required int amountCents,
+    required String currency,
+    required String interval,
+    required int intervalCount,
+    required String mappingType,
+    required String overageMetric,
+    required int includedSeats,
+    required String seatAddonPlanKey,
+    required String linkedBasePlanKey,
+    required bool active,
+    required String actorUid,
+  }) async {
+    final normalizedPlanKey = billingPlanKey.trim().toLowerCase();
+    if (normalizedPlanKey.isEmpty) {
+      throw StateError('billingPlanKey e obrigatorio.');
+    }
+
+    final normalizedCurrency = currency.trim().toLowerCase();
+    if (normalizedCurrency.isEmpty) {
+      throw StateError('currency e obrigatorio.');
+    }
+
+    final normalizedInterval = interval.trim().toLowerCase();
+    if (normalizedInterval.isEmpty) {
+      throw StateError('interval e obrigatorio.');
+    }
+
+    final sanitizedAmount = amountCents < 0 ? 0 : amountCents;
+    final sanitizedIntervalCount = intervalCount <= 0 ? 1 : intervalCount;
+    final normalizedMappingType = mappingType.trim().toLowerCase() == 'overage'
+        ? 'overage'
+        : 'base';
+    final normalizedOverageMetric = overageMetric.trim().toLowerCase();
+    final sanitizedIncludedSeats = includedSeats < 0 ? 0 : includedSeats;
+    final normalizedSeatAddonPlanKey = seatAddonPlanKey.trim().toLowerCase();
+    final normalizedLinkedBasePlanKey = linkedBasePlanKey.trim().toLowerCase();
+    final planId = normalizedPlanKey.replaceAll(RegExp(r'[^a-z0-9_-]'), '_');
+
+    await _asaasInternalPlansRef.doc(planId).set({
+      'billingPlanKey': normalizedPlanKey,
+      'planDisplayName': planDisplayName.trim(),
+      'planDisplayAmount': planDisplayAmount.trim(),
+      'amountCents': sanitizedAmount,
+      'currency': normalizedCurrency,
+      'interval': normalizedInterval,
+      'intervalCount': sanitizedIntervalCount,
+      'mappingType': normalizedMappingType,
+      'overageMetric': normalizedOverageMetric,
+      'includedSeats': sanitizedIncludedSeats,
+      'seatAddonPlanKey': normalizedSeatAddonPlanKey,
+      'linkedBasePlanKey': normalizedLinkedBasePlanKey,
+      'active': active,
+      'updatedBy': actorUid.trim(),
+      'updatedAt': DateTime.now().toIso8601String(),
+    }, SetOptions(merge: true));
+
+    await _asaasConfigRef.set({
+      'updatedBy': actorUid.trim(),
+      'updatedAt': DateTime.now().toIso8601String(),
+    }, SetOptions(merge: true));
+  }
+
+  Future<void> setAsaasInternalPlanActive({
+    required String planId,
+    required bool active,
+    required String actorUid,
+  }) async {
+    final normalizedPlanId = planId.trim();
+    if (normalizedPlanId.isEmpty) {
+      throw StateError('planId e obrigatorio.');
+    }
+
+    await _asaasInternalPlansRef.doc(normalizedPlanId).set({
+      'active': active,
+      'updatedBy': actorUid.trim(),
+      'updatedAt': DateTime.now().toIso8601String(),
+    }, SetOptions(merge: true));
+
+    await _asaasConfigRef.set({
+      'updatedBy': actorUid.trim(),
+      'updatedAt': DateTime.now().toIso8601String(),
+    }, SetOptions(merge: true));
+  }
+
+  Future<void> deleteAsaasInternalPlan({
+    required String planId,
+    required String actorUid,
+  }) async {
+    final normalizedPlanId = planId.trim();
+    if (normalizedPlanId.isEmpty) {
+      throw StateError('planId e obrigatorio.');
+    }
+
+    final planRef = _asaasInternalPlansRef.doc(normalizedPlanId);
+    final planDoc = await planRef.get();
+    if (!planDoc.exists) {
+      throw StateError('Plano interno Asaas nao encontrado para exclusao.');
+    }
+
+    final planData = planDoc.data() ?? const <String, dynamic>{};
+    final billingPlanKey = _readString(
+      planData['billingPlanKey'],
+      fallback: normalizedPlanId,
+    );
+    final tenantsUsingPlan = await countTenantsUsingPlan(
+      billingPlanKey: billingPlanKey,
+    );
+    if (tenantsUsingPlan > 0) {
+      throw StateError(
+        'Plano em uso por $tenantsUsingPlan tenant(s). Oculte/desative o plano em vez de excluir.',
+      );
+    }
+
+    await planRef.delete();
+
+    await _asaasConfigRef.set({
+      'updatedBy': actorUid.trim(),
+      'updatedAt': DateTime.now().toIso8601String(),
+    }, SetOptions(merge: true));
   }
 
   Future<void> upsertStripeConfig({

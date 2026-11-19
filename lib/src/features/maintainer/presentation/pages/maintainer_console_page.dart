@@ -20,6 +20,7 @@ part 'maintainer_console_user_dialogs.part.dart';
 part 'maintainer_console_checkout_api.part.dart';
 part 'maintainer_console_stripe.part.dart';
 part 'maintainer_console_asaas.part.dart';
+part 'maintainer_console_asaas_catalog.part.dart';
 part 'maintainer_console_stripe_config_dialog.part.dart';
 part 'maintainer_console_stripe_plan_mapping_dialog_models.part.dart';
 part 'maintainer_console_stripe_plan_mapping_dialog_ui.part.dart';
@@ -84,6 +85,10 @@ class _MaintainerConsolePageState extends State<MaintainerConsolePage> {
   late final MaintainerOverviewService _overviewService;
   late final MaintainerUserAdminService _userAdminService;
   late final Stream<List<MaintainerCriticalAuditEntry>> _criticalAuditStream;
+  late final Stream<List<MaintainerUserTenantMembership>>
+  _impersonationMembershipsStream;
+  late final Stream<Map<String, String>> _impersonationTenantNamesStream;
+  late final Stream<List<MaintainerUserAccount>> _impersonationUsersStream;
 
   late Future<MaintainerAccessDecision> _accessFuture;
   Future<MaintainerOverviewSnapshot>? _overviewFuture;
@@ -231,5 +236,48 @@ class _MaintainerConsolePageState extends State<MaintainerConsolePage> {
     setState(() {
       _activeTab = tab;
     });
+  }
+}
+
+class _HorizontalPlanTableScroller extends StatefulWidget {
+  const _HorizontalPlanTableScroller({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_HorizontalPlanTableScroller> createState() =>
+      _HorizontalPlanTableScrollerState();
+}
+
+class _HorizontalPlanTableScrollerState
+    extends State<_HorizontalPlanTableScroller> {
+  late final ScrollController _scrollController;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController = ScrollController();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scrollbar(
+      controller: _scrollController,
+      thumbVisibility: true,
+      trackVisibility: true,
+      interactive: true,
+      child: SingleChildScrollView(
+        controller: _scrollController,
+        primary: false,
+        scrollDirection: Axis.horizontal,
+        child: widget.child,
+      ),
+    );
   }
 }

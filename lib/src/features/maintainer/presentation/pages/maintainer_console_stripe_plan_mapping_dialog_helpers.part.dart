@@ -295,7 +295,7 @@ extension _MaintainerConsoleStripePlanMappingDialogHelpersPart
         : '';
 
     final normalizedSeatAddonPlanKey = normalizedMappingType == 'base'
-        ? dialogState.seatAddonPlanKeyController.text
+        ? dialogState.initialSeatAddonPlanKey
         : '';
 
     final normalizedLinkedBasePlanKey = normalizedMappingType == 'overage'

@@ -12,7 +12,7 @@ extension _MaintainerConsoleAsaasPart on _MaintainerConsolePageState {
     return Align(
       alignment: Alignment.centerLeft,
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 1320),
+        constraints: const BoxConstraints(maxWidth: 1680),
         child: Card(
           child: Padding(
             padding: const EdgeInsets.all(20),
@@ -25,7 +25,7 @@ extension _MaintainerConsoleAsaasPart on _MaintainerConsolePageState {
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'Configura metadados nao sensiveis do Asaas para preparar o backend multi-provider. Chaves/token devem permanecer somente no backend/Secret Manager.',
+                  'Configura apenas metadados nao sensiveis e catalogo interno de planos para Asaas. Chaves/token devem permanecer exclusivamente no backend/Secret Manager.',
                 ),
                 const SizedBox(height: 12),
                 StreamBuilder<MaintainerAsaasIntegrationConfig>(
@@ -111,6 +111,22 @@ extension _MaintainerConsoleAsaasPart on _MaintainerConsolePageState {
                             'Perfil somente leitura para configuracao de integracoes.',
                           ),
                         ],
+                        const SizedBox(height: 16),
+                        const Divider(height: 1),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Mapeamento billingPlanKey -> plano interno Asaas',
+                          style: Theme.of(context).textTheme.titleSmall,
+                        ),
+                        const SizedBox(height: 6),
+                        const Text(
+                          'Cadastre os planos dentro da seção da conta para manter o catálogo organizado por tipo de workspace.',
+                        ),
+                        const SizedBox(height: 10),
+                        _buildAsaasInternalCatalogSection(
+                          context,
+                          canManage: canManage,
+                        ),
                       ],
                     );
                   },

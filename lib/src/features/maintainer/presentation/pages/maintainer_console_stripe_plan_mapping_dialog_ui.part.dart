@@ -56,8 +56,6 @@ extension _MaintainerConsoleStripePlanMappingDialogUiPart
         ] else ...[
           const SizedBox(height: 12),
           _buildStripeIncludedSeatsField(dialogState),
-          const SizedBox(height: 12),
-          _buildStripeSeatAddonPlanKeyField(dialogState),
         ],
         const SizedBox(height: 12),
         _buildStripeActiveSwitch(
@@ -167,7 +165,7 @@ extension _MaintainerConsoleStripePlanMappingDialogUiPart
       subtitle: Text(
         dialogState.isAddonMapping
             ? 'Aditivo: exige plano base vinculado e usa metrica de excedente.'
-            : 'Plano normal/base: pode informar seats inclusos e addon de seats.',
+            : 'Plano normal/base: informe apenas os seats inclusos.',
       ),
       onChanged: (value) {
         setLocalState(() {
@@ -250,20 +248,6 @@ extension _MaintainerConsoleStripePlanMappingDialogUiPart
             ? 'Usado como capacidade base da assinatura no tenant.'
             : 'Normalmente deixe vazio para mapeamentos overage.',
         border: const OutlineInputBorder(),
-      ),
-    );
-  }
-
-  Widget _buildStripeSeatAddonPlanKeyField(
-    _StripePlanMappingDialogState dialogState,
-  ) {
-    return TextField(
-      controller: dialogState.seatAddonPlanKeyController,
-      decoration: const InputDecoration(
-        labelText: 'billingPlanKey do adicional de seats',
-        hintText: 'Ex.: representacoes_extra_usuario',
-        helperText: 'No plano base, informe o billingPlanKey do mapeamento overage de usuarios.',
-        border: OutlineInputBorder(),
       ),
     );
   }

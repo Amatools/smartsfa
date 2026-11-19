@@ -111,7 +111,7 @@ test('provider resolution selection logic', () => {
   });
   assert.equal(resolvedFromHint, 'asaas');
 
-  const selectionWithImplicitLinkedProvider =
+  const selectionWithPayloadProvider =
     providerResolution.resolveCheckoutApiProviderSelection({
       payload: { provider: 'asaas' },
       checkoutApiConfig: {
@@ -121,7 +121,41 @@ test('provider resolution selection logic', () => {
       tenantData: {},
     });
 
-  assert.deepEqual(selectionWithImplicitLinkedProvider, {
+  assert.deepEqual(selectionWithPayloadProvider, {
+    provider: 'asaas',
+    hasLinkedContract: false,
+    source: 'payload_provider',
+  });
+
+  const selectionWithPreferredProvider =
+    providerResolution.resolveCheckoutApiProviderSelection({
+      payload: {},
+      checkoutApiConfig: {
+        activeProviders: ['stripe', 'asaas'],
+        preferredProvider: 'asaas',
+      },
+      tenantData: {},
+    });
+
+  assert.deepEqual(selectionWithPreferredProvider, {
+    provider: 'asaas',
+    hasLinkedContract: false,
+    source: 'preferred_provider',
+  });
+
+  const selectionWithExistingContract =
+    providerResolution.resolveCheckoutApiProviderSelection({
+      payload: { provider: 'asaas' },
+      checkoutApiConfig: {
+        activeProviders: ['stripe', 'asaas'],
+        preferredProvider: 'asaas',
+      },
+      tenantData: {
+        stripeSubscriptionId: 'sub_existing_1',
+      },
+    });
+
+  assert.deepEqual(selectionWithExistingContract, {
     provider: 'stripe',
     hasLinkedContract: true,
     source: 'existing_contract',

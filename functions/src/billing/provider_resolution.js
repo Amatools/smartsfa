@@ -19,14 +19,17 @@ function normalizeBillingProviderKey(rawValue) {
 function resolveTenantLinkedBillingProvider(tenantData) {
   const data = tenantData && typeof tenantData === 'object' ? tenantData : {};
 
-  const explicitContractProvider = normalizeBillingProviderKey(
-    data.billingContractProvider,
-  );
-  if (
-    explicitContractProvider === BILLING_PROVIDER_STRIPE ||
-    explicitContractProvider === BILLING_PROVIDER_ASAAS
-  ) {
-    return explicitContractProvider;
+  const rawContractProvider = String(data.billingContractProvider ?? '').trim();
+  if (rawContractProvider) {
+    const explicitContractProvider = normalizeBillingProviderKey(
+      rawContractProvider,
+    );
+    if (
+      explicitContractProvider === BILLING_PROVIDER_STRIPE ||
+      explicitContractProvider === BILLING_PROVIDER_ASAAS
+    ) {
+      return explicitContractProvider;
+    }
   }
 
   const stripeSubscriptionId = String(data.stripeSubscriptionId ?? '').trim();

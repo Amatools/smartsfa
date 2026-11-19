@@ -21,12 +21,7 @@ extension _MaintainerConsoleStripePlansPart on _MaintainerConsolePageState {
       return DataCell(cellText);
     }
 
-    return DataCell(
-      SizedBox(
-        width: width,
-        child: cellText,
-      ),
-    );
+    return DataCell(SizedBox(width: width, child: cellText));
   }
 
   Widget _buildStripePlanSection(
@@ -99,149 +94,144 @@ extension _MaintainerConsoleStripePlansPart on _MaintainerConsolePageState {
           if (mappings.isEmpty)
             const Text('Nenhum plano cadastrado nesta seção.')
           else
-            Scrollbar(
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: DataTable(
-                  horizontalMargin: 12,
-                  columnSpacing: 20,
-                  headingRowHeight: 44,
-                  dataRowMinHeight: 52,
-                  dataRowMaxHeight: 56,
-                  columns: const [
-                    DataColumn(label: Text('Nome do plano')),
-                    DataColumn(label: Text('Valor')),
-                    DataColumn(label: Text('Acoes')),
-                    DataColumn(label: Text('Plan key')),
-                    DataColumn(label: Text('Tipo')),
-                    DataColumn(label: Text('Seats base')),
-                    DataColumn(label: Text('Addon seats')),
-                    DataColumn(label: Text('Stripe product')),
-                    DataColumn(label: Text('Stripe price')),
-                    DataColumn(label: Text('Metrica excedente')),
-                    DataColumn(label: Text('Plano base vinculado')),
-                    DataColumn(label: Text('Ativo')),
-                    DataColumn(label: Text('Atualizado')),
-                  ],
-                  rows: mappings
-                      .map(
-                        (mapping) => DataRow(
-                          cells: [
-                            _buildStripePlanTextCell(
-                              mapping.planDisplayName.isEmpty
-                                  ? mapping.billingPlanKey
-                                  : mapping.planDisplayName,
-                              width: 180,
-                            ),
-                            _buildStripePlanTextCell(
-                              mapping.planDisplayAmount,
-                              width: 180,
-                            ),
-                            DataCell(
-                              SizedBox(
-                                width: 96,
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Tooltip(
-                                      message: mapping.active
-                                          ? 'Ocultar para novas contratações'
-                                          : 'Reativar para novas contratações',
-                                      child: IconButton(
-                                        visualDensity: VisualDensity.compact,
-                                        constraints:
-                                            const BoxConstraints.tightFor(
-                                              width: 34,
-                                              height: 34,
-                                            ),
-                                        padding: EdgeInsets.zero,
-                                        icon: Icon(
-                                          mapping.active
-                                              ? Icons.visibility_off_outlined
-                                              : Icons.visibility_outlined,
-                                          size: 20,
-                                        ),
-                                        onPressed:
-                                            () => _toggleStripePlanMapping(
-                                              mapping,
-                                              active: !mapping.active,
-                                            ),
+            _HorizontalPlanTableScroller(
+              child: DataTable(
+                horizontalMargin: 12,
+                columnSpacing: 20,
+                headingRowHeight: 44,
+                dataRowMinHeight: 52,
+                dataRowMaxHeight: 56,
+                columns: const [
+                  DataColumn(label: Text('Nome do plano')),
+                  DataColumn(label: Text('Valor')),
+                  DataColumn(label: Text('Acoes')),
+                  DataColumn(label: Text('Plan key')),
+                  DataColumn(label: Text('Tipo')),
+                  DataColumn(label: Text('Seats base')),
+                  DataColumn(label: Text('Addon seats')),
+                  DataColumn(label: Text('Stripe product')),
+                  DataColumn(label: Text('Stripe price')),
+                  DataColumn(label: Text('Metrica excedente')),
+                  DataColumn(label: Text('Plano base vinculado')),
+                  DataColumn(label: Text('Ativo')),
+                  DataColumn(label: Text('Atualizado')),
+                ],
+                rows: mappings
+                    .map(
+                      (mapping) => DataRow(
+                        cells: [
+                          _buildStripePlanTextCell(
+                            mapping.planDisplayName.isEmpty
+                                ? mapping.billingPlanKey
+                                : mapping.planDisplayName,
+                            width: 180,
+                          ),
+                          _buildStripePlanTextCell(
+                            mapping.planDisplayAmount,
+                            width: 180,
+                          ),
+                          DataCell(
+                            SizedBox(
+                              width: 96,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Tooltip(
+                                    message: mapping.active
+                                        ? 'Ocultar para novas contratações'
+                                        : 'Reativar para novas contratações',
+                                    child: IconButton(
+                                      visualDensity: VisualDensity.compact,
+                                      constraints:
+                                          const BoxConstraints.tightFor(
+                                            width: 34,
+                                            height: 34,
+                                          ),
+                                      padding: EdgeInsets.zero,
+                                      icon: Icon(
+                                        mapping.active
+                                            ? Icons.visibility_off_outlined
+                                            : Icons.visibility_outlined,
+                                        size: 20,
+                                      ),
+                                      onPressed: () => _toggleStripePlanMapping(
+                                        mapping,
+                                        active: !mapping.active,
                                       ),
                                     ),
-                                    const SizedBox(width: 8),
-                                    Tooltip(
-                                      message: 'Excluir plano',
-                                      child: IconButton(
-                                        visualDensity: VisualDensity.compact,
-                                        constraints:
-                                            const BoxConstraints.tightFor(
-                                              width: 34,
-                                              height: 34,
-                                            ),
-                                        padding: EdgeInsets.zero,
-                                        icon: const Icon(
-                                          Icons.delete_outline,
-                                          color: Color(0xFFB3261E),
-                                          size: 20,
-                                        ),
-                                        onPressed:
-                                            () =>
-                                                _confirmDeleteStripePlanMapping(
-                                                  mapping,
-                                                ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Tooltip(
+                                    message: 'Excluir plano',
+                                    child: IconButton(
+                                      visualDensity: VisualDensity.compact,
+                                      constraints:
+                                          const BoxConstraints.tightFor(
+                                            width: 34,
+                                            height: 34,
+                                          ),
+                                      padding: EdgeInsets.zero,
+                                      icon: const Icon(
+                                        Icons.delete_outline,
+                                        color: Color(0xFFB3261E),
+                                        size: 20,
                                       ),
+                                      onPressed: () =>
+                                          _confirmDeleteStripePlanMapping(
+                                            mapping,
+                                          ),
                                     ),
-                                  ],
-                                ),
+                                  ),
+                                ],
                               ),
                             ),
-                            _buildStripePlanTextCell(
-                              mapping.billingPlanKey,
-                              ellipsis: false,
-                            ),
-                            _buildStripePlanTextCell(
-                              mapping.mappingType,
-                              width: 90,
-                            ),
-                            _buildStripePlanTextCell(
-                              '${mapping.includedSeats}',
-                              width: 96,
-                              ellipsis: false,
-                            ),
-                            _buildStripePlanTextCell(
-                              mapping.seatAddonPlanKey,
-                              ellipsis: false,
-                            ),
-                            _buildStripePlanTextCell(
-                              mapping.stripeProductId,
-                              ellipsis: false,
-                            ),
-                            _buildStripePlanTextCell(
-                              mapping.stripePriceId,
-                              ellipsis: false,
-                            ),
-                            _buildStripePlanTextCell(
-                              mapping.overageMetric,
-                              width: 170,
-                            ),
-                            _buildStripePlanTextCell(
-                              mapping.linkedBasePlanKey,
-                              ellipsis: false,
-                            ),
-                            _buildStripePlanTextCell(
-                              mapping.active ? 'sim' : 'nao',
-                              width: 70,
-                              ellipsis: false,
-                            ),
-                            _buildStripePlanTextCell(
-                              _formatDateTime(mapping.updatedAt),
-                              width: 120,
-                            ),
-                          ],
-                        ),
-                      )
-                      .toList(growable: false),
-                ),
+                          ),
+                          _buildStripePlanTextCell(
+                            mapping.billingPlanKey,
+                            ellipsis: false,
+                          ),
+                          _buildStripePlanTextCell(
+                            mapping.mappingType,
+                            width: 90,
+                          ),
+                          _buildStripePlanTextCell(
+                            '${mapping.includedSeats}',
+                            width: 96,
+                            ellipsis: false,
+                          ),
+                          _buildStripePlanTextCell(
+                            mapping.seatAddonPlanKey,
+                            ellipsis: false,
+                          ),
+                          _buildStripePlanTextCell(
+                            mapping.stripeProductId,
+                            ellipsis: false,
+                          ),
+                          _buildStripePlanTextCell(
+                            mapping.stripePriceId,
+                            ellipsis: false,
+                          ),
+                          _buildStripePlanTextCell(
+                            mapping.overageMetric,
+                            width: 170,
+                          ),
+                          _buildStripePlanTextCell(
+                            mapping.linkedBasePlanKey,
+                            ellipsis: false,
+                          ),
+                          _buildStripePlanTextCell(
+                            mapping.active ? 'sim' : 'nao',
+                            width: 70,
+                            ellipsis: false,
+                          ),
+                          _buildStripePlanTextCell(
+                            _formatDateTime(mapping.updatedAt),
+                            width: 120,
+                          ),
+                        ],
+                      ),
+                    )
+                    .toList(growable: false),
               ),
             ),
         ],

@@ -612,6 +612,105 @@
 			],
 			"isBackground": false,
 			"group": "build"
+		},
+		{
+			"label": "git commit billing bundle",
+			"type": "shell",
+			"command": "git",
+			"args": [
+				"commit",
+				"-m",
+				"feat(billing): unify provider flows and seat-addon UX hardening"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "git push main",
+			"type": "shell",
+			"command": "git",
+			"args": [
+				"push",
+				"origin",
+				"main"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "git status post push",
+			"type": "shell",
+			"command": "git",
+			"args": [
+				"status",
+				"--short"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "refactor diff stat",
+			"type": "shell",
+			"command": "git",
+			"args": [
+				"diff",
+				"--stat",
+				"functions/index.js",
+				"functions/src/billing/shared_helpers.js"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "index helper import check",
+			"type": "shell",
+			"command": "git",
+			"args": [
+				"diff",
+				"--",
+				"functions/index.js"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "git status after refactor slice",
+			"type": "shell",
+			"command": "git",
+			"args": [
+				"status",
+				"--short"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "refactor stat phase2",
+			"type": "shell",
+			"command": "git",
+			"args": [
+				"diff",
+				"--stat",
+				"functions/index.js",
+				"functions/src/billing/provider_resolution.js",
+				"functions/src/billing/stripe_plan_mappings.js",
+				"functions/src/billing/shared_helpers.js"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "firebase deploy impersonation functions",
+			"type": "shell",
+			"command": "C:/Users/Aureo.Filho/AppData/Roaming/npm/firebase.cmd",
+			"args": [
+				"deploy",
+				"--project=smart-sfa",
+				"--only",
+				"functions:createImpersonationSession,functions:consumeImpersonationSession"
+			],
+			"isBackground": false,
+			"group": "build"
 		}
 	]
 }

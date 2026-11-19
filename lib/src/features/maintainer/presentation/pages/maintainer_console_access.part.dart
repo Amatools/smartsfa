@@ -9,6 +9,14 @@ extension _MaintainerConsoleAccessPart on _MaintainerConsolePageState {
     _billingIntegrationService = MaintainerBillingIntegrationService(firestore);
     _overviewService = MaintainerOverviewService(firestore);
     _userAdminService = MaintainerUserAdminService(firestore);
+    _impersonationMembershipsStream = _userAdminService
+      .watchTenantMemberships(limit: 3000)
+      .asBroadcastStream();
+    _impersonationTenantNamesStream = _userAdminService
+      .watchTenantNamesById(limit: 3000)
+      .asBroadcastStream();
+    _impersonationUsersStream =
+      _userAdminService.watchUsers(limit: 500).asBroadcastStream();
     _criticalAuditStream = _auditService
         .watchCriticalEvents(limit: 400)
         .asBroadcastStream();

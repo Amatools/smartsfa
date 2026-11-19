@@ -4,9 +4,6 @@ const {
   resolveStripePlanPrefixByWorkspaceType,
 } = require('./shared_helpers');
 const {
-  buildStripePlanMappingFromDocData,
-} = require('./stripe_plan_mappings');
-const {
   normalizeAsaasBillingTypes,
   normalizeAsaasChargeType,
 } = require('./asaas_checkout_helpers');
@@ -22,69 +19,64 @@ async function listAsaasCheckoutPlansForTenant({
 
   const snapshot = await firestore
     .collection('billing_integrations')
-    .doc('stripe')
-    .collection('plan_mappings')
+    .doc('asaas')
+    .collection('internal_plan_catalog')
     .where('active', '==', true)
-    .where('mappingType', '==', 'base')
-    .limit(200)
-    .get();
-
-  const overageSnapshot = await firestore
-    .collection('billing_integrations')
-    .doc('stripe')
-    .collection('plan_mappings')
-    .where('active', '==', true)
-    .where('mappingType', '==', 'overage')
-    .limit(200)
+    .limit(400)
     .get();
 
   const seatAddonByPlanKey = new Map();
   const linkedSeatAddonByBasePlanKey = new Map();
-  for (const overageDoc of overageSnapshot.docs) {
-    const overageData = overageDoc.data() || {};
-    const overageMapping = buildStripePlanMappingFromDocData(
-      overageData,
-      overageDoc.id,
-    );
-    if (!overageMapping) {
-      continue;
-    }
-    if (overageMapping.mappingType !== 'overage') {
-      continue;
-    }
-    if (overageMapping.overageMetric !== 'extra_usuario') {
+  const baseDocs = [];
+
+  for (const doc of snapshot.docs) {
+    const data = doc.data() || {};
+    const mappingType = String(data.mappingType ?? 'base').trim().toLowerCase();
+    if (mappingType !== 'overage') {
+      baseDocs.push(doc);
       continue;
     }
 
-    const overageUnitPriceCentsInput = Number(overageMapping.stripeUnitAmount ?? 0);
+    const overageMetric = String(data.overageMetric ?? '').trim().toLowerCase();
+    if (overageMetric !== 'extra_usuario') {
+      continue;
+    }
+
+    const overagePlanKey = normalizeBillingPlanKey(data.billingPlanKey ?? doc.id);
+    if (!overagePlanKey) {
+      continue;
+    }
+
+    const overageUnitPriceCentsInput = Number(data.amountCents ?? 0);
     const overageUnitPriceCents = Number.isFinite(overageUnitPriceCentsInput)
       ? Math.max(0, Math.floor(overageUnitPriceCentsInput))
       : 0;
     const overageDisplayAmount =
-      String(overageMapping.planDisplayAmount ?? '').trim() ||
+      String(data.planDisplayAmount ?? '').trim() ||
       formatPlanAmountLabel({
         amountMinorUnits: overageUnitPriceCents,
-        currency: String(overageMapping.stripeCurrency ?? '').trim(),
-        recurringInterval: String(overageMapping.stripeRecurringInterval ?? '').trim(),
-        recurringIntervalCount: Number(overageMapping.stripeRecurringIntervalCount ?? 0),
+        currency: String(data.currency ?? '').trim(),
+        recurringInterval: String(data.interval ?? '').trim(),
+        recurringIntervalCount: Number(data.intervalCount ?? 0),
       });
 
     const seatAddonInfo = {
-      billingPlanKey: overageMapping.billingPlanKey,
+      billingPlanKey: overagePlanKey,
       unitPriceCents: overageUnitPriceCents,
       displayAmount: overageDisplayAmount,
     };
 
-    if (!seatAddonByPlanKey.has(overageMapping.billingPlanKey)) {
-      seatAddonByPlanKey.set(overageMapping.billingPlanKey, seatAddonInfo);
+    if (!seatAddonByPlanKey.has(overagePlanKey)) {
+      seatAddonByPlanKey.set(overagePlanKey, seatAddonInfo);
     }
 
-    if (!overageMapping.linkedBasePlanKey) {
+    const linkedBasePlanKey = normalizeBillingPlanKey(data.linkedBasePlanKey);
+    if (!linkedBasePlanKey) {
       continue;
     }
-    if (!linkedSeatAddonByBasePlanKey.has(overageMapping.linkedBasePlanKey)) {
+    if (!linkedSeatAddonByBasePlanKey.has(linkedBasePlanKey)) {
       linkedSeatAddonByBasePlanKey.set(
-        overageMapping.linkedBasePlanKey,
+        linkedBasePlanKey,
         seatAddonInfo,
       );
     }
@@ -94,7 +86,7 @@ async function listAsaasCheckoutPlansForTenant({
   const defaultAsaasBillingTypes = normalizeAsaasBillingTypes();
 
   const plans = [];
-  for (const doc of snapshot.docs) {
+  for (const doc of baseDocs) {
     const data = doc.data() || {};
     const billingPlanKey = normalizeBillingPlanKey(data.billingPlanKey ?? doc.id);
     if (!billingPlanKey) {
@@ -105,24 +97,22 @@ async function listAsaasCheckoutPlansForTenant({
       continue;
     }
 
-    const amountMinorUnits = Number(data.stripeUnitAmount ?? 0);
+    const amountMinorUnits = Number(data.amountCents ?? 0);
     if (!Number.isFinite(amountMinorUnits) || amountMinorUnits <= 0) {
       continue;
     }
 
     const planDisplayName =
       String(data.planDisplayName ?? '').trim() ||
-      String(data.stripeProductName ?? '').trim() ||
-      String(data.stripePriceNickname ?? '').trim() ||
       billingPlanKey;
 
     const planDisplayAmount =
       String(data.planDisplayAmount ?? '').trim() ||
       formatPlanAmountLabel({
         amountMinorUnits,
-        currency: String(data.stripeCurrency ?? '').trim(),
-        recurringInterval: String(data.stripeRecurringInterval ?? '').trim(),
-        recurringIntervalCount: Number(data.stripeRecurringIntervalCount ?? 0),
+        currency: String(data.currency ?? '').trim(),
+        recurringInterval: String(data.interval ?? '').trim(),
+        recurringIntervalCount: Number(data.intervalCount ?? 0),
       });
 
     const includedSeatsInput = Number(data.includedSeats ?? 0);
@@ -157,9 +147,9 @@ async function listAsaasCheckoutPlansForTenant({
       billingPlanKey,
       planDisplayName,
       planDisplayAmount,
-      stripePriceId: String(data.stripePriceId ?? '').trim(),
-      stripeProductId: String(data.stripeProductId ?? '').trim(),
-      stripeProductName: String(data.stripeProductName ?? '').trim(),
+      stripePriceId: '',
+      stripeProductId: '',
+      stripeProductName: '',
       includedSeats,
       seatAddonPlanKey,
       seatAddonUnitPriceCents,
