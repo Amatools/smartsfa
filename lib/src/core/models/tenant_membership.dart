@@ -187,7 +187,7 @@ class TenantMembership {
   }
 
   Map<String, Object?> toMap() {
-    return {
+    final map = <String, Object?>{
       'membershipId': membershipId,
       'tenantId': tenantId,
       'uid': uid,
@@ -208,12 +208,26 @@ class TenantMembership {
       'revokedReason': revokedReason,
       'revokedAt': revokedAt?.toIso8601String(),
       'lastSyncedAt': lastSyncedAt?.toIso8601String(),
-      'inactivityStartAt': inactivityStartAt?.toIso8601String(),
-      'inactivityEndAt': inactivityEndAt?.toIso8601String(),
-      'inactivityReason': inactivityReason,
-      'inactivityUpdatedByUid': inactivityUpdatedByUid,
-      'inactivityUpdatedAt': inactivityUpdatedAt?.toIso8601String(),
     };
+
+    if (inactivityStartAt != null && inactivityEndAt != null) {
+      map['inactivityStartAt'] = inactivityStartAt!.toIso8601String();
+      map['inactivityEndAt'] = inactivityEndAt!.toIso8601String();
+    }
+
+    if (inactivityReason != null) {
+      map['inactivityReason'] = inactivityReason;
+    }
+
+    if (inactivityUpdatedByUid != null && inactivityUpdatedByUid!.isNotEmpty) {
+      map['inactivityUpdatedByUid'] = inactivityUpdatedByUid;
+    }
+
+    if (inactivityUpdatedAt != null) {
+      map['inactivityUpdatedAt'] = inactivityUpdatedAt!.toIso8601String();
+    }
+
+    return map;
   }
 
   factory TenantMembership.fromMap(Map<String, Object?> map) {

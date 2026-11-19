@@ -11,19 +11,23 @@ class TenantSeatCapacitySnapshot {
   factory TenantSeatCapacitySnapshot.fromTenantData({
     required Map<String, dynamic> tenantData,
     required int activeMembers,
+    int? includedSeatsOverride,
   }) {
     final workspaceType = _normalize(tenantData['workspaceType']);
     final billingPlanKey = _normalize(tenantData['billingPlanKey']);
     final planTier = _normalize(tenantData['planTier']);
 
-    final includedSeats = _intFromValue(
-      tenantData['billingSeatsIncluded'],
-      fallback: _defaultIncludedSeats(
-        workspaceType: workspaceType,
-        billingPlanKey: billingPlanKey,
-        planTier: planTier,
-      ),
-    );
+    final includedSeats =
+        includedSeatsOverride != null && includedSeatsOverride > 0
+        ? includedSeatsOverride
+        : _intFromValue(
+            tenantData['billingSeatsIncluded'],
+            fallback: _defaultIncludedSeats(
+              workspaceType: workspaceType,
+              billingPlanKey: billingPlanKey,
+              planTier: planTier,
+            ),
+          );
     final addonSeats = _intFromValue(
       tenantData['billingSeatsAddon'],
       fallback: _intFromValue(tenantData['billingSeatAddons']),
@@ -31,7 +35,8 @@ class TenantSeatCapacitySnapshot {
 
     final configuredLimit = (includedSeats + addonSeats).clamp(1, 99999);
     final normalizedActiveMembers = activeMembers < 0 ? 0 : activeMembers;
-    final autoAdjustedToCurrentUsage = normalizedActiveMembers > configuredLimit;
+    final autoAdjustedToCurrentUsage =
+        normalizedActiveMembers > configuredLimit;
     final effectiveLimit = autoAdjustedToCurrentUsage
         ? normalizedActiveMembers
         : configuredLimit;

@@ -85,6 +85,173 @@ void main() {
       expect(reactivated.state.value, 'active');
     });
 
+    test('reactivateMembership uses stripe mapping seats when tenant field is missing', () async {
+      await firestore.collection('tenants').doc('tenant_plan').set({
+        'billingProvider': 'stripe',
+        'billingPlanKey': 'representacoes_starter',
+        'billingStatus': 'active',
+        'workspaceType': 'rep_workspace',
+        'billingSeatsIncluded': '',
+        'billingSeatsAddon': 0,
+      });
+
+      await firestore
+          .collection('billing_integrations')
+          .doc('stripe')
+          .collection('plan_mappings')
+          .doc('plan_rep_starter')
+          .set({
+            'billingPlanKey': 'representacoes_starter',
+            'mappingType': 'base',
+            'includedSeats': 2,
+            'active': true,
+          });
+
+      await firestore
+          .collection('tenant_memberships')
+          .doc('tenant_plan_owner')
+          .set({
+            'membershipId': 'tenant_plan_owner',
+            'tenantId': 'tenant_plan',
+            'uid': 'owner_1',
+            'role': 'owner',
+            'ativo': true,
+            'defaultTenant': true,
+            'ownerId': 'owner_1',
+            'gerenteId': '',
+            'representanteId': '',
+            'vendedorId': '',
+            'state': 'active',
+          });
+
+      await firestore
+          .collection('tenant_memberships')
+          .doc('tenant_plan_u2')
+          .set({
+            'membershipId': 'tenant_plan_u2',
+            'tenantId': 'tenant_plan',
+            'uid': 'u2',
+            'role': 'vendedor',
+            'ativo': false,
+            'defaultTenant': false,
+            'ownerId': 'owner_1',
+            'gerenteId': '',
+            'representanteId': '',
+            'vendedorId': 'u2',
+            'state': 'inactive',
+          });
+
+      final reactivated = await service.reactivateMembership(
+        membershipId: 'tenant_plan_u2',
+      );
+
+      expect(reactivated.ativo, isTrue);
+      expect(reactivated.state.value, 'active');
+    });
+
+    test('reactivateMembership uses seat enforcement fields when billing seats are missing', () async {
+      await firestore.collection('tenants').doc('tenant_enforced').set({
+        'billingProvider': 'stripe',
+        'billingPlanKey': 'representacoes_starter',
+        'billingStatus': 'active',
+        'workspaceType': 'rep_workspace',
+        'billingSeatsIncluded': '',
+        'billingSeatsAddon': 0,
+        'seatEnforcementIncludedSeats': 2,
+        'seatEnforcementAddonSeats': 0,
+        'seatEnforcementLimitConfigured': 2,
+      });
+
+      await firestore
+          .collection('tenant_memberships')
+          .doc('tenant_enforced_owner')
+          .set({
+            'membershipId': 'tenant_enforced_owner',
+            'tenantId': 'tenant_enforced',
+            'uid': 'owner_1',
+            'role': 'owner',
+            'ativo': true,
+            'defaultTenant': true,
+            'ownerId': 'owner_1',
+            'gerenteId': '',
+            'representanteId': '',
+            'vendedorId': '',
+            'state': 'active',
+          });
+
+      await firestore
+          .collection('tenant_memberships')
+          .doc('tenant_enforced_u2')
+          .set({
+            'membershipId': 'tenant_enforced_u2',
+            'tenantId': 'tenant_enforced',
+            'uid': 'u2',
+            'role': 'vendedor',
+            'ativo': false,
+            'defaultTenant': false,
+            'ownerId': 'owner_1',
+            'gerenteId': '',
+            'representanteId': '',
+            'vendedorId': 'u2',
+            'state': 'inactive',
+          });
+
+      final reactivated = await service.reactivateMembership(
+        membershipId: 'tenant_enforced_u2',
+      );
+
+      expect(reactivated.ativo, isTrue);
+      expect(reactivated.state.value, 'active');
+    });
+
+    test(
+      'loadSeatCapacity resolves included seats from asaas catalog',
+      () async {
+        await firestore.collection('tenants').doc('tenant_asaas').set({
+          'billingProvider': 'asaas',
+          'billingPlanKey': 'representacoes_starter',
+          'billingStatus': 'active',
+          'workspaceType': 'rep_workspace',
+          'billingSeatsIncluded': null,
+        });
+
+        await firestore
+            .collection('billing_integrations')
+            .doc('asaas')
+            .collection('internal_plan_catalog')
+            .doc('representacoes_starter')
+            .set({
+              'billingPlanKey': 'representacoes_starter',
+              'mappingType': 'base',
+              'includedSeats': 2,
+              'active': true,
+            });
+
+        await firestore
+            .collection('tenant_memberships')
+            .doc('tenant_asaas_owner')
+            .set({
+              'membershipId': 'tenant_asaas_owner',
+              'tenantId': 'tenant_asaas',
+              'uid': 'owner_asaas',
+              'role': 'owner',
+              'ativo': true,
+              'defaultTenant': true,
+              'ownerId': 'owner_asaas',
+              'gerenteId': '',
+              'representanteId': '',
+              'vendedorId': '',
+              'state': 'active',
+            });
+
+        final capacity = await service.loadSeatCapacity('tenant_asaas');
+
+        expect(capacity.includedSeats, 2);
+        expect(capacity.activeMembers, 1);
+        expect(capacity.remainingSeats, 1);
+      },
+    );
+
     test('watchMembershipsForTenant returns filtered memberships', () async {
       await firestore.collection('tenant_memberships').doc('t1_u1').set({
         'membershipId': 't1_u1',
@@ -404,45 +571,54 @@ void main() {
         'workspaceType': 'rep_workspace',
       });
 
-      await firestore.collection('tenant_memberships').doc('tenant1_owner_uid').set({
-        'membershipId': 'tenant1_owner_uid',
-        'tenantId': 'tenant1',
-        'uid': 'owner_uid',
-        'role': 'owner',
-        'ativo': true,
-        'defaultTenant': true,
-        'ownerId': 'owner_uid',
-        'gerenteId': 'owner_uid',
-        'representanteId': 'owner_uid',
-        'vendedorId': 'owner_uid',
-        'state': 'active',
-      });
-      await firestore.collection('tenant_memberships').doc('tenant1_rep_uid').set({
-        'membershipId': 'tenant1_rep_uid',
-        'tenantId': 'tenant1',
-        'uid': 'rep_uid',
-        'role': 'representante',
-        'ativo': true,
-        'defaultTenant': false,
-        'ownerId': 'owner_uid',
-        'gerenteId': 'owner_uid',
-        'representanteId': 'rep_uid',
-        'vendedorId': 'rep_uid',
-        'state': 'active',
-      });
-      await firestore.collection('tenant_memberships').doc('tenant1_seller_uid').set({
-        'membershipId': 'tenant1_seller_uid',
-        'tenantId': 'tenant1',
-        'uid': 'seller_uid',
-        'role': 'vendedor',
-        'ativo': true,
-        'defaultTenant': false,
-        'ownerId': 'owner_uid',
-        'gerenteId': 'owner_uid',
-        'representanteId': 'rep_uid',
-        'vendedorId': 'seller_uid',
-        'state': 'active',
-      });
+      await firestore
+          .collection('tenant_memberships')
+          .doc('tenant1_owner_uid')
+          .set({
+            'membershipId': 'tenant1_owner_uid',
+            'tenantId': 'tenant1',
+            'uid': 'owner_uid',
+            'role': 'owner',
+            'ativo': true,
+            'defaultTenant': true,
+            'ownerId': 'owner_uid',
+            'gerenteId': 'owner_uid',
+            'representanteId': 'owner_uid',
+            'vendedorId': 'owner_uid',
+            'state': 'active',
+          });
+      await firestore
+          .collection('tenant_memberships')
+          .doc('tenant1_rep_uid')
+          .set({
+            'membershipId': 'tenant1_rep_uid',
+            'tenantId': 'tenant1',
+            'uid': 'rep_uid',
+            'role': 'representante',
+            'ativo': true,
+            'defaultTenant': false,
+            'ownerId': 'owner_uid',
+            'gerenteId': 'owner_uid',
+            'representanteId': 'rep_uid',
+            'vendedorId': 'rep_uid',
+            'state': 'active',
+          });
+      await firestore
+          .collection('tenant_memberships')
+          .doc('tenant1_seller_uid')
+          .set({
+            'membershipId': 'tenant1_seller_uid',
+            'tenantId': 'tenant1',
+            'uid': 'seller_uid',
+            'role': 'vendedor',
+            'ativo': true,
+            'defaultTenant': false,
+            'ownerId': 'owner_uid',
+            'gerenteId': 'owner_uid',
+            'representanteId': 'rep_uid',
+            'vendedorId': 'seller_uid',
+            'state': 'active',
+          });
 
       expect(
         () => service.revokeMembershipByActor(
@@ -469,45 +645,54 @@ void main() {
         'workspaceType': 'brand_owner_workspace',
       });
 
-      await firestore.collection('tenant_memberships').doc('tenant_ent_owner_uid').set({
-        'membershipId': 'tenant_ent_owner_uid',
-        'tenantId': 'tenant_ent',
-        'uid': 'owner_uid',
-        'role': 'owner',
-        'ativo': true,
-        'defaultTenant': true,
-        'ownerId': 'owner_uid',
-        'gerenteId': 'owner_uid',
-        'representanteId': 'owner_uid',
-        'vendedorId': 'owner_uid',
-        'state': 'active',
-      });
-      await firestore.collection('tenant_memberships').doc('tenant_ent_manager_uid').set({
-        'membershipId': 'tenant_ent_manager_uid',
-        'tenantId': 'tenant_ent',
-        'uid': 'manager_uid',
-        'role': 'gerente',
-        'ativo': true,
-        'defaultTenant': false,
-        'ownerId': 'owner_uid',
-        'gerenteId': 'manager_uid',
-        'representanteId': 'manager_uid',
-        'vendedorId': 'manager_uid',
-        'state': 'active',
-      });
-      await firestore.collection('tenant_memberships').doc('tenant_ent_rep_uid').set({
-        'membershipId': 'tenant_ent_rep_uid',
-        'tenantId': 'tenant_ent',
-        'uid': 'rep_uid',
-        'role': 'representante',
-        'ativo': true,
-        'defaultTenant': false,
-        'ownerId': 'owner_uid',
-        'gerenteId': 'manager_uid',
-        'representanteId': 'rep_uid',
-        'vendedorId': 'rep_uid',
-        'state': 'active',
-      });
+      await firestore
+          .collection('tenant_memberships')
+          .doc('tenant_ent_owner_uid')
+          .set({
+            'membershipId': 'tenant_ent_owner_uid',
+            'tenantId': 'tenant_ent',
+            'uid': 'owner_uid',
+            'role': 'owner',
+            'ativo': true,
+            'defaultTenant': true,
+            'ownerId': 'owner_uid',
+            'gerenteId': 'owner_uid',
+            'representanteId': 'owner_uid',
+            'vendedorId': 'owner_uid',
+            'state': 'active',
+          });
+      await firestore
+          .collection('tenant_memberships')
+          .doc('tenant_ent_manager_uid')
+          .set({
+            'membershipId': 'tenant_ent_manager_uid',
+            'tenantId': 'tenant_ent',
+            'uid': 'manager_uid',
+            'role': 'gerente',
+            'ativo': true,
+            'defaultTenant': false,
+            'ownerId': 'owner_uid',
+            'gerenteId': 'manager_uid',
+            'representanteId': 'manager_uid',
+            'vendedorId': 'manager_uid',
+            'state': 'active',
+          });
+      await firestore
+          .collection('tenant_memberships')
+          .doc('tenant_ent_rep_uid')
+          .set({
+            'membershipId': 'tenant_ent_rep_uid',
+            'tenantId': 'tenant_ent',
+            'uid': 'rep_uid',
+            'role': 'representante',
+            'ativo': true,
+            'defaultTenant': false,
+            'ownerId': 'owner_uid',
+            'gerenteId': 'manager_uid',
+            'representanteId': 'rep_uid',
+            'vendedorId': 'rep_uid',
+            'state': 'active',
+          });
 
       expect(
         () => service.revokeMembershipByActor(

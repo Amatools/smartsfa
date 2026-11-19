@@ -256,11 +256,18 @@ class TenantMembershipService {
         .collection('tenants')
         .doc(normalizedTenantId)
         .get();
-    final activeMemberships = await _loadActiveMembershipDocs(normalizedTenantId);
+    final tenantData = tenantDoc.data() ?? <String, dynamic>{};
+    final activeMemberships = await _loadActiveMembershipDocs(
+      normalizedTenantId,
+    );
+    final includedSeatsOverride = await _resolveIncludedSeatsOverride(
+      tenantData,
+    );
 
     return TenantSeatCapacitySnapshot.fromTenantData(
-      tenantData: tenantDoc.data() ?? <String, dynamic>{},
+      tenantData: tenantData,
       activeMembers: activeMemberships.length,
+      includedSeatsOverride: includedSeatsOverride,
     );
   }
 
@@ -278,17 +285,25 @@ class TenantMembershipService {
         .collection('tenants')
         .doc(normalizedTenantId)
         .get();
-    final activeMemberships = await _loadActiveMembershipDocs(normalizedTenantId);
+    final tenantData = tenantDoc.data() ?? <String, dynamic>{};
+    final activeMemberships = await _loadActiveMembershipDocs(
+      normalizedTenantId,
+    );
     final targetAlreadyActive =
         normalizedTargetMembershipId.isNotEmpty &&
         activeMemberships.any((doc) => doc.id == normalizedTargetMembershipId);
+    final includedSeatsOverride = await _resolveIncludedSeatsOverride(
+      tenantData,
+    );
 
     final currentCapacity = TenantSeatCapacitySnapshot.fromTenantData(
-      tenantData: tenantDoc.data() ?? <String, dynamic>{},
+      tenantData: tenantData,
       activeMembers: activeMemberships.length,
+      includedSeatsOverride: includedSeatsOverride,
     );
-    final projectedActiveMembers =
-        targetAlreadyActive ? currentCapacity.activeMembers : currentCapacity.activeMembers + 1;
+    final projectedActiveMembers = targetAlreadyActive
+        ? currentCapacity.activeMembers
+        : currentCapacity.activeMembers + 1;
 
     if (projectedActiveMembers > currentCapacity.effectiveLimit) {
       throw StateError(
@@ -298,19 +313,220 @@ class TenantMembershipService {
     }
   }
 
-  Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>> _loadActiveMembershipDocs(
-    String tenantId,
+  Future<int?> _resolveIncludedSeatsOverride(
+    Map<String, dynamic> tenantData,
   ) async {
+    final explicitSeats = _tryReadPositiveInt(
+      tenantData['billingSeatsIncluded'],
+    );
+    if (explicitSeats != null) {
+      return null;
+    }
+
+    final seatEnforcementIncludedSeats = _tryReadPositiveInt(
+      tenantData['seatEnforcementIncludedSeats'],
+    );
+    if (seatEnforcementIncludedSeats != null) {
+      return seatEnforcementIncludedSeats;
+    }
+
+    final seatEnforcementLimitConfigured = _tryReadPositiveInt(
+      tenantData['seatEnforcementLimitConfigured'],
+    );
+    final seatEnforcementAddonSeats = _tryReadNonNegativeInt(
+      tenantData['seatEnforcementAddonSeats'],
+    );
+    if (seatEnforcementLimitConfigured != null) {
+      final inferredIncludedSeats =
+          seatEnforcementLimitConfigured - seatEnforcementAddonSeats;
+      if (inferredIncludedSeats > 0) {
+        return inferredIncludedSeats;
+      }
+    }
+
+    final billingPlanKey = _normalizeToken(tenantData['billingPlanKey']);
+    if (billingPlanKey.isEmpty) {
+      return null;
+    }
+
+    final billingProvider = _normalizeToken(tenantData['billingProvider']);
+    final lookups = <Future<int?>>[];
+    if (billingProvider == 'stripe') {
+      lookups.add(_lookupStripeIncludedSeats(billingPlanKey));
+      lookups.add(_lookupAsaasIncludedSeats(billingPlanKey));
+    } else if (billingProvider == 'asaas') {
+      lookups.add(_lookupAsaasIncludedSeats(billingPlanKey));
+      lookups.add(_lookupStripeIncludedSeats(billingPlanKey));
+    } else {
+      lookups.add(_lookupStripeIncludedSeats(billingPlanKey));
+      lookups.add(_lookupAsaasIncludedSeats(billingPlanKey));
+    }
+
+    for (final lookup in lookups) {
+      final includedSeats = await lookup;
+      if (includedSeats != null) {
+        return includedSeats;
+      }
+    }
+
+    return null;
+  }
+
+  Future<int?> _lookupStripeIncludedSeats(String billingPlanKey) async {
+    try {
+      final snapshot = await _firestore
+          .collection('billing_integrations')
+          .doc('stripe')
+          .collection('plan_mappings')
+          .where('billingPlanKey', isEqualTo: billingPlanKey)
+          .limit(10)
+          .get();
+
+      for (final doc in snapshot.docs) {
+        final includedSeats = _extractIncludedSeatsFromPlanDoc(doc.data());
+        if (includedSeats != null) {
+          return includedSeats;
+        }
+      }
+    } on FirebaseException {
+      return null;
+    }
+
+    return null;
+  }
+
+  Future<int?> _lookupAsaasIncludedSeats(String billingPlanKey) async {
+    try {
+      final directDoc = await _firestore
+          .collection('billing_integrations')
+          .doc('asaas')
+          .collection('internal_plan_catalog')
+          .doc(billingPlanKey)
+          .get();
+      if (directDoc.exists) {
+        final includedSeats = _extractIncludedSeatsFromPlanDoc(
+          directDoc.data() ?? <String, dynamic>{},
+        );
+        if (includedSeats != null) {
+          return includedSeats;
+        }
+      }
+
+      final snapshot = await _firestore
+          .collection('billing_integrations')
+          .doc('asaas')
+          .collection('internal_plan_catalog')
+          .where('billingPlanKey', isEqualTo: billingPlanKey)
+          .limit(10)
+          .get();
+
+      for (final doc in snapshot.docs) {
+        final includedSeats = _extractIncludedSeatsFromPlanDoc(doc.data());
+        if (includedSeats != null) {
+          return includedSeats;
+        }
+      }
+    } on FirebaseException {
+      return null;
+    }
+
+    return null;
+  }
+
+  int? _extractIncludedSeatsFromPlanDoc(Map<String, dynamic> data) {
+    if (!_isMappingActive(data)) {
+      return null;
+    }
+
+    if (!_isBaseMapping(data)) {
+      return null;
+    }
+
+    return _tryReadPositiveInt(data['includedSeats']);
+  }
+
+  bool _isMappingActive(Map<String, dynamic> data) {
+    final raw = data['active'];
+    if (raw is bool) {
+      return raw;
+    }
+    if (raw is num) {
+      return raw != 0;
+    }
+    if (raw is String) {
+      final normalized = raw.trim().toLowerCase();
+      return normalized.isEmpty || (normalized != 'false' && normalized != '0');
+    }
+    return true;
+  }
+
+  bool _isBaseMapping(Map<String, dynamic> data) {
+    final mappingType = _normalizeToken(data['mappingType']);
+    final overageMetric = _normalizeToken(data['overageMetric']);
+    if (mappingType == 'overage') {
+      return false;
+    }
+    if (overageMetric == 'extra_usuario') {
+      return false;
+    }
+    return mappingType.isEmpty || mappingType == 'base';
+  }
+
+  int? _tryReadPositiveInt(Object? raw) {
+    if (raw is int) {
+      return raw > 0 ? raw : null;
+    }
+    if (raw is num) {
+      final value = raw.toInt();
+      return value > 0 ? value : null;
+    }
+    if (raw is String) {
+      final value = int.tryParse(raw.trim());
+      if (value != null && value > 0) {
+        return value;
+      }
+    }
+    return null;
+  }
+
+  int _tryReadNonNegativeInt(Object? raw, {int fallback = 0}) {
+    if (raw is int) {
+      return raw < 0 ? 0 : raw;
+    }
+    if (raw is num) {
+      final value = raw.toInt();
+      return value < 0 ? 0 : value;
+    }
+    if (raw is String) {
+      final value = int.tryParse(raw.trim());
+      if (value != null) {
+        return value < 0 ? 0 : value;
+      }
+    }
+    return fallback < 0 ? 0 : fallback;
+  }
+
+  String _normalizeToken(Object? raw) {
+    return (raw ?? '').toString().trim().toLowerCase();
+  }
+
+  Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>>
+  _loadActiveMembershipDocs(String tenantId) async {
     final snapshot = await _firestore
         .collection('tenant_memberships')
         .where('tenantId', isEqualTo: tenantId)
         .where('ativo', isEqualTo: true)
         .get();
 
-    return snapshot.docs.where((doc) {
-      final state = (doc.data()['state'] ?? 'active').toString().trim().toLowerCase();
-      return state == 'active';
-    }).toList(growable: false);
+    return snapshot.docs
+        .where((doc) {
+          final state = (doc.data()['state'] ?? 'active')
+              .toString()
+              .trim()
+              .toLowerCase();
+          return state == 'active';
+        })
+        .toList(growable: false);
   }
 
   Future<TenantMembership?> loadById(String membershipId) async {
